@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -14,7 +15,14 @@ interface CompareEntry {
 }
 
 interface CopyOp { source_path: string; dest_path: string; }
-interface CopyResult { total: number; succeeded: number; failed: number; errors: string[]; }
+interface CopyResult { total: number; succeeded: number; failed: number; cancelled: boolean; errors: string[]; }
+
+interface SyncProgress {
+  total: number;
+  completed: number;
+  current_file: string;
+  phase: string;
+}
 type Filter = "all" | "differences" | "source_only" | "target_only" | "modified" | "same";
 type Status = CompareEntry["status"];
 
@@ -199,14 +207,15 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [result, setResult] = useState<CopyResult | null>(null);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
 
   const compare = useCallback(async () => {
     setLoading(true); setError(null); setResult(null); setSelected(new Set());
     try {
       const data = await invoke<CompareEntry[]>("compare_directories", { source: sourcePath, target: targetPath });
       setEntries(data);
-      // Auto-expand folders with differences (top 2 levels)
       const tree = buildTree(data.filter((e) => e.status !== "same"));
       setExpanded(new Set(collectDiffPaths(tree)));
     } catch (e) { setError(`${e}`); }
@@ -214,6 +223,15 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
   }, [sourcePath, targetPath]);
 
   useEffect(() => { compare(); }, [compare]);
+
+  // Listen for sync progress events
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    listen<SyncProgress>("sync-progress", (event) => {
+      setProgress(event.payload);
+    }).then((fn) => { unlisten = fn; unlistenRef.current = fn; });
+    return () => { unlisten?.(); };
+  }, []);
 
   const filtered = useMemo(() => {
     if (filter === "all") return entries;
@@ -256,10 +274,15 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
   // ── Sync actions ──
 
   const run = async (fn: () => Promise<void>) => {
-    setSyncing(true); setResult(null);
+    setSyncing(true); setResult(null); setProgress(null);
     try { await fn(); await compare(); }
     catch (e) { setError(`${e}`); }
-    finally { setSyncing(false); }
+    finally { setSyncing(false); setProgress(null); }
+  };
+
+  const handleCancel = async () => {
+    try { await invoke("cancel_sync"); }
+    catch (_) { /* ignore */ }
   };
 
   const copyToTarget = () => run(async () => {
@@ -432,26 +455,60 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 shrink-0">
-        <button disabled={syncing || nSrc === 0} onClick={copyToTarget}
-          className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed">
-          {syncing ? "Syncing..." : `Copy ${nSrc} to iPod \u2192`}
-        </button>
-        <button disabled={syncing || nTgt === 0} onClick={copyToSource}
-          className="flex-1 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed">
-          {syncing ? "Syncing..." : `\u2190 Copy ${nTgt} to Source`}
-        </button>
-        <button disabled={syncing || nTgt === 0} onClick={deleteTarget}
-          className="py-2 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed">
-          Delete {nTgt}
-        </button>
-      </div>
+      {/* Actions or Progress Bar */}
+      {syncing && progress ? (
+        <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-medium text-text-primary">
+              {progress.phase === "copying" ? "Copying" : progress.phase === "deleting" ? "Deleting" : "Finishing"}...
+            </span>
+            <span className="text-[11px] text-text-secondary">
+              {progress.completed} of {progress.total} files
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden mb-2">
+            <div
+              className="h-full bg-text-primary rounded-full transition-all duration-200"
+              style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-text-tertiary truncate flex-1 min-w-0 mr-3">
+              {progress.current_file || "Finishing up..."}
+            </span>
+            <button
+              onClick={handleCancel}
+              className="px-3 py-1 bg-transparent border border-danger/30 text-danger rounded-lg text-[10px] font-medium shrink-0 hover:bg-danger/10 transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 shrink-0">
+          <button disabled={syncing || nSrc === 0} onClick={copyToTarget}
+            className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed">
+            Copy {nSrc} to iPod {"\u2192"}
+          </button>
+          <button disabled={syncing || nTgt === 0} onClick={copyToSource}
+            className="flex-1 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed">
+            {"\u2190"} Copy {nTgt} to Source
+          </button>
+          <button disabled={syncing || nTgt === 0} onClick={deleteTarget}
+            className="py-2 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed">
+            Delete {nTgt}
+          </button>
+        </div>
+      )}
 
       {/* Result toast */}
-      {result && (
-        <div className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed ${result.failed ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
-          {result.succeeded}/{result.total} completed{result.failed > 0 && `. ${result.failed} failed.`}
+      {result && !syncing && (
+        <div className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed ${result.failed || result.cancelled ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
+          {result.cancelled
+            ? `Cancelled: ${result.succeeded} of ${result.total} completed`
+            : `${result.succeeded}/${result.total} completed`}
+          {result.failed > 0 && `. ${result.failed} failed.`}
           {result.errors.length > 0 && <div className="mt-1 text-[10px] opacity-70">{result.errors.slice(0, 3).map((e, i) => <div key={i}>{e}</div>)}</div>}
         </div>
       )}

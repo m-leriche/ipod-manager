@@ -1,5 +1,6 @@
 use crate::disk::{self, DiskInfo};
-use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry};
+use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn detect_ipod() -> Result<Option<DiskInfo>, String> {
@@ -30,11 +31,43 @@ pub fn compare_directories(source: String, target: String) -> Result<Vec<Compare
 }
 
 #[tauri::command]
-pub fn copy_files(operations: Vec<CopyOperation>) -> Result<CopyResult, String> {
-    Ok(files::copy_file_list(&operations))
+pub async fn copy_files(
+    operations: Vec<CopyOperation>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<CopyResult, String> {
+    let flag = cancel.flag();
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        files::copy_file_list(operations, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
 }
 
 #[tauri::command]
-pub fn delete_files(paths: Vec<String>) -> Result<CopyResult, String> {
-    Ok(files::delete_file_list(&paths))
+pub async fn delete_files(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<CopyResult, String> {
+    let flag = cancel.flag();
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        files::delete_file_list(paths, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn cancel_sync(cancel: State<'_, SyncCancel>) -> Result<(), String> {
+    cancel.cancel();
+    Ok(())
 }

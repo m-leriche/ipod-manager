@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FileEntry {
@@ -36,7 +39,38 @@ pub struct CopyResult {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
+    pub cancelled: bool,
     pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncProgress {
+    pub total: usize,
+    pub completed: usize,
+    pub current_file: String,
+    pub phase: String, // "copying" | "deleting"
+}
+
+/// Shared cancellation flag for sync operations.
+/// Uses Arc<AtomicBool> so it can be cloned and sent to background threads.
+pub struct SyncCancel(pub Arc<AtomicBool>);
+
+impl SyncCancel {
+    pub fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+    pub fn reset(&self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+    pub fn flag(&self) -> Arc<AtomicBool> {
+        self.0.clone()
+    }
 }
 
 /// List the contents of any directory on the filesystem.
@@ -232,19 +266,42 @@ pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, Str
     Ok(results)
 }
 
-/// Copy files from source paths to destination paths.
-/// Each operation specifies source_path and dest_path as absolute paths.
-pub fn copy_file_list(operations: &[CopyOperation]) -> CopyResult {
+/// Copy files with per-file progress events and cancellation support.
+/// Accepts Arc<AtomicBool> so this can run on a background thread.
+pub fn copy_file_list(
+    operations: Vec<CopyOperation>,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> CopyResult {
     let total = operations.len();
     let mut succeeded = 0;
     let mut failed = 0;
     let mut errors = Vec::new();
+    let mut cancelled = false;
 
-    for op in operations {
+    cancel_flag.store(false, Ordering::SeqCst);
+
+    for (i, op) in operations.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
+
+        let file_name = Path::new(&op.source_path)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| op.source_path.clone());
+
+        let _ = app.emit("sync-progress", SyncProgress {
+            total,
+            completed: i,
+            current_file: file_name,
+            phase: "copying".to_string(),
+        });
+
         let src = Path::new(&op.source_path);
         let dest = Path::new(&op.dest_path);
 
-        // Create parent directories if needed
         if let Some(parent) = dest.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
                 errors.push(format!("{}: mkdir failed: {}", op.dest_path, e));
@@ -262,25 +319,52 @@ pub fn copy_file_list(operations: &[CopyOperation]) -> CopyResult {
         }
     }
 
-    CopyResult {
+    let _ = app.emit("sync-progress", SyncProgress {
         total,
-        succeeded,
-        failed,
-        errors,
-    }
+        completed: succeeded + failed,
+        current_file: String::new(),
+        phase: if cancelled { "cancelled".to_string() } else { "done".to_string() },
+    });
+
+    CopyResult { total, succeeded, failed, cancelled, errors }
 }
 
-/// Delete a list of files given their absolute paths.
-pub fn delete_file_list(paths: &[String]) -> CopyResult {
+/// Delete files with per-file progress events and cancellation support.
+/// Accepts Arc<AtomicBool> so this can run on a background thread.
+pub fn delete_file_list(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> CopyResult {
     let total = paths.len();
     let mut succeeded = 0;
     let mut failed = 0;
     let mut errors = Vec::new();
+    let mut cancelled = false;
 
-    for path_str in paths {
+    cancel_flag.store(false, Ordering::SeqCst);
+
+    for (i, path_str) in paths.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
+
+        let file_name = Path::new(path_str)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| path_str.clone());
+
+        let _ = app.emit("sync-progress", SyncProgress {
+            total,
+            completed: i,
+            current_file: file_name,
+            phase: "deleting".to_string(),
+        });
+
         let path = Path::new(path_str);
         if !path.exists() {
-            succeeded += 1; // Already gone
+            succeeded += 1;
             continue;
         }
 
@@ -299,10 +383,12 @@ pub fn delete_file_list(paths: &[String]) -> CopyResult {
         }
     }
 
-    CopyResult {
+    let _ = app.emit("sync-progress", SyncProgress {
         total,
-        succeeded,
-        failed,
-        errors,
-    }
+        completed: succeeded + failed,
+        current_file: String::new(),
+        phase: if cancelled { "cancelled".to_string() } else { "done".to_string() },
+    });
+
+    CopyResult { total, succeeded, failed, cancelled, errors }
 }

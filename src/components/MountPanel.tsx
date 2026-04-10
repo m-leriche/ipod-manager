@@ -7,6 +7,9 @@ interface DiskInfo {
   name: string;
   mounted: boolean;
   mount_point: string | null;
+  free_space: number | null;
+  used_space: number | null;
+  total_space: number | null;
 }
 
 type Status = "detecting" | "not_found" | "found" | "mounted" | "mounting" | "unmounting";
@@ -94,7 +97,7 @@ export function MountPanel({ onMountChange, compact = false }: MountPanelProps) 
 
   const handleUnmount = async () => {
     setStatus("unmounting");
-    setMessage(null);
+    setMessage({ text: "Ejecting iPod safely...", type: "info" });
     try {
       await invoke("unmount_ipod");
       setMessage({ text: "iPod ejected safely", type: "success" });
@@ -157,6 +160,9 @@ export function MountPanel({ onMountChange, compact = false }: MountPanelProps) 
             {diskInfo.mount_point && <Row label="Mount" value={diskInfo.mount_point} />}
           </>
         )}
+        {diskInfo && diskInfo.free_space != null && diskInfo.total_space != null && (
+          <StorageBar free={diskInfo.free_space} total={diskInfo.total_space} />
+        )}
       </div>
 
       {status === "found" && (
@@ -202,6 +208,38 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between items-center py-1.5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">
       <span className="text-text-tertiary text-[11px]">{label}</span>
       <span className="text-[11px] font-medium text-text-secondary">{value}</span>
+    </div>
+  );
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
+  return `${(b / 1073741824).toFixed(1)} GB`;
+}
+
+function StorageBar({ free, total }: { free: number; total: number }) {
+  const used = total - free;
+  const pct = total > 0 ? (used / total) * 100 : 0;
+  const color = pct > 90 ? "bg-danger" : pct > 75 ? "bg-warning" : "bg-accent";
+
+  return (
+    <div className="pt-2.5 mt-1 border-t border-border-subtle">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="text-text-tertiary text-[10px] uppercase tracking-widest font-medium">Storage</span>
+        <span className="text-[10px] text-text-tertiary">{fmtBytes(free)} free</span>
+      </div>
+      <div className="w-full h-1.5 bg-bg-primary rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between mt-1">
+        <span className="text-[10px] text-text-tertiary">{fmtBytes(used)} used</span>
+        <span className="text-[10px] text-text-tertiary">{fmtBytes(total)} total</span>
+      </div>
     </div>
   );
 }

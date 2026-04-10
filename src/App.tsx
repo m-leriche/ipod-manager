@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { MountPanel } from "./components/MountPanel";
 import { SyncManager } from "./components/SyncManager";
+import { AlbumArtManager } from "./components/AlbumArtManager";
+
+type Tab = "sync" | "albumart";
 
 function App() {
   const [isMounted, setIsMounted] = useState(false);
+  const [tab, setTab] = useState<Tab>("sync");
 
   return (
     <div className="flex flex-col min-h-screen bg-bg-primary text-text-primary font-sans antialiased">
@@ -18,9 +22,44 @@ function App() {
         } items-start`}
       >
         <MountPanel onMountChange={setIsMounted} compact={isMounted} />
-        {isMounted && <SyncManager />}
+        {isMounted && (
+          <div className="flex-1 min-w-0 flex flex-col gap-2.5 max-h-[calc(100vh-72px)]">
+            <div className="flex gap-1 shrink-0">
+              <TabButton active={tab === "sync"} onClick={() => setTab("sync")}>
+                File Sync
+              </TabButton>
+              <TabButton active={tab === "albumart"} onClick={() => setTab("albumart")}>
+                Album Art
+              </TabButton>
+            </div>
+            {tab === "sync" ? <SyncManager /> : <AlbumArtManager />}
+          </div>
+        )}
       </main>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+        active
+          ? "bg-bg-card text-text-primary border border-border-active"
+          : "text-text-tertiary border border-transparent hover:text-text-secondary"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

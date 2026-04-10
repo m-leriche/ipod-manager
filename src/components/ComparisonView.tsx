@@ -302,8 +302,37 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
     if (paths.length) setResult(await invoke<CopyResult>("delete_files", { paths }));
   });
 
+  const mirrorToTarget = () => run(async () => {
+    const toCopy = entries.filter((e) => e.status === "source_only" || e.status === "modified");
+    const toDelete = entries.filter((e) => e.status === "target_only");
+    const total = toCopy.length + toDelete.length;
+    if (total === 0) return;
+
+    let succeeded = 0, failed = 0, cancelled = false;
+    const errors: string[] = [];
+
+    if (toCopy.length > 0) {
+      const ops: CopyOp[] = toCopy.map((e) => ({
+        source_path: `${sourcePath}/${e.relative_path}`,
+        dest_path: `${targetPath}/${e.relative_path}`,
+      }));
+      const r = await invoke<CopyResult>("copy_files", { operations: ops });
+      succeeded += r.succeeded; failed += r.failed; errors.push(...r.errors);
+      if (r.cancelled) { setResult({ total, succeeded, failed, cancelled: true, errors }); return; }
+    }
+
+    if (toDelete.length > 0) {
+      const paths = toDelete.map((e) => `${targetPath}/${e.relative_path}`);
+      const r = await invoke<CopyResult>("delete_files", { paths });
+      succeeded += r.succeeded; failed += r.failed; errors.push(...r.errors); cancelled = r.cancelled;
+    }
+
+    setResult({ total, succeeded, failed, cancelled, errors });
+  });
+
   const nSrc = [...selected].filter((p) => { const e = entries.find((x) => x.relative_path === p); return e && (e.status === "source_only" || e.status === "modified"); }).length;
   const nTgt = [...selected].filter((p) => { const e = entries.find((x) => x.relative_path === p); return e && e.status === "target_only"; }).length;
+  const nMirror = stats.source_only + stats.modified + stats.target_only;
 
   // ── Render a tree node recursively ──
 
@@ -487,13 +516,17 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
         </div>
       ) : (
         <div className="flex gap-2 shrink-0">
-          <button disabled={syncing || nSrc === 0} onClick={copyToTarget}
+          <button disabled={syncing || nMirror === 0} onClick={mirrorToTarget}
             className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed">
-            Copy {nSrc} to iPod {"\u2192"}
+            Mirror {nMirror} to iPod {"\u2192"}
+          </button>
+          <button disabled={syncing || nSrc === 0} onClick={copyToTarget}
+            className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed">
+            Copy {nSrc} {"\u2192"}
           </button>
           <button disabled={syncing || nTgt === 0} onClick={copyToSource}
-            className="flex-1 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed">
-            {"\u2190"} Copy {nTgt} to Source
+            className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed">
+            {"\u2190"} Copy {nTgt}
           </button>
           <button disabled={syncing || nTgt === 0} onClick={deleteTarget}
             className="py-2 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed">

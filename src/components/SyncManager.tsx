@@ -11,14 +11,14 @@ export function SyncManager() {
 
   if (comparing && sourceFolder && targetFolder) {
     return (
-      <div className="flex-1 min-w-0 flex flex-col gap-2.5 max-h-[calc(100vh-72px)]">
+      <div className="flex-1 min-w-0 flex flex-col gap-2.5 min-h-0">
         <ComparisonView sourcePath={sourceFolder} targetPath={targetFolder} onBack={() => setComparing(false)} />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-2.5 max-h-[calc(100vh-72px)]">
+    <div className="flex-1 min-w-0 flex flex-col gap-2.5 min-h-0">
       {/* Toolbar */}
       <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-4 py-2.5 shrink-0">
         <PathDisplay label="Source" path={sourceFolder} placeholder="Select folder on left" />

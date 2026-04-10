@@ -9,6 +9,9 @@ pub struct DiskInfo {
     pub name: String,
     pub mounted: bool,
     pub mount_point: Option<String>,
+    pub free_space: Option<u64>,
+    pub used_space: Option<u64>,
+    pub total_space: Option<u64>,
 }
 
 /// Run `diskutil list` and parse to find an iPod-like FAT32 partition.
@@ -102,6 +105,10 @@ fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
     // Check mount status
     let mount_point = get_mount_point(&identifier);
     let mounted = mount_point.is_some();
+    let (total_space, used_space, free_space) = mount_point
+        .as_deref()
+        .map(get_space_info)
+        .unwrap_or((None, None, None));
 
     Some(DiskInfo {
         identifier,
@@ -109,6 +116,9 @@ fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
         name,
         mounted,
         mount_point,
+        free_space,
+        used_space,
+        total_space,
     })
 }
 
@@ -153,6 +163,10 @@ fn check_partition_info(identifier: &str) -> Option<DiskInfo> {
 
     let mount_point = get_mount_point(identifier);
     let mounted = mount_point.is_some();
+    let (total_space, used_space, free_space) = mount_point
+        .as_deref()
+        .map(get_space_info)
+        .unwrap_or((None, None, None));
 
     Some(DiskInfo {
         identifier: identifier.to_string(),
@@ -160,7 +174,27 @@ fn check_partition_info(identifier: &str) -> Option<DiskInfo> {
         name,
         mounted,
         mount_point,
+        free_space,
+        used_space,
+        total_space,
     })
+}
+
+/// Get disk space info (total, used, free) in bytes from `df`.
+fn get_space_info(mount_point: &str) -> (Option<u64>, Option<u64>, Option<u64>) {
+    let Ok(output) = Command::new("df").arg("-k").arg(mount_point).output() else {
+        return (None, None, None);
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let Some(line) = stdout.lines().nth(1) else {
+        return (None, None, None);
+    };
+    let cols: Vec<&str> = line.split_whitespace().collect();
+    // df -k columns: Filesystem 1024-blocks Used Available Capacity ...
+    let total = cols.get(1).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
+    let used = cols.get(2).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
+    let free = cols.get(3).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
+    (total, used, free)
 }
 
 /// Check if a disk identifier is currently mounted by parsing `mount` output

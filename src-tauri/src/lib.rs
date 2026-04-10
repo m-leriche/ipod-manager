@@ -1,3 +1,4 @@
+mod albumart;
 mod commands;
 mod disk;
 mod files;
@@ -7,6 +8,7 @@ use files::SyncCancel;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(SyncCancel::new())
         .setup(|app| {
@@ -28,6 +30,8 @@ pub fn run() {
             commands::copy_files,
             commands::delete_files,
             commands::cancel_sync,
+            commands::scan_album_art,
+            commands::fix_album_art,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

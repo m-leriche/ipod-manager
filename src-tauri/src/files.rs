@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -266,6 +268,42 @@ pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, Str
     Ok(results)
 }
 
+/// Check available disk space at the given path (bytes).
+fn available_space(path: &Path) -> Option<u64> {
+    // Use `df` to get available space — works reliably on macOS for all volume types
+    let mount = path.ancestors()
+        .find(|p| p.exists())?;
+    let output = Command::new("df")
+        .arg("-k") // 1K blocks
+        .arg(mount)
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Second line, 4th column is available 1K-blocks
+    let line = stdout.lines().nth(1)?;
+    let avail_kb: u64 = line.split_whitespace().nth(3)?.parse().ok()?;
+    Some(avail_kb * 1024)
+}
+
+/// Check if an I/O error is a disk-full condition.
+fn is_no_space(err: &io::Error) -> bool {
+    // ErrorKind::StorageFull on nightly; fall back to raw OS code + message matching
+    let code = err.raw_os_error();
+    // ENOSPC = 28 on macOS/Linux
+    if code == Some(28) {
+        return true;
+    }
+    let msg = err.to_string().to_lowercase();
+    msg.contains("no space") || msg.contains("not enough space") || msg.contains("disk full")
+}
+
+fn fmt_bytes(b: u64) -> String {
+    if b < 1024 { return format!("{} B", b); }
+    if b < 1048576 { return format!("{:.1} KB", b as f64 / 1024.0); }
+    if b < 1073741824 { return format!("{:.1} MB", b as f64 / 1048576.0); }
+    format!("{:.2} GB", b as f64 / 1073741824.0)
+}
+
 /// Copy files with per-file progress events and cancellation support.
 /// Accepts Arc<AtomicBool> so this can run on a background thread.
 pub fn copy_file_list(
@@ -280,6 +318,25 @@ pub fn copy_file_list(
     let mut cancelled = false;
 
     cancel_flag.store(false, Ordering::SeqCst);
+
+    // Pre-flight: estimate required space vs available
+    if let Some(first_dest) = operations.first().map(|op| Path::new(&op.dest_path).to_path_buf()) {
+        let needed: u64 = operations.iter()
+            .filter_map(|op| fs::metadata(&op.source_path).ok())
+            .map(|m| m.len())
+            .sum();
+
+        if let Some(avail) = available_space(&first_dest) {
+            if needed > avail {
+                errors.push(format!(
+                    "Not enough disk space: need {} but only {} available",
+                    fmt_bytes(needed),
+                    fmt_bytes(avail),
+                ));
+                return CopyResult { total, succeeded: 0, failed: total, cancelled: false, errors };
+            }
+        }
+    }
 
     for (i, op) in operations.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -313,6 +370,15 @@ pub fn copy_file_list(
         match fs::copy(src, dest) {
             Ok(_) => succeeded += 1,
             Err(e) => {
+                // Clean up partial file
+                let _ = fs::remove_file(dest);
+
+                if is_no_space(&e) {
+                    errors.push("Disk full — stopped copying".to_string());
+                    failed += total - i - succeeded;
+                    break;
+                }
+
                 errors.push(format!("{}: {}", op.source_path, e));
                 failed += 1;
             }

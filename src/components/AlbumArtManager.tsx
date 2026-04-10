@@ -38,7 +38,7 @@ type Phase = "idle" | "scanning" | "scanned" | "fixing";
 
 export function AlbumArtManager() {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [scanPath, setScanPath] = useState("/Volumes/IPOD");
+  const [scanPath, setScanPath] = useState("");
   const [albums, setAlbums] = useState<AlbumInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<AlbumArtProgress | null>(null);
@@ -143,8 +143,8 @@ export function AlbumArtManager() {
             Choose a music folder to scan for missing album art
           </p>
           <div className="flex items-center gap-2 mb-4 bg-bg-secondary border border-border rounded-xl px-3 py-2">
-            <span className="flex-1 min-w-0 text-[11px] text-text-secondary font-medium truncate text-left">
-              {scanPath}
+            <span className={`flex-1 min-w-0 text-[11px] font-medium truncate text-left ${scanPath ? "text-text-secondary" : "text-text-tertiary"}`}>
+              {scanPath || "No folder selected"}
             </span>
             <button
               onClick={browse}
@@ -155,7 +155,8 @@ export function AlbumArtManager() {
           </div>
           <button
             onClick={() => scan()}
-            className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium hover:opacity-90 transition-all"
+            disabled={!scanPath}
+            className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
           >
             Scan for Missing Art
           </button>

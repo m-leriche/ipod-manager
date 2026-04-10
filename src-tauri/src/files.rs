@@ -61,14 +61,8 @@ impl SyncCancel {
     pub fn new() -> Self {
         Self(Arc::new(AtomicBool::new(false)))
     }
-    pub fn reset(&self) {
-        self.0.store(false, Ordering::SeqCst);
-    }
     pub fn cancel(&self) {
         self.0.store(true, Ordering::SeqCst);
-    }
-    pub fn is_cancelled(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
     }
     pub fn flag(&self) -> Arc<AtomicBool> {
         self.0.clone()

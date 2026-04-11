@@ -12,7 +12,7 @@ Built with Tauri 2 (Rust backend) and React 19 (TypeScript frontend).
 - **Exclusion filters** — Right-click folders in the comparison tree to filter them out. Filtered folders are hidden from comparison and excluded from sync operations. Manage filters via the filter panel.
 - **iPod mount/unmount** — Auto-detects your iPod, mounts it at `/Volumes/IPOD` with one click and your macOS password. Live storage bar shows used/free/total space.
 - **Album art manager** — Scans any music folder for albums missing cover art. Extracts embedded art from audio file tags first (fast, no network), then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder for Rockbox compatibility.
-- **YouTube to Audio** — Paste a YouTube URL, pick an output folder and format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download with real-time progress. Requires `yt-dlp` and `ffmpeg` (install via `brew install yt-dlp ffmpeg`).
+- **YouTube to Audio** — Paste a YouTube URL, pick an output folder and format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download with real-time progress. Automatically detects video chapters and splits them into individually numbered tracks in a subfolder. Requires `yt-dlp` and `ffmpeg` (install via `brew install yt-dlp ffmpeg`).
 - **Disk space safety** — Pre-flight check warns if there isn't enough space before copying starts. If space runs out mid-copy, stops immediately and cleans up partial files.
 
 ## Prerequisites
@@ -79,7 +79,7 @@ Output:
 1. **File Explorer** (default tab) — Browse to pick a folder and explore its contents. Right-click to delete files or folders.
 2. **File Sync** — Create or select a profile, browse source and target folders, then click **Compare Folders**. Review the diff tree, right-click folders to add exclusion filters, and sync with Mirror/Copy/Delete.
 3. **Album Art** — Browse to a music folder, scan for missing art, and click **Fix** to extract or fetch cover images.
-4. **YouTube to Audio** — Paste a YouTube URL, select an output folder and format (FLAC or MP3), then download. The tab checks for `yt-dlp`/`ffmpeg` on load and shows install instructions if missing.
+4. **YouTube to Audio** — Paste a YouTube URL, select an output folder and format (FLAC or MP3), then download. If the video has chapters (e.g., a live concert with song timestamps), they're detected automatically and each chapter is saved as a numbered track in a subfolder. The tab checks for `yt-dlp`/`ffmpeg` on load and shows install instructions if missing.
 5. **iPod** — The connection panel on the left auto-detects your iPod. Enter your macOS password and click **Mount** to mount it at `/Volumes/IPOD`. Click **Eject** when done.
 
 ## Project Structure

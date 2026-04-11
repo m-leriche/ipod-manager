@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { YouTubeDownloader } from "./YouTubeDownloader";
-import { isValidYouTubeUrl } from "./helpers";
+import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
@@ -23,6 +23,18 @@ const VIDEO_INFO = {
   title: "Test Video Title",
   duration: "3:45",
   uploader: "Test Channel",
+  chapters: [],
+};
+
+const VIDEO_INFO_WITH_CHAPTERS = {
+  title: "Live Concert",
+  duration: "15:00",
+  uploader: "Test Channel",
+  chapters: [
+    { title: "Song One", start_time: 0, end_time: 180 },
+    { title: "Song Two", start_time: 180, end_time: 360 },
+    { title: "Song Three", start_time: 360, end_time: 540 },
+  ],
 };
 
 describe("YouTubeDownloader", () => {
@@ -186,7 +198,7 @@ describe("YouTubeDownloader", () => {
       if (cmd === "check_yt_dependencies") return Promise.resolve();
       if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO);
       if (cmd === "download_audio")
-        return Promise.resolve({ success: true, cancelled: false, file_path: "/output/test.flac", error: null });
+        return Promise.resolve({ success: true, cancelled: false, file_paths: ["/output/test.flac"], error: null });
       return Promise.resolve();
     });
 
@@ -209,6 +221,7 @@ describe("YouTubeDownloader", () => {
         url: "https://www.youtube.com/watch?v=test123",
         outputDir: "/output",
         format: "flac",
+        splitChapters: false,
       });
     });
   });
@@ -220,7 +233,7 @@ describe("YouTubeDownloader", () => {
       if (cmd === "check_yt_dependencies") return Promise.resolve();
       if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO);
       if (cmd === "download_audio")
-        return Promise.resolve({ success: true, cancelled: false, file_path: "/output/test.flac", error: null });
+        return Promise.resolve({ success: true, cancelled: false, file_paths: ["/output/test.flac"], error: null });
       return Promise.resolve();
     });
 
@@ -266,6 +279,113 @@ describe("YouTubeDownloader", () => {
     // Switch back to FLAC
     await user.click(screen.getByRole("button", { name: "FLAC" }));
     expect(screen.getByText("44.1 kHz / 16-bit")).toBeInTheDocument();
+  });
+
+  it("shows chapters in ready state when detected", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/output");
+    mockInvoke.mockImplementation((cmd) => {
+      if (cmd === "check_yt_dependencies") return Promise.resolve();
+      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO_WITH_CHAPTERS);
+      return Promise.resolve();
+    });
+
+    render(<YouTubeDownloader />);
+    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
+
+    await user.type(
+      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
+      "https://www.youtube.com/watch?v=test123",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+    await waitFor(() => screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("3 chapters — will split into individual tracks")).toBeInTheDocument();
+      expect(screen.getByText("Song One")).toBeInTheDocument();
+      expect(screen.getByText("Song Two")).toBeInTheDocument();
+      expect(screen.getByText("Song Three")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Download 3 tracks as FLAC" })).toBeInTheDocument();
+    });
+  });
+
+  it("passes splitChapters true when chapters exist", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/output");
+    mockInvoke.mockImplementation((cmd) => {
+      if (cmd === "check_yt_dependencies") return Promise.resolve();
+      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO_WITH_CHAPTERS);
+      if (cmd === "download_audio")
+        return Promise.resolve({
+          success: true,
+          cancelled: false,
+          file_paths: ["/output/Song One.flac", "/output/Song Two.flac", "/output/Song Three.flac"],
+          error: null,
+        });
+      return Promise.resolve();
+    });
+
+    render(<YouTubeDownloader />);
+    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
+
+    await user.type(
+      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
+      "https://www.youtube.com/watch?v=test123",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+    await waitFor(() => screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Download 3 tracks as FLAC" }));
+    await user.click(screen.getByRole("button", { name: "Download 3 tracks as FLAC" }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("download_audio", {
+        url: "https://www.youtube.com/watch?v=test123",
+        outputDir: "/output",
+        format: "flac",
+        splitChapters: true,
+      });
+    });
+  });
+
+  it("shows multiple tracks in done state after chapter split", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/output");
+    mockInvoke.mockImplementation((cmd) => {
+      if (cmd === "check_yt_dependencies") return Promise.resolve();
+      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO_WITH_CHAPTERS);
+      if (cmd === "download_audio")
+        return Promise.resolve({
+          success: true,
+          cancelled: false,
+          file_paths: ["/output/Song One.flac", "/output/Song Two.flac", "/output/Song Three.flac"],
+          error: null,
+        });
+      return Promise.resolve();
+    });
+
+    render(<YouTubeDownloader />);
+    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
+
+    await user.type(
+      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
+      "https://www.youtube.com/watch?v=test123",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+    await waitFor(() => screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Download 3 tracks as FLAC" }));
+    await user.click(screen.getByRole("button", { name: "Download 3 tracks as FLAC" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Download complete — 3 tracks")).toBeInTheDocument();
+      expect(screen.getByText("Song One.flac")).toBeInTheDocument();
+      expect(screen.getByText("Song Two.flac")).toBeInTheDocument();
+      expect(screen.getByText("Song Three.flac")).toBeInTheDocument();
+    });
   });
 
   it("cancel calls cancel_sync during download", async () => {
@@ -325,5 +445,33 @@ describe("isValidYouTubeUrl", () => {
   it("rejects invalid URLs", () => {
     expect(isValidYouTubeUrl("not a url")).toBe(false);
     expect(isValidYouTubeUrl("")).toBe(false);
+  });
+});
+
+describe("formatSeconds", () => {
+  it("formats zero", () => {
+    expect(formatSeconds(0)).toBe("0:00");
+  });
+
+  it("formats seconds under a minute", () => {
+    expect(formatSeconds(45)).toBe("0:45");
+  });
+
+  it("formats minutes and seconds", () => {
+    expect(formatSeconds(185)).toBe("3:05");
+  });
+
+  it("pads single-digit seconds", () => {
+    expect(formatSeconds(62)).toBe("1:02");
+  });
+});
+
+describe("fileNameFromPath", () => {
+  it("extracts filename from absolute path", () => {
+    expect(fileNameFromPath("/output/Song One.flac")).toBe("Song One.flac");
+  });
+
+  it("returns input when no slashes", () => {
+    expect(fileNameFromPath("file.flac")).toBe("file.flac");
   });
 });

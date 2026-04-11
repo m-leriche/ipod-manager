@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import { isValidYouTubeUrl } from "./helpers";
+import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 import { FormatButton } from "./FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 
@@ -74,6 +74,8 @@ export const YouTubeDownloader = () => {
     }
   };
 
+  const hasChapters = (videoInfo?.chapters.length ?? 0) > 0;
+
   const startDownload = async () => {
     setPhase("downloading");
     setProgress(null);
@@ -84,6 +86,7 @@ export const YouTubeDownloader = () => {
         url,
         outputDir,
         format,
+        splitChapters: hasChapters,
       });
       setResult(res);
       setPhase("done");
@@ -163,9 +166,23 @@ export const YouTubeDownloader = () => {
             <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Download cancelled</div>
           ) : result.success ? (
             <>
-              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">Download complete</div>
-              {result.file_path && (
-                <p className="text-text-tertiary text-[10px] mb-4 truncate max-w-md">{result.file_path}</p>
+              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+                {result.file_paths.length > 1
+                  ? `Download complete — ${result.file_paths.length} tracks`
+                  : "Download complete"}
+              </div>
+              {result.file_paths.length > 1 ? (
+                <ul className="text-left mb-4 space-y-1 max-h-48 overflow-y-auto">
+                  {result.file_paths.map((fp) => (
+                    <li key={fp} className="text-text-tertiary text-[10px] truncate">
+                      {fileNameFromPath(fp)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                result.file_paths[0] && (
+                  <p className="text-text-tertiary text-[10px] mb-4 truncate max-w-md">{result.file_paths[0]}</p>
+                )
               )}
             </>
           ) : (
@@ -194,7 +211,11 @@ export const YouTubeDownloader = () => {
           <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-text-primary">
-                {progress?.phase === "converting" ? "Converting..." : "Downloading..."}
+                {progress?.phase === "splitting"
+                  ? "Splitting chapters..."
+                  : progress?.phase === "converting"
+                    ? (progress.title ? `Converting: ${progress.title}` : "Converting...")
+                    : "Downloading..."}
               </span>
               <span className="text-[11px] text-text-secondary">
                 {progress ? `${progress.percent.toFixed(1)}%` : "Starting..."}
@@ -251,6 +272,24 @@ export const YouTubeDownloader = () => {
             </p>
           </div>
 
+          {videoInfo.chapters.length > 0 && (
+            <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-4">
+              <p className="text-[10px] font-medium text-text-secondary mb-2">
+                {videoInfo.chapters.length} chapters — will split into individual tracks
+              </p>
+              <ul className="space-y-0.5 max-h-40 overflow-y-auto">
+                {videoInfo.chapters.map((ch, i) => (
+                  <li key={i} className="text-[10px] text-text-tertiary flex justify-between">
+                    <span className="truncate mr-2">{ch.title}</span>
+                    <span className="shrink-0 tabular-nums">
+                      {formatSeconds(ch.start_time)} — {formatSeconds(ch.end_time)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mb-4">
             <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
             <div className="flex gap-1">
@@ -264,7 +303,9 @@ export const YouTubeDownloader = () => {
               onClick={startDownload}
               className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
             >
-              Download as {format.toUpperCase()}
+              {hasChapters
+                ? `Download ${videoInfo.chapters.length} tracks as ${format.toUpperCase()}`
+                : `Download as ${format.toUpperCase()}`}
             </button>
             <button
               onClick={() => {

@@ -1,7 +1,14 @@
+export interface Chapter {
+  title: string;
+  start_time: number;
+  end_time: number;
+}
+
 export interface VideoInfo {
   title: string;
   duration: string;
   uploader: string;
+  chapters: Chapter[];
 }
 
 export interface DownloadProgress {
@@ -15,7 +22,7 @@ export interface DownloadProgress {
 export interface DownloadResult {
   success: boolean;
   cancelled: boolean;
-  file_path: string | null;
+  file_paths: string[];
   error: string | null;
 }
 

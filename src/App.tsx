@@ -1,21 +1,19 @@
 import { useState } from "react";
-import { MountPanel } from "./components/MountPanel";
-import { BrowseExplorer } from "./components/organisms/BrowseExplorer";
-import { SyncManager } from "./components/SyncManager";
-import { AlbumArtManager } from "./components/AlbumArtManager";
+import { MountPanel } from "./components/templates/MountPanel/MountPanel";
+import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
+import { SyncManager } from "./components/templates/SyncManager/SyncManager";
+import { AlbumArtManager } from "./components/templates/AlbumArtManager/AlbumArtManager";
 
 type Tab = "browse" | "sync" | "albumart";
 
-function App() {
+const App = () => {
   const [isMounted, setIsMounted] = useState(false);
   const [tab, setTab] = useState<Tab>("browse");
 
   return (
     <div className="flex flex-col min-h-screen bg-bg-primary text-text-primary font-sans antialiased">
       <header className="px-6 py-4 border-b border-border flex items-center">
-        <h1 className="text-sm font-medium tracking-tight text-text-secondary">
-          iPod Manager
-        </h1>
+        <h1 className="text-sm font-medium tracking-tight text-text-secondary">iPod Manager</h1>
       </header>
       <main className="flex-1 flex gap-4 p-4 items-start">
         <MountPanel onMountChange={setIsMounted} compact />
@@ -38,9 +36,9 @@ function App() {
       </main>
     </div>
   );
-}
+};
 
-function TabButton({
+const TabButton = ({
   active,
   disabled,
   onClick,
@@ -50,22 +48,20 @@ function TabButton({
   disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-        disabled
-          ? "text-text-tertiary/40 border border-transparent cursor-not-allowed"
-          : active
-            ? "bg-bg-card text-text-primary border border-border-active"
-            : "text-text-tertiary border border-transparent hover:text-text-secondary"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+      disabled
+        ? "text-text-tertiary/40 border border-transparent cursor-not-allowed"
+        : active
+          ? "bg-bg-card text-text-primary border border-border-active"
+          : "text-text-tertiary border border-transparent hover:text-text-secondary"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 export default App;

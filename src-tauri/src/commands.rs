@@ -1,6 +1,7 @@
 use crate::albumart;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::profiles::{self, ProfileStore};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -35,10 +36,22 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
-pub async fn compare_directories(source: String, target: String) -> Result<Vec<CompareEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || files::compare_dirs(&source, &target))
-        .await
-        .map_err(|e| format!("Compare failed: {}", e))?
+pub async fn compare_directories(
+    source: String,
+    target: String,
+    exclusions: Option<Vec<String>>,
+) -> Result<Vec<CompareEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut entries = files::compare_dirs(&source, &target)?;
+        if let Some(ref ex) = exclusions {
+            if !ex.is_empty() {
+                entries.retain(|e| !profiles::is_excluded(&e.relative_path, ex));
+            }
+        }
+        Ok(entries)
+    })
+    .await
+    .map_err(|e| format!("Compare failed: {}", e))?
 }
 
 #[tauri::command]
@@ -106,4 +119,32 @@ pub async fn fix_album_art(
     .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn delete_entry(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = std::path::Path::new(&path);
+        if !p.exists() {
+            return Err(format!("Path does not exist: {}", path));
+        }
+        if p.is_dir() {
+            std::fs::remove_dir_all(p)
+        } else {
+            std::fs::remove_file(p)
+        }
+        .map_err(|e| format!("Delete failed: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub fn get_profiles(app: AppHandle) -> Result<ProfileStore, String> {
+    profiles::load_profiles(&app)
+}
+
+#[tauri::command]
+pub fn save_profiles(store: ProfileStore, app: AppHandle) -> Result<(), String> {
+    profiles::save_profiles(&app, &store)
 }

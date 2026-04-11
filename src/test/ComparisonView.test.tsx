@@ -20,7 +20,7 @@ beforeEach(() => {
 describe("ComparisonView", () => {
   it("calls compare_directories on mount", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("compare_directories", {
@@ -32,7 +32,7 @@ describe("ComparisonView", () => {
 
   it("displays stats after comparison", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getAllByText("1 new").length).toBeGreaterThanOrEqual(1);
@@ -44,7 +44,7 @@ describe("ComparisonView", () => {
 
   it("shows source and target paths in header", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText("/source")).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("ComparisonView", () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={onBack} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={onBack} />);
 
     await waitFor(() => screen.getByText("1 matching"));
     await user.click(screen.getByRole("button", { name: /Browse/ }));
@@ -66,7 +66,7 @@ describe("ComparisonView", () => {
 
   it("defaults to Differences filter", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       // Should show non-same entries in tree nodes
@@ -78,7 +78,7 @@ describe("ComparisonView", () => {
 
   it("shows tree nodes with folder names", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText("Artist1")).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("ComparisonView", () => {
 
   it("shows file names within expanded folders", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     // Folders with differences are auto-expanded
     await waitFor(() => {
@@ -101,7 +101,7 @@ describe("ComparisonView", () => {
 
   it("shows Mirror button with correct count", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       // 1 source_only + 1 modified + 1 target_only = 3
@@ -111,7 +111,7 @@ describe("ComparisonView", () => {
 
   it("shows error when comparison fails", async () => {
     mockInvoke.mockRejectedValue("Source path not found");
-    render(<ComparisonView sourcePath="/bad" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/bad" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText("Source path not found")).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe("ComparisonView", () => {
       { relative_path: "song.mp3", is_dir: false, source_size: 5000, target_size: 5000, source_modified: 1700000000, target_modified: 1700000000, status: "same" as const },
     ];
     mockInvoke.mockResolvedValue(sameEntries);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText(/no differences found/)).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe("ComparisonView", () => {
 
   it("has filter buttons", async () => {
     mockInvoke.mockResolvedValue(ENTRIES);
-    render(<ComparisonView sourcePath="/source" targetPath="/target" onBack={vi.fn()} />);
+    render(<ComparisonView sourcePath="/source" targetPath="/target" exclusions={[]} onAddExclusion={vi.fn()} onBack={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Differences" })).toBeInTheDocument();

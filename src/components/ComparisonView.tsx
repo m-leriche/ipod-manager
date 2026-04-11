@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { Pill } from "./atoms/Pill";
+import { Spinner } from "./atoms/Spinner";
+import { ContextMenu } from "./molecules/ContextMenu";
+import type { ContextMenuItem } from "../types/profiles";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -39,7 +43,13 @@ interface TreeNode {
   dominant: Status | "mixed";
 }
 
-interface Props { sourcePath: string; targetPath: string; onBack: () => void; }
+interface Props {
+  sourcePath: string;
+  targetPath: string;
+  exclusions: string[];
+  onAddExclusion: (path: string) => void;
+  onBack: () => void;
+}
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -199,7 +209,7 @@ function collectActionableFiles(node: TreeNode): string[] {
 
 // ── Component ──────────────────────────────────────────────────────
 
-export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
+export function ComparisonView({ sourcePath, targetPath, exclusions, onAddExclusion, onBack }: Props) {
   const [entries, setEntries] = useState<CompareEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +219,7 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [result, setResult] = useState<CopyResult | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderPath: string } | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   const compare = useCallback(async () => {
@@ -233,17 +244,23 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
     return () => { unlisten?.(); };
   }, []);
 
+  // Apply exclusions client-side so adding a filter doesn't re-fetch
+  const visibleEntries = useMemo(() => {
+    if (exclusions.length === 0) return entries;
+    return entries.filter((e) => !exclusions.some((ex) => e.relative_path === ex || e.relative_path.startsWith(ex + "/")));
+  }, [entries, exclusions]);
+
   const filtered = useMemo(() => {
-    if (filter === "all") return entries;
-    if (filter === "differences") return entries.filter((e) => e.status !== "same");
-    return entries.filter((e) => e.status === filter);
-  }, [entries, filter]);
+    if (filter === "all") return visibleEntries;
+    if (filter === "differences") return visibleEntries.filter((e) => e.status !== "same");
+    return visibleEntries.filter((e) => e.status === filter);
+  }, [visibleEntries, filter]);
 
   const tree = useMemo(() => buildTree(filtered), [filtered]);
 
   const stats = useMemo(() => {
     const s = { source_only: 0, target_only: 0, modified: 0, same: 0 };
-    entries.forEach((e) => s[e.status]++);
+    visibleEntries.forEach((e) => s[e.status]++);
     return s;
   }, [entries]);
 
@@ -286,25 +303,25 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
   };
 
   const copyToTarget = () => run(async () => {
-    const ops: CopyOp[] = entries.filter((e) => selected.has(e.relative_path) && (e.status === "source_only" || e.status === "modified"))
+    const ops: CopyOp[] = visibleEntries.filter((e) => selected.has(e.relative_path) && (e.status === "source_only" || e.status === "modified"))
       .map((e) => ({ source_path: `${sourcePath}/${e.relative_path}`, dest_path: `${targetPath}/${e.relative_path}` }));
     if (ops.length) setResult(await invoke<CopyResult>("copy_files", { operations: ops }));
   });
 
   const copyToSource = () => run(async () => {
-    const ops: CopyOp[] = entries.filter((e) => selected.has(e.relative_path) && (e.status === "target_only" || e.status === "modified"))
+    const ops: CopyOp[] = visibleEntries.filter((e) => selected.has(e.relative_path) && (e.status === "target_only" || e.status === "modified"))
       .map((e) => ({ source_path: `${targetPath}/${e.relative_path}`, dest_path: `${sourcePath}/${e.relative_path}` }));
     if (ops.length) setResult(await invoke<CopyResult>("copy_files", { operations: ops }));
   });
 
   const deleteTarget = () => run(async () => {
-    const paths = entries.filter((e) => selected.has(e.relative_path) && e.status === "target_only").map((e) => `${targetPath}/${e.relative_path}`);
+    const paths = visibleEntries.filter((e) => selected.has(e.relative_path) && e.status === "target_only").map((e) => `${targetPath}/${e.relative_path}`);
     if (paths.length) setResult(await invoke<CopyResult>("delete_files", { paths }));
   });
 
   const mirrorToTarget = () => run(async () => {
-    const toCopy = entries.filter((e) => e.status === "source_only" || e.status === "modified");
-    const toDelete = entries.filter((e) => e.status === "target_only");
+    const toCopy = visibleEntries.filter((e) => e.status === "source_only" || e.status === "modified");
+    const toDelete = visibleEntries.filter((e) => e.status === "target_only");
     const total = toCopy.length + toDelete.length;
     if (total === 0) return;
 
@@ -330,8 +347,8 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
     setResult({ total, succeeded, failed, cancelled, errors });
   });
 
-  const nSrc = [...selected].filter((p) => { const e = entries.find((x) => x.relative_path === p); return e && (e.status === "source_only" || e.status === "modified"); }).length;
-  const nTgt = [...selected].filter((p) => { const e = entries.find((x) => x.relative_path === p); return e && e.status === "target_only"; }).length;
+  const nSrc = [...selected].filter((p) => { const e = visibleEntries.find((x) => x.relative_path === p); return e && (e.status === "source_only" || e.status === "modified"); }).length;
+  const nTgt = [...selected].filter((p) => { const e = visibleEntries.find((x) => x.relative_path === p); return e && e.status === "target_only"; }).length;
   const nMirror = stats.source_only + stats.modified + stats.target_only;
 
   // ── Render a tree node recursively ──
@@ -356,6 +373,10 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
           className={`flex items-center gap-2 py-1.5 pr-3 cursor-pointer select-none transition-colors hover:bg-bg-hover/50 ${folderBg}`}
           style={{ paddingLeft: `${12 + depth * 20}px` }}
           onClick={() => toggleExpand(node.path)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (node.path) setContextMenu({ x: e.clientX, y: e.clientY, folderPath: node.path });
+          }}
         >
           {/* Checkbox */}
           {actionable.length > 0 ? (
@@ -454,6 +475,11 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
           <span className="text-text-tertiary uppercase text-[10px] font-medium tracking-widest shrink-0">iPod</span>
           <span className="text-text-secondary font-medium overflow-hidden text-ellipsis whitespace-nowrap">{targetPath}</span>
         </div>
+        {exclusions.length > 0 && (
+          <span className="px-2 py-1 bg-accent/10 border border-accent/20 rounded-lg text-[10px] font-medium text-accent shrink-0">
+            {exclusions.length} filtered
+          </span>
+        )}
         <button onClick={compare} disabled={loading} className="px-2.5 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-xl text-xs shrink-0 hover:not-disabled:text-text-secondary hover:not-disabled:bg-bg-hover disabled:opacity-30 transition-all">↻</button>
       </div>
 
@@ -563,14 +589,21 @@ export function ComparisonView({ sourcePath, targetPath, onBack }: Props) {
           )}
         </div>
       )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: `Filter out "${contextMenu.folderPath.split("/").pop()}"`,
+              onClick: () => onAddExclusion(contextMenu.folderPath),
+            },
+          ] satisfies ContextMenuItem[]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
 
-function Pill({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return <button onClick={onClick} className="px-2.5 py-1 rounded-lg text-[10px] font-medium text-text-tertiary hover:text-text-secondary transition-all">{children}</button>;
-}
-
-function Spinner() {
-  return <span className="inline-block w-3 h-3 border-[1.5px] border-text-tertiary border-t-transparent rounded-full animate-spin mr-1.5 align-middle" />;
-}

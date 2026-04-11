@@ -138,7 +138,7 @@ export function MountPanel({ onMountChange, compact = false }: MountPanelProps) 
     : "bg-bg-elevated text-text-secondary";
 
   return (
-    <div className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-4 w-[260px] shrink-0" : "p-6 w-full max-w-md"}`}>
+    <div className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-4 w-[220px] shrink-0" : "p-6 w-full max-w-md"}`}>
       <div className="flex items-center justify-between mb-4">
         <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">Connection</span>
         <button

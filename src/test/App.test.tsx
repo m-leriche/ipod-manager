@@ -8,8 +8,11 @@ const mockInvoke = vi.mocked(invoke);
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  // MountPanel calls detect_ipod on mount — default to no iPod found
-  mockInvoke.mockResolvedValue(null);
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    if (cmd === "detect_ipod") return null;
+    if (cmd === "get_profiles") return { profiles: [] };
+    return null;
+  });
 });
 
 describe("App", () => {
@@ -18,28 +21,30 @@ describe("App", () => {
     expect(screen.getByText("iPod Manager")).toBeInTheDocument();
   });
 
-  it("shows both tab buttons", () => {
+  it("shows all three tab buttons", () => {
     render(<App />);
+    expect(screen.getByRole("button", { name: "File Explorer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "File Sync" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Album Art" })).toBeInTheDocument();
   });
 
-  it("defaults to Album Art tab", () => {
+  it("defaults to File Explorer tab", () => {
     render(<App />);
-    // Album Art tab active, AlbumArtManager renders its idle UI
-    expect(screen.getByText("Choose a music folder to scan for missing album art")).toBeInTheDocument();
+    expect(screen.getByText("Choose a folder to explore its contents")).toBeInTheDocument();
   });
 
-  it("disables File Sync tab when iPod is not mounted", () => {
-    render(<App />);
-    expect(screen.getByRole("button", { name: "File Sync" })).toBeDisabled();
-  });
-
-  it("does not switch to File Sync when disabled", async () => {
+  it("switches to File Sync tab on click", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "File Sync" }));
-    // Should still show Album Art content
+    expect(screen.getByText("Profile")).toBeInTheDocument();
+    expect(screen.getByText("Select or create a profile to start syncing folders")).toBeInTheDocument();
+  });
+
+  it("switches to Album Art tab on click", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Album Art" }));
     expect(screen.getByText("Choose a music folder to scan for missing album art")).toBeInTheDocument();
   });
 });

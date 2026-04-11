@@ -14,15 +14,9 @@ pub struct Profile {
     pub exclusions: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ProfileStore {
     pub profiles: Vec<Profile>,
-}
-
-impl Default for ProfileStore {
-    fn default() -> Self {
-        Self { profiles: vec![] }
-    }
 }
 
 fn profiles_path(app: &AppHandle) -> Result<PathBuf, String> {

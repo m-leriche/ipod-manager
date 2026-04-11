@@ -164,7 +164,24 @@ pub fn download_audio(
         }
     };
 
-    let stdout = child.stdout.take().expect("stdout piped");
+    let Some(stdout) = child.stdout.take() else {
+        return DownloadResult {
+            success: false,
+            cancelled: false,
+            file_path: None,
+            error: Some("Failed to capture yt-dlp stdout".to_string()),
+        };
+    };
+
+    // Drain stderr in a background thread to prevent pipe buffer deadlock
+    let stderr_handle = child.stderr.take().map(|mut stderr| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut stderr, &mut buf).unwrap_or_default();
+            buf
+        })
+    });
+
     let reader = std::io::BufReader::new(stdout);
     let mut file_path: Option<String> = None;
 
@@ -230,15 +247,8 @@ pub fn download_audio(
     };
 
     if !status.success() {
-        // Read stderr for error details
-        let stderr = child
-            .stderr
-            .take()
-            .and_then(|mut s| {
-                let mut buf = String::new();
-                std::io::Read::read_to_string(&mut s, &mut buf).ok()?;
-                Some(buf)
-            })
+        let stderr = stderr_handle
+            .and_then(|h| h.join().ok())
             .unwrap_or_default();
 
         return DownloadResult {

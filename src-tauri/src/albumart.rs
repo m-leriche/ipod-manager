@@ -126,6 +126,9 @@ fn scan_dir(dir: &Path, albums: &mut Vec<AlbumInfo>, app: &AppHandle) {
         if entry.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
+        if entry.file_type().is_ok_and(|ft| ft.is_symlink()) {
+            continue;
+        }
         if path.is_dir() {
             subdirs.push(path);
         } else if is_audio(&path) {

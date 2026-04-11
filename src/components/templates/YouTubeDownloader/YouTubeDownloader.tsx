@@ -33,13 +33,16 @@ export const YouTubeDownloader = () => {
         setDepsError(`${e}`);
       });
 
+    let active = true;
     listen<DownloadProgress>("youtube-progress", (e) => {
-      setProgress(e.payload);
+      if (active) setProgress(e.payload);
     }).then((fn) => {
-      unlistenRef.current = fn;
+      if (active) unlistenRef.current = fn;
+      else fn();
     });
 
     return () => {
+      active = false;
       unlistenRef.current?.();
     };
   }, []);

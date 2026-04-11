@@ -3,6 +3,7 @@ mod commands;
 mod disk;
 mod files;
 mod profiles;
+mod youtube;
 
 use files::SyncCancel;
 
@@ -36,6 +37,9 @@ pub fn run() {
             commands::delete_entry,
             commands::get_profiles,
             commands::save_profiles,
+            commands::check_yt_dependencies,
+            commands::fetch_video_info,
+            commands::download_audio,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

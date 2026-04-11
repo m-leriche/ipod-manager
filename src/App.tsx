@@ -3,11 +3,11 @@ import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
 import { AlbumArtManager } from "./components/templates/AlbumArtManager/AlbumArtManager";
+import { YouTubeDownloader } from "./components/templates/YouTubeDownloader/YouTubeDownloader";
 
-type Tab = "browse" | "sync" | "albumart";
+type Tab = "browse" | "sync" | "albumart" | "youtube";
 
 const App = () => {
-  const [isMounted, setIsMounted] = useState(false);
   const [tab, setTab] = useState<Tab>("browse");
 
   return (
@@ -16,7 +16,7 @@ const App = () => {
         <h1 className="text-sm font-medium tracking-tight text-text-secondary">iPod Manager</h1>
       </header>
       <main className="flex-1 flex gap-4 p-4 items-start">
-        <MountPanel onMountChange={setIsMounted} compact />
+        <MountPanel compact />
         <div className="flex-1 min-w-0 flex flex-col gap-2.5 max-h-[calc(100vh-72px)]">
           <div className="flex gap-1 shrink-0">
             <TabButton active={tab === "browse"} onClick={() => setTab("browse")}>
@@ -28,10 +28,14 @@ const App = () => {
             <TabButton active={tab === "albumart"} onClick={() => setTab("albumart")}>
               Album Art
             </TabButton>
+            <TabButton active={tab === "youtube"} onClick={() => setTab("youtube")}>
+              YouTube to Audio
+            </TabButton>
           </div>
           {tab === "browse" && <BrowseExplorer />}
           {tab === "sync" && <SyncManager />}
           {tab === "albumart" && <AlbumArtManager />}
+          {tab === "youtube" && <YouTubeDownloader />}
         </div>
       </main>
     </div>

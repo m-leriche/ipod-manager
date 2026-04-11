@@ -6,10 +6,18 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Chapter {
+    pub title: String,
+    pub start_time: f64,
+    pub end_time: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct VideoInfo {
     pub title: String,
     pub duration: String,
     pub uploader: String,
+    pub chapters: Vec<Chapter>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -25,7 +33,7 @@ pub struct DownloadProgress {
 pub struct DownloadResult {
     pub success: bool,
     pub cancelled: bool,
-    pub file_path: Option<String>,
+    pub file_paths: Vec<String>,
     pub error: Option<String>,
 }
 
@@ -98,10 +106,26 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
         .unwrap_or("Unknown")
         .to_string();
 
+    let chapters = json["chapters"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|ch| {
+                    Some(Chapter {
+                        title: ch["title"].as_str()?.to_string(),
+                        start_time: ch["start_time"].as_f64()?,
+                        end_time: ch["end_time"].as_f64()?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     Ok(VideoInfo {
         title,
         duration,
         uploader,
+        chapters,
     })
 }
 
@@ -111,6 +135,7 @@ pub fn download_audio(
     url: &str,
     output_dir: &str,
     format: &str,
+    split_chapters: bool,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> DownloadResult {
@@ -118,7 +143,7 @@ pub fn download_audio(
         return DownloadResult {
             success: false,
             cancelled: false,
-            file_path: None,
+            file_paths: vec![],
             error: Some(format!("Invalid format: {}", format)),
         };
     }
@@ -139,9 +164,20 @@ pub fn download_audio(
         args.push("0".to_string());
     }
 
+    args.extend(["-o".to_string(), output_template]);
+
+    if split_chapters {
+        args.push("--split-chapters".to_string());
+        args.extend([
+            "-o".to_string(),
+            format!(
+                "chapter:{}/%(title)s/%(section_number)d. %(section_title)s.%(ext)s",
+                output_dir
+            ),
+        ]);
+    }
+
     args.extend([
-        "-o".to_string(),
-        output_template,
         "--newline".to_string(),
         "--no-mtime".to_string(),
         url.to_string(),
@@ -158,7 +194,7 @@ pub fn download_audio(
             return DownloadResult {
                 success: false,
                 cancelled: false,
-                file_path: None,
+                file_paths: vec![],
                 error: Some(format!("Failed to start yt-dlp: {}", e)),
             };
         }
@@ -168,7 +204,7 @@ pub fn download_audio(
         return DownloadResult {
             success: false,
             cancelled: false,
-            file_path: None,
+            file_paths: vec![],
             error: Some("Failed to capture yt-dlp stdout".to_string()),
         };
     };
@@ -183,7 +219,8 @@ pub fn download_audio(
     });
 
     let reader = std::io::BufReader::new(stdout);
-    let mut file_path: Option<String> = None;
+    let mut file_paths: Vec<String> = Vec::new();
+    let mut download_dest: Option<String> = None;
 
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -192,22 +229,53 @@ pub fn download_audio(
             return DownloadResult {
                 success: false,
                 cancelled: true,
-                file_path: None,
+                file_paths: vec![],
                 error: None,
             };
         }
 
         let Ok(line) = line else { continue };
 
-        // Capture destination path
+        // Capture intermediate download destination (fallback for non-split)
         if line.contains("[download] Destination:") {
             if let Some(path) = line.split("Destination:").nth(1) {
-                file_path = Some(path.trim().to_string());
+                download_dest = Some(path.trim().to_string());
             }
         }
 
-        // Capture final merged/converted path
+        // Chapter splitting progress
+        if line.contains("[SplitChapters]") {
+            let _ = app.emit(
+                "youtube-progress",
+                DownloadProgress {
+                    phase: "splitting".to_string(),
+                    percent: 100.0,
+                    speed: None,
+                    eta: None,
+                    title: None,
+                },
+            );
+            continue;
+        }
+
+        // Capture final audio file paths from ExtractAudio/ffmpeg lines
         if line.contains("[ExtractAudio]") || line.contains("[ffmpeg]") {
+            let title = if line.contains("Destination:") {
+                if let Some(path) = line.split("Destination:").nth(1) {
+                    let path = path.trim().to_string();
+                    let name = std::path::Path::new(&path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(String::from);
+                    file_paths.push(path);
+                    name
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let _ = app.emit(
                 "youtube-progress",
                 DownloadProgress {
@@ -215,22 +283,21 @@ pub fn download_audio(
                     percent: 100.0,
                     speed: None,
                     eta: None,
-                    title: None,
+                    title,
                 },
             );
-
-            // Try to extract output path from lines like:
-            // [ExtractAudio] Destination: /path/to/file.flac
-            if line.contains("Destination:") {
-                if let Some(path) = line.split("Destination:").nth(1) {
-                    file_path = Some(path.trim().to_string());
-                }
-            }
             continue;
         }
 
         if let Some(progress) = parse_progress_line(&line) {
             let _ = app.emit("youtube-progress", progress);
+        }
+    }
+
+    // Fallback: if no ExtractAudio destinations captured, use download dest
+    if file_paths.is_empty() {
+        if let Some(path) = download_dest {
+            file_paths.push(path);
         }
     }
 
@@ -240,7 +307,7 @@ pub fn download_audio(
             return DownloadResult {
                 success: false,
                 cancelled: false,
-                file_path: None,
+                file_paths: vec![],
                 error: Some(format!("Process error: {}", e)),
             };
         }
@@ -254,7 +321,7 @@ pub fn download_audio(
         return DownloadResult {
             success: false,
             cancelled: false,
-            file_path: None,
+            file_paths: vec![],
             error: Some(format!("yt-dlp exited with error: {}", stderr.trim())),
         };
     }
@@ -262,7 +329,7 @@ pub fn download_audio(
     DownloadResult {
         success: true,
         cancelled: false,
-        file_path,
+        file_paths,
         error: None,
     }
 }

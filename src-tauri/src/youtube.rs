@@ -170,7 +170,10 @@ pub fn download_audio(
         args.push("--split-chapters".to_string());
         args.extend([
             "-o".to_string(),
-            format!("chapter:{}/%(title)s/%(section_number)d. %(section_title)s.%(ext)s", output_dir),
+            format!(
+                "chapter:{}/%(title)s/%(section_number)d. %(section_title)s.%(ext)s",
+                output_dir
+            ),
         ]);
     }
 

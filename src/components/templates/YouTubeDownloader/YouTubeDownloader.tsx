@@ -214,7 +214,9 @@ export const YouTubeDownloader = () => {
                 {progress?.phase === "splitting"
                   ? "Splitting chapters..."
                   : progress?.phase === "converting"
-                    ? (progress.title ? `Converting: ${progress.title}` : "Converting...")
+                    ? progress.title
+                      ? `Converting: ${progress.title}`
+                      : "Converting..."
                     : "Downloading..."}
               </span>
               <span className="text-[11px] text-text-secondary">

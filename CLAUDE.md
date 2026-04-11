@@ -92,6 +92,27 @@ Rules:
 - No barrel files. Import directly from the component's folder — never create re-export files that just forward imports.
 - Name component files `ComponentName.tsx`, not `index.tsx`. Imports should be explicit: `from "./ComponentName/ComponentName"`.
 
+## Pre-PR Checklist
+
+Before committing and pushing, always run these checks and fix any issues:
+
+```bash
+# Format frontend code
+npx prettier --write "src/**/*.{ts,tsx}"
+
+# Format Rust code
+cd src-tauri && cargo fmt
+
+# Type-check frontend
+npx tsc --noEmit
+
+# Check Rust compiles
+cd src-tauri && cargo check
+
+# Run all tests
+npm test
+```
+
 ## Code Style
 
 - Write clean, concise code. No fluff, no over-engineering.

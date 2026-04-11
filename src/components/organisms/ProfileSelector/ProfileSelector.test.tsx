@@ -4,8 +4,8 @@ import { describe, it, expect, vi } from "vitest";
 import { ProfileSelector } from "./ProfileSelector";
 
 const PROFILES = [
-  { name: "My iPod", exclusions: ["Podcasts"] },
-  { name: "Backup", exclusions: [] },
+  { name: "My iPod", source_path: null, target_path: null, exclusions: ["Podcasts"] },
+  { name: "Backup", source_path: null, target_path: null, exclusions: [] },
 ];
 
 const defaults = {

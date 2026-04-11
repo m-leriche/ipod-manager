@@ -2,6 +2,7 @@ use crate::albumart;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
 use crate::profiles::{self, ProfileStore};
+use crate::youtube;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -147,4 +148,38 @@ pub fn get_profiles(app: AppHandle) -> Result<ProfileStore, String> {
 #[tauri::command]
 pub fn save_profiles(store: ProfileStore, app: AppHandle) -> Result<(), String> {
     profiles::save_profiles(&app, &store)
+}
+
+#[tauri::command]
+pub async fn check_yt_dependencies() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(youtube::check_dependencies)
+        .await
+        .map_err(|e| format!("Check failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn fetch_video_info(url: String) -> Result<youtube::VideoInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || youtube::fetch_video_info(&url))
+        .await
+        .map_err(|e| format!("Fetch failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn download_audio(
+    url: String,
+    output_dir: String,
+    format: String,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<youtube::DownloadResult, String> {
+    let flag = cancel.flag();
+    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        youtube::download_audio(&url, &output_dir, &format, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
 }

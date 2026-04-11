@@ -2,6 +2,7 @@ mod albumart;
 mod commands;
 mod disk;
 mod files;
+mod profiles;
 
 use files::SyncCancel;
 
@@ -32,6 +33,9 @@ pub fn run() {
             commands::cancel_sync,
             commands::scan_album_art,
             commands::fix_album_art,
+            commands::delete_entry,
+            commands::get_profiles,
+            commands::save_profiles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

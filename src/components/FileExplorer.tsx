@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Spinner } from "./atoms/Spinner";
+import { ContextMenu } from "./molecules/ContextMenu";
 
 interface FileEntry {
   name: string;
@@ -40,13 +42,15 @@ interface Props {
   allowParentNavigation?: boolean;
   onSelectFolder?: (path: string) => void;
   selectedFolder?: string | null;
+  allowDelete?: boolean;
 }
 
-export function FileExplorer({ rootPath, rootLabel, allowParentNavigation = false, onSelectFolder, selectedFolder }: Props) {
+export function FileExplorer({ rootPath, rootLabel, allowParentNavigation = false, onSelectFolder, selectedFolder, allowDelete = false }: Props) {
   const [path, setPath] = useState(rootPath);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
 
   const load = useCallback(async (p: string) => {
     setLoading(true); setError(null);
@@ -60,6 +64,18 @@ export function FileExplorer({ rootPath, rootLabel, allowParentNavigation = fals
   useEffect(() => { load(rootPath); }, [load, rootPath]);
 
   const into = (name: string) => load(path.endsWith("/") ? `${path}${name}` : `${path}/${name}`);
+
+  const handleDelete = async (entry: FileEntry) => {
+    const fullPath = path.endsWith("/") ? `${path}${entry.name}` : `${path}/${entry.name}`;
+    const kind = entry.is_dir ? "folder" : "file";
+    if (!window.confirm(`Delete ${kind} "${entry.name}"?`)) return;
+    try {
+      await invoke("delete_entry", { path: fullPath });
+      setEntries((prev) => prev.filter((e) => e.name !== entry.name));
+    } catch (e) {
+      setError(`Delete failed: ${e}`);
+    }
+  };
   const up = () => {
     if (!allowParentNavigation && path === rootPath) return;
     if (path === "/") return;
@@ -132,7 +148,12 @@ export function FileExplorer({ rootPath, rootLabel, allowParentNavigation = fals
             </thead>
             <tbody>
               {entries.map((e) => (
-                <tr key={e.name} className="transition-colors hover:bg-bg-hover/50 group" onDoubleClick={() => e.is_dir && into(e.name)}>
+                <tr
+                  key={e.name}
+                  className="transition-colors hover:bg-bg-hover/50 group"
+                  onDoubleClick={() => e.is_dir && into(e.name)}
+                  onContextMenu={allowDelete ? (ev) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, entry: e }); } : undefined}
+                >
                   <td className="px-3 py-[5px] text-[11px] border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap">
                     <span className="mr-1.5 text-xs align-middle opacity-60">{icon(e)}</span>
                     {e.is_dir ? (
@@ -154,6 +175,17 @@ export function FileExplorer({ rootPath, rootLabel, allowParentNavigation = fals
       <div className="px-3 py-1.5 border-t border-border text-[10px] text-text-tertiary shrink-0">
         {!loading && !error && `${entries.filter((e) => e.is_dir).length} folders, ${entries.filter((e) => !e.is_dir).length} files`}
       </div>
+
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={[
+            { label: `Delete "${ctxMenu.entry.name}"`, onClick: () => handleDelete(ctxMenu.entry) },
+          ]}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }
@@ -166,6 +198,3 @@ function CenterMsg({ children, className = "" }: { children: React.ReactNode; cl
   return <div className={`py-12 text-center text-text-tertiary text-xs ${className}`}>{children}</div>;
 }
 
-function Spinner() {
-  return <span className="inline-block w-3 h-3 border-[1.5px] border-text-tertiary border-t-transparent rounded-full animate-spin mr-1.5 align-middle" />;
-}

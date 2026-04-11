@@ -1,37 +1,58 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { SyncManager } from "../components/SyncManager";
 
 const mockInvoke = vi.mocked(invoke);
 
+const STORE_WITH_PROFILE = {
+  profiles: [{ name: "Test", source_path: null, target_path: null, exclusions: [] }],
+};
+
 beforeEach(() => {
   mockInvoke.mockReset();
-  // FileExplorer calls list_directory on mount
-  mockInvoke.mockResolvedValue([]);
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    if (cmd === "get_profiles") return { profiles: [] };
+    return [];
+  });
 });
 
 describe("SyncManager", () => {
-  it("renders dual explorer layout", () => {
+  it("renders ProfileSelector", () => {
     render(<SyncManager />);
-    // Should show source and iPod path labels
-    expect(screen.getByText("Source")).toBeInTheDocument();
-    expect(screen.getByText("iPod")).toBeInTheDocument();
+    expect(screen.getByText("Profile")).toBeInTheDocument();
   });
 
-  it("shows Compare Folders button", () => {
+  it("shows empty state when no profile is selected", () => {
     render(<SyncManager />);
-    expect(screen.getByRole("button", { name: "Compare Folders" })).toBeInTheDocument();
+    expect(screen.getByText("Select or create a profile to start syncing folders")).toBeInTheDocument();
   });
 
-  it("disables Compare button when no folders are selected", () => {
+  it("shows folder pickers when profile is selected", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_profiles") return STORE_WITH_PROFILE;
+      return [];
+    });
     render(<SyncManager />);
-    expect(screen.getByRole("button", { name: "Compare Folders" })).toBeDisabled();
+
+    await waitFor(() => {
+      expect(screen.getByText("Test")).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByRole("combobox"), "Test");
+
+    await waitFor(() => {
+      expect(screen.getByText("Source")).toBeInTheDocument();
+      expect(screen.getByText("Target")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Compare Folders" })).toBeDisabled();
+    });
   });
 
-  it("shows placeholder text for unselected folders", () => {
+  it("shows no profile selected by default", () => {
     render(<SyncManager />);
-    expect(screen.getByText("Select folder on left")).toBeInTheDocument();
-    expect(screen.getByText("Select folder on right")).toBeInTheDocument();
+    const select = screen.getByRole("combobox");
+    expect(select).toHaveValue("");
   });
 });

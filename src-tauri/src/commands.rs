@@ -64,11 +64,10 @@ pub async fn copy_files(
     let flag = cancel.flag();
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        files::copy_file_list(operations, app, flag)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || files::copy_file_list(operations, app, flag))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
 }
@@ -82,11 +81,10 @@ pub async fn delete_files(
     let flag = cancel.flag();
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        files::delete_file_list(paths, app, flag)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || files::delete_file_list(paths, app, flag))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
 }
@@ -98,7 +96,10 @@ pub fn cancel_sync(cancel: State<'_, SyncCancel>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn scan_album_art(path: String, app: AppHandle) -> Result<Vec<albumart::AlbumInfo>, String> {
+pub async fn scan_album_art(
+    path: String,
+    app: AppHandle,
+) -> Result<Vec<albumart::AlbumInfo>, String> {
     tauri::async_runtime::spawn_blocking(move || albumart::scan_albums(&path, app))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
@@ -113,11 +114,10 @@ pub async fn fix_album_art(
     let flag = cancel.flag();
     flag.store(false, std::sync::atomic::Ordering::SeqCst);
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        albumart::fix_album_art(folders, app, flag)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || albumart::fix_album_art(folders, app, flag))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
 }

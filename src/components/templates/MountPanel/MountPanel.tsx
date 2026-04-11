@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Spinner } from "../../atoms/Spinner/Spinner";
+import { StatusDot } from "./StatusDot";
 import type { DiskInfo, Status, Message, MountPanelProps } from "./types";
 import { fmtBytes } from "./helpers";
 
@@ -90,16 +92,6 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && status === "found" && password) handleMount();
   };
-
-  const Spinner = () => (
-    <span className="inline-block w-3 h-3 border-[1.5px] border-text-secondary border-t-transparent rounded-full animate-spin mr-1.5 align-middle" />
-  );
-
-  const StatusDot = ({ active }: { active: boolean }) => (
-    <span
-      className={`w-1.5 h-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px_var(--color-success)]" : "bg-danger shadow-[0_0_6px_var(--color-danger)]"}`}
-    />
-  );
 
   const statusLabel = () => {
     switch (status) {

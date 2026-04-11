@@ -1,6 +1,6 @@
 use serde::Serialize;
-use std::process::Command;
 use std::path::Path;
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DiskInfo {
@@ -74,19 +74,22 @@ pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
     Ok(None)
 }
 
-/// Parse a line like: "2: DOS_FAT_32 IPOD 119.1 GB disk5s1"
-fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
+/// Extract identifier, size, and name from a diskutil FAT partition line.
+/// Pure parsing — no I/O. Returns (identifier, size, name).
+fn parse_partition_fields(line: &str) -> Option<(String, String, String)> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     // Find the disk identifier (last part, starts with "disk")
-    let identifier = parts.iter().rev().find(|p| p.starts_with("disk"))?.to_string();
+    let identifier = parts
+        .iter()
+        .rev()
+        .find(|p| p.starts_with("disk"))?
+        .to_string();
 
     // Find the size (number followed by GB/TB/MB)
     let mut size = String::new();
     for (i, part) in parts.iter().enumerate() {
         if let Some(next) = parts.get(i + 1) {
-            if (*next == "GB" || *next == "TB" || *next == "MB")
-                && part.parse::<f64>().is_ok()
-            {
+            if (*next == "GB" || *next == "TB" || *next == "MB") && part.parse::<f64>().is_ok() {
                 size = format!("{} {}", part, next);
                 break;
             }
@@ -94,13 +97,25 @@ fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
     }
 
     // The name is typically between the filesystem type and the size
-    let fs_type_idx = parts.iter().position(|p| *p == "DOS_FAT_32" || *p == "Windows_FAT_32")?;
-    let size_idx = parts.iter().position(|p| p.parse::<f64>().is_ok()).unwrap_or(parts.len());
+    let fs_type_idx = parts
+        .iter()
+        .position(|p| *p == "DOS_FAT_32" || *p == "Windows_FAT_32")?;
+    let size_idx = parts
+        .iter()
+        .position(|p| p.parse::<f64>().is_ok())
+        .unwrap_or(parts.len());
     let name = if size_idx > fs_type_idx + 1 {
         parts[fs_type_idx + 1..size_idx].join(" ")
     } else {
         String::new()
     };
+
+    Some((identifier, size, name))
+}
+
+/// Parse a line like: "2: DOS_FAT_32 IPOD 119.1 GB disk5s1"
+fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
+    let (identifier, size, name) = parse_partition_fields(line)?;
 
     // Check mount status
     let mount_point = get_mount_point(&identifier);
@@ -191,9 +206,18 @@ fn get_space_info(mount_point: &str) -> (Option<u64>, Option<u64>, Option<u64>) 
     };
     let cols: Vec<&str> = line.split_whitespace().collect();
     // df -k columns: Filesystem 1024-blocks Used Available Capacity ...
-    let total = cols.get(1).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
-    let used = cols.get(2).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
-    let free = cols.get(3).and_then(|s| s.parse::<u64>().ok()).map(|kb| kb * 1024);
+    let total = cols
+        .get(1)
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|kb| kb * 1024);
+    let used = cols
+        .get(2)
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|kb| kb * 1024);
+    let free = cols
+        .get(3)
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|kb| kb * 1024);
     (total, used, free)
 }
 
@@ -269,7 +293,10 @@ pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
     }
 
     // Step 1: Unmount from any existing mount point
-    let _ = sudo_run(password, &["diskutil", "unmount", &format!("/dev/{}", identifier)]);
+    let _ = sudo_run(
+        password,
+        &["diskutil", "unmount", &format!("/dev/{}", identifier)],
+    );
 
     // Step 2: Create mount point
     sudo_run(password, &["mkdir", "-p", "/Volumes/IPOD"])
@@ -278,7 +305,13 @@ pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
     // Step 3: Mount using mount -t msdos (exactly like your terminal command)
     sudo_run(
         password,
-        &["mount", "-t", "msdos", &format!("/dev/{}", identifier), "/Volumes/IPOD"],
+        &[
+            "mount",
+            "-t",
+            "msdos",
+            &format!("/dev/{}", identifier),
+            "/Volumes/IPOD",
+        ],
     )
     .map_err(|e| format!("Mount failed: {}", e))?;
 
@@ -299,5 +332,52 @@ pub fn unmount_ipod_disk() -> Result<(), String> {
             "Unmount failed: {}",
             String::from_utf8_lossy(&output.stderr)
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_standard_fat32_line() {
+        let line = "2: DOS_FAT_32 IPOD 119.1 GB disk5s2";
+        let (id, size, name) = parse_partition_fields(line).unwrap();
+        assert_eq!(id, "disk5s2");
+        assert_eq!(size, "119.1 GB");
+        assert_eq!(name, "IPOD");
+    }
+
+    #[test]
+    fn parse_windows_fat32_line() {
+        let line = "2: Windows_FAT_32 IPOD 119.1 GB disk5s1";
+        let (id, size, name) = parse_partition_fields(line).unwrap();
+        assert_eq!(id, "disk5s1");
+        assert_eq!(size, "119.1 GB");
+        assert_eq!(name, "IPOD");
+    }
+
+    #[test]
+    fn parse_multi_word_name() {
+        let line = "2: DOS_FAT_32 MY IPOD 64.0 GB disk3s1";
+        let (id, size, name) = parse_partition_fields(line).unwrap();
+        assert_eq!(id, "disk3s1");
+        assert_eq!(size, "64.0 GB");
+        assert_eq!(name, "MY IPOD");
+    }
+
+    #[test]
+    fn parse_mb_size() {
+        let line = "2: DOS_FAT_32 SHUFFLE 512.0 MB disk2s1";
+        let (id, size, name) = parse_partition_fields(line).unwrap();
+        assert_eq!(id, "disk2s1");
+        assert_eq!(size, "512.0 MB");
+        assert_eq!(name, "SHUFFLE");
+    }
+
+    #[test]
+    fn parse_no_fat_type_returns_none() {
+        let line = "2: Apple_APFS Container 119.1 GB disk1s2";
+        assert!(parse_partition_fields(line).is_none());
     }
 }

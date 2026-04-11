@@ -34,10 +34,20 @@ pub struct DownloadResult {
 pub fn check_dependencies() -> Result<(), String> {
     let mut missing = Vec::new();
 
-    if Command::new("which").arg("yt-dlp").output().map(|o| !o.status.success()).unwrap_or(true) {
+    if Command::new("which")
+        .arg("yt-dlp")
+        .output()
+        .map(|o| !o.status.success())
+        .unwrap_or(true)
+    {
         missing.push("yt-dlp");
     }
-    if Command::new("which").arg("ffmpeg").output().map(|o| !o.status.success()).unwrap_or(true) {
+    if Command::new("which")
+        .arg("ffmpeg")
+        .output()
+        .map(|o| !o.status.success())
+        .unwrap_or(true)
+    {
         missing.push("ffmpeg");
     }
 

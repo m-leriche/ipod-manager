@@ -75,8 +75,7 @@ pub fn list_dir(path: &str) -> Result<Vec<FileEntry>, String> {
         .canonicalize()
         .map_err(|e| format!("Invalid path: {}", e))?;
 
-    let entries = fs::read_dir(&resolved)
-        .map_err(|e| format!("Cannot read directory: {}", e))?;
+    let entries = fs::read_dir(&resolved).map_err(|e| format!("Cannot read directory: {}", e))?;
 
     let mut results: Vec<FileEntry> = Vec::new();
 
@@ -138,8 +137,8 @@ fn collect_files_recursive(
     current: &Path,
     map: &mut HashMap<String, (u64, u64)>,
 ) -> Result<(), String> {
-    let entries = fs::read_dir(current)
-        .map_err(|e| format!("Cannot read {}: {}", current.display(), e))?;
+    let entries =
+        fs::read_dir(current).map_err(|e| format!("Cannot read {}: {}", current.display(), e))?;
 
     for entry in entries {
         let entry = match entry {
@@ -254,9 +253,11 @@ pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, Str
             "same" => 3,
             _ => 4,
         };
-        priority(&a.status)
-            .cmp(&priority(&b.status))
-            .then_with(|| a.relative_path.to_lowercase().cmp(&b.relative_path.to_lowercase()))
+        priority(&a.status).cmp(&priority(&b.status)).then_with(|| {
+            a.relative_path
+                .to_lowercase()
+                .cmp(&b.relative_path.to_lowercase())
+        })
     });
 
     Ok(results)
@@ -265,8 +266,7 @@ pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, Str
 /// Check available disk space at the given path (bytes).
 fn available_space(path: &Path) -> Option<u64> {
     // Use `df` to get available space — works reliably on macOS for all volume types
-    let mount = path.ancestors()
-        .find(|p| p.exists())?;
+    let mount = path.ancestors().find(|p| p.exists())?;
     let output = Command::new("df")
         .arg("-k") // 1K blocks
         .arg(mount)
@@ -292,9 +292,15 @@ fn is_no_space(err: &io::Error) -> bool {
 }
 
 fn fmt_bytes(b: u64) -> String {
-    if b < 1024 { return format!("{} B", b); }
-    if b < 1048576 { return format!("{:.1} KB", b as f64 / 1024.0); }
-    if b < 1073741824 { return format!("{:.1} MB", b as f64 / 1048576.0); }
+    if b < 1024 {
+        return format!("{} B", b);
+    }
+    if b < 1048576 {
+        return format!("{:.1} KB", b as f64 / 1024.0);
+    }
+    if b < 1073741824 {
+        return format!("{:.1} MB", b as f64 / 1048576.0);
+    }
     format!("{:.2} GB", b as f64 / 1073741824.0)
 }
 
@@ -314,8 +320,12 @@ pub fn copy_file_list(
     cancel_flag.store(false, Ordering::SeqCst);
 
     // Pre-flight: estimate required space vs available
-    if let Some(first_dest) = operations.first().map(|op| Path::new(&op.dest_path).to_path_buf()) {
-        let needed: u64 = operations.iter()
+    if let Some(first_dest) = operations
+        .first()
+        .map(|op| Path::new(&op.dest_path).to_path_buf())
+    {
+        let needed: u64 = operations
+            .iter()
             .filter_map(|op| fs::metadata(&op.source_path).ok())
             .map(|m| m.len())
             .sum();
@@ -327,7 +337,13 @@ pub fn copy_file_list(
                     fmt_bytes(needed),
                     fmt_bytes(avail),
                 ));
-                return CopyResult { total, succeeded: 0, failed: total, cancelled: false, errors };
+                return CopyResult {
+                    total,
+                    succeeded: 0,
+                    failed: total,
+                    cancelled: false,
+                    errors,
+                };
             }
         }
     }
@@ -343,12 +359,15 @@ pub fn copy_file_list(
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| op.source_path.clone());
 
-        let _ = app.emit("sync-progress", SyncProgress {
-            total,
-            completed: i,
-            current_file: file_name,
-            phase: "copying".to_string(),
-        });
+        let _ = app.emit(
+            "sync-progress",
+            SyncProgress {
+                total,
+                completed: i,
+                current_file: file_name,
+                phase: "copying".to_string(),
+            },
+        );
 
         let src = Path::new(&op.source_path);
         let dest = Path::new(&op.dest_path);
@@ -379,14 +398,27 @@ pub fn copy_file_list(
         }
     }
 
-    let _ = app.emit("sync-progress", SyncProgress {
-        total,
-        completed: succeeded + failed,
-        current_file: String::new(),
-        phase: if cancelled { "cancelled".to_string() } else { "done".to_string() },
-    });
+    let _ = app.emit(
+        "sync-progress",
+        SyncProgress {
+            total,
+            completed: succeeded + failed,
+            current_file: String::new(),
+            phase: if cancelled {
+                "cancelled".to_string()
+            } else {
+                "done".to_string()
+            },
+        },
+    );
 
-    CopyResult { total, succeeded, failed, cancelled, errors }
+    CopyResult {
+        total,
+        succeeded,
+        failed,
+        cancelled,
+        errors,
+    }
 }
 
 /// Delete files with per-file progress events and cancellation support.
@@ -415,12 +447,15 @@ pub fn delete_file_list(
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| path_str.clone());
 
-        let _ = app.emit("sync-progress", SyncProgress {
-            total,
-            completed: i,
-            current_file: file_name,
-            phase: "deleting".to_string(),
-        });
+        let _ = app.emit(
+            "sync-progress",
+            SyncProgress {
+                total,
+                completed: i,
+                current_file: file_name,
+                phase: "deleting".to_string(),
+            },
+        );
 
         let path = Path::new(path_str);
         if !path.exists() {
@@ -443,12 +478,82 @@ pub fn delete_file_list(
         }
     }
 
-    let _ = app.emit("sync-progress", SyncProgress {
-        total,
-        completed: succeeded + failed,
-        current_file: String::new(),
-        phase: if cancelled { "cancelled".to_string() } else { "done".to_string() },
-    });
+    let _ = app.emit(
+        "sync-progress",
+        SyncProgress {
+            total,
+            completed: succeeded + failed,
+            current_file: String::new(),
+            phase: if cancelled {
+                "cancelled".to_string()
+            } else {
+                "done".to_string()
+            },
+        },
+    );
 
-    CopyResult { total, succeeded, failed, cancelled, errors }
+    CopyResult {
+        total,
+        succeeded,
+        failed,
+        cancelled,
+        errors,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fmt_bytes_zero() {
+        assert_eq!(fmt_bytes(0), "0 B");
+    }
+
+    #[test]
+    fn fmt_bytes_bytes() {
+        assert_eq!(fmt_bytes(512), "512 B");
+    }
+
+    #[test]
+    fn fmt_bytes_kilobytes() {
+        assert_eq!(fmt_bytes(1024), "1.0 KB");
+        assert_eq!(fmt_bytes(1536), "1.5 KB");
+    }
+
+    #[test]
+    fn fmt_bytes_megabytes() {
+        assert_eq!(fmt_bytes(1048576), "1.0 MB");
+        assert_eq!(fmt_bytes(1572864), "1.5 MB");
+    }
+
+    #[test]
+    fn fmt_bytes_gigabytes() {
+        assert_eq!(fmt_bytes(1073741824), "1.00 GB");
+        assert_eq!(fmt_bytes(2684354560), "2.50 GB");
+    }
+
+    #[test]
+    fn is_no_space_os_code_28() {
+        let err = io::Error::from_raw_os_error(28);
+        assert!(is_no_space(&err));
+    }
+
+    #[test]
+    fn is_no_space_message_match() {
+        let err = io::Error::new(io::ErrorKind::Other, "No space left on device");
+        assert!(is_no_space(&err));
+    }
+
+    #[test]
+    fn is_no_space_disk_full_message() {
+        let err = io::Error::new(io::ErrorKind::Other, "Disk full");
+        assert!(is_no_space(&err));
+    }
+
+    #[test]
+    fn is_no_space_unrelated_error() {
+        let err = io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied");
+        assert!(!is_no_space(&err));
+    }
 }

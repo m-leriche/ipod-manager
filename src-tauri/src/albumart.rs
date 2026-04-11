@@ -14,8 +14,16 @@ const AUDIO_EXT: &[&str] = &[
 ];
 
 const COVER_NAMES: &[&str] = &[
-    "cover.jpg", "cover.jpeg", "cover.png", "cover.bmp", "folder.jpg", "folder.jpeg",
-    "album.jpg", "album.jpeg", "front.jpg", "front.jpeg",
+    "cover.jpg",
+    "cover.jpeg",
+    "cover.png",
+    "cover.bmp",
+    "folder.jpg",
+    "folder.jpeg",
+    "album.jpg",
+    "album.jpeg",
+    "front.jpg",
+    "front.jpeg",
 ];
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,26 +71,36 @@ fn is_audio(path: &Path) -> bool {
 }
 
 fn has_cover(dir: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else { return false };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
     let names: Vec<String> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().to_lowercase())
         .collect();
-    COVER_NAMES.iter().any(|c| names.contains(&(*c).to_string()))
+    COVER_NAMES
+        .iter()
+        .any(|c| names.contains(&(*c).to_string()))
 }
 
 /// Read artist, album, and embedded-art presence from the first parseable audio file.
 fn read_metadata(dir: &Path) -> (Option<String>, Option<String>, bool) {
-    let Ok(entries) = fs::read_dir(dir) else { return (None, None, false) };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return (None, None, false);
+    };
 
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
         if !is_audio(&path) {
             continue;
         }
-        let Ok(probe) = Probe::open(&path) else { continue };
+        let Ok(probe) = Probe::open(&path) else {
+            continue;
+        };
         let Ok(tagged) = probe.read() else { continue };
-        let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else { continue };
+        let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
+            continue;
+        };
 
         return (
             tag.artist().map(|s| s.to_string()),
@@ -96,7 +114,9 @@ fn read_metadata(dir: &Path) -> (Option<String>, Option<String>, bool) {
 // ── Scanning ──────────────────────────────────────────────────────
 
 fn scan_dir(dir: &Path, albums: &mut Vec<AlbumInfo>, app: &AppHandle) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
 
     let mut audio_count = 0usize;
     let mut subdirs = Vec::new();
@@ -157,13 +177,11 @@ pub fn scan_albums(music_path: &str, app: AppHandle) -> Result<Vec<AlbumInfo>, S
         a.has_cover_file.cmp(&b.has_cover_file).then_with(|| {
             let aa = a.artist.as_deref().unwrap_or("");
             let ba = b.artist.as_deref().unwrap_or("");
-            aa.to_lowercase()
-                .cmp(&ba.to_lowercase())
-                .then_with(|| {
-                    let al = a.album.as_deref().unwrap_or("");
-                    let bl = b.album.as_deref().unwrap_or("");
-                    al.to_lowercase().cmp(&bl.to_lowercase())
-                })
+            aa.to_lowercase().cmp(&ba.to_lowercase()).then_with(|| {
+                let al = a.album.as_deref().unwrap_or("");
+                let bl = b.album.as_deref().unwrap_or("");
+                al.to_lowercase().cmp(&bl.to_lowercase())
+            })
         })
     });
 
@@ -183,9 +201,13 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
         if !is_audio(&path) {
             continue;
         }
-        let Ok(probe) = Probe::open(&path) else { continue };
+        let Ok(probe) = Probe::open(&path) else {
+            continue;
+        };
         let Ok(tagged) = probe.read() else { continue };
-        let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else { continue };
+        let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
+            continue;
+        };
 
         // Prefer front cover, fall back to any picture
         let pic = tag
@@ -196,8 +218,8 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
 
         let Some(pic) = pic else { continue };
 
-        let img = image::load_from_memory(pic.data())
-            .map_err(|e| format!("Decode failed: {}", e))?;
+        let img =
+            image::load_from_memory(pic.data()).map_err(|e| format!("Decode failed: {}", e))?;
 
         // Resize if oversized to save iPod storage
         let img = if img.width() > 600 || img.height() > 600 {
@@ -231,7 +253,9 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
         .map_err(|e| format!("Search failed: {}", e))?;
 
     let body: serde_json::Value = {
-        let text = resp.into_string().map_err(|e| format!("Read failed: {}", e))?;
+        let text = resp
+            .into_string()
+            .map_err(|e| format!("Read failed: {}", e))?;
         serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
     };
 
@@ -240,7 +264,9 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
         .ok_or_else(|| "No results from MusicBrainz".to_string())?;
 
     for release in releases {
-        let Some(mbid) = release["id"].as_str() else { continue };
+        let Some(mbid) = release["id"].as_str() else {
+            continue;
+        };
 
         let url = format!("https://coverartarchive.org/release/{}/front-500", mbid);
         let Ok(img_resp) = ureq::get(&url)
@@ -255,7 +281,9 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
             continue;
         }
 
-        let Ok(img) = image::load_from_memory(&bytes) else { continue };
+        let Ok(img) = image::load_from_memory(&bytes) else {
+            continue;
+        };
 
         let img = if img.width() > 600 || img.height() > 600 {
             img.resize(600, 600, image::imageops::FilterType::Lanczos3)
@@ -361,5 +389,44 @@ pub fn fix_album_art(
         failed,
         cancelled,
         errors,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn is_audio_mp3() {
+        assert!(is_audio(&PathBuf::from("song.mp3")));
+    }
+
+    #[test]
+    fn is_audio_flac_uppercase() {
+        assert!(is_audio(&PathBuf::from("track.FLAC")));
+    }
+
+    #[test]
+    fn is_audio_all_formats() {
+        for ext in AUDIO_EXT {
+            assert!(is_audio(&PathBuf::from(format!("file.{}", ext))));
+        }
+    }
+
+    #[test]
+    fn is_audio_not_text() {
+        assert!(!is_audio(&PathBuf::from("readme.txt")));
+    }
+
+    #[test]
+    fn is_audio_no_extension() {
+        assert!(!is_audio(&PathBuf::from("Makefile")));
+    }
+
+    #[test]
+    fn is_audio_double_extension() {
+        // "file.mp3.bak" has extension "bak", not "mp3"
+        assert!(!is_audio(&PathBuf::from("file.mp3.bak")));
     }
 }

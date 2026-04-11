@@ -7,14 +7,17 @@ use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn detect_ipod() -> Result<Option<DiskInfo>, String> {
-    tauri::async_runtime::spawn_blocking(|| disk::detect_ipod_disk())
+    tauri::async_runtime::spawn_blocking(disk::detect_ipod_disk)
         .await
         .map_err(|e| format!("Detection failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn mount_ipod(identifier: String, password: String) -> Result<(), String> {
-    if !identifier.starts_with("disk") || identifier.contains(' ') || identifier.contains(';') {
+    if !identifier.starts_with("disk")
+        || identifier.len() <= 4
+        || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
+    {
         return Err("Invalid disk identifier".to_string());
     }
     tauri::async_runtime::spawn_blocking(move || disk::mount_ipod_disk(&identifier, &password))
@@ -24,7 +27,7 @@ pub async fn mount_ipod(identifier: String, password: String) -> Result<(), Stri
 
 #[tauri::command]
 pub async fn unmount_ipod() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(|| disk::unmount_ipod_disk())
+    tauri::async_runtime::spawn_blocking(disk::unmount_ipod_disk)
         .await
         .map_err(|e| format!("Unmount failed: {}", e))?
 }
@@ -61,8 +64,7 @@ pub async fn copy_files(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<CopyResult, String> {
-    let flag = cancel.flag();
-    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let flag = cancel.new_flag();
 
     let result =
         tauri::async_runtime::spawn_blocking(move || files::copy_file_list(operations, app, flag))
@@ -78,8 +80,7 @@ pub async fn delete_files(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<CopyResult, String> {
-    let flag = cancel.flag();
-    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let flag = cancel.new_flag();
 
     let result =
         tauri::async_runtime::spawn_blocking(move || files::delete_file_list(paths, app, flag))
@@ -111,8 +112,7 @@ pub async fn fix_album_art(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<albumart::AlbumArtResult, String> {
-    let flag = cancel.flag();
-    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let flag = cancel.new_flag();
 
     let result =
         tauri::async_runtime::spawn_blocking(move || albumart::fix_album_art(folders, app, flag))
@@ -172,8 +172,7 @@ pub async fn download_audio(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, String> {
-    let flag = cancel.flag();
-    flag.store(false, std::sync::atomic::Ordering::SeqCst);
+    let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
         youtube::download_audio(&url, &output_dir, &format, app, flag)

@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter};
 
@@ -54,18 +54,23 @@ pub struct SyncProgress {
 }
 
 /// Shared cancellation flag for sync operations.
-/// Uses Arc<AtomicBool> so it can be cloned and sent to background threads.
-pub struct SyncCancel(pub Arc<AtomicBool>);
+/// Each new operation gets a fresh AtomicBool via `new_flag()`, so cancelling
+/// only affects the currently active operation and avoids race conditions
+/// between flag reset and task spawn.
+pub struct SyncCancel(Mutex<Arc<AtomicBool>>);
 
 impl SyncCancel {
     pub fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
+        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
     }
     pub fn cancel(&self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.0.lock().unwrap().store(true, Ordering::SeqCst);
     }
-    pub fn flag(&self) -> Arc<AtomicBool> {
-        self.0.clone()
+    /// Create and store a fresh cancellation flag for a new operation.
+    pub fn new_flag(&self) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        *self.0.lock().unwrap() = flag.clone();
+        flag
     }
 }
 
@@ -156,6 +161,11 @@ fn collect_files_recursive(
             Ok(m) => m,
             Err(_) => continue,
         };
+
+        // Skip symlinks to prevent infinite recursion from cycles
+        if entry.file_type().is_ok_and(|ft| ft.is_symlink()) {
+            continue;
+        }
 
         if metadata.is_dir() {
             collect_files_recursive(base, &path, map)?;
@@ -317,8 +327,6 @@ pub fn copy_file_list(
     let mut errors = Vec::new();
     let mut cancelled = false;
 
-    cancel_flag.store(false, Ordering::SeqCst);
-
     // Pre-flight: estimate required space vs available
     if let Some(first_dest) = operations
         .first()
@@ -433,8 +441,6 @@ pub fn delete_file_list(
     let mut failed = 0;
     let mut errors = Vec::new();
     let mut cancelled = false;
-
-    cancel_flag.store(false, Ordering::SeqCst);
 
     for (i, path_str) in paths.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {

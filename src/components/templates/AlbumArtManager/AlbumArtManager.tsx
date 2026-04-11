@@ -19,10 +19,24 @@ export const AlbumArtManager = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     const unsubs: UnlistenFn[] = [];
-    listen<AlbumArtProgress>("albumart-progress", (e) => setProgress(e.payload)).then((fn) => unsubs.push(fn));
-    listen<ScanProgress>("albumart-scan-progress", (e) => setScanProgress(e.payload)).then((fn) => unsubs.push(fn));
-    return () => unsubs.forEach((fn) => fn());
+    listen<AlbumArtProgress>("albumart-progress", (e) => {
+      if (active) setProgress(e.payload);
+    }).then((fn) => {
+      if (active) unsubs.push(fn);
+      else fn();
+    });
+    listen<ScanProgress>("albumart-scan-progress", (e) => {
+      if (active) setScanProgress(e.payload);
+    }).then((fn) => {
+      if (active) unsubs.push(fn);
+      else fn();
+    });
+    return () => {
+      active = false;
+      unsubs.forEach((fn) => fn());
+    };
   }, []);
 
   const browse = async () => {
@@ -74,7 +88,9 @@ export const AlbumArtManager = () => {
         const data = await invoke<AlbumInfo[]>("scan_album_art", { path: scanPath });
         setAlbums(data);
         setSelected(new Set(data.filter((a) => !a.has_cover_file).map((a) => a.folder_path)));
-      } catch (_) {}
+      } catch (rescanErr) {
+        setError(`Art fixed successfully, but re-scan failed: ${rescanErr}`);
+      }
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");

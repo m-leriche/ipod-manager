@@ -8,8 +8,3 @@ export interface Profile {
 export interface ProfileStore {
   profiles: Profile[];
 }
-
-export interface ContextMenuItem {
-  label: string;
-  onClick: () => void;
-}

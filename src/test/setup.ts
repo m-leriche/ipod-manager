@@ -1,5 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({

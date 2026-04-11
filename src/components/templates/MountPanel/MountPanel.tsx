@@ -49,7 +49,8 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
 
   useEffect(() => {
     detectIPod();
-    const interval = setInterval(pollIPod, 10000);
+    const POLL_INTERVAL_MS = 10_000;
+    const interval = setInterval(pollIPod, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [detectIPod, pollIPod]);
 

@@ -327,8 +327,6 @@ pub fn copy_file_list(
     let mut errors = Vec::new();
     let mut cancelled = false;
 
-
-
     // Pre-flight: estimate required space vs available
     if let Some(first_dest) = operations
         .first()
@@ -443,8 +441,6 @@ pub fn delete_file_list(
     let mut failed = 0;
     let mut errors = Vec::new();
     let mut cancelled = false;
-
-
 
     for (i, path_str) in paths.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {

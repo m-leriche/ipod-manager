@@ -25,7 +25,7 @@ npm test
 npm run test:watch
 
 # Run a single test file
-npx vitest run src/test/App.test.tsx
+npx vitest run src/components/templates/SyncManager/SyncManager.test.tsx
 
 # Type-check frontend
 npx tsc --noEmit
@@ -51,10 +51,12 @@ React calls Rust via `invoke()` from `@tauri-apps/api/core`. All 10 Tauri comman
 
 ### Frontend Components (src/components/)
 
-- **App.tsx** — Tab layout. Album Art tab always available; File Sync tab requires mounted iPod.
-- **MountPanel.tsx** — Polls `detect_ipod` every 10s. Gates `isMounted` state that controls File Sync availability.
-- **SyncManager.tsx** — Orchestrates dual FileExplorer panels and ComparisonView.
-- **AlbumArtManager.tsx** — Standalone album art workflow (scan → review → fix). Works on any folder, no iPod required.
+Follows atomic design with four levels:
+
+- **atoms/** — Tiny, stateless building blocks (Spinner, Pill, FolderPicker)
+- **molecules/** — Composed atoms with simple logic (ContextMenu, FilterChip)
+- **organisms/** — Domain-aware components (FileExplorer, ProfileSelector, FilterPanel)
+- **templates/** — Full page/tab-level containers that compose organisms (SyncManager, ComparisonView, AlbumArtManager, MountPanel, BrowseExplorer)
 
 ### Styling
 
@@ -65,7 +67,30 @@ Tailwind v4 with a custom dark theme defined as CSS variables in `src/App.css`. 
 - **Cancellation:** Long operations check a shared `SyncCancel` (`AtomicBool` in Tauri state). Frontend calls `cancel_sync` command to set the flag.
 - **Progress events:** Backend emits events like `albumart-progress`, `albumart-scan-progress`, `copy-progress`. Frontend subscribes via `listen()` and updates UI in real-time.
 - **macOS only:** Disk operations rely on `diskutil` and `mount` CLI tools. Not portable to other OSes.
-- **Testing:** Every React component has a corresponding test file in `src/test/`. When creating a new component, always create a unit test file alongside it. Tests use Vitest + React Testing Library with Tauri API mocks defined in `src/test/setup.ts`.
+- **Testing:** Every component has a co-located test file in its folder (e.g., `ComponentName.test.tsx`). When creating a new component, always create a test alongside it. Tests use Vitest + React Testing Library with Tauri API mocks defined in `src/test/setup.ts`.
+
+## Component Structure
+
+Each component lives in its own folder with this layout:
+
+```
+ComponentName/
+├── ComponentName.tsx      # Component code (named after the component, not index.tsx)
+├── types.ts               # TypeScript interfaces/types (if any)
+├── helpers.ts             # Helper functions and utilities (if any)
+├── constants.ts           # Constants, config maps (if any)
+├── SubComponent.tsx       # Extracted sub-components (if any)
+└── ComponentName.test.tsx # Co-located unit test
+```
+
+Rules:
+- Use `const` arrow function declarations, not `function` declarations.
+- Extract types/interfaces out of component files into `types.ts`.
+- Extract helper functions into `helpers.ts`. Keep component files focused on rendering.
+- Keep components small and human-readable. If a sub-component grows beyond a few lines, extract it to its own file in the same folder.
+- Shared types used across multiple components go in `src/types/`.
+- No barrel files. Import directly from the component's folder — never create re-export files that just forward imports.
+- Name component files `ComponentName.tsx`, not `index.tsx`. Imports should be explicit: `from "./ComponentName/ComponentName"`.
 
 ## Code Style
 

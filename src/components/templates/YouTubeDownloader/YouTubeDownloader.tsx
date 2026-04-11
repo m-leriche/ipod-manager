@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { isValidYouTubeUrl } from "./helpers";
+import { FormatButton } from "./FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 
 export const YouTubeDownloader = () => {
@@ -325,16 +326,3 @@ export const YouTubeDownloader = () => {
     </div>
   );
 };
-
-const FormatButton = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
-      active
-        ? "bg-bg-card text-text-primary border border-border-active"
-        : "text-text-tertiary border border-transparent hover:text-text-secondary"
-    }`}
-  >
-    {label}
-  </button>
-);

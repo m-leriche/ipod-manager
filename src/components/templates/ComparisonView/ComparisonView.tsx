@@ -4,19 +4,12 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Pill } from "../../atoms/Pill/Pill";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import { TreeNodeRow } from "./TreeNodeRow";
+import { SyncActions } from "./SyncActions";
 import type { ContextMenuItem } from "../../../types/profiles";
-import type {
-  CompareEntry,
-  CopyOp,
-  CopyResult,
-  SyncProgress,
-  Filter,
-  Status,
-  TreeNode,
-  ComparisonViewProps,
-} from "./types";
-import { buildTree, collectPaths, collectDiffPaths, collectActionableFiles, fmtSize, lastSegment } from "./helpers";
-import { STATUS_ICON, STATUS_BADGE, STATUS_LABEL, STATUS_COLOR, FILE_ROW_BG, FILTERS } from "./constants";
+import type { CompareEntry, CopyOp, CopyResult, SyncProgress, Filter, TreeNode, ComparisonViewProps } from "./types";
+import { buildTree, collectPaths, collectDiffPaths, collectActionableFiles } from "./helpers";
+import { FILTERS } from "./constants";
 
 export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclusion, onBack }: ComparisonViewProps) => {
   const [entries, setEntries] = useState<CompareEntry[]>([]);
@@ -84,7 +77,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
     const s = { source_only: 0, target_only: 0, modified: 0, same: 0 };
     visibleEntries.forEach((e) => s[e.status]++);
     return s;
-  }, [entries]);
+  }, [visibleEntries]);
 
   // ── Selection ──
 
@@ -223,134 +216,8 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
   }).length;
   const nMirror = stats.source_only + stats.modified + stats.target_only;
 
-  // ── Render a tree node recursively ──
-
-  const renderNode = (node: TreeNode, depth: number) => {
-    const isExpanded = expanded.has(node.path);
-    const actionable = collectActionableFiles(node);
-    const allChecked = actionable.length > 0 && actionable.every((p) => selected.has(p));
-    const someChecked = actionable.some((p) => selected.has(p));
-    const hasContent = node.files.length > 0 || node.children.length > 0;
-
-    const folderBg =
-      node.dominant === "source_only"
-        ? "bg-success/[0.03]"
-        : node.dominant === "target_only"
-          ? "bg-danger/[0.03]"
-          : node.dominant === "same"
-            ? "opacity-50"
-            : "";
-
-    return (
-      <div key={node.path}>
-        {/* Folder row */}
-        <div
-          className={`flex items-center gap-2 py-1.5 pr-3 cursor-pointer select-none transition-colors hover:bg-bg-hover/50 ${folderBg}`}
-          style={{ paddingLeft: `${12 + depth * 20}px` }}
-          onClick={() => toggleExpand(node.path)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            if (node.path) setContextMenu({ x: e.clientX, y: e.clientY, folderPath: node.path });
-          }}
-        >
-          {/* Checkbox */}
-          {actionable.length > 0 ? (
-            <input
-              type="checkbox"
-              checked={allChecked}
-              ref={(el) => {
-                if (el) el.indeterminate = someChecked && !allChecked;
-              }}
-              onChange={(e) => {
-                e.stopPropagation();
-                toggleNodeSelection(node);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-3 h-3 cursor-pointer accent-accent rounded shrink-0"
-            />
-          ) : (
-            <div className="w-3 shrink-0" />
-          )}
-
-          {/* Chevron */}
-          <span
-            className={`text-[10px] w-3 shrink-0 transition-transform ${isExpanded ? "text-text-secondary" : "text-text-tertiary"}`}
-          >
-            {hasContent ? (isExpanded ? "\u25be" : "\u25b8") : "\u00b7"}
-          </span>
-
-          {/* Folder icon + name */}
-          <span className="text-xs shrink-0 opacity-50">{"\ud83d\udcc1"}</span>
-          <span
-            className={`text-[11px] font-medium truncate ${node.hasDifferences ? "text-text-primary" : "text-text-tertiary"}`}
-          >
-            {node.name}
-          </span>
-
-          <div className="flex-1" />
-
-          {/* Summary badges */}
-          <div className="flex items-center gap-2 shrink-0">
-            {(["source_only", "modified", "target_only", "same"] as Status[]).map((s) =>
-              node.totalCounts[s] > 0 ? (
-                <span key={s} className={`text-[10px] font-medium ${STATUS_COLOR[s]}`}>
-                  {node.totalCounts[s]} {STATUS_LABEL[s]}
-                </span>
-              ) : null,
-            )}
-          </div>
-        </div>
-
-        {/* Expanded content */}
-        {isExpanded && (
-          <>
-            {/* Child folders (recursive) */}
-            {node.children.map((child) => renderNode(child, depth + 1))}
-
-            {/* Direct files in this folder */}
-            {node.files.map((entry) => (
-              <div
-                key={entry.relative_path}
-                className={`flex items-center gap-2 py-[4px] pr-3 transition-colors ${FILE_ROW_BG[entry.status]}`}
-                style={{ paddingLeft: `${32 + depth * 20}px` }}
-              >
-                {/* Checkbox */}
-                <div className="w-3 shrink-0 flex justify-center">
-                  {entry.status !== "same" ? (
-                    <input
-                      type="checkbox"
-                      checked={selected.has(entry.relative_path)}
-                      onChange={() => toggle(entry.relative_path)}
-                      className="w-3 h-3 cursor-pointer accent-accent rounded"
-                    />
-                  ) : null}
-                </div>
-
-                {/* Status badge */}
-                <span
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold shrink-0 ${STATUS_BADGE[entry.status]}`}
-                >
-                  {STATUS_ICON[entry.status]}
-                </span>
-
-                {/* Filename */}
-                <span className="text-[11px] text-text-secondary flex-1 min-w-0 truncate" title={entry.relative_path}>
-                  {lastSegment(entry.relative_path)}
-                </span>
-
-                {/* Sizes */}
-                <span className="text-[10px] text-text-tertiary w-16 text-right shrink-0">
-                  {fmtSize(entry.source_size)}
-                </span>
-                <span className="text-[10px] text-text-tertiary w-16 text-right shrink-0">
-                  {fmtSize(entry.target_size)}
-                </span>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    );
+  const handleContextMenu = (x: number, y: number, folderPath: string) => {
+    setContextMenu({ x, y, folderPath });
   };
 
   // ── Main render ──
@@ -421,86 +288,19 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
       </div>
 
       {/* Actions or Progress Bar */}
-      {syncing && progress ? (
-        <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium text-text-primary">
-              {progress.phase === "copying" ? "Copying" : progress.phase === "deleting" ? "Deleting" : "Finishing"}...
-            </span>
-            <span className="text-[11px] text-text-secondary">
-              {progress.completed} of {progress.total} files
-            </span>
-          </div>
-          {/* Progress bar */}
-          <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-text-primary rounded-full transition-all duration-200"
-              style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-text-tertiary truncate flex-1 min-w-0 mr-3">
-              {progress.current_file || "Finishing up..."}
-            </span>
-            <button
-              onClick={handleCancel}
-              className="px-3 py-1 bg-transparent border border-danger/30 text-danger rounded-lg text-[10px] font-medium shrink-0 hover:bg-danger/10 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-2 shrink-0">
-          <button
-            disabled={syncing || nMirror === 0}
-            onClick={mirrorToTarget}
-            className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            Mirror {nMirror} to iPod {"\u2192"}
-          </button>
-          <button
-            disabled={syncing || nSrc === 0}
-            onClick={copyToTarget}
-            className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            Copy {nSrc} {"\u2192"}
-          </button>
-          <button
-            disabled={syncing || nTgt === 0}
-            onClick={copyToSource}
-            className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            {"\u2190"} Copy {nTgt}
-          </button>
-          <button
-            disabled={syncing || nTgt === 0}
-            onClick={deleteTarget}
-            className="py-2 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            Delete {nTgt}
-          </button>
-        </div>
-      )}
-
-      {/* Result toast */}
-      {result && !syncing && (
-        <div
-          className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed ${result.failed || result.cancelled ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}
-        >
-          {result.cancelled
-            ? `Cancelled: ${result.succeeded} of ${result.total} completed`
-            : `${result.succeeded}/${result.total} completed`}
-          {result.failed > 0 && `. ${result.failed} failed.`}
-          {result.errors.length > 0 && (
-            <div className="mt-1 text-[10px] opacity-70">
-              {result.errors.slice(0, 3).map((e, i) => (
-                <div key={i}>{e}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <SyncActions
+        syncing={syncing}
+        progress={progress}
+        result={result}
+        nSrc={nSrc}
+        nTgt={nTgt}
+        nMirror={nMirror}
+        onMirrorToTarget={mirrorToTarget}
+        onCopyToTarget={copyToTarget}
+        onCopyToSource={copyToSource}
+        onDeleteTarget={deleteTarget}
+        onCancel={handleCancel}
+      />
 
       {loading && (
         <div className="py-12 text-center text-text-tertiary text-xs">
@@ -518,7 +318,21 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
               {filter === "differences" ? "In sync \u2014 no differences found." : "No files match this filter."}
             </div>
           ) : (
-            <div className="divide-y divide-border-subtle">{tree.map((node) => renderNode(node, 0))}</div>
+            <div className="divide-y divide-border-subtle">
+              {tree.map((node) => (
+                <TreeNodeRow
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  expanded={expanded}
+                  selected={selected}
+                  onToggleExpand={toggleExpand}
+                  onToggleNodeSelection={toggleNodeSelection}
+                  onToggleFile={toggle}
+                  onContextMenu={handleContextMenu}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

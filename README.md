@@ -12,6 +12,7 @@ Built with Tauri 2 (Rust backend) and React 19 (TypeScript frontend).
 - **Exclusion filters** — Right-click folders in the comparison tree to filter them out. Filtered folders are hidden from comparison and excluded from sync operations. Manage filters via the filter panel.
 - **iPod mount/unmount** — Auto-detects your iPod, mounts it at `/Volumes/IPOD` with one click and your macOS password. Live storage bar shows used/free/total space.
 - **Album art manager** — Scans any music folder for albums missing cover art. Extracts embedded art from audio file tags first (fast, no network), then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder for Rockbox compatibility.
+- **YouTube to Audio** — Paste a YouTube URL, pick an output folder and format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download with real-time progress. Requires `yt-dlp` and `ffmpeg` (install via `brew install yt-dlp ffmpeg`).
 - **Disk space safety** — Pre-flight check warns if there isn't enough space before copying starts. If space runs out mid-copy, stops immediately and cleans up partial files.
 
 ## Prerequisites
@@ -19,6 +20,7 @@ Built with Tauri 2 (Rust backend) and React 19 (TypeScript frontend).
 - **macOS** (uses `diskutil` and `mount` under the hood)
 - **Node.js** >= 18 and npm
 - **Rust** toolchain (install via [rustup](https://rustup.rs/))
+- **yt-dlp** and **ffmpeg** (optional, for YouTube to Audio tab): `brew install yt-dlp ffmpeg`
 
 ## Setup
 
@@ -51,6 +53,15 @@ npx tsc --noEmit
 
 # Check Rust
 cd src-tauri && cargo check
+
+# Run Rust tests
+cd src-tauri && cargo test
+
+# Format Rust code
+cd src-tauri && cargo fmt
+
+# Check Rust formatting (used in CI)
+cd src-tauri && cargo fmt --check
 ```
 
 ## Build
@@ -68,7 +79,8 @@ Output:
 1. **File Explorer** (default tab) — Browse to pick a folder and explore its contents. Right-click to delete files or folders.
 2. **File Sync** — Create or select a profile, browse source and target folders, then click **Compare Folders**. Review the diff tree, right-click folders to add exclusion filters, and sync with Mirror/Copy/Delete.
 3. **Album Art** — Browse to a music folder, scan for missing art, and click **Fix** to extract or fetch cover images.
-4. **iPod** — The connection panel on the left auto-detects your iPod. Enter your macOS password and click **Mount** to mount it at `/Volumes/IPOD`. Click **Eject** when done.
+4. **YouTube to Audio** — Paste a YouTube URL, select an output folder and format (FLAC or MP3), then download. The tab checks for `yt-dlp`/`ffmpeg` on load and shows install instructions if missing.
+5. **iPod** — The connection panel on the left auto-detects your iPod. Enter your macOS password and click **Mount** to mount it at `/Volumes/IPOD`. Click **Eject** when done.
 
 ## Project Structure
 
@@ -94,7 +106,8 @@ src/
         ├── BrowseExplorer/
         ├── ComparisonView/
         ├── MountPanel/
-        └── SyncManager/
+        ├── SyncManager/
+        └── YouTubeDownloader/
 
 src-tauri/src/
 ├── main.rs                              # Tauri entry point
@@ -103,23 +116,26 @@ src-tauri/src/
 ├── disk.rs                              # diskutil parsing, mount/unmount
 ├── files.rs                             # Directory listing, comparison, copy/delete
 ├── albumart.rs                          # Album art scanning, tag reading, MusicBrainz
-└── profiles.rs                          # Profile persistence (JSON in app data dir)
+├── profiles.rs                          # Profile persistence (JSON in app data dir)
+└── youtube.rs                           # YouTube audio download via yt-dlp
 ```
 
 Each component has its own folder with co-located test, types, and helper files.
 
 ## Tech Stack
 
-| Layer    | Technology                        |
-|----------|-----------------------------------|
-| Frontend | React 19, TypeScript, Tailwind v4 |
-| Backend  | Rust, Tauri 2                     |
-| Bundler  | Vite 8                            |
-| Testing  | Vitest, React Testing Library     |
-| Formatting | Prettier                        |
-| Audio    | lofty (metadata/tag reading)      |
-| Network  | ureq (MusicBrainz API)            |
-| Images   | image (decode/resize/encode)      |
+| Layer      | Technology                        |
+|------------|-----------------------------------|
+| Frontend   | React 19, TypeScript, Tailwind v4 |
+| Backend    | Rust, Tauri 2                     |
+| Bundler    | Vite 8                            |
+| Testing    | Vitest, React Testing Library, cargo test |
+| Formatting | Prettier, rustfmt                 |
+| CI         | GitHub Actions                    |
+| Audio      | lofty (metadata/tag reading)      |
+| YouTube    | yt-dlp + ffmpeg (external CLI)    |
+| Network    | ureq (MusicBrainz API)            |
+| Images     | image (decode/resize/encode)      |
 
 ## How Mounting Works
 

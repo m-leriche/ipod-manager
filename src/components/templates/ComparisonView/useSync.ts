@@ -122,5 +122,15 @@ export const useSync = (
       setResult({ total, succeeded, failed, cancelled, errors });
     });
 
-  return { syncing, progress, result, setResult, handleCancel, copyToTarget, copyToSource, deleteTarget, mirrorToTarget };
+  return {
+    syncing,
+    progress,
+    result,
+    setResult,
+    handleCancel,
+    copyToTarget,
+    copyToSource,
+    deleteTarget,
+    mirrorToTarget,
+  };
 };

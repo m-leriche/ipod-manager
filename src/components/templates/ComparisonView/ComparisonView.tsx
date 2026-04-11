@@ -34,8 +34,14 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
     await compare();
   }, [compare, resetSelection]);
 
-  const { syncing, progress, result, handleCancel, copyToTarget, copyToSource, deleteTarget, mirrorToTarget } =
-    useSync(sourcePath, targetPath, visibleEntries, selected, resetAndCompare, setError);
+  const { syncing, progress, result, handleCancel, copyToTarget, copyToSource, deleteTarget, mirrorToTarget } = useSync(
+    sourcePath,
+    targetPath,
+    visibleEntries,
+    selected,
+    resetAndCompare,
+    setError,
+  );
 
   const nSrc = [...selected].filter((p) => {
     const e = entryMap.get(p);

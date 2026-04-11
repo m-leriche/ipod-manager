@@ -5,13 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { isValidYouTubeUrl } from "./helpers";
-import type {
-  AudioFormat,
-  DownloadProgress,
-  DownloadResult,
-  Phase,
-  VideoInfo,
-} from "./types";
+import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 
 export const YouTubeDownloader = () => {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -118,17 +112,11 @@ export const YouTubeDownloader = () => {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
-          <p className="text-text-secondary text-xs mb-2 font-medium">
-            Missing required tools
-          </p>
-          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">
-            {depsError}
-          </p>
+          <p className="text-text-secondary text-xs mb-2 font-medium">Missing required tools</p>
+          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">{depsError}</p>
           <p className="text-text-tertiary text-[11px] mb-4">
             Run in your terminal:{" "}
-            <code className="bg-bg-card px-1.5 py-0.5 rounded text-text-secondary">
-              brew install yt-dlp ffmpeg
-            </code>
+            <code className="bg-bg-card px-1.5 py-0.5 rounded text-text-secondary">brew install yt-dlp ffmpeg</code>
           </p>
           <button
             onClick={() => {
@@ -168,18 +156,12 @@ export const YouTubeDownloader = () => {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
           {result.cancelled ? (
-            <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">
-              Download cancelled
-            </div>
+            <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Download cancelled</div>
           ) : result.success ? (
             <>
-              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
-                Download complete
-              </div>
+              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">Download complete</div>
               {result.file_path && (
-                <p className="text-text-tertiary text-[10px] mb-4 truncate max-w-md">
-                  {result.file_path}
-                </p>
+                <p className="text-text-tertiary text-[10px] mb-4 truncate max-w-md">{result.file_path}</p>
               )}
             </>
           ) : (
@@ -204,17 +186,11 @@ export const YouTubeDownloader = () => {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-md">
-          {videoInfo && (
-            <p className="text-text-secondary text-[11px] font-medium mb-3 truncate">
-              {videoInfo.title}
-            </p>
-          )}
+          {videoInfo && <p className="text-text-secondary text-[11px] font-medium mb-3 truncate">{videoInfo.title}</p>}
           <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-text-primary">
-                {progress?.phase === "converting"
-                  ? "Converting..."
-                  : "Downloading..."}
+                {progress?.phase === "converting" ? "Converting..." : "Downloading..."}
               </span>
               <span className="text-[11px] text-text-secondary">
                 {progress ? `${progress.percent.toFixed(1)}%` : "Starting..."}
@@ -265,29 +241,17 @@ export const YouTubeDownloader = () => {
       <div className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-4">
-            <p className="text-[11px] font-medium text-text-primary mb-1 truncate">
-              {videoInfo.title}
-            </p>
+            <p className="text-[11px] font-medium text-text-primary mb-1 truncate">{videoInfo.title}</p>
             <p className="text-[10px] text-text-tertiary">
               {videoInfo.uploader} — {videoInfo.duration}
             </p>
           </div>
 
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">
-              Format
-            </span>
+            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
             <div className="flex gap-1">
-              <FormatButton
-                label="FLAC"
-                active={format === "flac"}
-                onClick={() => setFormat("flac")}
-              />
-              <FormatButton
-                label="MP3"
-                active={format === "mp3"}
-                onClick={() => setFormat("mp3")}
-              />
+              <FormatButton label="FLAC" active={format === "flac"} onClick={() => setFormat("flac")} />
+              <FormatButton label="MP3" active={format === "mp3"} onClick={() => setFormat("mp3")} />
             </div>
           </div>
 
@@ -310,11 +274,7 @@ export const YouTubeDownloader = () => {
             </button>
           </div>
 
-          {error && (
-            <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">
-              {error}
-            </div>
-          )}
+          {error && <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
         </div>
       </div>
     );
@@ -325,9 +285,7 @@ export const YouTubeDownloader = () => {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="w-full max-w-md">
-        <p className="text-text-tertiary text-xs mb-4 text-center">
-          Paste a YouTube URL to download audio
-        </p>
+        <p className="text-text-tertiary text-xs mb-4 text-center">Paste a YouTube URL to download audio</p>
 
         <div className="mb-3">
           <input
@@ -344,20 +302,10 @@ export const YouTubeDownloader = () => {
         </div>
 
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">
-            Format
-          </span>
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
           <div className="flex gap-1">
-            <FormatButton
-              label="FLAC"
-              active={format === "flac"}
-              onClick={() => setFormat("flac")}
-            />
-            <FormatButton
-              label="MP3"
-              active={format === "mp3"}
-              onClick={() => setFormat("mp3")}
-            />
+            <FormatButton label="FLAC" active={format === "flac"} onClick={() => setFormat("flac")} />
+            <FormatButton label="MP3" active={format === "mp3"} onClick={() => setFormat("mp3")} />
           </div>
           <span className="text-[10px] text-text-tertiary ml-1">
             {format === "flac" ? "44.1 kHz / 16-bit" : "320 kbps"}
@@ -372,25 +320,13 @@ export const YouTubeDownloader = () => {
           Download
         </button>
 
-        {error && (
-          <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">
-            {error}
-          </div>
-        )}
+        {error && <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
       </div>
     </div>
   );
 };
 
-const FormatButton = ({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) => (
+const FormatButton = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
   <button
     onClick={onClick}
     className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${

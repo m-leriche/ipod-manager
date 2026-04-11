@@ -75,7 +75,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
 
     expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();
@@ -90,7 +90,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
@@ -113,7 +113,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
@@ -141,7 +141,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByRole("button", { name: "Download" }));
@@ -168,7 +168,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByRole("button", { name: "Download" }));
@@ -195,7 +195,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByRole("button", { name: "Download" }));
@@ -229,7 +229,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByRole("button", { name: "Download" }));
@@ -284,7 +284,7 @@ describe("YouTubeDownloader", () => {
 
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123"
+      "https://www.youtube.com/watch?v=test123",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByRole("button", { name: "Download" }));

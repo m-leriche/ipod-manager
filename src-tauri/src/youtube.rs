@@ -136,6 +136,7 @@ pub fn download_audio(
     output_dir: &str,
     format: &str,
     split_chapters: bool,
+    chapter_count: usize,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> DownloadResult {
@@ -221,6 +222,9 @@ pub fn download_audio(
     let reader = std::io::BufReader::new(stdout);
     let mut file_paths: Vec<String> = Vec::new();
     let mut download_dest: Option<String> = None;
+    let mut full_file_path: Option<String> = None;
+    let mut chapters_split: usize = 0;
+    let in_split_mode = split_chapters && chapter_count > 0;
 
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -243,13 +247,24 @@ pub fn download_audio(
             }
         }
 
-        // Chapter splitting progress
+        // Chapter splitting progress — capture output paths and emit incremental progress
         if line.contains("[SplitChapters]") {
+            if line.contains("Destination:") {
+                if let Some(path) = line.split("Destination:").nth(1) {
+                    file_paths.push(path.trim().to_string());
+                }
+            }
+            chapters_split += 1;
+            let percent = if chapter_count > 0 {
+                (chapters_split as f64 / chapter_count as f64 * 100.0).min(100.0)
+            } else {
+                100.0
+            };
             let _ = app.emit(
                 "youtube-progress",
                 DownloadProgress {
                     phase: "splitting".to_string(),
-                    percent: 100.0,
+                    percent,
                     speed: None,
                     eta: None,
                     title: None,
@@ -260,32 +275,31 @@ pub fn download_audio(
 
         // Capture final audio file paths from ExtractAudio/ffmpeg lines
         if line.contains("[ExtractAudio]") || line.contains("[ffmpeg]") {
-            let title = if line.contains("Destination:") {
+            if line.contains("Destination:") {
                 if let Some(path) = line.split("Destination:").nth(1) {
                     let path = path.trim().to_string();
-                    let name = std::path::Path::new(&path)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(String::from);
-                    file_paths.push(path);
-                    name
-                } else {
-                    None
+                    if in_split_mode {
+                        // Full file before chapter split — save for cleanup, don't add to results
+                        full_file_path = Some(path);
+                    } else {
+                        let name = std::path::Path::new(&path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .map(String::from);
+                        file_paths.push(path);
+                        let _ = app.emit(
+                            "youtube-progress",
+                            DownloadProgress {
+                                phase: "converting".to_string(),
+                                percent: 100.0,
+                                speed: None,
+                                eta: None,
+                                title: name,
+                            },
+                        );
+                    }
                 }
-            } else {
-                None
-            };
-
-            let _ = app.emit(
-                "youtube-progress",
-                DownloadProgress {
-                    phase: "converting".to_string(),
-                    percent: 100.0,
-                    speed: None,
-                    eta: None,
-                    title,
-                },
-            );
+            }
             continue;
         }
 
@@ -324,6 +338,13 @@ pub fn download_audio(
             file_paths: vec![],
             error: Some(format!("yt-dlp exited with error: {}", stderr.trim())),
         };
+    }
+
+    // Clean up the full audio file when chapters were split into individual tracks
+    if in_split_mode {
+        if let Some(ref path) = full_file_path {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     DownloadResult {

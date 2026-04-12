@@ -222,11 +222,12 @@ describe("YouTubeDownloader", () => {
         outputDir: "/output",
         format: "flac",
         splitChapters: false,
+        chapterCount: 0,
       });
     });
   });
 
-  it("shows success after download", async () => {
+  it("shows no-chapters message after single file download", async () => {
     const user = userEvent.setup();
     mockOpen.mockResolvedValue("/output");
     mockInvoke.mockImplementation((cmd) => {
@@ -252,8 +253,8 @@ describe("YouTubeDownloader", () => {
     await user.click(screen.getByRole("button", { name: "Download as FLAC" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Download complete")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Download Another" })).toBeInTheDocument();
+      expect(screen.getByText("No chapters found. One audio file created.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "OK" })).toBeInTheDocument();
     });
   });
 
@@ -346,6 +347,7 @@ describe("YouTubeDownloader", () => {
         outputDir: "/output",
         format: "flac",
         splitChapters: true,
+        chapterCount: 3,
       });
     });
   });
@@ -385,6 +387,7 @@ describe("YouTubeDownloader", () => {
       expect(screen.getByText("Song One.flac")).toBeInTheDocument();
       expect(screen.getByText("Song Two.flac")).toBeInTheDocument();
       expect(screen.getByText("Song Three.flac")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Download Another" })).toBeInTheDocument();
     });
   });
 

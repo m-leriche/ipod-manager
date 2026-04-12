@@ -87,6 +87,7 @@ export const YouTubeDownloader = () => {
         outputDir,
         format,
         splitChapters: hasChapters,
+        chapterCount: videoInfo?.chapters.length ?? 0,
       });
       setResult(res);
       setPhase("done");
@@ -166,12 +167,16 @@ export const YouTubeDownloader = () => {
             <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Download cancelled</div>
           ) : result.success ? (
             <>
-              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
-                {result.file_paths.length > 1
-                  ? `Download complete — ${result.file_paths.length} tracks`
-                  : "Download complete"}
-              </div>
-              {result.file_paths.length > 1 ? (
+              {hasChapters ? (
+                <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+                  {`Download complete — ${result.file_paths.length} tracks`}
+                </div>
+              ) : (
+                <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+                  No chapters found. One audio file created.
+                </div>
+              )}
+              {hasChapters && result.file_paths.length > 1 ? (
                 <ul className="text-left mb-4 space-y-1 max-h-48 overflow-y-auto">
                   {result.file_paths.map((fp) => (
                     <li key={fp} className="text-text-tertiary text-[10px] truncate">
@@ -194,7 +199,7 @@ export const YouTubeDownloader = () => {
             onClick={reset}
             className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
           >
-            Download Another
+            {result.success && !hasChapters ? "OK" : "Download Another"}
           </button>
         </div>
       </div>
@@ -204,15 +209,30 @@ export const YouTubeDownloader = () => {
   // ── Downloading ──
 
   if (phase === "downloading") {
+    const isSplitting = progress?.phase === "splitting";
+
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-md">
           {videoInfo && <p className="text-text-secondary text-[11px] font-medium mb-3 truncate">{videoInfo.title}</p>}
+
+          {isSplitting && (
+            <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-2 opacity-50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-text-tertiary">Download complete</span>
+                <span className="text-[11px] text-text-tertiary">100%</span>
+              </div>
+              <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden">
+                <div className="h-full bg-text-primary rounded-full w-full" />
+              </div>
+            </div>
+          )}
+
           <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-text-primary">
-                {progress?.phase === "splitting"
-                  ? "Splitting chapters..."
+                {isSplitting
+                  ? "Splitting chapters into individual tracks"
                   : progress?.phase === "converting"
                     ? progress.title
                       ? `Converting: ${progress.title}`
@@ -233,8 +253,8 @@ export const YouTubeDownloader = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-text-tertiary flex-1 min-w-0 mr-3">
-                {progress?.speed && `${progress.speed}`}
-                {progress?.eta && ` — ETA ${progress.eta}`}
+                {!isSplitting && progress?.speed && `${progress.speed}`}
+                {!isSplitting && progress?.eta && ` — ETA ${progress.eta}`}
               </span>
               <button
                 onClick={cancel}

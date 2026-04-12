@@ -244,6 +244,13 @@ export const MetadataEditor = () => {
         <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Folder</span>
         <span className="flex-1 min-w-0 text-xs text-text-secondary font-medium truncate">{scanPath}</span>
         <span className="text-[11px] text-text-tertiary shrink-0">{tracks.length} tracks</span>
+        <button
+          onClick={browse}
+          disabled={phase === "saving"}
+          className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-xs shrink-0 hover:not-disabled:text-text-secondary hover:not-disabled:border-border-active disabled:opacity-30 transition-all"
+        >
+          Browse
+        </button>
         {theArtistCount > 0 && (
           <button
             onClick={handleFixTheArtists}

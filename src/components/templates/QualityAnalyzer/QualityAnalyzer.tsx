@@ -188,6 +188,12 @@ export const QualityAnalyzer = () => {
         <span className="flex-1 min-w-0 text-xs text-text-secondary font-medium truncate">{scanPath}</span>
         <span className="text-[11px] text-text-tertiary shrink-0">{files.length} files</span>
         <button
+          onClick={browse}
+          className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-xs shrink-0 hover:text-text-secondary hover:border-border-active transition-all"
+        >
+          Browse
+        </button>
+        <button
           onClick={() => scan()}
           className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-xs shrink-0 hover:text-text-secondary hover:border-border-active transition-all"
         >

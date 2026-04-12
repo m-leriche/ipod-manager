@@ -1,19 +1,17 @@
-# iPod Manager
+# Crate
 
-A native macOS desktop app for managing a Rockbox iPod Classic. Replaces the workflow of using FreeFileSync + Swinsian + terminal commands with a single clean GUI.
-
-Built with Tauri 2 (Rust backend) and React 19 (TypeScript frontend).
+A native macOS desktop app for music library management. Built with Tauri 2 (Rust backend) and React 19 (TypeScript frontend).
 
 ## Features
 
 - **File Explorer** — Browse any folder on your system. Navigate in and out of directories, view file sizes and dates, and delete files/folders via right-click.
-- **Folder comparison & sync** — Pick any two folders (iPod, external drives, local folders) and recursively compare them. Color-coded tree view shows new, modified, extra, and matching files. Mirror sync, selective copy, or delete with real-time progress.
-- **Profiles** — Named presets that store source/target folder paths and exclusion filters. Create profiles for different devices (e.g., "My iPod", "Backup Drive"). Save/discard changes explicitly.
-- **Exclusion filters** — Right-click folders in the comparison tree to filter them out. Filtered folders are hidden from comparison and excluded from sync operations. Manage filters via the filter panel.
-- **iPod mount/unmount** — Auto-detects your iPod, mounts it at `/Volumes/IPOD` with one click and your macOS password. Live storage bar shows used/free/total space.
-- **Album art manager** — Scans any music folder for albums missing cover art. Extracts embedded art from audio file tags first (fast, no network), then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder for Rockbox compatibility.
-- **YouTube to Audio** — Paste a YouTube URL, pick an output folder and format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download with real-time progress. Automatically detects video chapters and splits them into individually numbered tracks in a subfolder. Requires `yt-dlp` and `ffmpeg` (install via `brew install yt-dlp ffmpeg`).
-- **Disk space safety** — Pre-flight check warns if there isn't enough space before copying starts. If space runs out mid-copy, stops immediately and cleans up partial files.
+- **Folder comparison & sync** — Pick any two folders and recursively compare them. Color-coded tree view shows new, modified, extra, and matching files. Mirror sync, selective copy, or delete with real-time progress. Profiles save source/target paths and exclusion filters.
+- **Album art manager** — Scans music folders for albums missing cover art. Extracts embedded art from audio tags first, then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder.
+- **Audio metadata editor** — Scan a folder and view/edit ID3 tags grouped by Artist/Album/Track. Batch edit across selections, dirty tracking with visual indicators, and a "Fix The Artists" button that auto-stages sort/album artist for artists starting with "The" (e.g., "The Beatles" -> sort artist "Beatles, The").
+- **Audio quality analyzer** — Scans audio files via ffprobe, detects suspect lossy-to-lossless transcodes by measuring high-frequency energy, and generates on-demand spectrograms for visual confirmation. Files grouped by verdict: lossless, lossy, or suspect transcode.
+- **YouTube to Audio** — Paste a YouTube URL, pick format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download. Auto-detects chapters and splits into individual tracks.
+- **Video to Audio** — Extract audio from local video files with optional user-defined chapter splitting and timestamp validation.
+- **iPod management** — Auto-detects Rockbox iPod Classic, mounts/unmounts with one click, live storage bar. Disk space safety checks before syncing.
 
 ## Prerequisites
 
@@ -71,16 +69,8 @@ npm run tauri build
 ```
 
 Output:
-- `src-tauri/target/release/bundle/macos/iPod Manager.app`
-- `src-tauri/target/release/bundle/dmg/iPod Manager_<version>_aarch64.dmg`
-
-## Usage
-
-1. **File Explorer** (default tab) — Browse to pick a folder and explore its contents. Right-click to delete files or folders.
-2. **File Sync** — Create or select a profile, browse source and target folders, then click **Compare Folders**. Review the diff tree, right-click folders to add exclusion filters, and sync with Mirror/Copy/Delete.
-3. **Album Art** — Browse to a music folder, scan for missing art, and click **Fix** to extract or fetch cover images.
-4. **YouTube to Audio** — Paste a YouTube URL, select an output folder and format (FLAC or MP3), then download. If the video has chapters (e.g., a live concert with song timestamps), they're detected automatically and each chapter is saved as a numbered track in a subfolder. The tab checks for `yt-dlp`/`ffmpeg` on load and shows install instructions if missing.
-5. **iPod** — The connection panel on the left auto-detects your iPod. Enter your macOS password and click **Mount** to mount it at `/Volumes/IPOD`. Click **Eject** when done.
+- `src-tauri/target/release/bundle/macos/Crate.app`
+- `src-tauri/target/release/bundle/dmg/Crate_<version>_aarch64.dmg`
 
 ## Project Structure
 
@@ -91,33 +81,30 @@ src/
 ├── types/                               # Shared TypeScript types
 └── components/
     ├── atoms/                           # Tiny, stateless building blocks
-    │   ├── FolderPicker/
-    │   ├── Pill/
-    │   └── Spinner/
     ├── molecules/                       # Composed atoms with simple logic
-    │   ├── ContextMenu/
-    │   └── FilterChip/
     ├── organisms/                       # Domain-aware components
-    │   ├── FileExplorer/
-    │   ├── FilterPanel/
-    │   └── ProfileSelector/
     └── templates/                       # Full page/tab-level containers
         ├── AlbumArtManager/
         ├── BrowseExplorer/
         ├── ComparisonView/
+        ├── MetadataEditor/
         ├── MountPanel/
+        ├── QualityAnalyzer/
         ├── SyncManager/
+        ├── VideoExtractor/
         └── YouTubeDownloader/
 
 src-tauri/src/
-├── main.rs                              # Tauri entry point
 ├── lib.rs                               # Plugin + command registration
-├── commands.rs                          # Tauri command handlers (all async)
-├── disk.rs                              # diskutil parsing, mount/unmount
+├── commands.rs                          # Tauri command handlers
+├── disk.rs                              # iPod detection, mount/unmount
 ├── files.rs                             # Directory listing, comparison, copy/delete
-├── albumart.rs                          # Album art scanning, tag reading, MusicBrainz
-├── profiles.rs                          # Profile persistence (JSON in app data dir)
-└── youtube.rs                           # YouTube audio download via yt-dlp
+├── albumart.rs                          # Album art scanning + MusicBrainz
+├── metadata.rs                          # Audio tag reading/writing via lofty
+├── audioquality.rs                      # Quality analysis, transcode detection, spectrograms
+├── localvideo.rs                        # Local video audio extraction via ffmpeg
+├── youtube.rs                           # YouTube audio download via yt-dlp
+└── profiles.rs                          # Profile persistence
 ```
 
 Each component has its own folder with co-located test, types, and helper files.
@@ -132,7 +119,7 @@ Each component has its own folder with co-located test, types, and helper files.
 | Testing    | Vitest, React Testing Library, cargo test |
 | Formatting | Prettier, rustfmt                 |
 | CI         | GitHub Actions                    |
-| Audio      | lofty (metadata/tag reading)      |
+| Audio      | lofty (metadata), ffmpeg/ffprobe (quality, extraction) |
 | YouTube    | yt-dlp + ffmpeg (external CLI)    |
 | Network    | ureq (MusicBrainz API)            |
 | Images     | image (decode/resize/encode)      |
@@ -148,6 +135,15 @@ sudo mount -t msdos /dev/disk6s1 /Volumes/IPOD
 ```
 
 The Rust backend runs these via `sudo -S`, piping your password through stdin. Your password is never stored — it's cleared from memory immediately after the mount command completes.
+
+## TODO
+
+- [ ] **Folder structure normalization** — Scan a library and flag/fix naming inconsistencies. Target convention like `Artist/Album/01 Track.flac`. Preview renames as a diff before applying.
+- [ ] **Duplicate detection** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison, pick which to keep.
+- [ ] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Extends the existing MusicBrainz integration.
+- [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
+- [ ] **Audio waveform preview** — Waveform visualization when selecting a file in the explorer. Quick visual check for corruption or silence.
+- [ ] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
 
 ## License
 

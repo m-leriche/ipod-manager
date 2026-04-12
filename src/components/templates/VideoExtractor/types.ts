@@ -1,3 +1,5 @@
+export type { Chapter, DownloadProgress, DownloadResult, AudioFormat } from "../../../types/audio";
+
 export interface VideoProbe {
   title: string;
   duration: number;

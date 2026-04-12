@@ -365,7 +365,7 @@ describe("buildChapters", () => {
       { id: 2, title: "Main", timestamp: "3:00" },
     ];
     const { chapters, errors } = buildChapters(editable, 600);
-    expect(errors.size).toBe(0);
+    expect(Object.keys(errors).length).toBe(0);
     expect(chapters).toEqual([
       { title: "Intro", start_time: 0, end_time: 180 },
       { title: "Main", start_time: 180, end_time: 600 },
@@ -375,8 +375,8 @@ describe("buildChapters", () => {
   it("rejects timestamps exceeding duration", () => {
     const editable = [{ id: 1, title: "Late", timestamp: "15:00" }];
     const { errors } = buildChapters(editable, 600);
-    expect(errors.has(1)).toBe(true);
-    expect(errors.get(1)).toContain("Exceeds video length");
+    expect(errors[1]).toBeDefined();
+    expect(errors[1]).toContain("Exceeds video length");
   });
 
   it("rejects out-of-order timestamps", () => {
@@ -385,8 +385,8 @@ describe("buildChapters", () => {
       { id: 2, title: "Second", timestamp: "1:00" },
     ];
     const { errors } = buildChapters(editable, 600);
-    expect(errors.has(2)).toBe(true);
-    expect(errors.get(2)).toContain("Must be after previous chapter");
+    expect(errors[2]).toBeDefined();
+    expect(errors[2]).toContain("Must be after previous chapter");
   });
 
   it("uses default title when empty", () => {

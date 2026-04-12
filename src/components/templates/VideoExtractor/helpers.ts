@@ -1,5 +1,5 @@
 import type { EditableChapter } from "./types";
-import type { Chapter } from "../YouTubeDownloader/types";
+import type { Chapter } from "../../../types/audio";
 
 export const parseTimestamp = (ts: string): number | null => {
   const trimmed = ts.trim();
@@ -30,32 +30,32 @@ export const formatDuration = (secs: number): string => {
 export const buildChapters = (
   editableChapters: EditableChapter[],
   videoDuration: number,
-): { chapters: Chapter[]; errors: Map<number, string> } => {
-  const errors = new Map<number, string>();
+): { chapters: Chapter[]; errors: Record<number, string> } => {
+  const errors: Record<number, string> = {};
   const valid: { id: number; title: string; startSecs: number }[] = [];
 
   for (const ch of editableChapters) {
     const secs = parseTimestamp(ch.timestamp);
 
     if (secs === null) {
-      errors.set(ch.id, "Invalid format (use M:SS or H:MM:SS)");
+      errors[ch.id] = "Invalid format (use M:SS or H:MM:SS)";
       continue;
     }
 
     if (secs >= videoDuration) {
-      errors.set(ch.id, `Exceeds video length (${formatDuration(videoDuration)})`);
+      errors[ch.id] = `Exceeds video length (${formatDuration(videoDuration)})`;
       continue;
     }
 
     if (valid.length > 0 && secs <= valid[valid.length - 1].startSecs) {
-      errors.set(ch.id, "Must be after previous chapter");
+      errors[ch.id] = "Must be after previous chapter";
       continue;
     }
 
     valid.push({ id: ch.id, title: ch.title || `Chapter ${valid.length + 1}`, startSecs: secs });
   }
 
-  if (errors.size > 0) {
+  if (Object.keys(errors).length > 0) {
     return { chapters: [], errors };
   }
 

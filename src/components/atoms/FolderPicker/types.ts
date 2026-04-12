@@ -3,4 +3,5 @@ export interface FolderPickerProps {
   path: string | null;
   onBrowse: () => void;
   disabled?: boolean;
+  placeholder?: string;
 }

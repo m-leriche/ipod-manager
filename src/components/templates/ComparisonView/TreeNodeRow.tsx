@@ -32,8 +32,8 @@ export const TreeNodeRow = ({
     <div key={node.path}>
       {/* Folder row */}
       <div
-        className={`flex items-center gap-2 py-1.5 pr-3 cursor-pointer select-none transition-colors hover:bg-bg-hover/50 ${folderBg}`}
-        style={{ paddingLeft: `${12 + depth * 20}px` }}
+        className={`flex items-center gap-2.5 py-2 pr-4 cursor-pointer select-none transition-colors hover:bg-bg-hover/50 ${folderBg}`}
+        style={{ paddingLeft: `${16 + depth * 24}px` }}
         onClick={() => onToggleExpand(node.path)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -110,8 +110,8 @@ export const TreeNodeRow = ({
           {node.files.map((entry) => (
             <div
               key={entry.relative_path}
-              className={`flex items-center gap-2 py-[4px] pr-3 transition-colors ${FILE_ROW_BG[entry.status]}`}
-              style={{ paddingLeft: `${32 + depth * 20}px` }}
+              className={`flex items-center gap-2.5 py-[6px] pr-4 transition-colors ${FILE_ROW_BG[entry.status]}`}
+              style={{ paddingLeft: `${40 + depth * 24}px` }}
             >
               {/* Checkbox */}
               <div className="w-3 shrink-0 flex justify-center">

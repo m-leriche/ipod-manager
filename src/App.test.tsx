@@ -18,7 +18,7 @@ beforeEach(() => {
 describe("App", () => {
   it("renders the header", () => {
     render(<App />);
-    expect(screen.getByText("iPod Manager")).toBeInTheDocument();
+    expect(screen.getByText("Crate")).toBeInTheDocument();
   });
 
   it("shows all three tab buttons", () => {

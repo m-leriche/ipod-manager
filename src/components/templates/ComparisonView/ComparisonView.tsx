@@ -54,9 +54,9 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
   const nMirror = stats.source_only + stats.modified + stats.target_only;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-2">
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
       {/* Header */}
-      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-4 py-2.5 shrink-0">
+      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
         <button
           onClick={onBack}
           className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-xl text-[11px] font-medium shrink-0 hover:bg-bg-hover hover:text-text-primary transition-all"
@@ -89,7 +89,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
       </div>
 
       {/* Stats */}
-      <div className="flex gap-5 px-4 py-2 bg-bg-secondary border border-border rounded-2xl shrink-0 text-[11px] font-medium">
+      <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
         <span className="text-success">{stats.source_only} new</span>
         <span className="text-warning">{stats.modified} modified</span>
         <span className="text-danger">{stats.target_only} extra</span>

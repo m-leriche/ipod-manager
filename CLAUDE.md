@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A native macOS desktop app for managing a Rockbox iPod Classic. Tauri 2 (Rust backend) + React 19 (TypeScript frontend). Replaces FreeFileSync + Swinsian + terminal `diskutil`/`mount` commands with a single GUI.
+**Crate** — a native macOS desktop app for music library management. Tauri 2 (Rust backend) + React 19 (TypeScript frontend). Features include Rockbox iPod Classic management, file syncing, album art fixing, YouTube audio downloading, and local video audio extraction.
 
 ## Commands
 
@@ -40,14 +40,16 @@ cd src-tauri && cargo check
 
 ### Frontend → Backend Communication
 
-React calls Rust via `invoke()` from `@tauri-apps/api/core`. All 10 Tauri commands are defined as `#[tauri::command]` async functions in `src-tauri/src/commands.rs` and registered in `src-tauri/src/lib.rs`. Long-running operations (scan, fix, copy) emit real-time progress events via `app.emit()` that the frontend listens to with `listen()`.
+React calls Rust via `invoke()` from `@tauri-apps/api/core`. Tauri commands are defined as `#[tauri::command]` async functions in `src-tauri/src/commands.rs` and registered in `src-tauri/src/lib.rs`. Long-running operations (scan, fix, copy, extract) emit real-time progress events via `app.emit()` that the frontend listens to with `listen()`.
 
 ### Rust Backend Modules (src-tauri/src/)
 
-- **commands.rs** — Thin Tauri command handlers. Each one delegates to `disk`, `files`, or `albumart`. Entry point for all frontend `invoke()` calls.
+- **commands.rs** — Thin Tauri command handlers. Each one delegates to `disk`, `files`, `albumart`, `youtube`, or `localvideo`. Entry point for all frontend `invoke()` calls.
 - **disk.rs** — macOS-specific iPod detection by parsing `diskutil list` output for FAT32 partitions. Mount/unmount via `sudo mount -t msdos` with password piped through stdin.
 - **files.rs** — Directory listing (`FileEntry`), recursive comparison (`CompareEntry` tree), copy/delete with progress events. `SyncCancel` (shared `Arc<AtomicBool>`) enables cancellation from the frontend.
 - **albumart.rs** — Scans folders for albums missing `cover.jpg`. Two-tier fix: (1) extract embedded art from audio tags via `lofty`, (2) fetch from MusicBrainz Cover Art Archive via `ureq`. Resizes to 600x600 via `image` crate.
+- **youtube.rs** — YouTube audio downloading via `yt-dlp`. Fetches video metadata, extracts audio to FLAC/MP3, and splits by chapters. Emits `youtube-progress` events.
+- **localvideo.rs** — Local video audio extraction via `ffmpeg`/`ffprobe`. Probes video duration, extracts audio with optional chapter splitting. Emits `video-extract-progress` events.
 
 ### Frontend Components (src/components/)
 
@@ -56,7 +58,7 @@ Follows atomic design with four levels:
 - **atoms/** — Tiny, stateless building blocks (Spinner, Pill, FolderPicker)
 - **molecules/** — Composed atoms with simple logic (ContextMenu, FilterChip)
 - **organisms/** — Domain-aware components (FileExplorer, ProfileSelector, FilterPanel)
-- **templates/** — Full page/tab-level containers that compose organisms (SyncManager, ComparisonView, AlbumArtManager, MountPanel, BrowseExplorer)
+- **templates/** — Full page/tab-level containers that compose organisms (SyncManager, ComparisonView, AlbumArtManager, MountPanel, BrowseExplorer, YouTubeDownloader, VideoExtractor)
 
 ### Styling
 

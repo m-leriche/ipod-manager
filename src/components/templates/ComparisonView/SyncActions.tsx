@@ -15,12 +15,12 @@ export const SyncActions = ({
 }: SyncActionsProps) => (
   <>
     {syncing && progress ? (
-      <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-medium text-text-primary">
+      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5 shrink-0">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-xs font-medium text-text-primary">
             {progress.phase === "copying" ? "Copying" : progress.phase === "deleting" ? "Deleting" : "Finishing"}...
           </span>
-          <span className="text-[11px] text-text-secondary">
+          <span className="text-xs text-text-secondary">
             {progress.completed} of {progress.total} files
           </span>
         </div>
@@ -43,32 +43,32 @@ export const SyncActions = ({
         </div>
       </div>
     ) : (
-      <div className="flex gap-2 shrink-0">
+      <div className="flex gap-2.5 shrink-0">
         <button
           disabled={syncing || nMirror === 0}
           onClick={onMirrorToTarget}
-          className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="flex-1 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Mirror {nMirror} to iPod {"\u2192"}
         </button>
         <button
           disabled={syncing || nSrc === 0}
           onClick={onCopyToTarget}
-          className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
+          className="py-2.5 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Copy {nSrc} {"\u2192"}
         </button>
         <button
           disabled={syncing || nTgt === 0}
           onClick={onCopyToSource}
-          className="py-2 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
+          className="py-2.5 px-4 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
         >
           {"\u2190"} Copy {nTgt}
         </button>
         <button
           disabled={syncing || nTgt === 0}
           onClick={onDeleteTarget}
-          className="py-2 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="py-2.5 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Delete {nTgt}
         </button>

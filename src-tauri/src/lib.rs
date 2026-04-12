@@ -1,4 +1,5 @@
 mod albumart;
+mod audioquality;
 mod commands;
 mod disk;
 mod files;
@@ -47,6 +48,8 @@ pub fn run() {
             commands::extract_audio_from_video,
             commands::scan_metadata,
             commands::save_metadata,
+            commands::scan_audio_quality,
+            commands::generate_spectrogram,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

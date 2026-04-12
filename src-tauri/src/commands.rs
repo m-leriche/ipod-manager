@@ -1,4 +1,5 @@
 use crate::albumart;
+use crate::audioquality;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
 use crate::localvideo;
@@ -246,4 +247,23 @@ pub async fn save_metadata(
     tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates)))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn scan_audio_quality(
+    path: String,
+    app: AppHandle,
+) -> Result<Vec<audioquality::AudioFileInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || audioquality::scan_audio_quality(&path, app))
+        .await
+        .map_err(|e| format!("Scan failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn generate_spectrogram(
+    file_path: String,
+) -> Result<audioquality::SpectrogramResult, String> {
+    tauri::async_runtime::spawn_blocking(move || audioquality::generate_spectrogram(&file_path))
+        .await
+        .map_err(|e| format!("Generation failed: {}", e))?
 }

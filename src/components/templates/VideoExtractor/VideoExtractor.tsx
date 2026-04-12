@@ -4,11 +4,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import { FormatButton } from "../YouTubeDownloader/FormatButton";
+import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import { ChapterEditor } from "./ChapterEditor";
 import { buildChapters, fileNameFromPath } from "./helpers";
-import type { VideoProbe, EditableChapter, Phase } from "./types";
-import type { AudioFormat, DownloadProgress, DownloadResult } from "../YouTubeDownloader/types";
+import type { VideoProbe, EditableChapter, Phase, AudioFormat, DownloadProgress, DownloadResult } from "./types";
 
 export const VideoExtractor = () => {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -20,7 +19,7 @@ export const VideoExtractor = () => {
   const [outputDir, setOutputDir] = useState("");
   const [format, setFormat] = useState<AudioFormat>("flac");
   const [chapters, setChapters] = useState<EditableChapter[]>([]);
-  const [chapterErrors, setChapterErrors] = useState<Map<number, string>>(new Map());
+  const [chapterErrors, setChapterErrors] = useState<Record<number, string>>({});
   const [nextChapterId, setNextChapterId] = useState(1);
 
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
@@ -62,7 +61,7 @@ export const VideoExtractor = () => {
         setError(null);
         setVideoInfo(null);
         setChapters([]);
-        setChapterErrors(new Map());
+        setChapterErrors({});
         setNextChapterId(1);
         try {
           const info = await invoke<VideoProbe>("probe_video", { path });
@@ -93,19 +92,17 @@ export const VideoExtractor = () => {
   const removeChapter = (id: number) => {
     setChapters(chapters.filter((ch) => ch.id !== id));
     setChapterErrors((prev) => {
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
+      const { [id]: _, ...rest } = prev;
+      return rest;
     });
   };
 
   const updateChapter = (id: number, field: "title" | "timestamp", value: string) => {
     setChapters(chapters.map((ch) => (ch.id === id ? { ...ch, [field]: value } : ch)));
-    if (chapterErrors.has(id)) {
+    if (chapterErrors[id]) {
       setChapterErrors((prev) => {
-        const next = new Map(prev);
-        next.delete(id);
-        return next;
+        const { [id]: _, ...rest } = prev;
+        return rest;
       });
     }
   };
@@ -116,7 +113,7 @@ export const VideoExtractor = () => {
     let parsedChapters: { title: string; start_time: number; end_time: number }[] = [];
     if (chapters.length > 0) {
       const built = buildChapters(chapters, videoInfo.duration);
-      if (built.errors.size > 0) {
+      if (Object.keys(built.errors).length > 0) {
         setChapterErrors(built.errors);
         return;
       }
@@ -155,7 +152,7 @@ export const VideoExtractor = () => {
     setVideoInfo(null);
     setOutputDir("");
     setChapters([]);
-    setChapterErrors(new Map());
+    setChapterErrors({});
     setNextChapterId(1);
     setProgress(null);
     setResult(null);

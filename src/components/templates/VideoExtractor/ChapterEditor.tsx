@@ -2,7 +2,7 @@ import type { EditableChapter } from "./types";
 
 interface ChapterEditorProps {
   chapters: EditableChapter[];
-  errors: Map<number, string>;
+  errors: Record<number, string>;
   onAdd: () => void;
   onRemove: (id: number) => void;
   onChange: (id: number, field: "title" | "timestamp", value: string) => void;
@@ -43,7 +43,7 @@ export const ChapterEditor = ({ chapters, errors, onAdd, onRemove, onChange }: C
                 onChange={(e) => onChange(ch.id, "timestamp", e.target.value)}
                 placeholder="0:00"
                 className={`w-24 px-3 py-1.5 bg-bg-card border rounded-lg text-xs text-text-primary outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary text-center tabular-nums ${
-                  errors.has(ch.id) ? "border-danger" : "border-border"
+                  errors[ch.id] ? "border-danger" : "border-border"
                 }`}
               />
               <button
@@ -53,9 +53,9 @@ export const ChapterEditor = ({ chapters, errors, onAdd, onRemove, onChange }: C
                 &times;
               </button>
             </div>
-            {errors.has(ch.id) && (
+            {errors[ch.id] && (
               <div className="px-5 py-1.5 text-[11px] text-danger bg-danger/5 border-b border-border-subtle pl-14">
-                {errors.get(ch.id)}
+                {errors[ch.id]}
               </div>
             )}
           </div>

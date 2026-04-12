@@ -3,6 +3,7 @@ mod commands;
 mod disk;
 mod files;
 mod localvideo;
+mod metadata;
 mod profiles;
 mod youtube;
 
@@ -44,6 +45,8 @@ pub fn run() {
             commands::check_ffmpeg,
             commands::probe_video,
             commands::extract_audio_from_video,
+            commands::scan_metadata,
+            commands::save_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

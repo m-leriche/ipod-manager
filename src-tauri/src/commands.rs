@@ -2,6 +2,7 @@ use crate::albumart;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
 use crate::localvideo;
+use crate::metadata;
 use crate::profiles::{self, ProfileStore};
 use crate::youtube;
 use tauri::{AppHandle, State};
@@ -226,4 +227,23 @@ pub async fn download_audio(
     .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn scan_metadata(
+    path: String,
+    app: AppHandle,
+) -> Result<Vec<metadata::TrackMetadata>, String> {
+    tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata(&path, app))
+        .await
+        .map_err(|e| format!("Scan failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn save_metadata(
+    updates: Vec<metadata::MetadataUpdate>,
+) -> Result<metadata::MetadataSaveResult, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates)))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
 }

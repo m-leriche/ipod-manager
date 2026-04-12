@@ -1,4 +1,6 @@
-export const FormatButton = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
+import type { FormatButtonProps } from "./types";
+
+export const FormatButton = ({ label, active, onClick }: FormatButtonProps) => (
   <button
     onClick={onClick}
     className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${

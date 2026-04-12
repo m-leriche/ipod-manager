@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
-import { FormatButton } from "./FormatButton";
+import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 
 export const YouTubeDownloader = () => {

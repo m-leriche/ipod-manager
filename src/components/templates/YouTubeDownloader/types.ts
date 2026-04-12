@@ -1,8 +1,6 @@
-export interface Chapter {
-  title: string;
-  start_time: number;
-  end_time: number;
-}
+import type { Chapter } from "../../../types/audio";
+
+export type { Chapter, DownloadProgress, DownloadResult, AudioFormat } from "../../../types/audio";
 
 export interface VideoInfo {
   title: string;
@@ -10,22 +8,5 @@ export interface VideoInfo {
   uploader: string;
   chapters: Chapter[];
 }
-
-export interface DownloadProgress {
-  phase: string;
-  percent: number;
-  speed: string | null;
-  eta: string | null;
-  title: string | null;
-}
-
-export interface DownloadResult {
-  success: boolean;
-  cancelled: boolean;
-  file_paths: string[];
-  error: string | null;
-}
-
-export type AudioFormat = "flac" | "mp3";
 
 export type Phase = "idle" | "fetching" | "ready" | "downloading" | "done";

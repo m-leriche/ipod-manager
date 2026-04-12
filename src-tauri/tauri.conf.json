@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "iPod Manager",
+  "productName": "Crate",
   "version": "0.1.0",
-  "identifier": "com.ipodmanager.app",
+  "identifier": "com.crateapp.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "iPod Manager",
-        "width": 800,
-        "height": 600,
+        "title": "Crate",
+        "width": 1200,
+        "height": 800,
         "resizable": true,
         "fullscreen": false
       }

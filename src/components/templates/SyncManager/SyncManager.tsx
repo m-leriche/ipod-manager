@@ -124,9 +124,9 @@ export const SyncManager = () => {
   };
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-2.5 min-h-0">
+    <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
       {/* Profile bar — always visible */}
-      <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-2.5 shrink-0">
+      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
         <ProfileSelector
           profiles={profileStore.profiles}
           activeProfile={localProfile}

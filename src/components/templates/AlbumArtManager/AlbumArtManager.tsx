@@ -171,7 +171,7 @@ export const AlbumArtManager = () => {
   return (
     <>
       {/* Path bar */}
-      <div className="flex items-center gap-2 bg-bg-secondary border border-border rounded-2xl px-4 py-2 shrink-0">
+      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-5 py-2.5 shrink-0">
         <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Folder</span>
         <span className="flex-1 min-w-0 text-[11px] text-text-secondary font-medium truncate">{scanPath}</span>
         <button
@@ -184,7 +184,7 @@ export const AlbumArtManager = () => {
       </div>
 
       {/* Stats */}
-      <div className="flex gap-5 px-4 py-2 bg-bg-secondary border border-border rounded-2xl shrink-0 text-[11px] font-medium">
+      <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
         <span className="text-text-secondary">{albums.length} albums</span>
         <span className="text-success">{hasCover.length} have art</span>
         <span className="text-accent">{extractable.length} extractable</span>
@@ -193,10 +193,10 @@ export const AlbumArtManager = () => {
 
       {/* Progress or actions */}
       {phase === "fixing" && progress ? (
-        <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-medium text-text-primary">Fixing album art...</span>
-            <span className="text-[11px] text-text-secondary">
+        <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5 shrink-0">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs font-medium text-text-primary">Fixing album art...</span>
+            <span className="text-xs text-text-secondary">
               {progress.completed} of {progress.total}
             </span>
           </div>

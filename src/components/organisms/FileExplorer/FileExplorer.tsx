@@ -7,7 +7,7 @@ import type { FileEntry, FileExplorerProps } from "./types";
 
 const TH = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <th
-    className={`bg-bg-card px-3 py-1.5 text-left text-[10px] font-medium text-text-tertiary uppercase tracking-wider border-b border-border ${className}`}
+    className={`bg-bg-card px-3 py-2 text-left text-[11px] font-medium text-text-tertiary uppercase tracking-wider border-b border-border ${className}`}
   >
     {children}
   </th>
@@ -87,7 +87,7 @@ export const FileExplorer = ({
       className={`flex-1 min-w-0 bg-bg-secondary border rounded-2xl flex flex-col transition-colors ${selected ? "border-success/40" : "border-border"}`}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-border shrink-0">
         <button
           disabled={!canUp}
           onClick={up}
@@ -162,7 +162,7 @@ export const FileExplorer = ({
                       : undefined
                   }
                 >
-                  <td className="px-3 py-[5px] text-[11px] border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap">
+                  <td className="px-3 py-[7px] text-xs border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap">
                     <span className="mr-1.5 text-xs align-middle opacity-60">{icon(e)}</span>
                     {e.is_dir ? (
                       <span
@@ -175,10 +175,10 @@ export const FileExplorer = ({
                       <span className="text-text-secondary align-middle">{e.name}</span>
                     )}
                   </td>
-                  <td className="px-3 py-[5px] text-[11px] text-text-tertiary border-b border-border-subtle">
+                  <td className="px-3 py-[7px] text-xs text-text-tertiary border-b border-border-subtle">
                     {fmtSize(e.size)}
                   </td>
-                  <td className="px-3 py-[5px] text-[11px] text-text-tertiary border-b border-border-subtle">
+                  <td className="px-3 py-[7px] text-xs text-text-tertiary border-b border-border-subtle">
                     {fmtDate(e.modified)}
                   </td>
                 </tr>
@@ -189,7 +189,7 @@ export const FileExplorer = ({
       )}
 
       {/* Footer */}
-      <div className="px-3 py-1.5 border-t border-border text-[10px] text-text-tertiary shrink-0">
+      <div className="px-4 py-2 border-t border-border text-[11px] text-text-tertiary shrink-0">
         {!loading &&
           !error &&
           `${entries.filter((e) => e.is_dir).length} folders, ${entries.filter((e) => !e.is_dir).length} files`}

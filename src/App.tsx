@@ -4,21 +4,22 @@ import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExpl
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
 import { AlbumArtManager } from "./components/templates/AlbumArtManager/AlbumArtManager";
 import { YouTubeDownloader } from "./components/templates/YouTubeDownloader/YouTubeDownloader";
+import { VideoExtractor } from "./components/templates/VideoExtractor/VideoExtractor";
 
-type Tab = "browse" | "sync" | "albumart" | "youtube";
+type Tab = "browse" | "sync" | "albumart" | "youtube" | "video";
 
 const App = () => {
   const [tab, setTab] = useState<Tab>("browse");
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg-primary text-text-primary font-sans antialiased">
-      <header className="px-6 py-4 border-b border-border flex items-center">
-        <h1 className="text-sm font-medium tracking-tight text-text-secondary">iPod Manager</h1>
+    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary text-text-primary font-sans antialiased">
+      <header className="px-8 py-5 border-b border-border flex items-center shrink-0">
+        <h1 className="text-sm font-medium tracking-tight text-text-secondary">Crate</h1>
       </header>
-      <main className="flex-1 flex gap-4 p-4 items-start">
+      <main className="flex-1 flex gap-6 p-6 min-h-0">
         <MountPanel compact />
-        <div className="flex-1 min-w-0 flex flex-col gap-2.5 max-h-[calc(100vh-72px)]">
-          <div className="flex gap-1 shrink-0">
+        <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+          <div className="flex gap-1.5 shrink-0">
             <TabButton active={tab === "browse"} onClick={() => setTab("browse")}>
               File Explorer
             </TabButton>
@@ -31,11 +32,15 @@ const App = () => {
             <TabButton active={tab === "youtube"} onClick={() => setTab("youtube")}>
               YouTube to Audio
             </TabButton>
+            <TabButton active={tab === "video"} onClick={() => setTab("video")}>
+              Video to Audio
+            </TabButton>
           </div>
           {tab === "browse" && <BrowseExplorer />}
           {tab === "sync" && <SyncManager />}
           {tab === "albumart" && <AlbumArtManager />}
           {tab === "youtube" && <YouTubeDownloader />}
+          {tab === "video" && <VideoExtractor />}
         </div>
       </main>
     </div>
@@ -56,7 +61,7 @@ const TabButton = ({
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
       disabled
         ? "text-text-tertiary/40 border border-transparent cursor-not-allowed"
         : active

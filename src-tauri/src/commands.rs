@@ -1,6 +1,7 @@
 use crate::albumart;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::localvideo;
 use crate::profiles::{self, ProfileStore};
 use crate::youtube;
 use tauri::{AppHandle, State};
@@ -162,6 +163,40 @@ pub async fn fetch_video_info(url: String) -> Result<youtube::VideoInfo, String>
     tauri::async_runtime::spawn_blocking(move || youtube::fetch_video_info(&url))
         .await
         .map_err(|e| format!("Fetch failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn check_ffmpeg() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(localvideo::check_ffmpeg)
+        .await
+        .map_err(|e| format!("Check failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn probe_video(path: String) -> Result<localvideo::VideoProbe, String> {
+    tauri::async_runtime::spawn_blocking(move || localvideo::probe_video(&path))
+        .await
+        .map_err(|e| format!("Probe failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn extract_audio_from_video(
+    path: String,
+    output_dir: String,
+    format: String,
+    chapters: Vec<youtube::Chapter>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<youtube::DownloadResult, String> {
+    let flag = cancel.new_flag();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        localvideo::extract_audio(&path, &output_dir, &format, chapters, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
 }
 
 #[tauri::command]

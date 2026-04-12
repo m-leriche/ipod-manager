@@ -1,12 +1,16 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "iPod Manager for Rockbox iPod Classic"
+description = "Crate — music library and iPod management tool"
 authors = ["you"]
 license = "MIT"
 repository = "https://github.com/m-leriche/ipod-manager"
 edition = "2021"
 rust-version = "1.77.2"
+
+[[bin]]
+name = "Crate"
+path = "src/main.rs"
 
 [lib]
 name = "app_lib"

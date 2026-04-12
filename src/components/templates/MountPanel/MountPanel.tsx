@@ -150,9 +150,9 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
 
   return (
     <div
-      className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-4 w-[220px] shrink-0" : "p-6 w-full max-w-md"}`}
+      className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-5 w-[260px] shrink-0" : "p-6 w-full max-w-md"}`}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">Connection</span>
         <button
           disabled={status === "mounting" || status === "unmounting"}
@@ -163,7 +163,7 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
         </button>
       </div>
 
-      <div className="bg-bg-card border border-border rounded-xl p-3.5 mb-3.5">
+      <div className="bg-bg-card border border-border rounded-xl p-4 mb-4">
         <Row label="Status" value={statusLabel()} />
         {diskInfo && (
           <>
@@ -186,22 +186,22 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="w-full mb-3 px-3 py-2 bg-bg-card border border-border rounded-xl text-text-primary text-xs outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
+          className="w-full mb-3.5 px-3.5 py-2.5 bg-bg-card border border-border rounded-xl text-text-primary text-xs outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
         />
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2.5">
         <button
           disabled={status !== "found" || !password}
           onClick={handleMount}
-          className="flex-1 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="flex-1 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Mount
         </button>
         <button
           disabled={status !== "mounted"}
           onClick={handleUnmount}
-          className="flex-1 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
+          className="flex-1 py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Eject
         </button>
@@ -215,7 +215,7 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
 };
 
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="flex justify-between items-center py-1.5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">
+  <div className="flex justify-between items-center py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">
     <span className="text-text-tertiary text-[11px]">{label}</span>
     <span className="text-[11px] font-medium text-text-secondary">{value}</span>
   </div>

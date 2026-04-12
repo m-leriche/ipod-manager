@@ -2,6 +2,7 @@ mod albumart;
 mod commands;
 mod disk;
 mod files;
+mod localvideo;
 mod profiles;
 mod youtube;
 
@@ -40,6 +41,9 @@ pub fn run() {
             commands::check_yt_dependencies,
             commands::fetch_video_info,
             commands::download_audio,
+            commands::check_ffmpeg,
+            commands::probe_video,
+            commands::extract_audio_from_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

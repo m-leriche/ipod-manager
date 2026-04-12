@@ -25,7 +25,7 @@ export const BrowseExplorer = () => {
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-2.5 min-h-0">
+    <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
       <FolderPicker label="Folder" path={rootPath} onBrowse={browse} />
       <FileExplorer
         rootPath={rootPath}

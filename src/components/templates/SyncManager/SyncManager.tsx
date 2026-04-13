@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ComparisonView } from "../ComparisonView/ComparisonView";
+import { SplitComparisonView } from "../SplitComparisonView/SplitComparisonView";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { ProfileSelector } from "../../organisms/ProfileSelector/ProfileSelector";
 import { FilterPanel } from "../../organisms/FilterPanel/FilterPanel";
@@ -10,6 +11,7 @@ import { emptyProfile } from "./helpers";
 
 export const SyncManager = () => {
   const [comparing, setComparing] = useState(false);
+  const [viewMode, setViewMode] = useState<"tree" | "split">("split");
   const [profileStore, setProfileStore] = useState<ProfileStore>({ profiles: [] });
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -148,13 +150,49 @@ export const SyncManager = () => {
           <p className="text-text-tertiary text-xs">Select or create a profile to start syncing folders</p>
         </div>
       ) : comparing && sourceFolder && targetFolder ? (
-        <ComparisonView
-          sourcePath={sourceFolder}
-          targetPath={targetFolder}
-          exclusions={exclusions}
-          onAddExclusion={addExclusion}
-          onBack={() => setComparing(false)}
-        />
+        <>
+          {/* View mode toggle */}
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => setViewMode("tree")}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                viewMode === "tree"
+                  ? "bg-bg-card text-text-primary border-border-active"
+                  : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
+              }`}
+            >
+              Tree
+            </button>
+            <button
+              onClick={() => setViewMode("split")}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                viewMode === "split"
+                  ? "bg-bg-card text-text-primary border-border-active"
+                  : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
+              }`}
+            >
+              Split
+            </button>
+          </div>
+
+          {viewMode === "tree" ? (
+            <ComparisonView
+              sourcePath={sourceFolder}
+              targetPath={targetFolder}
+              exclusions={exclusions}
+              onAddExclusion={addExclusion}
+              onBack={() => setComparing(false)}
+            />
+          ) : (
+            <SplitComparisonView
+              sourcePath={sourceFolder}
+              targetPath={targetFolder}
+              exclusions={exclusions}
+              onAddExclusion={addExclusion}
+              onBack={() => setComparing(false)}
+            />
+          )}
+        </>
       ) : (
         <>
           <FolderPicker

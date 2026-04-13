@@ -13,3 +13,16 @@ export interface FileExplorerProps {
   selectedFolder?: string | null;
   allowDelete?: boolean;
 }
+
+export interface ClipboardState {
+  paths: string[];
+  operation: "copy" | "cut";
+  sourceDir: string;
+}
+
+export interface ContextMenuState {
+  x: number;
+  y: number;
+  target: "entry" | "empty";
+  entry?: FileEntry;
+}

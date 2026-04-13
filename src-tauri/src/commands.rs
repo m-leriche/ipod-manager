@@ -144,6 +144,36 @@ pub async fn delete_entry(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn rename_entry(old_path: String, new_path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || files::rename_entry(&old_path, &new_path))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn create_folder(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || files::create_folder(&path))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn move_files(
+    operations: Vec<CopyOperation>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<CopyResult, String> {
+    let flag = cancel.new_flag();
+
+    let result =
+        tauri::async_runtime::spawn_blocking(move || files::move_file_list(operations, app, flag))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
 pub fn get_profiles(app: AppHandle) -> Result<ProfileStore, String> {
     profiles::load_profiles(&app)
 }

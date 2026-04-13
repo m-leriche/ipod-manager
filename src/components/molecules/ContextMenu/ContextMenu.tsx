@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ContextMenuProps } from "./types";
+import type { ContextMenuProps, ContextMenuItem } from "./types";
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -25,18 +25,30 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
       style={{ left: x, top: y }}
       className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
     >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item, i) =>
+        isSeparator(item) ? (
+          <div key={`sep-${i}`} className="h-px bg-border my-1" />
+        ) : (
+          <button
+            key={item.label}
+            onClick={() => {
+              if (item.disabled) return;
+              item.onClick();
+              onClose();
+            }}
+            className={`w-full text-left px-3 py-2 text-[11px] flex items-center justify-between transition-colors ${
+              item.disabled
+                ? "text-text-tertiary/40 cursor-default"
+                : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+            }`}
+          >
+            <span>{item.label}</span>
+            {item.shortcut && <span className="text-text-tertiary text-[10px] ml-4">{item.shortcut}</span>}
+          </button>
+        ),
+      )}
     </div>
   );
 };
+
+const isSeparator = (item: ContextMenuItem): item is { type: "separator" } => item.type === "separator";

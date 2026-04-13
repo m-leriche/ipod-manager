@@ -507,6 +507,140 @@ pub fn delete_file_list(
     }
 }
 
+// ── Rename / Create / Move ────────────────────────────────────────
+
+pub fn rename_entry(old_path: &str, new_path: &str) -> Result<(), String> {
+    let old = Path::new(old_path);
+    let new = Path::new(new_path);
+
+    if !old.exists() {
+        return Err(format!("Source does not exist: {}", old_path));
+    }
+    if new.exists() {
+        return Err(format!("Destination already exists: {}", new_path));
+    }
+
+    fs::rename(old, new).map_err(|e| format!("Rename failed: {}", e))
+}
+
+pub fn create_folder(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+
+    if p.exists() {
+        return Err(format!("Already exists: {}", path));
+    }
+
+    let parent = p.parent().ok_or("Invalid path")?;
+    if !parent.exists() {
+        return Err(format!(
+            "Parent directory does not exist: {}",
+            parent.display()
+        ));
+    }
+
+    fs::create_dir(p).map_err(|e| format!("Create folder failed: {}", e))
+}
+
+pub fn move_file_list(
+    operations: Vec<CopyOperation>,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> CopyResult {
+    let total = operations.len();
+    let mut succeeded = 0;
+    let mut failed = 0;
+    let mut cancelled = false;
+    let mut errors: Vec<String> = Vec::new();
+
+    for (i, op) in operations.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
+
+        let _ = app.emit(
+            "sync-progress",
+            SyncProgress {
+                total,
+                completed: i,
+                current_file: Path::new(&op.dest_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+                phase: "moving".to_string(),
+            },
+        );
+
+        let dest = Path::new(&op.dest_path);
+        if let Some(parent) = dest.parent() {
+            if !parent.exists() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    errors.push(format!("{}: {}", op.source_path, e));
+                    failed += 1;
+                    continue;
+                }
+            }
+        }
+
+        match move_single(&op.source_path, &op.dest_path) {
+            Ok(()) => succeeded += 1,
+            Err(e) => {
+                errors.push(format!("{}: {}", op.source_path, e));
+                failed += 1;
+            }
+        }
+    }
+
+    CopyResult {
+        total,
+        succeeded,
+        failed,
+        cancelled,
+        errors,
+    }
+}
+
+fn move_single(source: &str, dest: &str) -> Result<(), String> {
+    // Try rename first (instant for same-volume)
+    match fs::rename(source, dest) {
+        Ok(()) => return Ok(()),
+        Err(e) => {
+            // errno 18 = EXDEV (cross-device link) on macOS/Linux
+            if e.raw_os_error() != Some(18) {
+                return Err(format!("Move failed: {}", e));
+            }
+            // Fall through to copy + delete for cross-volume
+        }
+    }
+
+    let src_path = Path::new(source);
+    if src_path.is_dir() {
+        copy_dir_recursive(src_path, Path::new(dest))?;
+        fs::remove_dir_all(src_path).map_err(|e| format!("Remove source dir failed: {}", e))
+    } else {
+        fs::copy(source, dest).map_err(|e| format!("Copy failed: {}", e))?;
+        fs::remove_file(source).map_err(|e| format!("Remove source failed: {}", e))
+    }
+}
+
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| format!("Create dir failed: {}", e))?;
+
+    let entries = fs::read_dir(src).map_err(|e| format!("Read dir failed: {}", e))?;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let src_child = entry.path();
+        let dest_child = dest.join(entry.file_name());
+        if src_child.is_dir() {
+            copy_dir_recursive(&src_child, &dest_child)?;
+        } else {
+            fs::copy(&src_child, &dest_child)
+                .map_err(|e| format!("Copy {} failed: {}", src_child.display(), e))?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

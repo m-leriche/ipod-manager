@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { FileExplorer } from "./FileExplorer";
+import { deduplicateName, joinPath } from "./helpers";
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -149,5 +150,72 @@ describe("FileExplorer", () => {
       expect(screen.getByText("5.0 MB")).toBeInTheDocument();
       expect(screen.getByText("1.0 KB")).toBeInTheDocument();
     });
+  });
+
+  it("shows selected count in footer when items are selected", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    await user.click(screen.getByText("song.mp3"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 selected/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows context menu with Copy on right-click", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("song.mp3") });
+
+    await waitFor(() => {
+      expect(screen.getByText("Copy")).toBeInTheDocument();
+      expect(screen.getByText("Cut")).toBeInTheDocument();
+      expect(screen.getByText("Rename")).toBeInTheDocument();
+      expect(screen.getByText("Delete")).toBeInTheDocument();
+    });
+  });
+
+  it("shows New Folder in empty-space context menu", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    // Right-click on the container footer (empty space area)
+    const footer = screen.getByText(/folders/);
+    await user.pointer({ keys: "[MouseRight]", target: footer.closest("div")! });
+
+    await waitFor(() => {
+      expect(screen.getByText("New Folder")).toBeInTheDocument();
+    });
+  });
+});
+
+describe("helpers", () => {
+  it("deduplicateName creates copy names", () => {
+    const existing = new Set(["song.mp3"]);
+    expect(deduplicateName("song.mp3", existing)).toBe("song (copy).mp3");
+    existing.add("song (copy).mp3");
+    expect(deduplicateName("song.mp3", existing)).toBe("song (copy 2).mp3");
+  });
+
+  it("deduplicateName returns original if no conflict", () => {
+    expect(deduplicateName("new.txt", new Set(["old.txt"]))).toBe("new.txt");
+  });
+
+  it("deduplicateName handles files without extensions", () => {
+    const existing = new Set(["Makefile"]);
+    expect(deduplicateName("Makefile", existing)).toBe("Makefile (copy)");
+  });
+
+  it("joinPath avoids double slashes", () => {
+    expect(joinPath("/music", "song.mp3")).toBe("/music/song.mp3");
+    expect(joinPath("/music/", "song.mp3")).toBe("/music/song.mp3");
   });
 });

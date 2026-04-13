@@ -7,8 +7,9 @@ import { YouTubeDownloader } from "./components/templates/YouTubeDownloader/YouT
 import { VideoExtractor } from "./components/templates/VideoExtractor/VideoExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
 import { QualityAnalyzer } from "./components/templates/QualityAnalyzer/QualityAnalyzer";
+import { LibraryStats } from "./components/templates/LibraryStats/LibraryStats";
 
-type Tab = "browse" | "sync" | "albumart" | "metadata" | "quality" | "youtube" | "video";
+type Tab = "browse" | "sync" | "albumart" | "metadata" | "quality" | "youtube" | "video" | "stats";
 
 const App = () => {
   const [tab, setTab] = useState<Tab>("browse");
@@ -43,6 +44,9 @@ const App = () => {
             <TabButton active={tab === "video"} onClick={() => setTab("video")}>
               Video to Audio
             </TabButton>
+            <TabButton active={tab === "stats"} onClick={() => setTab("stats")}>
+              Library Stats
+            </TabButton>
           </div>
           {tab === "browse" && <BrowseExplorer />}
           {tab === "sync" && <SyncManager />}
@@ -51,6 +55,7 @@ const App = () => {
           {tab === "quality" && <QualityAnalyzer />}
           {tab === "youtube" && <YouTubeDownloader />}
           {tab === "video" && <VideoExtractor />}
+          {tab === "stats" && <LibraryStats />}
         </div>
       </main>
     </div>

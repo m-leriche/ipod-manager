@@ -2,9 +2,11 @@ use crate::albumart;
 use crate::audioquality;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::libstats;
 use crate::localvideo;
 use crate::metadata;
 use crate::profiles::{self, ProfileStore};
+use crate::rockbox;
 use crate::youtube;
 use tauri::{AppHandle, State};
 
@@ -303,4 +305,24 @@ pub async fn generate_spectrogram(
     tauri::async_runtime::spawn_blocking(move || audioquality::generate_spectrogram(&file_path))
         .await
         .map_err(|e| format!("Generation failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn scan_library_stats(
+    path: String,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<libstats::LibraryStats, String> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || libstats::scan_library_stats(&path, app, flag))
+        .await
+        .map_err(|e| format!("Scan failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn read_rockbox_playdata(ipod_path: String) -> Result<rockbox::RockboxPlayData, String> {
+    tauri::async_runtime::spawn_blocking(move || rockbox::read_rockbox_playdata(&ipod_path))
+        .await
+        .map_err(|e| format!("Read failed: {}", e))?
 }

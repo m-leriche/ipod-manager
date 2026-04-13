@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ContextMenuProps, ContextMenuItem } from "./types";
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -19,10 +20,29 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
     };
   }, [onClose]);
 
+  // Adjust position after first render so the menu doesn't overflow the viewport
+  useEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = 8;
+
+    let left = x;
+    let top = y;
+
+    if (x + rect.width > vw - pad) left = x - rect.width;
+    if (y + rect.height > vh - pad) top = y - rect.height;
+    if (left < pad) left = pad;
+    if (top < pad) top = pad;
+
+    setPos({ left, top });
+  }, [x, y]);
+
   return (
     <div
       ref={ref}
-      style={{ left: x, top: y }}
+      style={{ left: pos.left, top: pos.top }}
       className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
     >
       {items.map((item, i) =>

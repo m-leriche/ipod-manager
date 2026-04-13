@@ -3,7 +3,7 @@ import type { ContextMenuProps, ContextMenuItem } from "./types";
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -20,7 +20,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
     };
   }, [onClose]);
 
-  // Adjust position after first render so the menu doesn't overflow the viewport
+  // Measure off-screen on first render, then place in the correct position
   useEffect(() => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
@@ -42,7 +42,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   return (
     <div
       ref={ref}
-      style={{ left: pos.left, top: pos.top }}
+      style={pos ? { left: pos.left, top: pos.top } : { left: x, top: y, visibility: "hidden" }}
       className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
     >
       {items.map((item, i) =>

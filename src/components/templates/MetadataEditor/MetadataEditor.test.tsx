@@ -127,6 +127,114 @@ describe("MetadataEditor", () => {
       expect(screen.getByText("Path does not exist")).toBeInTheDocument();
     });
   });
+
+  it("shows cancel button during scanning", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music");
+    // Never resolve so we stay in scanning phase
+    mockInvoke.mockReturnValue(new Promise(() => {}));
+
+    render(<MetadataEditor />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    });
+  });
+
+  it("calls cancel_sync when cancel is clicked", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music");
+    mockInvoke.mockReturnValue(new Promise(() => {}));
+
+    render(<MetadataEditor />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(mockInvoke).toHaveBeenCalledWith("cancel_sync");
+  });
+
+  it("returns to idle on cancelled scan", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music");
+    mockInvoke.mockRejectedValue("Cancelled");
+
+    render(<MetadataEditor />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Choose a music folder to view and edit metadata")).toBeInTheDocument();
+    });
+    // Should not show error for cancellation
+    expect(screen.queryByText("Cancelled")).not.toBeInTheDocument();
+  });
+
+  it("shows banner and changes button after Fix The Artists", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music");
+    mockInvoke.mockResolvedValue(TRACKS);
+
+    render(<MetadataEditor />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => {
+      expect(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)'));
+
+    await waitFor(() => {
+      // Banner shows with track count
+      expect(screen.getByText(/Updated album artist & sort artist for 2 tracks/)).toBeInTheDocument();
+      // Button changes to "Fixed" state and is disabled
+      expect(screen.getByText((_, el) => el?.textContent === 'Fixed "The" Artists')).toBeInTheDocument();
+      // Unsaved changes count shows
+      expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
+    });
+  });
+
+  it("shows save progress with cancel button during save", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music");
+    // First invoke: scan_metadata returns tracks. Second: save_metadata hangs.
+    mockInvoke.mockResolvedValueOnce(TRACKS).mockReturnValueOnce(new Promise(() => {}));
+
+    render(<MetadataEditor />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    // Wait for scanned state
+    await waitFor(() => {
+      expect(screen.getByText("The Beatles")).toBeInTheDocument();
+    });
+
+    // Fix "The" artists to create dirty tracks
+    await user.click(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)'));
+
+    await waitFor(() => {
+      expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
+    });
+
+    // Select all Beatles tracks to see the edit panel + save button
+    const beatlesCheckbox = screen.getAllByRole("checkbox")[0];
+    await user.click(beatlesCheckbox);
+
+    // Click save
+    await waitFor(() => {
+      expect(screen.getByText(/Save 2 Change/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByText(/Save 2 Change/));
+
+    // Should show saving progress UI with cancel button
+    await waitFor(() => {
+      expect(screen.getByText("Saving metadata...")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    });
+  });
 });
 
 // ── Helper tests ─────────────────────────────────────────────────

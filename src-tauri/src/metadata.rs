@@ -5,6 +5,8 @@ use lofty::tag::ItemKey;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 const AUDIO_EXT: &[&str] = &[
@@ -48,10 +50,18 @@ pub struct MetadataScanProgress {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct MetadataSaveProgress {
+    pub total: usize,
+    pub completed: usize,
+    pub current_file: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct MetadataSaveResult {
     pub total: usize,
     pub succeeded: usize,
     pub failed: usize,
+    pub cancelled: bool,
     pub errors: Vec<String>,
 }
 
@@ -148,7 +158,11 @@ fn empty_track(file_path: String, file_name: String) -> TrackMetadata {
 
 // ── Scan ─────────────────────────────────────────────────────────
 
-pub fn scan_metadata(path: &str, app: AppHandle) -> Result<Vec<TrackMetadata>, String> {
+pub fn scan_metadata(
+    path: &str,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<TrackMetadata>, String> {
     let root = Path::new(path);
     if !root.exists() {
         return Err(format!("Path does not exist: {}", path));
@@ -161,6 +175,10 @@ pub fn scan_metadata(path: &str, app: AppHandle) -> Result<Vec<TrackMetadata>, S
     let mut tracks = Vec::with_capacity(total);
 
     for (i, file_path) in audio_files.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".to_string());
+        }
+
         let file_name = file_path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -183,20 +201,45 @@ pub fn scan_metadata(path: &str, app: AppHandle) -> Result<Vec<TrackMetadata>, S
 
 // ── Save ─────────────────────────────────────────────────────────
 
-pub fn save_metadata(updates: Vec<MetadataUpdate>) -> MetadataSaveResult {
+pub fn save_metadata(
+    updates: Vec<MetadataUpdate>,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> MetadataSaveResult {
     let total = updates.len();
     let mut succeeded = 0;
     let mut failed = 0;
     let mut errors = Vec::new();
 
-    for update in &updates {
+    for (i, update) in updates.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return MetadataSaveResult {
+                total,
+                succeeded,
+                failed,
+                cancelled: true,
+                errors,
+            };
+        }
+
+        let file_name = Path::new(&update.file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&update.file_path)
+            .to_string();
+
+        let _ = app.emit(
+            "metadata-save-progress",
+            MetadataSaveProgress {
+                total,
+                completed: i,
+                current_file: file_name.clone(),
+            },
+        );
+
         match apply_update(update) {
             Ok(()) => succeeded += 1,
             Err(e) => {
-                let file_name = Path::new(&update.file_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or(&update.file_path);
                 errors.push(format!("{}: {}", file_name, e));
                 failed += 1;
             }
@@ -207,6 +250,7 @@ pub fn save_metadata(updates: Vec<MetadataUpdate>) -> MetadataSaveResult {
         total,
         succeeded,
         failed,
+        cancelled: false,
         errors,
     }
 }

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { confirm, message } from "@tauri-apps/plugin-dialog";
 import type { FileEntry, ClipboardState } from "./types";
 import { joinPath, deduplicateName } from "./helpers";
 
@@ -15,7 +16,7 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
         reload();
         return true;
       } catch (e) {
-        window.alert(`Rename failed: ${e}`);
+        await message(`Rename failed: ${e}`, { title: "Error", kind: "error" });
         return false;
       }
     },
@@ -30,7 +31,7 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
         reload();
         return true;
       } catch (e) {
-        window.alert(`Create folder failed: ${e}`);
+        await message(`Create folder failed: ${e}`, { title: "Error", kind: "error" });
         return false;
       }
     },
@@ -40,14 +41,18 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
   const handleDelete = useCallback(
     async (names: string[]) => {
       if (names.length === 0) return;
-      const label = names.length === 1 ? `Delete "${names[0]}"?` : `Delete ${names.length} items?`;
-      if (!window.confirm(label)) return;
+      const label =
+        names.length === 1
+          ? `Are you sure you want to delete "${names[0]}"?`
+          : `Are you sure you want to delete ${names.length} items?`;
+      const ok = await confirm(label, { title: "Delete", kind: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
+      if (!ok) return;
 
       if (names.length === 1) {
         try {
           await invoke("delete_entry", { path: joinPath(currentPath, names[0]) });
         } catch (e) {
-          window.alert(`Delete failed: ${e}`);
+          await message(`Delete failed: ${e}`, { title: "Error", kind: "error" });
         }
       } else {
         try {
@@ -55,7 +60,7 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
             paths: names.map((n) => joinPath(currentPath, n)),
           });
         } catch (e) {
-          window.alert(`Delete failed: ${e}`);
+          await message(`Delete failed: ${e}`, { title: "Error", kind: "error" });
         }
       }
       reload();
@@ -67,11 +72,18 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
     async (clipboard: ClipboardState) => {
       const existingNames = new Set(entries.map((e) => e.name));
       const isSameDir = clipboard.sourceDir === currentPath;
+      const action = clipboard.operation === "copy" ? "copy" : "move";
+      const count = clipboard.paths.length;
+      const label =
+        count === 1
+          ? `${action === "copy" ? "Copy" : "Move"} "${clipboard.paths[0].split("/").pop()}" here?`
+          : `${action === "copy" ? "Copy" : "Move"} ${count} items here?`;
+      const ok = await confirm(label, { title: "Paste", okLabel: "OK", cancelLabel: "Cancel" });
+      if (!ok) return;
 
       const operations = clipboard.paths.map((srcPath) => {
         const fileName = srcPath.split("/").pop() ?? srcPath;
         const destName = isSameDir ? deduplicateName(fileName, existingNames) : fileName;
-        // Track used names to avoid collisions within the same paste batch
         existingNames.add(destName);
         return { source_path: srcPath, dest_path: joinPath(currentPath, destName) };
       });
@@ -83,7 +95,7 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
           await invoke("move_files", { operations });
         }
       } catch (e) {
-        window.alert(`Paste failed: ${e}`);
+        await message(`Paste failed: ${e}`, { title: "Error", kind: "error" });
       }
       reload();
     },

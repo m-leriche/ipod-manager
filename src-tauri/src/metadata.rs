@@ -1,5 +1,5 @@
 use lofty::config::WriteOptions;
-use lofty::prelude::{Accessor, TagExt, TaggedFileExt};
+use lofty::prelude::{Accessor, AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::ItemKey;
 use serde::{Deserialize, Serialize};
@@ -266,47 +266,51 @@ fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
         .read()
         .map_err(|e| format!("Read failed: {}", e))?;
 
-    // Get or create a mutable tag
-    let tag = if let Some(t) = tagged.primary_tag_mut() {
-        t
-    } else {
-        let tag_type = tagged.primary_tag_type();
-        tagged.insert_tag(lofty::tag::Tag::new(tag_type));
-        tagged.primary_tag_mut().ok_or("Failed to create tag")?
-    };
+    // Modify the tag inside a block so the mutable borrow is dropped
+    // before we save through the TaggedFile (which already knows the format).
+    {
+        let tag = if let Some(t) = tagged.primary_tag_mut() {
+            t
+        } else {
+            let tag_type = tagged.primary_tag_type();
+            tagged.insert_tag(lofty::tag::Tag::new(tag_type));
+            tagged.primary_tag_mut().ok_or("Failed to create tag")?
+        };
 
-    // Accessor trait fields
-    if let Some(ref v) = update.title {
-        tag.set_title(v.to_string());
-    }
-    if let Some(ref v) = update.artist {
-        tag.set_artist(v.to_string());
-    }
-    if let Some(ref v) = update.album {
-        tag.set_album(v.to_string());
-    }
-    if let Some(ref v) = update.genre {
-        tag.set_genre(v.to_string());
-    }
-    if let Some(v) = update.year {
-        tag.set_year(v);
-    }
-    if let Some(v) = update.track {
-        tag.set_track(v);
-    }
-    if let Some(v) = update.track_total {
-        tag.set_track_total(v);
+        if let Some(ref v) = update.title {
+            tag.set_title(v.to_string());
+        }
+        if let Some(ref v) = update.artist {
+            tag.set_artist(v.to_string());
+        }
+        if let Some(ref v) = update.album {
+            tag.set_album(v.to_string());
+        }
+        if let Some(ref v) = update.genre {
+            tag.set_genre(v.to_string());
+        }
+        if let Some(v) = update.year {
+            tag.set_year(v);
+        }
+        if let Some(v) = update.track {
+            tag.set_track(v);
+        }
+        if let Some(v) = update.track_total {
+            tag.set_track_total(v);
+        }
+
+        if let Some(ref v) = update.album_artist {
+            tag.insert_text(ItemKey::AlbumArtist, v.to_string());
+        }
+        if let Some(ref v) = update.sort_artist {
+            tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
+        }
     }
 
-    // ItemKey-based fields (not on Accessor trait)
-    if let Some(ref v) = update.album_artist {
-        tag.insert_text(ItemKey::AlbumArtist, v.to_string());
-    }
-    if let Some(ref v) = update.sort_artist {
-        tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
-    }
-
-    tag.save_to_path(path, WriteOptions::default())
+    // Save through TaggedFile which preserves the format detected during read,
+    // avoiding re-probe failures on MP3s with non-standard headers.
+    tagged
+        .save_to_path(path, WriteOptions::default())
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())

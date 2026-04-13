@@ -264,8 +264,11 @@ pub async fn download_audio(
 pub async fn scan_metadata(
     path: String,
     app: AppHandle,
+    cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<metadata::TrackMetadata>, String> {
-    tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata(&path, app))
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
 }
@@ -273,8 +276,12 @@ pub async fn scan_metadata(
 #[tauri::command]
 pub async fn save_metadata(
     updates: Vec<metadata::MetadataUpdate>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
 ) -> Result<metadata::MetadataSaveResult, String> {
-    tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates)))
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates, app, flag)))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
 }

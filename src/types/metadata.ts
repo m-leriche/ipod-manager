@@ -31,9 +31,16 @@ export interface MetadataScanProgress {
   current_file: string;
 }
 
+export interface MetadataSaveProgress {
+  total: number;
+  completed: number;
+  current_file: string;
+}
+
 export interface MetadataSaveResult {
   total: number;
   succeeded: number;
   failed: number;
+  cancelled: boolean;
   errors: string[];
 }

@@ -1,5 +1,6 @@
+use id3::TagLike;
 use lofty::config::WriteOptions;
-use lofty::prelude::{Accessor, AudioFile, TaggedFileExt};
+use lofty::prelude::{Accessor, TagExt, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::ItemKey;
 use serde::{Deserialize, Serialize};
@@ -261,56 +262,102 @@ fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
         return Err("File not found".to_string());
     }
 
+    let is_mp3 = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("mp3"))
+        .unwrap_or(false);
+
+    if is_mp3 {
+        apply_update_id3(path, update)
+    } else {
+        apply_update_lofty(path, update)
+    }
+}
+
+/// Write MP3 tags via the id3 crate, which handles non-standard MP3 headers
+/// that lofty's re-probe rejects during save.
+fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> {
+    let mut tag = id3::Tag::read_from_path(path).unwrap_or_else(|_| id3::Tag::new());
+
+    if let Some(ref v) = update.title {
+        tag.set_title(v.as_str());
+    }
+    if let Some(ref v) = update.artist {
+        tag.set_artist(v.as_str());
+    }
+    if let Some(ref v) = update.album {
+        tag.set_album(v.as_str());
+    }
+    if let Some(ref v) = update.genre {
+        tag.set_genre(v.as_str());
+    }
+    if let Some(v) = update.year {
+        tag.set_year(v as i32);
+    }
+    if let Some(v) = update.track {
+        tag.set_track(v);
+    }
+    if let Some(v) = update.track_total {
+        tag.set_total_tracks(v);
+    }
+    if let Some(ref v) = update.album_artist {
+        tag.set_album_artist(v.as_str());
+    }
+    if let Some(ref v) = update.sort_artist {
+        tag.add_frame(id3::frame::Frame::text("TSOP", v.as_str()));
+    }
+
+    tag.write_to_path(path, id3::Version::Id3v24)
+        .map_err(|e| format!("Save failed: {}", e))?;
+
+    Ok(())
+}
+
+/// Write tags for non-MP3 formats via lofty.
+fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String> {
     let mut tagged = Probe::open(path)
         .map_err(|e| format!("Open failed: {}", e))?
         .read()
         .map_err(|e| format!("Read failed: {}", e))?;
 
-    // Modify the tag inside a block so the mutable borrow is dropped
-    // before we save through the TaggedFile (which already knows the format).
-    {
-        let tag = if let Some(t) = tagged.primary_tag_mut() {
-            t
-        } else {
-            let tag_type = tagged.primary_tag_type();
-            tagged.insert_tag(lofty::tag::Tag::new(tag_type));
-            tagged.primary_tag_mut().ok_or("Failed to create tag")?
-        };
+    let tag = if let Some(t) = tagged.primary_tag_mut() {
+        t
+    } else {
+        let tag_type = tagged.primary_tag_type();
+        tagged.insert_tag(lofty::tag::Tag::new(tag_type));
+        tagged.primary_tag_mut().ok_or("Failed to create tag")?
+    };
 
-        if let Some(ref v) = update.title {
-            tag.set_title(v.to_string());
-        }
-        if let Some(ref v) = update.artist {
-            tag.set_artist(v.to_string());
-        }
-        if let Some(ref v) = update.album {
-            tag.set_album(v.to_string());
-        }
-        if let Some(ref v) = update.genre {
-            tag.set_genre(v.to_string());
-        }
-        if let Some(v) = update.year {
-            tag.set_year(v);
-        }
-        if let Some(v) = update.track {
-            tag.set_track(v);
-        }
-        if let Some(v) = update.track_total {
-            tag.set_track_total(v);
-        }
-
-        if let Some(ref v) = update.album_artist {
-            tag.insert_text(ItemKey::AlbumArtist, v.to_string());
-        }
-        if let Some(ref v) = update.sort_artist {
-            tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
-        }
+    if let Some(ref v) = update.title {
+        tag.set_title(v.to_string());
+    }
+    if let Some(ref v) = update.artist {
+        tag.set_artist(v.to_string());
+    }
+    if let Some(ref v) = update.album {
+        tag.set_album(v.to_string());
+    }
+    if let Some(ref v) = update.genre {
+        tag.set_genre(v.to_string());
+    }
+    if let Some(v) = update.year {
+        tag.set_year(v);
+    }
+    if let Some(v) = update.track {
+        tag.set_track(v);
+    }
+    if let Some(v) = update.track_total {
+        tag.set_track_total(v);
+    }
+    if let Some(ref v) = update.album_artist {
+        tag.insert_text(ItemKey::AlbumArtist, v.to_string());
+    }
+    if let Some(ref v) = update.sort_artist {
+        tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
     }
 
-    // Save through TaggedFile which preserves the format detected during read,
-    // avoiding re-probe failures on MP3s with non-standard headers.
-    tagged
-        .save_to_path(path, WriteOptions::default())
+    tag.save_to_path(path, WriteOptions::default())
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())

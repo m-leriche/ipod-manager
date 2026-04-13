@@ -189,8 +189,10 @@ describe("MetadataEditor", () => {
     await user.click(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)'));
 
     await waitFor(() => {
-      // Banner shows with track count
+      // Banner shows with track count and action buttons
       expect(screen.getByText(/Updated album artist & sort artist for 2 tracks/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save All" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
       // Button changes to "Fixed" state and is disabled
       expect(screen.getByText((_, el) => el?.textContent === 'Fixed "The" Artists')).toBeInTheDocument();
       // Unsaved changes count shows

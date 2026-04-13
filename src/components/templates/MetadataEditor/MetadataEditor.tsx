@@ -318,9 +318,26 @@ export const MetadataEditor = () => {
 
       {/* Fix The Artists banner */}
       {theArtistsFixedCount !== null && phase !== "saving" && (
-        <div className="px-3 py-2 rounded-xl text-[11px] leading-relaxed bg-accent/10 text-accent shrink-0">
-          Updated album artist &amp; sort artist for {theArtistsFixedCount}{" "}
-          {theArtistsFixedCount === 1 ? "track" : "tracks"} — select all and save to apply
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] leading-relaxed bg-accent/10 text-accent shrink-0">
+          <span className="flex-1">
+            Updated album artist &amp; sort artist for {theArtistsFixedCount}{" "}
+            {theArtistsFixedCount === 1 ? "track" : "tracks"}
+          </span>
+          <button
+            onClick={() => {
+              setEditedTracks({});
+              setTheArtistsFixedCount(null);
+            }}
+            className="px-3 py-1 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] hover:text-text-primary hover:border-border-active transition-all"
+          >
+            Undo
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-3 py-1 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium hover:opacity-90 transition-all"
+          >
+            Save All
+          </button>
         </div>
       )}
 

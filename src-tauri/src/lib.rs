@@ -3,9 +3,11 @@ mod audioquality;
 mod commands;
 mod disk;
 mod files;
+mod libstats;
 mod localvideo;
 mod metadata;
 mod profiles;
+mod rockbox;
 mod youtube;
 
 use files::SyncCancel;
@@ -53,6 +55,8 @@ pub fn run() {
             commands::save_metadata,
             commands::scan_audio_quality,
             commands::generate_spectrogram,
+            commands::scan_library_stats,
+            commands::read_rockbox_playdata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

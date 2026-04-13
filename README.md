@@ -12,6 +12,8 @@ A native macOS desktop app for music library management. Built with Tauri 2 (Rus
 - **YouTube to Audio** — Paste a YouTube URL, pick format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download. Auto-detects chapters and splits into individual tracks.
 - **Video to Audio** — Extract audio from local video files with optional user-defined chapter splitting and timestamp validation.
 - **iPod management** — Auto-detects Rockbox iPod Classic, mounts/unmounts with one click, live storage bar. Disk space safety checks before syncing.
+- **Library statistics** — Scan any music folder for an overview: total tracks, size, duration, average bitrate, artist/album counts, format breakdown, genre and sample rate distribution, and year spread.
+- **iPod play data** — Parses the Rockbox TagCache binary database on a mounted iPod to surface play counts, ratings, total play time, and last-played ordering. Sort by most played, least recently played, highest rated, or never played to find music worth keeping or cleaning up. Requires "Gather Runtime Data" enabled in Rockbox settings.
 
 ## Prerequisites
 
@@ -90,6 +92,7 @@ src/
         ├── MetadataEditor/
         ├── MountPanel/
         ├── QualityAnalyzer/
+        ├── LibraryStats/
         ├── SyncManager/
         ├── VideoExtractor/
         └── YouTubeDownloader/
@@ -102,6 +105,8 @@ src-tauri/src/
 ├── albumart.rs                          # Album art scanning + MusicBrainz
 ├── metadata.rs                          # Audio tag reading/writing via lofty
 ├── audioquality.rs                      # Quality analysis, transcode detection, spectrograms
+├── libstats.rs                          # Library statistics aggregation via lofty
+├── rockbox.rs                           # Rockbox TagCache binary database parser
 ├── localvideo.rs                        # Local video audio extraction via ffmpeg
 ├── youtube.rs                           # YouTube audio download via yt-dlp
 └── profiles.rs                          # Profile persistence
@@ -143,7 +148,7 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 - [ ] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Extends the existing MusicBrainz integration.
 - [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
 - [ ] **Audio waveform preview** — Waveform visualization when selecting a file in the explorer. Quick visual check for corruption or silence.
-- [ ] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
+- [x] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
 
 ## License
 

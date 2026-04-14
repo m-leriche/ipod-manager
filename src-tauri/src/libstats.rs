@@ -267,9 +267,7 @@ pub fn scan_library_stats(
             .to_string_lossy()
             .to_string();
 
-        let sample_rate_display = file_sample_rate
-            .map(format_sample_rate)
-            .unwrap_or_default();
+        let sample_rate_display = file_sample_rate.map(format_sample_rate).unwrap_or_default();
 
         file_details.push(FileDetail {
             relative_path,

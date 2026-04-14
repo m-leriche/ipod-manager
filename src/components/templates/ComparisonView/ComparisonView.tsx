@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { Pill } from "../../atoms/Pill/Pill";
-import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { TreeNodeRow } from "./TreeNodeRow";
 import { SyncActions } from "./SyncActions";
@@ -24,20 +23,8 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
     [setExpanded],
   );
 
-  const {
-    loading,
-    error,
-    setError,
-    filter,
-    setFilter,
-    compare,
-    cancel: cancelCompare,
-    visibleEntries,
-    filtered,
-    tree,
-    entryMap,
-    stats,
-  } = useComparison(sourcePath, targetPath, exclusions, onCompared);
+  const { loading, error, setError, filter, setFilter, compare, visibleEntries, filtered, tree, entryMap, stats } =
+    useComparison(sourcePath, targetPath, exclusions, onCompared);
 
   const { selected, toggle, toggleNodeSelection, selAll, selNone, reset: resetSelection } = useTreeSelection(filtered);
 
@@ -145,20 +132,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
         onCancel={handleCancel}
       />
 
-      {loading && (
-        <div className="py-12 text-center text-text-tertiary text-xs shrink-0">
-          <Spinner />
-          Comparing...
-          <div className="mt-3">
-            <button
-              onClick={cancelCompare}
-              className="px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      {loading && <div className="py-12 shrink-0" />}
       {error && <div className="py-12 text-center text-danger text-xs shrink-0">{error}</div>}
 
       {/* Tree view */}

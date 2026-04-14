@@ -4,19 +4,23 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Pill } from "../../atoms/Pill/Pill";
-import { Spinner } from "../../atoms/Spinner/Spinner";
 import { AlbumGroup } from "./AlbumGroup";
 import type { AlbumInfo, AlbumArtProgress, ScanProgress, AlbumArtResult, Phase } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 
 export const AlbumArtManager = () => {
-  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const {
+    state: progressState,
+    start: startProgress,
+    update: updateProgress,
+    finish: finishProgress,
+    fail: failProgress,
+  } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
   const [albums, setAlbums] = useState<AlbumInfo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<AlbumArtProgress | null>(null);
-  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const [result, setResult] = useState<AlbumArtResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +38,6 @@ export const AlbumArtManager = () => {
     });
     listen<ScanProgress>("albumart-scan-progress", (e) => {
       if (active) {
-        setScanProgress(e.payload);
         updateProgress(0, 0, e.payload.current_folder);
       }
     }).then((fn) => {
@@ -70,7 +73,6 @@ export const AlbumArtManager = () => {
     setError(null);
     setResult(null);
     setAlbums([]);
-    setScanProgress(null);
     startProgress("Scanning for album art...", cancel);
     try {
       const data = await invoke<AlbumInfo[]>("scan_album_art", { path: targetPath });
@@ -167,32 +169,7 @@ export const AlbumArtManager = () => {
   // ── Scanning ──
 
   if (phase === "scanning") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-text-tertiary text-xs mb-1">
-            <Spinner /> Scanning albums...
-          </div>
-          {scanProgress && (
-            <>
-              <div className="text-[11px] text-text-secondary font-medium">
-                {scanProgress.albums_found} album
-                {scanProgress.albums_found !== 1 ? "s" : ""} found
-              </div>
-              <div className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
-                {scanProgress.current_folder}
-              </div>
-            </>
-          )}
-          <button
-            onClick={cancel}
-            className="mt-3 px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Scanned / Fixing ──
@@ -221,7 +198,7 @@ export const AlbumArtManager = () => {
       </div>
 
       {/* Progress or actions */}
-      {phase === "fixing" && progress ? (
+      {phase === "fixing" && progress && !progressState.active ? (
         <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5 shrink-0">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-medium text-text-primary">Fixing album art...</span>

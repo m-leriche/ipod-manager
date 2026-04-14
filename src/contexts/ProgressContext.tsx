@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { getCurrentWindow, ProgressBarStatus } from "@tauri-apps/api/window";
 
 interface ProgressState {
   active: boolean;
@@ -36,50 +37,87 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
   const [state, setState] = useState<ProgressState>(initial);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  const start = useCallback((title: string, cancelFn?: () => void) => {
-    cancelRef.current = cancelFn ?? null;
-    setState({
-      active: true,
-      title,
-      completed: 0,
-      total: 0,
-      currentItem: "",
-      canCancel: !!cancelFn,
-      result: null,
-    });
-  }, []);
+  const win = getCurrentWindow();
 
-  const update = useCallback((completed: number, total: number, currentItem?: string) => {
-    setState((prev) => ({
-      ...prev,
-      completed,
-      total,
-      currentItem: currentItem ?? prev.currentItem,
-    }));
-  }, []);
+  const setDockIndicator = useCallback(
+    (percent?: number) => {
+      if (percent === undefined) {
+        win.setProgressBar({ status: ProgressBarStatus.None }).catch(() => {});
+        win.setBadgeLabel().catch(() => {});
+      } else if (percent < 0) {
+        win.setProgressBar({ status: ProgressBarStatus.Indeterminate }).catch(() => {});
+        win.setBadgeLabel("...").catch(() => {});
+      } else {
+        win.setProgressBar({ status: ProgressBarStatus.Normal, progress: percent }).catch(() => {});
+        win.setBadgeLabel(`${percent}%`).catch(() => {});
+      }
+    },
+    [win],
+  );
 
-  const finish = useCallback((message: string) => {
-    cancelRef.current = null;
-    setState((prev) => ({
-      ...prev,
-      canCancel: false,
-      result: { message, success: true },
-    }));
-  }, []);
+  const start = useCallback(
+    (title: string, cancelFn?: () => void) => {
+      cancelRef.current = cancelFn ?? null;
+      setState({
+        active: true,
+        title,
+        completed: 0,
+        total: 0,
+        currentItem: "",
+        canCancel: !!cancelFn,
+        result: null,
+      });
+      setDockIndicator(-1);
+    },
+    [setDockIndicator],
+  );
 
-  const fail = useCallback((message: string) => {
-    cancelRef.current = null;
-    setState((prev) => ({
-      ...prev,
-      canCancel: false,
-      result: { message, success: false },
-    }));
-  }, []);
+  const update = useCallback(
+    (completed: number, total: number, currentItem?: string) => {
+      setState((prev) => ({
+        ...prev,
+        completed,
+        total,
+        currentItem: currentItem ?? prev.currentItem,
+      }));
+      if (total > 0) {
+        setDockIndicator(Math.round((completed / total) * 100));
+      }
+    },
+    [setDockIndicator],
+  );
+
+  const finish = useCallback(
+    (message: string) => {
+      cancelRef.current = null;
+      setState((prev) => ({
+        ...prev,
+        canCancel: false,
+        result: { message, success: true },
+      }));
+      setDockIndicator();
+    },
+    [setDockIndicator],
+  );
+
+  const fail = useCallback(
+    (message: string) => {
+      cancelRef.current = null;
+      setState((prev) => ({
+        ...prev,
+        canCancel: false,
+        result: { message, success: false },
+      }));
+      setDockIndicator();
+    },
+    [setDockIndicator],
+  );
 
   const dismiss = useCallback(() => {
     cancelRef.current = null;
     setState(initial);
-  }, []);
+    setDockIndicator();
+  }, [setDockIndicator]);
 
   const cancel = useCallback(() => {
     cancelRef.current?.();

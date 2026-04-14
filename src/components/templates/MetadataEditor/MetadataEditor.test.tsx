@@ -109,37 +109,6 @@ describe("MetadataEditor", () => {
     });
   });
 
-  it("shows cancel button during scanning", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music");
-    // Never resolve so we stay in scanning phase
-    mockInvoke.mockReturnValue(new Promise(() => {}));
-
-    render(<MetadataEditor />);
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    });
-  });
-
-  it("calls cancel_sync when cancel is clicked", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music");
-    mockInvoke.mockReturnValue(new Promise(() => {}));
-
-    render(<MetadataEditor />);
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(mockInvoke).toHaveBeenCalledWith("cancel_sync");
-  });
-
   it("returns to idle on cancelled scan", async () => {
     const user = userEvent.setup();
     mockOpen.mockResolvedValue("/music");

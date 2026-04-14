@@ -284,31 +284,6 @@ describe("VideoExtractor", () => {
     });
   });
 
-  it("cancel calls cancel_sync during extraction", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValueOnce("/path/to/video.mp4").mockResolvedValueOnce("/output");
-    mockInvoke.mockImplementation((cmd) => {
-      if (cmd === "check_ffmpeg") return Promise.resolve();
-      if (cmd === "probe_video") return Promise.resolve(VIDEO_PROBE);
-      if (cmd === "extract_audio_from_video") return new Promise(() => {});
-      if (cmd === "cancel_sync") return Promise.resolve();
-      return Promise.resolve();
-    });
-
-    render(<VideoExtractor />);
-    await waitFor(() => screen.getByText("No file selected"));
-    await user.click(screen.getByText("No file selected").closest("div")!);
-    await waitFor(() => screen.getByText("My Concert"));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-    await waitFor(() => screen.getByRole("button", { name: "Extract Audio" }));
-    await user.click(screen.getByRole("button", { name: "Extract Audio" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(mockInvoke).toHaveBeenCalledWith("cancel_sync");
-  });
-
   it("format toggle switches between FLAC and MP3", async () => {
     const user = userEvent.setup();
     render(<VideoExtractor />);

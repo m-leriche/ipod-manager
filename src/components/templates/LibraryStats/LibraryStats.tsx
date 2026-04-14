@@ -20,7 +20,6 @@ export const LibraryStats = () => {
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
   const [stats, setStats] = useState<LibraryStatsData | null>(null);
-  const [scanProgress, setScanProgress] = useState<LibStatsScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<StatsFilter | null>(null);
 
@@ -37,7 +36,6 @@ export const LibraryStats = () => {
 
     listen<LibStatsScanProgress>("libstats-scan-progress", (e) => {
       if (active) {
-        setScanProgress(e.payload);
         updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
       }
     }).then((fn) => {
@@ -68,7 +66,6 @@ export const LibraryStats = () => {
   const scanLibrary = async (path: string) => {
     setPhase("scanning");
     setError(null);
-    setScanProgress(null);
     startProgress("Scanning library stats...", cancelScan);
     try {
       const data = await invoke<LibraryStatsData>("scan_library_stats", { path });
@@ -131,11 +128,9 @@ export const LibraryStats = () => {
           phase={phase}
           scanPath={scanPath}
           stats={stats}
-          scanProgress={scanProgress}
           error={error}
           onBrowse={browseLibrary}
           onRescan={() => scanLibrary(scanPath)}
-          onCancel={cancelScan}
           onFilterSelect={setActiveFilter}
         />
       )}
@@ -164,21 +159,17 @@ const LibraryMode = ({
   phase,
   scanPath,
   stats,
-  scanProgress,
   error,
   onBrowse,
   onRescan,
-  onCancel,
   onFilterSelect,
 }: {
   phase: Phase;
   scanPath: string;
   stats: LibraryStatsData | null;
-  scanProgress: LibStatsScanProgress | null;
   error: string | null;
   onBrowse: () => void;
   onRescan: () => void;
-  onCancel: () => void;
   onFilterSelect: (filter: StatsFilter) => void;
 }) => {
   if (phase === "idle") {
@@ -201,37 +192,7 @@ const LibraryMode = ({
   }
 
   if (phase === "scanning") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-text-tertiary text-xs mb-2">
-            <Spinner /> Scanning library...
-          </div>
-          {scanProgress && (
-            <>
-              <div className="w-48 h-1.5 bg-bg-card rounded-full overflow-hidden mb-2 mx-auto">
-                <div
-                  className="h-full bg-text-primary rounded-full transition-all duration-200"
-                  style={{ width: `${(scanProgress.completed / scanProgress.total) * 100}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-text-secondary font-medium">
-                {scanProgress.completed.toLocaleString()} of {scanProgress.total.toLocaleString()} files
-              </p>
-              <p className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
-                {scanProgress.current_file}
-              </p>
-            </>
-          )}
-          <button
-            onClick={onCancel}
-            className="mt-3 px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   return (

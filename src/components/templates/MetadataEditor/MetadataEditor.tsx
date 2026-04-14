@@ -29,12 +29,17 @@ import type { Phase, View, EditableFields, RepairReport, RepairLookupProgress, A
 import { useProgress } from "../../../contexts/ProgressContext";
 
 export const MetadataEditor = () => {
-  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const {
+    state: progressState,
+    start: startProgress,
+    update: updateProgress,
+    finish: finishProgress,
+    fail: failProgress,
+  } = useProgress();
   // ── Shared state ──
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
   const [tracks, setTracks] = useState<TrackMetadata[]>([]);
-  const [scanProgress, setScanProgress] = useState<MetadataScanProgress | null>(null);
   const [saveProgress, setSaveProgress] = useState<MetadataSaveProgress | null>(null);
   const [saveResult, setSaveResult] = useState<MetadataSaveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +51,6 @@ export const MetadataEditor = () => {
 
   // ── Repair state ──
   const [report, setReport] = useState<RepairReport | null>(null);
-  const [lookupProgress, setLookupProgress] = useState<RepairLookupProgress | null>(null);
   const [acceptedFixes, setAcceptedFixes] = useState<Set<string>>(new Set());
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
@@ -58,7 +62,6 @@ export const MetadataEditor = () => {
 
     listen<MetadataScanProgress>("metadata-scan-progress", (e) => {
       if (active) {
-        setScanProgress(e.payload);
         updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
       }
     }).then((fn) => {
@@ -78,7 +81,6 @@ export const MetadataEditor = () => {
 
     listen<RepairLookupProgress>("repair-lookup-progress", (e) => {
       if (active) {
-        setLookupProgress(e.payload);
         updateProgress(e.payload.completed_albums, e.payload.total_albums, e.payload.current_album);
       }
     }).then((fn) => {
@@ -118,7 +120,6 @@ export const MetadataEditor = () => {
     setReport(null);
     setAcceptedFixes(new Set());
     setSelectedAlbum(null);
-    setScanProgress(null);
     startProgress("Scanning metadata...", cancel);
     try {
       const data = await invoke<TrackMetadata[]>("scan_metadata", { path: targetPath });
@@ -266,7 +267,6 @@ export const MetadataEditor = () => {
     if (tracks.length === 0) return;
     setPhase("looking_up");
     setError(null);
-    setLookupProgress(null);
     setReport(null);
     setAcceptedFixes(new Set());
     setSelectedAlbum(null);
@@ -423,67 +423,13 @@ export const MetadataEditor = () => {
   // ── Scanning ──
 
   if (phase === "scanning") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-text-tertiary text-xs mb-1">
-            <Spinner /> Scanning metadata...
-          </div>
-          {scanProgress && (
-            <>
-              <div className="text-[11px] text-text-secondary font-medium">
-                {scanProgress.completed} of {scanProgress.total} files
-              </div>
-              <div className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
-                {scanProgress.current_file}
-              </div>
-            </>
-          )}
-          <button
-            onClick={cancel}
-            className="mt-4 px-4 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-xs hover:text-text-primary hover:border-border-active transition-all"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Looking up (MusicBrainz) ──
 
   if (phase === "looking_up") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="text-text-tertiary text-xs mb-1">
-            <Spinner /> Looking up albums on MusicBrainz...
-          </div>
-          {lookupProgress && (
-            <>
-              <div className="text-[11px] text-text-secondary font-medium">
-                {lookupProgress.completed_albums} of {lookupProgress.total_albums} albums
-              </div>
-              <div className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
-                {lookupProgress.current_album}
-              </div>
-              <div className="w-64 h-1.5 bg-bg-card rounded-full overflow-hidden mt-2 mx-auto">
-                <div
-                  className="h-full bg-accent rounded-full transition-all duration-200"
-                  style={{ width: `${(lookupProgress.completed_albums / lookupProgress.total_albums) * 100}%` }}
-                />
-              </div>
-            </>
-          )}
-          <button
-            onClick={cancel}
-            className="mt-4 px-4 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-xs hover:text-text-primary hover:border-border-active transition-all"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Scanned / Saving (main view) ──
@@ -623,7 +569,7 @@ export const MetadataEditor = () => {
       )}
 
       {/* Save progress */}
-      {phase === "saving" && (
+      {phase === "saving" && !progressState.active && (
         <div className="px-4 py-3 bg-bg-secondary border border-border rounded-2xl shrink-0">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-text-secondary font-medium">

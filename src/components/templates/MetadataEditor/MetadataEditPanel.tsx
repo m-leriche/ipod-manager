@@ -71,6 +71,12 @@ export const MetadataEditPanel = ({
         mixed={mixed.sort_artist}
         onChange={(v) => onFieldChange("sort_artist", v)}
       />
+      <Field
+        label="Sort Album Artist"
+        value={fields.sort_album_artist}
+        mixed={mixed.sort_album_artist}
+        onChange={(v) => onFieldChange("sort_album_artist", v)}
+      />
       <div className="flex gap-2">
         <Field
           label="Track #"

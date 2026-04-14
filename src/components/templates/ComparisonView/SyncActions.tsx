@@ -13,7 +13,7 @@ export const SyncActions = ({
   onDeleteTarget,
   onCancel,
 }: SyncActionsProps) => (
-  <>
+  <div className="shrink-0 flex flex-col gap-3">
     {syncing && progress ? (
       <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5 shrink-0">
         <div className="flex items-center justify-between mb-2.5">
@@ -93,5 +93,5 @@ export const SyncActions = ({
         )}
       </div>
     )}
-  </>
+  </div>
 );

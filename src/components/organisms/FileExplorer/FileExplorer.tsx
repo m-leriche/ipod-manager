@@ -202,7 +202,7 @@ export const FileExplorer = ({
     <div
       ref={containerRef}
       tabIndex={-1}
-      className={`flex-1 min-w-0 bg-bg-secondary border rounded-2xl flex flex-col transition-colors outline-none ${folderSelected ? "border-success/40" : "border-border"}`}
+      className={`flex-1 min-w-0 min-h-0 bg-bg-secondary border rounded-2xl flex flex-col transition-colors outline-none ${folderSelected ? "border-success/40" : "border-border"}`}
       onContextMenu={(e) => {
         if ((e.target as HTMLElement).closest("table")) return;
         openContextMenu(e, "empty");

@@ -8,8 +8,10 @@ import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import { ChapterEditor } from "./ChapterEditor";
 import { buildChapters, fileNameFromPath } from "./helpers";
 import type { VideoProbe, EditableChapter, Phase, AudioFormat, DownloadProgress, DownloadResult } from "./types";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 export const VideoExtractor = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
   const [depsOk, setDepsOk] = useState<boolean | null>(null);
   const [depsError, setDepsError] = useState<string | null>(null);
@@ -37,7 +39,10 @@ export const VideoExtractor = () => {
     let active = true;
     const unsubs: UnlistenFn[] = [];
     listen<DownloadProgress>("video-extract-progress", (e) => {
-      if (active) setProgress(e.payload);
+      if (active) {
+        setProgress(e.payload);
+        updateProgress(e.payload.percent ?? 0, 100, e.payload.title ?? "");
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
@@ -124,6 +129,7 @@ export const VideoExtractor = () => {
     setProgress(null);
     setResult(null);
     setError(null);
+    startProgress("Extracting audio...", cancel);
 
     try {
       const res = await invoke<DownloadResult>("extract_audio_from_video", {
@@ -134,9 +140,11 @@ export const VideoExtractor = () => {
       });
       setResult(res);
       setPhase("done");
+      finishProgress(res.cancelled ? "Extraction cancelled" : "Extraction complete");
     } catch (e) {
       setError(`${e}`);
       setPhase("idle");
+      failProgress(`${e}`);
     }
   };
 

@@ -1,7 +1,15 @@
 import type { TrackMetadata, MetadataUpdate } from "../../../types/metadata";
-import type { EditableFields, ArtistGroup, AlbumGroup } from "./types";
+import type { EditableFields, ArtistGroup, AlbumGroup, AlbumRepairReport, TrackIssue, IssueSeverity } from "./types";
 
-const METADATA_FIELDS = ["title", "artist", "album", "album_artist", "sort_artist", "genre"] as const;
+const METADATA_FIELDS = [
+  "title",
+  "artist",
+  "album",
+  "album_artist",
+  "sort_artist",
+  "sort_album_artist",
+  "genre",
+] as const;
 const NUMERIC_FIELDS = ["track", "track_total", "year"] as const;
 
 // ── Conversion ───────────────────────────────────────────────────
@@ -12,6 +20,7 @@ export const trackToEditable = (t: TrackMetadata): EditableFields => ({
   album: t.album ?? "",
   album_artist: t.album_artist ?? "",
   sort_artist: t.sort_artist ?? "",
+  sort_album_artist: t.sort_album_artist ?? "",
   track: t.track != null ? String(t.track) : "",
   track_total: t.track_total != null ? String(t.track_total) : "",
   year: t.year != null ? String(t.year) : "",
@@ -148,41 +157,113 @@ export const groupTracks = (tracks: TrackMetadata[], editedTracks: Record<string
   return groups;
 };
 
-// ── "Fix The Artists" ────────────────────────────────────────────
+// ── Repair helpers ──────────────────────────────────────────────
 
-const THE_PREFIX = /^the\s/i;
+export const issueKey = (issue: TrackIssue): string => `${issue.file_path}::${issue.kind}::${issue.field}`;
 
-export const countTheArtists = (tracks: TrackMetadata[]): number => {
-  const artists = new Set<string>();
-  for (const t of tracks) {
-    const artist = t.artist ?? "";
-    if (THE_PREFIX.test(artist)) {
-      artists.add(artist);
+export const issuesToUpdates = (album: AlbumRepairReport, acceptedKeys: Set<string>): MetadataUpdate[] => {
+  const updateMap = new Map<string, MetadataUpdate>();
+
+  for (const tm of album.track_matches) {
+    for (const issue of tm.issues) {
+      if (!acceptedKeys.has(issueKey(issue))) continue;
+      if (!issue.suggested_value) continue;
+
+      const filePath = issue.file_path;
+      if (!updateMap.has(filePath)) {
+        updateMap.set(filePath, { file_path: filePath });
+      }
+      const update = updateMap.get(filePath)!;
+
+      switch (issue.field) {
+        case "title":
+          update.title = issue.suggested_value;
+          break;
+        case "artist":
+          update.artist = issue.suggested_value;
+          break;
+        case "album":
+          update.album = issue.suggested_value;
+          break;
+        case "album_artist":
+          update.album_artist = issue.suggested_value;
+          break;
+        case "sort_artist":
+          update.sort_artist = issue.suggested_value;
+          break;
+        case "sort_album_artist":
+          update.sort_album_artist = issue.suggested_value;
+          break;
+        case "genre":
+          update.genre = issue.suggested_value;
+          break;
+        case "track":
+          update.track = parseInt(issue.suggested_value, 10);
+          break;
+        case "track_total":
+          update.track_total = parseInt(issue.suggested_value, 10);
+          break;
+        case "year":
+          update.year = parseInt(issue.suggested_value, 10);
+          break;
+      }
     }
   }
-  return artists.size;
+
+  return [...updateMap.values()];
 };
 
-export const fixTheArtists = (
-  tracks: TrackMetadata[],
-  editedTracks: Record<string, EditableFields>,
-): Record<string, EditableFields> => {
-  const result = { ...editedTracks };
+export const sortAlbumsByIssues = (albums: AlbumRepairReport[]): AlbumRepairReport[] =>
+  [...albums].sort((a, b) => {
+    if (a.issue_summary.error_count !== b.issue_summary.error_count) {
+      return b.issue_summary.error_count - a.issue_summary.error_count;
+    }
+    if (a.issue_summary.warning_count !== b.issue_summary.warning_count) {
+      return b.issue_summary.warning_count - a.issue_summary.warning_count;
+    }
+    const aTotal = a.issue_summary.error_count + a.issue_summary.warning_count + a.issue_summary.info_count;
+    const bTotal = b.issue_summary.error_count + b.issue_summary.warning_count + b.issue_summary.info_count;
+    return bTotal - aTotal;
+  });
 
-  for (const track of tracks) {
-    const artist = track.artist ?? "";
-    if (!THE_PREFIX.test(artist)) continue;
-
-    const rest = artist.replace(THE_PREFIX, "");
-    const sorted = `${rest}, The`;
-
-    const existing = result[track.file_path] ?? trackToEditable(track);
-    result[track.file_path] = {
-      ...existing,
-      album_artist: sorted,
-      sort_artist: sorted,
-    };
+export const severityColor = (severity: IssueSeverity): string => {
+  switch (severity) {
+    case "Error":
+      return "text-danger";
+    case "Warning":
+      return "text-warning";
+    case "Info":
+      return "text-accent";
   }
+};
 
-  return result;
+export const confidenceLabel = (confidence: number): string => {
+  if (confidence >= 0.95) return "High";
+  if (confidence >= 0.8) return "Medium";
+  if (confidence > 0) return "Low";
+  return "No Match";
+};
+
+export const confidenceColor = (confidence: number): string => {
+  if (confidence >= 0.95) return "bg-success/20 text-success";
+  if (confidence >= 0.8) return "bg-warning/20 text-warning";
+  if (confidence > 0) return "bg-danger/20 text-danger";
+  return "bg-bg-card text-text-tertiary";
+};
+
+export const totalIssueCount = (album: AlbumRepairReport): number =>
+  album.issue_summary.error_count + album.issue_summary.warning_count + album.issue_summary.info_count;
+
+export const allIssueKeys = (albums: AlbumRepairReport[]): Set<string> => {
+  const keys = new Set<string>();
+  for (const album of albums) {
+    for (const tm of album.track_matches) {
+      for (const issue of tm.issues) {
+        if (issue.suggested_value) {
+          keys.add(issueKey(issue));
+        }
+      }
+    }
+  }
+  return keys;
 };

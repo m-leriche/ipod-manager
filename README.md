@@ -7,7 +7,7 @@ A native macOS desktop app for music library management. Built with Tauri 2 (Rus
 - **File Explorer** — Browse any folder on your system. Navigate in and out of directories, view file sizes and dates, and delete files/folders via right-click.
 - **Folder comparison & sync** — Pick any two folders and recursively compare them. Color-coded tree view shows new, modified, extra, and matching files. Mirror sync, selective copy, or delete with real-time progress. Profiles save source/target paths and exclusion filters.
 - **Album art manager** — Scans music folders for albums missing cover art. Extracts embedded art from audio tags first, then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder.
-- **Audio metadata editor** — Scan a folder and view/edit ID3 tags grouped by Artist/Album/Track. Batch edit across selections, dirty tracking with visual indicators, and a "Fix The Artists" button that auto-stages sort/album artist for artists starting with "The" (e.g., "The Beatles" -> sort artist "Beatles, The").
+- **Audio metadata editor & repair** — Scan a folder and view/edit ID3 tags grouped by Artist/Album/Track. Batch edit across selections with dirty tracking. One-click MusicBrainz repair: compares local metadata track-by-track, detects title mismatches, wrong track numbers, missing album artist/sort tags, year discrepancies, and incomplete albums. Review issues per-album with side-by-side comparison, accept or reject individual fixes, and apply in bulk.
 - **Audio quality analyzer** — Scans audio files via ffprobe, detects suspect lossy-to-lossless transcodes by measuring high-frequency energy, and generates on-demand spectrograms for visual confirmation. Files grouped by verdict: lossless, lossy, or suspect transcode.
 - **YouTube to Audio** — Paste a YouTube URL, pick format (FLAC 44.1kHz/16-bit or MP3 320kbps), and download. Auto-detects chapters and splits into individual tracks.
 - **Video to Audio** — Extract audio from local video files with optional user-defined chapter splitting and timestamp validation.
@@ -104,6 +104,8 @@ src-tauri/src/
 ├── files.rs                             # Directory listing, comparison, copy/delete
 ├── albumart.rs                          # Album art scanning + MusicBrainz
 ├── metadata.rs                          # Audio tag reading/writing via lofty
+├── metarepair.rs                        # MusicBrainz-powered metadata validation and repair
+├── musicbrainz.rs                       # Shared MusicBrainz API client (search, release details, cover art)
 ├── audioquality.rs                      # Quality analysis, transcode detection, spectrograms
 ├── libstats.rs                          # Library statistics aggregation via lofty
 ├── rockbox.rs                           # Rockbox TagCache binary database parser
@@ -145,9 +147,10 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 
 - [ ] **Folder structure normalization** — Scan a library and flag/fix naming inconsistencies. Target convention like `Artist/Album/01 Track.flac`. Preview renames as a diff before applying.
 - [ ] **Duplicate detection** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison, pick which to keep.
-- [ ] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Extends the existing MusicBrainz integration.
+- [x] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Part of the Metadata Repair tab.
 - [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
 - [ ] **Audio waveform preview** — Waveform visualization when selecting a file in the explorer. Quick visual check for corruption or silence.
+- [ ] **Persist tab state across switches** — Switching tabs unmounts the active component, killing in-progress operations (scans, copies, art fixes) and discarding all state. Lift long-running process state out of individual tab components so progress survives tab switches and users can navigate freely without losing work.
 - [x] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
 
 ## License

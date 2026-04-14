@@ -5,6 +5,7 @@ use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, Syn
 use crate::libstats;
 use crate::localvideo;
 use crate::metadata;
+use crate::metarepair;
 use crate::profiles::{self, ProfileStore};
 use crate::rockbox;
 use crate::youtube;
@@ -286,6 +287,33 @@ pub async fn save_metadata(
     tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates, app, flag)))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn repair_analyze(
+    tracks: Vec<metadata::TrackMetadata>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<metarepair::RepairReport, String> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || metarepair::lookup_and_compare(tracks, app, flag))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn repair_compare_release(
+    tracks: Vec<metadata::TrackMetadata>,
+    mbid: String,
+    app: AppHandle,
+) -> Result<metarepair::AlbumRepairReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = &app; // keep app alive for the task duration
+        metarepair::compare_against_release(tracks, &mbid)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]

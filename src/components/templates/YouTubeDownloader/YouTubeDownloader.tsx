@@ -7,8 +7,10 @@ import { Spinner } from "../../atoms/Spinner/Spinner";
 import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 export const YouTubeDownloader = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
   const [depsOk, setDepsOk] = useState<boolean | null>(null);
   const [depsError, setDepsError] = useState<string | null>(null);
@@ -35,7 +37,10 @@ export const YouTubeDownloader = () => {
 
     let active = true;
     listen<DownloadProgress>("youtube-progress", (e) => {
-      if (active) setProgress(e.payload);
+      if (active) {
+        setProgress(e.payload);
+        updateProgress(e.payload.percent ?? 0, 100, e.payload.title ?? "");
+      }
     }).then((fn) => {
       if (active) unlistenRef.current = fn;
       else fn();
@@ -81,6 +86,7 @@ export const YouTubeDownloader = () => {
     setProgress(null);
     setResult(null);
     setError(null);
+    startProgress("Downloading audio...", cancel);
     try {
       const res = await invoke<DownloadResult>("download_audio", {
         url,
@@ -91,9 +97,11 @@ export const YouTubeDownloader = () => {
       });
       setResult(res);
       setPhase("done");
+      finishProgress(res.cancelled ? "Download cancelled" : "Download complete");
     } catch (e) {
       setError(`${e}`);
       setPhase("ready");
+      failProgress(`${e}`);
     }
   };
 

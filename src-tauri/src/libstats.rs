@@ -28,6 +28,7 @@ pub struct LibraryStats {
     pub year_distribution: Vec<YearEntry>,
     pub oldest_year: Option<u32>,
     pub newest_year: Option<u32>,
+    pub file_details: Vec<FileDetail>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,6 +49,22 @@ pub struct DistributionEntry {
 pub struct YearEntry {
     pub year: u32,
     pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileDetail {
+    pub relative_path: String,
+    pub artist: String,
+    pub album: String,
+    pub title: String,
+    pub genre: String,
+    pub year: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub sample_rate_display: String,
+    pub bitrate_kbps: Option<u32>,
+    pub duration_secs: f64,
+    pub size: u64,
+    pub format: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,6 +161,7 @@ pub fn scan_library_stats(
     let mut years: HashMap<u32, usize> = HashMap::new();
     let mut oldest_year: Option<u32> = None;
     let mut newest_year: Option<u32> = None;
+    let mut file_details: Vec<FileDetail> = Vec::with_capacity(total);
 
     for (i, file_path) in audio_files.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -170,7 +188,7 @@ pub fn scan_library_stats(
 
         // Format breakdown
         let ext = format_ext(file_path);
-        let entry = formats.entry(ext).or_insert((0, 0));
+        let entry = formats.entry(ext.clone()).or_insert((0, 0));
         entry.0 += 1;
         entry.1 += file_size;
 
@@ -186,36 +204,51 @@ pub fn scan_library_stats(
 
         // Properties (duration, bitrate, sample rate)
         let props = tagged.properties();
-        total_duration_secs += props.duration().as_secs_f64();
+        let file_duration = props.duration().as_secs_f64();
+        total_duration_secs += file_duration;
 
-        if let Some(br) = props.audio_bitrate() {
+        let file_bitrate = props.audio_bitrate();
+        if let Some(br) = file_bitrate {
             total_bitrate_kbps += br as u64;
             bitrate_count += 1;
         }
 
-        if let Some(sr) = props.sample_rate() {
+        let file_sample_rate = props.sample_rate();
+        if let Some(sr) = file_sample_rate {
             *sample_rates.entry(sr).or_insert(0) += 1;
         }
 
         // Tags
+        let mut file_artist = String::new();
+        let mut file_album = String::new();
+        let mut file_title = String::new();
+        let mut file_genre = String::new();
+        let mut file_year: Option<u32> = None;
+
         let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
         if let Some(tag) = tag {
+            if let Some(title) = tag.title() {
+                file_title = title.to_string();
+            }
             if let Some(artist) = tag.artist() {
                 let a = artist.to_string();
                 if !a.is_empty() {
-                    artists.insert(a);
+                    artists.insert(a.clone());
+                    file_artist = a;
                 }
             }
             if let Some(album) = tag.album() {
                 let a = album.to_string();
                 if !a.is_empty() {
-                    albums.insert(a);
+                    albums.insert(a.clone());
+                    file_album = a;
                 }
             }
             if let Some(genre) = tag.genre() {
                 let g = genre.to_string();
                 if !g.is_empty() {
-                    *genres.entry(g).or_insert(0) += 1;
+                    *genres.entry(g.clone()).or_insert(0) += 1;
+                    file_genre = g;
                 }
             }
             if let Some(year) = tag.year() {
@@ -223,9 +256,33 @@ pub fn scan_library_stats(
                     *years.entry(year).or_insert(0) += 1;
                     oldest_year = Some(oldest_year.map_or(year, |o: u32| o.min(year)));
                     newest_year = Some(newest_year.map_or(year, |n: u32| n.max(year)));
+                    file_year = Some(year);
                 }
             }
         }
+
+        let relative_path = file_path
+            .strip_prefix(root)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .to_string();
+
+        let sample_rate_display = file_sample_rate.map(format_sample_rate).unwrap_or_default();
+
+        file_details.push(FileDetail {
+            relative_path,
+            artist: file_artist,
+            album: file_album,
+            title: file_title,
+            genre: file_genre,
+            year: file_year,
+            sample_rate: file_sample_rate,
+            sample_rate_display,
+            bitrate_kbps: file_bitrate,
+            duration_secs: file_duration,
+            size: file_size,
+            format: ext,
+        });
     }
 
     // Build sorted distributions
@@ -282,6 +339,7 @@ pub fn scan_library_stats(
         year_distribution,
         oldest_year,
         newest_year,
+        file_details,
     })
 }
 

@@ -11,6 +11,22 @@ export interface LibraryStats {
   year_distribution: YearEntry[];
   oldest_year: number | null;
   newest_year: number | null;
+  file_details: FileDetail[];
+}
+
+export interface FileDetail {
+  relative_path: string;
+  artist: string;
+  album: string;
+  title: string;
+  genre: string;
+  year: number | null;
+  sample_rate: number | null;
+  sample_rate_display: string;
+  bitrate_kbps: number | null;
+  duration_secs: number;
+  size: number;
+  format: string;
 }
 
 export interface FormatEntry {

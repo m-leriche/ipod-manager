@@ -11,8 +11,10 @@ import {
   formatBitrate,
   formatPercentage,
   sortPlayData,
+  filterFileDetails,
+  sortFileDetails,
 } from "./helpers";
-import type { LibraryStats as LibraryStatsData, RockboxTrack } from "../../../types/libstats";
+import type { LibraryStats as LibraryStatsData, RockboxTrack, FileDetail } from "../../../types/libstats";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
@@ -39,6 +41,36 @@ const MOCK_STATS: LibraryStatsData = {
   ],
   oldest_year: 2020,
   newest_year: 2021,
+  file_details: [
+    {
+      relative_path: "Artist1/Album1/track1.flac",
+      artist: "Artist1",
+      album: "Album1",
+      title: "Track 1",
+      genre: "Rock",
+      year: 2020,
+      sample_rate: 44100,
+      sample_rate_display: "44.1 kHz",
+      bitrate_kbps: 900,
+      duration_secs: 240,
+      size: 30_000_000,
+      format: "FLAC",
+    },
+    {
+      relative_path: "Artist2/Album2/track2.mp3",
+      artist: "Artist2",
+      album: "Album2",
+      title: "Track 2",
+      genre: "Electronic",
+      year: 2021,
+      sample_rate: 48000,
+      sample_rate_display: "48 kHz",
+      bitrate_kbps: 320,
+      duration_secs: 180,
+      size: 5_000_000,
+      format: "MP3",
+    },
+  ],
 };
 
 const MOCK_TRACKS: RockboxTrack[] = [
@@ -237,6 +269,121 @@ describe("helpers", () => {
       const sorted = sortPlayData(MOCK_TRACKS, "least_recent");
       expect(sorted).toHaveLength(1); // only played tracks
       expect(sorted[0].title).toBe("Song A");
+    });
+  });
+
+  describe("filterFileDetails", () => {
+    const files: FileDetail[] = MOCK_STATS.file_details;
+
+    it("filters by format", () => {
+      const result = filterFileDetails(files, { category: "format", value: "FLAC", displayLabel: "" });
+      expect(result).toHaveLength(1);
+      expect(result[0].format).toBe("FLAC");
+    });
+
+    it("filters by genre", () => {
+      const result = filterFileDetails(files, { category: "genre", value: "Rock", displayLabel: "" });
+      expect(result).toHaveLength(1);
+      expect(result[0].genre).toBe("Rock");
+    });
+
+    it("filters by sample rate", () => {
+      const result = filterFileDetails(files, { category: "sample_rate", value: "44.1 kHz", displayLabel: "" });
+      expect(result).toHaveLength(1);
+      expect(result[0].sample_rate_display).toBe("44.1 kHz");
+    });
+
+    it("filters by year", () => {
+      const result = filterFileDetails(files, { category: "year", value: "2021", displayLabel: "" });
+      expect(result).toHaveLength(1);
+      expect(result[0].year).toBe(2021);
+    });
+  });
+
+  describe("sortFileDetails", () => {
+    const files: FileDetail[] = MOCK_STATS.file_details;
+
+    it("sorts by path ascending", () => {
+      const sorted = sortFileDetails(files, "path", "asc");
+      expect(sorted[0].relative_path).toBe("Artist1/Album1/track1.flac");
+    });
+
+    it("sorts by size descending", () => {
+      const sorted = sortFileDetails(files, "size", "desc");
+      expect(sorted[0].size).toBe(30_000_000);
+    });
+
+    it("sorts by artist ascending", () => {
+      const sorted = sortFileDetails(files, "artist", "asc");
+      expect(sorted[0].artist).toBe("Artist1");
+      expect(sorted[1].artist).toBe("Artist2");
+    });
+  });
+});
+
+describe("stats drill-down", () => {
+  it("opens detail modal when format bar is clicked", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music/library");
+    mockInvoke.mockResolvedValue(MOCK_STATS);
+
+    render(<LibraryStats />);
+    await user.click(screen.getByText("Choose Folder"));
+
+    await waitFor(() => {
+      expect(screen.getByText("FLAC")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("FLAC"));
+
+    await waitFor(() => {
+      expect(screen.getByText("FLAC — 1,000 tracks")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Artist1/Album1/track1.flac")).toBeInTheDocument();
+    expect(screen.queryByText("Artist2/Album2/track2.mp3")).not.toBeInTheDocument();
+  });
+
+  it("opens detail modal when genre tag is clicked", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music/library");
+    mockInvoke.mockResolvedValue(MOCK_STATS);
+
+    render(<LibraryStats />);
+    await user.click(screen.getByText("Choose Folder"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Rock")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Rock"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Rock — 600 tracks")).toBeInTheDocument();
+    });
+  });
+
+  it("closes detail modal on backdrop click", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/music/library");
+    mockInvoke.mockResolvedValue(MOCK_STATS);
+
+    render(<LibraryStats />);
+    await user.click(screen.getByText("Choose Folder"));
+
+    await waitFor(() => {
+      expect(screen.getByText("FLAC")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("FLAC"));
+
+    await waitFor(() => {
+      expect(screen.getByText("FLAC — 1,000 tracks")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("modal-backdrop"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("FLAC — 1,000 tracks")).not.toBeInTheDocument();
     });
   });
 });

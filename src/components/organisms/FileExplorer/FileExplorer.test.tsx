@@ -195,6 +195,25 @@ describe("FileExplorer", () => {
       expect(screen.getByText("New Folder")).toBeInTheDocument();
     });
   });
+
+  it("makes rows draggable when paneId is provided", async () => {
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" paneId="left" />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    const rows = screen.getAllByRole("row").filter((r) => r.getAttribute("draggable") === "true");
+    // All entry rows (4) should be draggable
+    expect(rows.length).toBe(4);
+  });
+
+  it("does not make rows draggable without paneId", async () => {
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    const rows = screen.getAllByRole("row").filter((r) => r.getAttribute("draggable") === "true");
+    expect(rows.length).toBe(0);
+  });
 });
 
 describe("helpers", () => {

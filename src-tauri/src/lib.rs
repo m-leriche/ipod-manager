@@ -19,7 +19,11 @@ use files::SyncCancel;
 fn ensure_homebrew_path() {
     let path = std::env::var("PATH").unwrap_or_default();
     let extras = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"];
-    let missing: Vec<&str> = extras.iter().copied().filter(|p| !path.contains(p)).collect();
+    let missing: Vec<&str> = extras
+        .iter()
+        .copied()
+        .filter(|p| !path.contains(p))
+        .collect();
     if !missing.is_empty() {
         let new_path = format!("{}:{}", missing.join(":"), path);
         std::env::set_var("PATH", new_path);

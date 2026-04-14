@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
+use crate::localvideo;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
     pub title: String,
@@ -135,8 +137,7 @@ pub fn download_audio(
     url: &str,
     output_dir: &str,
     format: &str,
-    split_chapters: bool,
-    chapter_count: usize,
+    chapters: Vec<Chapter>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> DownloadResult {
@@ -165,20 +166,9 @@ pub fn download_audio(
         args.push("0".to_string());
     }
 
-    args.extend(["-o".to_string(), output_template]);
-
-    if split_chapters {
-        args.push("--split-chapters".to_string());
-        args.extend([
-            "-o".to_string(),
-            format!(
-                "chapter:{}/%(title)s/%(section_number)d. %(section_title)s.%(ext)s",
-                output_dir
-            ),
-        ]);
-    }
-
     args.extend([
+        "-o".to_string(),
+        output_template,
         "--newline".to_string(),
         "--no-mtime".to_string(),
         url.to_string(),
@@ -222,9 +212,6 @@ pub fn download_audio(
     let reader = std::io::BufReader::new(stdout);
     let mut file_paths: Vec<String> = Vec::new();
     let mut download_dest: Option<String> = None;
-    let mut full_file_path: Option<String> = None;
-    let mut chapters_split: usize = 0;
-    let in_split_mode = split_chapters && chapter_count > 0;
 
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -240,64 +227,31 @@ pub fn download_audio(
 
         let Ok(line) = line else { continue };
 
-        // Capture intermediate download destination (fallback for non-split)
         if line.contains("[download] Destination:") {
             if let Some(path) = line.split("Destination:").nth(1) {
                 download_dest = Some(path.trim().to_string());
             }
         }
 
-        // Chapter splitting progress — capture output paths and emit incremental progress
-        if line.contains("[SplitChapters]") {
-            if line.contains("Destination:") {
-                if let Some(path) = line.split("Destination:").nth(1) {
-                    file_paths.push(path.trim().to_string());
-                }
-            }
-            chapters_split += 1;
-            let percent = if chapter_count > 0 {
-                (chapters_split as f64 / chapter_count as f64 * 100.0).min(100.0)
-            } else {
-                100.0
-            };
-            let _ = app.emit(
-                "youtube-progress",
-                DownloadProgress {
-                    phase: "splitting".to_string(),
-                    percent,
-                    speed: None,
-                    eta: None,
-                    title: None,
-                },
-            );
-            continue;
-        }
-
-        // Capture final audio file paths from ExtractAudio/ffmpeg lines
         if line.contains("[ExtractAudio]") || line.contains("[ffmpeg]") {
             if line.contains("Destination:") {
                 if let Some(path) = line.split("Destination:").nth(1) {
                     let path = path.trim().to_string();
-                    if in_split_mode {
-                        // Full file before chapter split — save for cleanup, don't add to results
-                        full_file_path = Some(path);
-                    } else {
-                        let name = std::path::Path::new(&path)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .map(String::from);
-                        file_paths.push(path);
-                        let _ = app.emit(
-                            "youtube-progress",
-                            DownloadProgress {
-                                phase: "converting".to_string(),
-                                percent: 100.0,
-                                speed: None,
-                                eta: None,
-                                title: name,
-                            },
-                        );
-                    }
+                    let name = std::path::Path::new(&path)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(String::from);
+                    file_paths.push(path);
+                    let _ = app.emit(
+                        "youtube-progress",
+                        DownloadProgress {
+                            phase: "converting".to_string(),
+                            percent: 100.0,
+                            speed: None,
+                            eta: None,
+                            title: name,
+                        },
+                    );
                 }
             }
             continue;
@@ -340,11 +294,128 @@ pub fn download_audio(
         };
     }
 
-    // Clean up the full audio file when chapters were split into individual tracks
-    if in_split_mode {
-        if let Some(ref path) = full_file_path {
-            let _ = std::fs::remove_file(path);
+    // Split into chapters using ffmpeg if chapters were provided
+    if !chapters.is_empty() {
+        let full_file = match file_paths.first() {
+            Some(p) => p.clone(),
+            None => {
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: vec![],
+                    error: Some("Could not determine downloaded file path".to_string()),
+                };
+            }
+        };
+
+        let title = std::path::Path::new(&full_file)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("audio")
+            .to_string();
+
+        let chapter_dir = format!("{}/{}", output_dir, localvideo::sanitize_filename(&title));
+        if let Err(e) = std::fs::create_dir_all(&chapter_dir) {
+            return DownloadResult {
+                success: false,
+                cancelled: false,
+                file_paths: vec![],
+                error: Some(format!("Failed to create chapter directory: {}", e)),
+            };
         }
+
+        let total = chapters.len();
+        let mut chapter_paths: Vec<String> = Vec::new();
+
+        for (i, chapter) in chapters.iter().enumerate() {
+            if cancel_flag.load(Ordering::SeqCst) {
+                return DownloadResult {
+                    success: false,
+                    cancelled: true,
+                    file_paths: chapter_paths,
+                    error: None,
+                };
+            }
+
+            let _ = app.emit(
+                "youtube-progress",
+                DownloadProgress {
+                    phase: "splitting".to_string(),
+                    percent: (i as f64 / total as f64 * 100.0).min(100.0),
+                    speed: None,
+                    eta: None,
+                    title: Some(chapter.title.clone()),
+                },
+            );
+
+            let output_path = format!(
+                "{}/{:02}. {}.{}",
+                chapter_dir,
+                i + 1,
+                localvideo::sanitize_filename(&chapter.title),
+                format
+            );
+
+            let mut ffmpeg_args = vec![
+                "-i".to_string(),
+                full_file.clone(),
+                "-vn".to_string(),
+                "-ss".to_string(),
+                format!("{}", chapter.start_time),
+                "-to".to_string(),
+                format!("{}", chapter.end_time),
+            ];
+            ffmpeg_args.extend(localvideo::build_codec_args(format));
+            ffmpeg_args.extend(["-y".to_string(), output_path.clone()]);
+
+            let output = match Command::new("ffmpeg").args(&ffmpeg_args).output() {
+                Ok(o) => o,
+                Err(e) => {
+                    return DownloadResult {
+                        success: false,
+                        cancelled: false,
+                        file_paths: chapter_paths,
+                        error: Some(format!("Failed to run ffmpeg: {}", e)),
+                    };
+                }
+            };
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: chapter_paths,
+                    error: Some(format!(
+                        "ffmpeg failed on chapter {}: {}",
+                        i + 1,
+                        stderr.lines().last().unwrap_or("unknown error").trim()
+                    )),
+                };
+            }
+
+            chapter_paths.push(output_path);
+        }
+
+        let _ = app.emit(
+            "youtube-progress",
+            DownloadProgress {
+                phase: "splitting".to_string(),
+                percent: 100.0,
+                speed: None,
+                eta: None,
+                title: None,
+            },
+        );
+
+        let _ = std::fs::remove_file(&full_file);
+
+        return DownloadResult {
+            success: true,
+            cancelled: false,
+            file_paths: chapter_paths,
+            error: None,
+        };
     }
 
     DownloadResult {

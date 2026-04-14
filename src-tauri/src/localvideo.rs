@@ -129,7 +129,7 @@ pub fn extract_audio(
     }
 }
 
-fn build_codec_args(format: &str) -> Vec<String> {
+pub fn build_codec_args(format: &str) -> Vec<String> {
     match format {
         "flac" => vec!["-acodec", "flac", "-ar", "44100", "-sample_fmt", "s16"],
         "mp3" => vec!["-acodec", "libmp3lame", "-q:a", "0"],
@@ -381,7 +381,7 @@ fn extract_chapters(
     }
 }
 
-fn sanitize_filename(name: &str) -> String {
+pub fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| match c {
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',

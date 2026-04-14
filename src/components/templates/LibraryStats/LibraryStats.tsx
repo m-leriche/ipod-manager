@@ -59,20 +59,32 @@ export const LibraryStats = () => {
     }
   };
 
+  const cancelScan = async () => {
+    try {
+      await invoke("cancel_sync");
+    } catch (_) {}
+  };
+
   const scanLibrary = async (path: string) => {
     setPhase("scanning");
     setError(null);
     setScanProgress(null);
-    startProgress("Scanning library stats...");
+    startProgress("Scanning library stats...", cancelScan);
     try {
       const data = await invoke<LibraryStatsData>("scan_library_stats", { path });
       setStats(data);
       setPhase("scanned");
       finishProgress(`Scanned ${data.total_tracks} tracks`);
     } catch (e) {
-      setError(`${e}`);
-      setPhase("idle");
-      failProgress(`${e}`);
+      const msg = `${e}`;
+      if (msg.includes("Cancelled")) {
+        setPhase("idle");
+        finishProgress("Scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("idle");
+        failProgress(msg);
+      }
     }
   };
 
@@ -123,6 +135,7 @@ export const LibraryStats = () => {
           error={error}
           onBrowse={browseLibrary}
           onRescan={() => scanLibrary(scanPath)}
+          onCancel={cancelScan}
           onFilterSelect={setActiveFilter}
         />
       )}
@@ -155,6 +168,7 @@ const LibraryMode = ({
   error,
   onBrowse,
   onRescan,
+  onCancel,
   onFilterSelect,
 }: {
   phase: Phase;
@@ -164,6 +178,7 @@ const LibraryMode = ({
   error: string | null;
   onBrowse: () => void;
   onRescan: () => void;
+  onCancel: () => void;
   onFilterSelect: (filter: StatsFilter) => void;
 }) => {
   if (phase === "idle") {
@@ -208,6 +223,12 @@ const LibraryMode = ({
               </p>
             </>
           )}
+          <button
+            onClick={onCancel}
+            className="mt-3 px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );

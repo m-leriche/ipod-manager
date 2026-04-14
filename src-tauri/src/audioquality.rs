@@ -3,6 +3,8 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 const AUDIO_EXT: &[&str] = &[
@@ -291,7 +293,11 @@ fn parse_mean_volume(stderr: &str) -> Option<f64> {
 
 // ── Scan ─────────────────────────────────────────────────────────
 
-pub fn scan_audio_quality(path: &str, app: AppHandle) -> Result<Vec<AudioFileInfo>, String> {
+pub fn scan_audio_quality(
+    path: &str,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<AudioFileInfo>, String> {
     let root = Path::new(path);
     if !root.exists() {
         return Err(format!("Path does not exist: {}", path));
@@ -304,6 +310,10 @@ pub fn scan_audio_quality(path: &str, app: AppHandle) -> Result<Vec<AudioFileInf
     let mut results = Vec::with_capacity(total);
 
     for (i, file_path) in audio_files.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".to_string());
+        }
+
         let file_name = file_path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())

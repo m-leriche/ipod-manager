@@ -71,7 +71,7 @@ export const AlbumArtManager = () => {
     setResult(null);
     setAlbums([]);
     setScanProgress(null);
-    startProgress("Scanning for album art...");
+    startProgress("Scanning for album art...", cancel);
     try {
       const data = await invoke<AlbumInfo[]>("scan_album_art", { path: targetPath });
       setAlbums(data);
@@ -80,9 +80,15 @@ export const AlbumArtManager = () => {
       const missingCount = data.filter((a) => !a.has_cover_file).length;
       finishProgress(`Found ${data.length} albums, ${missingCount} missing art`);
     } catch (e) {
-      setError(`${e}`);
-      setPhase("idle");
-      failProgress(`${e}`);
+      const msg = `${e}`;
+      if (msg.includes("Cancelled")) {
+        setPhase("idle");
+        finishProgress("Scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("idle");
+        failProgress(msg);
+      }
     }
   };
 
@@ -178,6 +184,12 @@ export const AlbumArtManager = () => {
               </div>
             </>
           )}
+          <button
+            onClick={cancel}
+            className="mt-3 px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );

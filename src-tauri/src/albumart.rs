@@ -112,7 +112,16 @@ fn read_metadata(dir: &Path) -> (Option<String>, Option<String>, bool) {
 
 // ── Scanning ──────────────────────────────────────────────────────
 
-fn scan_dir(dir: &Path, albums: &mut Vec<AlbumInfo>, app: &AppHandle) {
+fn scan_dir(
+    dir: &Path,
+    albums: &mut Vec<AlbumInfo>,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+) {
+    if cancel_flag.load(Ordering::SeqCst) {
+        return;
+    }
+
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -162,17 +171,25 @@ fn scan_dir(dir: &Path, albums: &mut Vec<AlbumInfo>, app: &AppHandle) {
     }
 
     for sub in subdirs {
-        scan_dir(&sub, albums, app);
+        scan_dir(&sub, albums, app, cancel_flag);
     }
 }
 
-pub fn scan_albums(music_path: &str, app: AppHandle) -> Result<Vec<AlbumInfo>, String> {
+pub fn scan_albums(
+    music_path: &str,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<AlbumInfo>, String> {
     let root = Path::new(music_path)
         .canonicalize()
         .map_err(|e| format!("Invalid path: {}", e))?;
 
     let mut albums = Vec::new();
-    scan_dir(&root, &mut albums, &app);
+    scan_dir(&root, &mut albums, &app, &cancel_flag);
+
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".to_string());
+    }
 
     // Missing art first, then alphabetical by artist/album
     albums.sort_by(|a, b| {

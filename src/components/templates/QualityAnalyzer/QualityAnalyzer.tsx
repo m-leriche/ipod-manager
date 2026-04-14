@@ -61,6 +61,12 @@ export const QualityAnalyzer = () => {
     }
   };
 
+  const cancel = async () => {
+    try {
+      await invoke("cancel_sync");
+    } catch (_) {}
+  };
+
   const scan = async (path?: string) => {
     const targetPath = path ?? scanPath;
     setPhase("scanning");
@@ -69,16 +75,22 @@ export const QualityAnalyzer = () => {
     setSelectedFile(null);
     setSpectrograms({});
     setScanProgress(null);
-    startProgress("Analyzing audio quality...");
+    startProgress("Analyzing audio quality...", cancel);
     try {
       const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
       setFiles(data);
       setPhase("scanned");
       finishProgress(`Analyzed ${data.length} files`);
     } catch (e) {
-      setError(`${e}`);
-      setPhase("idle");
-      failProgress(`${e}`);
+      const msg = `${e}`;
+      if (msg.includes("Cancelled")) {
+        setPhase("idle");
+        finishProgress("Scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("idle");
+        failProgress(msg);
+      }
     }
   };
 
@@ -181,6 +193,12 @@ export const QualityAnalyzer = () => {
               </div>
             </>
           )}
+          <button
+            onClick={cancel}
+            className="mt-3 px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium hover:bg-danger/10 transition-all"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );

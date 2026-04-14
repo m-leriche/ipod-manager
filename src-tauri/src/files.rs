@@ -321,7 +321,7 @@ pub fn copy_file_list(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> CopyResult {
-    let total = operations.len();
+    let op_count = operations.len();
     let mut succeeded = 0;
     let mut failed = 0;
     let mut errors = Vec::new();
@@ -346,9 +346,9 @@ pub fn copy_file_list(
                     fmt_bytes(avail),
                 ));
                 return CopyResult {
-                    total,
+                    total: op_count,
                     succeeded: 0,
-                    failed: total,
+                    failed: op_count,
                     cancelled: false,
                     errors,
                 };
@@ -356,26 +356,26 @@ pub fn copy_file_list(
         }
     }
 
-    for (i, op) in operations.iter().enumerate() {
+    // Count total files (expanding directories) for accurate progress
+    let total: usize = operations
+        .iter()
+        .map(|op| {
+            let src = Path::new(&op.source_path);
+            if src.is_dir() {
+                count_files_recursive(src)
+            } else {
+                1
+            }
+        })
+        .sum();
+
+    let mut completed: usize = 0;
+
+    for op in &operations {
         if cancel_flag.load(Ordering::SeqCst) {
             cancelled = true;
             break;
         }
-
-        let file_name = Path::new(&op.source_path)
-            .file_name()
-            .map(|f| f.to_string_lossy().to_string())
-            .unwrap_or_else(|| op.source_path.clone());
-
-        let _ = app.emit(
-            "sync-progress",
-            SyncProgress {
-                total,
-                completed: i,
-                current_file: file_name,
-                phase: "copying".to_string(),
-            },
-        );
 
         let src = Path::new(&op.source_path);
         let dest = Path::new(&op.dest_path);
@@ -388,20 +388,50 @@ pub fn copy_file_list(
             }
         }
 
-        match fs::copy(src, dest) {
-            Ok(_) => succeeded += 1,
-            Err(e) => {
-                // Clean up partial file
-                let _ = fs::remove_file(dest);
-
-                if is_no_space(&e) {
-                    errors.push("Disk full — stopped copying".to_string());
-                    failed += total - i - succeeded;
-                    break;
+        if src.is_dir() {
+            match copy_dir_recursive(src, dest, &app, &cancel_flag, &mut completed, total) {
+                Ok(()) => succeeded += 1,
+                Err(e) => {
+                    if e == "Cancelled" {
+                        cancelled = true;
+                        break;
+                    }
+                    errors.push(format!("{}: {}", op.source_path, e));
+                    failed += 1;
                 }
+            }
+        } else {
+            let file_name = src
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
 
-                errors.push(format!("{}: {}", op.source_path, e));
-                failed += 1;
+            match fs::copy(src, dest) {
+                Ok(_) => {
+                    succeeded += 1;
+                    completed += 1;
+                    let _ = app.emit(
+                        "sync-progress",
+                        SyncProgress {
+                            total,
+                            completed,
+                            current_file: file_name,
+                            phase: "copying".to_string(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    let _ = fs::remove_file(dest);
+
+                    if is_no_space(&e) {
+                        errors.push("Disk full — stopped copying".to_string());
+                        failed += op_count - succeeded - failed;
+                        break;
+                    }
+
+                    errors.push(format!("{}: {}", op.source_path, e));
+                    failed += 1;
+                }
             }
         }
     }
@@ -410,7 +440,7 @@ pub fn copy_file_list(
         "sync-progress",
         SyncProgress {
             total,
-            completed: succeeded + failed,
+            completed,
             current_file: String::new(),
             phase: if cancelled {
                 "cancelled".to_string()
@@ -421,7 +451,7 @@ pub fn copy_file_list(
     );
 
     CopyResult {
-        total,
+        total: op_count,
         succeeded,
         failed,
         cancelled,
@@ -546,31 +576,34 @@ pub fn move_file_list(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> CopyResult {
-    let total = operations.len();
+    let op_count = operations.len();
     let mut succeeded = 0;
     let mut failed = 0;
     let mut cancelled = false;
     let mut errors: Vec<String> = Vec::new();
 
-    for (i, op) in operations.iter().enumerate() {
+    // Count total files for accurate progress (same-volume renames count as 1 each)
+    let total: usize = operations
+        .iter()
+        .map(|op| {
+            let src = Path::new(&op.source_path);
+            if src.is_dir() {
+                // For rename (same volume) it's instant, but for cross-volume
+                // it needs per-file progress. Use file count as upper bound.
+                count_files_recursive(src).max(1)
+            } else {
+                1
+            }
+        })
+        .sum();
+
+    let mut completed: usize = 0;
+
+    for op in &operations {
         if cancel_flag.load(Ordering::SeqCst) {
             cancelled = true;
             break;
         }
-
-        let _ = app.emit(
-            "sync-progress",
-            SyncProgress {
-                total,
-                completed: i,
-                current_file: Path::new(&op.dest_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-                    .to_string(),
-                phase: "moving".to_string(),
-            },
-        );
 
         let dest = Path::new(&op.dest_path);
         if let Some(parent) = dest.parent() {
@@ -583,17 +616,42 @@ pub fn move_file_list(
             }
         }
 
-        match move_single(&op.source_path, &op.dest_path) {
+        match move_single(
+            &op.source_path,
+            &op.dest_path,
+            &app,
+            &cancel_flag,
+            &mut completed,
+            total,
+        ) {
             Ok(()) => succeeded += 1,
             Err(e) => {
+                if e == "Cancelled" {
+                    cancelled = true;
+                    break;
+                }
                 errors.push(format!("{}: {}", op.source_path, e));
                 failed += 1;
             }
         }
     }
 
+    let _ = app.emit(
+        "sync-progress",
+        SyncProgress {
+            total,
+            completed,
+            current_file: String::new(),
+            phase: if cancelled {
+                "cancelled".to_string()
+            } else {
+                "done".to_string()
+            },
+        },
+    );
+
     CopyResult {
-        total,
+        total: op_count,
         succeeded,
         failed,
         cancelled,
@@ -601,10 +659,32 @@ pub fn move_file_list(
     }
 }
 
-fn move_single(source: &str, dest: &str) -> Result<(), String> {
+fn move_single(
+    source: &str,
+    dest: &str,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+    completed: &mut usize,
+    total: usize,
+) -> Result<(), String> {
     // Try rename first (instant for same-volume)
     match fs::rename(source, dest) {
-        Ok(()) => return Ok(()),
+        Ok(()) => {
+            *completed += 1;
+            let _ = app.emit(
+                "sync-progress",
+                SyncProgress {
+                    total,
+                    completed: *completed,
+                    current_file: Path::new(source)
+                        .file_name()
+                        .map(|f| f.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    phase: "moving".to_string(),
+                },
+            );
+            return Ok(());
+        }
         Err(e) => {
             // errno 18 = EXDEV (cross-device link) on macOS/Linux
             if e.raw_os_error() != Some(18) {
@@ -616,26 +696,90 @@ fn move_single(source: &str, dest: &str) -> Result<(), String> {
 
     let src_path = Path::new(source);
     if src_path.is_dir() {
-        copy_dir_recursive(src_path, Path::new(dest))?;
+        copy_dir_recursive(
+            src_path,
+            Path::new(dest),
+            app,
+            cancel_flag,
+            completed,
+            total,
+        )?;
         fs::remove_dir_all(src_path).map_err(|e| format!("Remove source dir failed: {}", e))
     } else {
         fs::copy(source, dest).map_err(|e| format!("Copy failed: {}", e))?;
-        fs::remove_file(source).map_err(|e| format!("Remove source failed: {}", e))
+        fs::remove_file(source).map_err(|e| format!("Remove source failed: {}", e))?;
+        *completed += 1;
+        let _ = app.emit(
+            "sync-progress",
+            SyncProgress {
+                total,
+                completed: *completed,
+                current_file: Path::new(source)
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                phase: "moving".to_string(),
+            },
+        );
+        Ok(())
     }
 }
 
-fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+fn count_files_recursive(path: &Path) -> usize {
+    let mut count = 0;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let p = entry.path();
+            if p.is_dir() {
+                count += count_files_recursive(&p);
+            } else {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+fn copy_dir_recursive(
+    src: &Path,
+    dest: &Path,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+    completed: &mut usize,
+    total: usize,
+) -> Result<(), String> {
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".to_string());
+    }
+
     fs::create_dir_all(dest).map_err(|e| format!("Create dir failed: {}", e))?;
 
     let entries = fs::read_dir(src).map_err(|e| format!("Read dir failed: {}", e))?;
     for entry in entries.filter_map(|e| e.ok()) {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".to_string());
+        }
+
         let src_child = entry.path();
         let dest_child = dest.join(entry.file_name());
         if src_child.is_dir() {
-            copy_dir_recursive(&src_child, &dest_child)?;
+            copy_dir_recursive(&src_child, &dest_child, app, cancel_flag, completed, total)?;
         } else {
             fs::copy(&src_child, &dest_child)
                 .map_err(|e| format!("Copy {} failed: {}", src_child.display(), e))?;
+            *completed += 1;
+            let _ = app.emit(
+                "sync-progress",
+                SyncProgress {
+                    total,
+                    completed: *completed,
+                    current_file: src_child
+                        .file_name()
+                        .map(|f| f.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    phase: "copying".to_string(),
+                },
+            );
         }
     }
     Ok(())

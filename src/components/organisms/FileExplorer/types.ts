@@ -12,6 +12,18 @@ export interface FileExplorerProps {
   onSelectFolder?: (path: string) => void;
   selectedFolder?: string | null;
   allowDelete?: boolean;
+  paneId?: string;
+  onExternalDrop?: () => void;
+}
+
+export interface FileExplorerHandle {
+  reload: () => void;
+}
+
+export interface DragTransferData {
+  paneId: string;
+  paths: string[];
+  sourceDir: string;
 }
 
 export interface ClipboardState {

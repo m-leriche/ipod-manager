@@ -20,7 +20,6 @@ export const YouTubeDownloader = () => {
   const [format, setFormat] = useState<AudioFormat>("flac");
 
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
-  const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [result, setResult] = useState<DownloadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +37,6 @@ export const YouTubeDownloader = () => {
     let active = true;
     listen<DownloadProgress>("youtube-progress", (e) => {
       if (active) {
-        setProgress(e.payload);
         updateProgress(e.payload.percent ?? 0, 100, e.payload.title ?? "");
       }
     }).then((fn) => {
@@ -83,7 +81,6 @@ export const YouTubeDownloader = () => {
 
   const startDownload = async () => {
     setPhase("downloading");
-    setProgress(null);
     setResult(null);
     setError(null);
     startProgress("Downloading audio...", cancel);
@@ -114,7 +111,6 @@ export const YouTubeDownloader = () => {
     setPhase("idle");
     setUrl("");
     setVideoInfo(null);
-    setProgress(null);
     setResult(null);
     setError(null);
   };
@@ -216,64 +212,7 @@ export const YouTubeDownloader = () => {
   // ── Downloading ──
 
   if (phase === "downloading") {
-    const isSplitting = progress?.phase === "splitting";
-
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-md">
-          {videoInfo && <p className="text-text-secondary text-[11px] font-medium mb-3 truncate">{videoInfo.title}</p>}
-
-          {isSplitting && (
-            <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-2 opacity-50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-text-tertiary">Download complete</span>
-                <span className="text-[11px] text-text-tertiary">100%</span>
-              </div>
-              <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden">
-                <div className="h-full bg-text-primary rounded-full w-full" />
-              </div>
-            </div>
-          )}
-
-          <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium text-text-primary">
-                {isSplitting
-                  ? "Splitting chapters into individual tracks"
-                  : progress?.phase === "converting"
-                    ? progress.title
-                      ? `Converting: ${progress.title}`
-                      : "Converting..."
-                    : "Downloading..."}
-              </span>
-              <span className="text-[11px] text-text-secondary">
-                {progress ? `${progress.percent.toFixed(1)}%` : "Starting..."}
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden mb-2">
-              <div
-                className="h-full bg-text-primary rounded-full transition-all duration-200"
-                style={{
-                  width: `${progress?.percent ?? 0}%`,
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-text-tertiary flex-1 min-w-0 mr-3">
-                {!isSplitting && progress?.speed && `${progress.speed}`}
-                {!isSplitting && progress?.eta && ` — ETA ${progress.eta}`}
-              </span>
-              <button
-                onClick={cancel}
-                className="px-3 py-1 border border-danger/30 text-danger rounded-lg text-[10px] font-medium shrink-0 hover:bg-danger/10 transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Fetching info ──

@@ -131,9 +131,12 @@ pub fn list_dir(path: &str) -> Result<Vec<FileEntry>, String> {
 
 /// Recursively collect all files (not directories) under a path,
 /// returning a map of relative_path -> (size, modified).
-fn collect_files(base: &Path) -> Result<HashMap<String, (u64, u64)>, String> {
+fn collect_files(
+    base: &Path,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<HashMap<String, (u64, u64)>, String> {
     let mut map = HashMap::new();
-    collect_files_recursive(base, base, &mut map)?;
+    collect_files_recursive(base, base, &mut map, cancel_flag)?;
     Ok(map)
 }
 
@@ -141,7 +144,12 @@ fn collect_files_recursive(
     base: &Path,
     current: &Path,
     map: &mut HashMap<String, (u64, u64)>,
+    cancel_flag: &Arc<AtomicBool>,
 ) -> Result<(), String> {
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".to_string());
+    }
+
     let entries =
         fs::read_dir(current).map_err(|e| format!("Cannot read {}: {}", current.display(), e))?;
 
@@ -168,7 +176,7 @@ fn collect_files_recursive(
         }
 
         if metadata.is_dir() {
-            collect_files_recursive(base, &path, map)?;
+            collect_files_recursive(base, &path, map, cancel_flag)?;
         } else {
             let relative = path
                 .strip_prefix(base)
@@ -193,7 +201,11 @@ fn collect_files_recursive(
 
 /// Compare two directories recursively. Returns a list of entries showing
 /// what's in source only, target only, modified, or same.
-pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, String> {
+pub fn compare_dirs(
+    source: &str,
+    target: &str,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<CompareEntry>, String> {
     let source_path = Path::new(source)
         .canonicalize()
         .map_err(|e| format!("Invalid source path: {}", e))?;
@@ -201,8 +213,8 @@ pub fn compare_dirs(source: &str, target: &str) -> Result<Vec<CompareEntry>, Str
         .canonicalize()
         .map_err(|e| format!("Invalid target path: {}", e))?;
 
-    let source_files = collect_files(&source_path)?;
-    let target_files = collect_files(&target_path)?;
+    let source_files = collect_files(&source_path, &cancel_flag)?;
+    let target_files = collect_files(&target_path, &cancel_flag)?;
 
     let mut results: Vec<CompareEntry> = Vec::new();
 

@@ -392,37 +392,6 @@ describe("YouTubeDownloader", () => {
       expect(screen.getByRole("button", { name: "Download Another" })).toBeInTheDocument();
     });
   });
-
-  it("cancel calls cancel_sync during download", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/output");
-    mockInvoke.mockImplementation((cmd) => {
-      if (cmd === "check_yt_dependencies") return Promise.resolve();
-      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO);
-      if (cmd === "download_audio") return new Promise(() => {}); // never resolves
-      if (cmd === "cancel_sync") return Promise.resolve();
-      return Promise.resolve();
-    });
-
-    render(<YouTubeDownloader />);
-    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
-
-    await user.type(
-      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
-      "https://www.youtube.com/watch?v=test123",
-    );
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-    await waitFor(() => screen.getByRole("button", { name: "Download" }));
-    await user.click(screen.getByRole("button", { name: "Download" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Download as FLAC" }));
-    await user.click(screen.getByRole("button", { name: "Download as FLAC" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(mockInvoke).toHaveBeenCalledWith("cancel_sync");
-  });
 });
 
 describe("isValidYouTubeUrl", () => {

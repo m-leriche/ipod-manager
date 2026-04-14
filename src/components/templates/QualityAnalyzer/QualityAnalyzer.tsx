@@ -20,7 +20,6 @@ export const QualityAnalyzer = () => {
   const [files, setFiles] = useState<AudioFileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [spectrograms, setSpectrograms] = useState<Record<string, string>>({});
-  const [scanProgress, setScanProgress] = useState<QualityScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export const QualityAnalyzer = () => {
     const unsubs: UnlistenFn[] = [];
     listen<QualityScanProgress>("quality-scan-progress", (e) => {
       if (active) {
-        setScanProgress(e.payload);
         updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
       }
     }).then((fn) => {
@@ -61,6 +59,12 @@ export const QualityAnalyzer = () => {
     }
   };
 
+  const cancel = async () => {
+    try {
+      await invoke("cancel_sync");
+    } catch (_) {}
+  };
+
   const scan = async (path?: string) => {
     const targetPath = path ?? scanPath;
     setPhase("scanning");
@@ -68,17 +72,22 @@ export const QualityAnalyzer = () => {
     setFiles([]);
     setSelectedFile(null);
     setSpectrograms({});
-    setScanProgress(null);
-    startProgress("Analyzing audio quality...");
+    startProgress("Analyzing audio quality...", cancel);
     try {
       const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
       setFiles(data);
       setPhase("scanned");
       finishProgress(`Analyzed ${data.length} files`);
     } catch (e) {
-      setError(`${e}`);
-      setPhase("idle");
-      failProgress(`${e}`);
+      const msg = `${e}`;
+      if (msg.includes("Cancelled")) {
+        setPhase("idle");
+        finishProgress("Scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("idle");
+        failProgress(msg);
+      }
     }
   };
 
@@ -165,25 +174,7 @@ export const QualityAnalyzer = () => {
   // ── Scanning ──
 
   if (phase === "scanning") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-text-tertiary text-xs mb-1">
-            <Spinner /> Analyzing audio files...
-          </div>
-          {scanProgress && (
-            <>
-              <div className="text-[11px] text-text-secondary font-medium">
-                {scanProgress.completed} of {scanProgress.total} files
-              </div>
-              <div className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
-                {scanProgress.current_file}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Scanned ──

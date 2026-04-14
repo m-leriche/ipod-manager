@@ -14,6 +14,12 @@ export const useComparison = (
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("differences");
 
+  const cancel = useCallback(async () => {
+    try {
+      await invoke("cancel_sync");
+    } catch (_) {}
+  }, []);
+
   const compare = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -23,7 +29,10 @@ export const useComparison = (
       const tree = buildTree(data.filter((e) => e.status !== "same"));
       onCompared(new Set(collectDiffPaths(tree)));
     } catch (e) {
-      setError(`${e}`);
+      const msg = `${e}`;
+      if (!msg.includes("Cancelled")) {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -56,5 +65,18 @@ export const useComparison = (
     return s;
   }, [visibleEntries]);
 
-  return { loading, error, setError, filter, setFilter, compare, visibleEntries, filtered, tree, entryMap, stats };
+  return {
+    loading,
+    error,
+    setError,
+    filter,
+    setFilter,
+    compare,
+    cancel,
+    visibleEntries,
+    filtered,
+    tree,
+    entryMap,
+    stats,
+  };
 };

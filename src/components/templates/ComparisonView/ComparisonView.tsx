@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { Pill } from "../../atoms/Pill/Pill";
-import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { TreeNodeRow } from "./TreeNodeRow";
 import { SyncActions } from "./SyncActions";
@@ -133,12 +132,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
         onCancel={handleCancel}
       />
 
-      {loading && (
-        <div className="py-12 text-center text-text-tertiary text-xs shrink-0">
-          <Spinner />
-          Comparing...
-        </div>
-      )}
+      {loading && <div className="py-12 shrink-0" />}
       {error && <div className="py-12 text-center text-danger text-xs shrink-0">{error}</div>}
 
       {/* Tree view */}

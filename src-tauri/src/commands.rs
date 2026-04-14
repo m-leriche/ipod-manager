@@ -50,9 +50,12 @@ pub async fn compare_directories(
     source: String,
     target: String,
     exclusions: Option<Vec<String>>,
+    cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<CompareEntry>, String> {
+    let flag = cancel.new_flag();
+
     tauri::async_runtime::spawn_blocking(move || {
-        let mut entries = files::compare_dirs(&source, &target)?;
+        let mut entries = files::compare_dirs(&source, &target, flag)?;
         if let Some(ref ex) = exclusions {
             if !ex.is_empty() {
                 entries.retain(|e| !profiles::is_excluded(&e.relative_path, ex));
@@ -106,8 +109,11 @@ pub fn cancel_sync(cancel: State<'_, SyncCancel>) -> Result<(), String> {
 pub async fn scan_album_art(
     path: String,
     app: AppHandle,
+    cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<albumart::AlbumInfo>, String> {
-    tauri::async_runtime::spawn_blocking(move || albumart::scan_albums(&path, app))
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || albumart::scan_albums(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
 }
@@ -311,8 +317,11 @@ pub async fn repair_compare_release(
 pub async fn scan_audio_quality(
     path: String,
     app: AppHandle,
+    cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<audioquality::AudioFileInfo>, String> {
-    tauri::async_runtime::spawn_blocking(move || audioquality::scan_audio_quality(&path, app))
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || audioquality::scan_audio_quality(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
 }

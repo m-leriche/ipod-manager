@@ -24,7 +24,6 @@ export const VideoExtractor = () => {
   const [chapterErrors, setChapterErrors] = useState<Record<number, string>>({});
   const [nextChapterId, setNextChapterId] = useState(1);
 
-  const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [result, setResult] = useState<DownloadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +39,6 @@ export const VideoExtractor = () => {
     const unsubs: UnlistenFn[] = [];
     listen<DownloadProgress>("video-extract-progress", (e) => {
       if (active) {
-        setProgress(e.payload);
         updateProgress(e.payload.percent ?? 0, 100, e.payload.title ?? "");
       }
     }).then((fn) => {
@@ -126,7 +124,6 @@ export const VideoExtractor = () => {
     }
 
     setPhase("extracting");
-    setProgress(null);
     setResult(null);
     setError(null);
     startProgress("Extracting audio...", cancel);
@@ -162,7 +159,6 @@ export const VideoExtractor = () => {
     setChapters([]);
     setChapterErrors({});
     setNextChapterId(1);
-    setProgress(null);
     setResult(null);
     setError(null);
   };
@@ -260,40 +256,7 @@ export const VideoExtractor = () => {
   // ── Extracting ──
 
   if (phase === "extracting") {
-    const isSplitting = progress?.phase === "splitting";
-
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-md">
-          {videoInfo && <p className="text-text-secondary text-xs font-medium mb-3 truncate">{videoInfo.title}</p>}
-
-          <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-medium text-text-primary">
-                {isSplitting ? `Splitting: ${progress?.title ?? "..."}` : "Extracting audio..."}
-              </span>
-              <span className="text-xs text-text-secondary">
-                {progress ? `${progress.percent.toFixed(1)}%` : "Starting..."}
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden mb-2.5">
-              <div
-                className="h-full bg-text-primary rounded-full transition-all duration-200"
-                style={{ width: `${progress?.percent ?? 0}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-end">
-              <button
-                onClick={cancel}
-                className="px-3 py-1.5 border border-danger/30 text-danger rounded-lg text-[11px] font-medium shrink-0 hover:bg-danger/10 transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="flex-1" />;
   }
 
   // ── Idle (main editing view) ──

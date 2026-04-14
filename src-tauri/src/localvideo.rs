@@ -331,7 +331,14 @@ fn extract_chapters(
             format!("{}", chapter.end_time),
         ];
         args.extend(build_codec_args(format));
-        args.extend(["-y".to_string(), output_path.clone()]);
+        args.extend([
+            "-metadata".to_string(),
+            format!("track={}/{}", i + 1, total),
+            "-metadata".to_string(),
+            format!("title={}", chapter.title),
+            "-y".to_string(),
+            output_path.clone(),
+        ]);
 
         let output = match Command::new("ffmpeg").args(&args).output() {
             Ok(o) => o,

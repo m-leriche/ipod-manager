@@ -92,8 +92,7 @@ export const YouTubeDownloader = () => {
         url,
         outputDir,
         format,
-        splitChapters: hasChapters,
-        chapterCount: videoInfo?.chapters.length ?? 0,
+        chapters: videoInfo?.chapters ?? [],
       });
       setResult(res);
       setPhase("done");

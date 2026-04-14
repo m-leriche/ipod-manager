@@ -239,23 +239,14 @@ pub async fn download_audio(
     url: String,
     output_dir: String,
     format: String,
-    split_chapters: bool,
-    chapter_count: usize,
+    chapters: Vec<youtube::Chapter>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, String> {
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
-        youtube::download_audio(
-            &url,
-            &output_dir,
-            &format,
-            split_chapters,
-            chapter_count,
-            app,
-            flag,
-        )
+        youtube::download_audio(&url, &output_dir, &format, chapters, app, flag)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?;

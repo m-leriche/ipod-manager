@@ -221,8 +221,7 @@ describe("YouTubeDownloader", () => {
         url: "https://www.youtube.com/watch?v=test123",
         outputDir: "/output",
         format: "flac",
-        splitChapters: false,
-        chapterCount: 0,
+        chapters: [],
       });
     });
   });
@@ -311,7 +310,7 @@ describe("YouTubeDownloader", () => {
     });
   });
 
-  it("passes splitChapters true when chapters exist", async () => {
+  it("passes chapters array when chapters exist", async () => {
     const user = userEvent.setup();
     mockOpen.mockResolvedValue("/output");
     mockInvoke.mockImplementation((cmd) => {
@@ -346,8 +345,11 @@ describe("YouTubeDownloader", () => {
         url: "https://www.youtube.com/watch?v=test123",
         outputDir: "/output",
         format: "flac",
-        splitChapters: true,
-        chapterCount: 3,
+        chapters: [
+          { title: "Song One", start_time: 0, end_time: 180 },
+          { title: "Song Two", start_time: 180, end_time: 360 },
+          { title: "Song Three", start_time: 360, end_time: 540 },
+        ],
       });
     });
   });

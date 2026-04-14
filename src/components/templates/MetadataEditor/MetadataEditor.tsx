@@ -6,14 +6,18 @@ import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MetadataTree } from "./MetadataTree";
 import { MetadataEditPanel } from "./MetadataEditPanel";
+import { RepairAlbumCard } from "./RepairAlbumCard";
+import { RepairDetailPanel } from "./RepairDetailPanel";
 import {
   groupTracks,
   buildUpdate,
   computeBatchFields,
   computeMixedFlags,
   trackToEditable,
-  countTheArtists,
-  fixTheArtists,
+  sortAlbumsByIssues,
+  issuesToUpdates,
+  issueKey,
+  allIssueKeys,
 } from "./helpers";
 import type {
   TrackMetadata,
@@ -21,40 +25,74 @@ import type {
   MetadataSaveProgress,
   MetadataSaveResult,
 } from "../../../types/metadata";
-import type { Phase, EditableFields } from "./types";
+import type { Phase, View, EditableFields, RepairReport, RepairLookupProgress, AlbumRepairReport } from "./types";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 export const MetadataEditor = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  // ── Shared state ──
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
   const [tracks, setTracks] = useState<TrackMetadata[]>([]);
+  const [scanProgress, setScanProgress] = useState<MetadataScanProgress | null>(null);
+  const [saveProgress, setSaveProgress] = useState<MetadataSaveProgress | null>(null);
+  const [saveResult, setSaveResult] = useState<MetadataSaveResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<View>("edit");
+
+  // ── Editor state ──
   const [editedTracks, setEditedTracks] = useState<Record<string, EditableFields>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [scanProgress, setScanProgress] = useState<MetadataScanProgress | null>(null);
-  const [saveResult, setSaveResult] = useState<MetadataSaveResult | null>(null);
-  const [saveProgress, setSaveProgress] = useState<MetadataSaveProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [theArtistsFixedCount, setTheArtistsFixedCount] = useState<number | null>(null);
 
+  // ── Repair state ──
+  const [report, setReport] = useState<RepairReport | null>(null);
+  const [lookupProgress, setLookupProgress] = useState<RepairLookupProgress | null>(null);
+  const [acceptedFixes, setAcceptedFixes] = useState<Set<string>>(new Set());
+  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
+
+  // ── Event listeners ──
   useEffect(() => {
     let active = true;
     const unsubs: UnlistenFn[] = [];
+
     listen<MetadataScanProgress>("metadata-scan-progress", (e) => {
-      if (active) setScanProgress(e.payload);
+      if (active) {
+        setScanProgress(e.payload);
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
     });
+
     listen<MetadataSaveProgress>("metadata-save-progress", (e) => {
-      if (active) setSaveProgress(e.payload);
+      if (active) {
+        setSaveProgress(e.payload);
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
     });
+
+    listen<RepairLookupProgress>("repair-lookup-progress", (e) => {
+      if (active) {
+        setLookupProgress(e.payload);
+        updateProgress(e.payload.completed_albums, e.payload.total_albums, e.payload.current_album);
+      }
+    }).then((fn) => {
+      if (active) unsubs.push(fn);
+      else fn();
+    });
+
     return () => {
       active = false;
       unsubs.forEach((fn) => fn());
     };
   }, []);
+
+  // ── Shared actions ──
 
   const browse = async () => {
     try {
@@ -74,27 +112,34 @@ export const MetadataEditor = () => {
     setPhase("scanning");
     setError(null);
     setSaveResult(null);
-    setTheArtistsFixedCount(null);
     setTracks([]);
     setEditedTracks({});
     setSelected(new Set());
+    setReport(null);
+    setAcceptedFixes(new Set());
+    setSelectedAlbum(null);
     setScanProgress(null);
+    startProgress("Scanning metadata...", cancel);
     try {
       const data = await invoke<TrackMetadata[]>("scan_metadata", { path: targetPath });
       setTracks(data);
       setPhase("scanned");
+      setView("edit");
+      finishProgress(`Scanned ${data.length} tracks`);
     } catch (e) {
       const msg = `${e}`;
       if (msg === "Cancelled") {
         setPhase("idle");
+        failProgress("Scan cancelled");
       } else {
         setError(msg);
         setPhase("idle");
+        failProgress(msg);
       }
     }
   };
 
-  const cancelScan = async () => {
+  const cancel = async () => {
     try {
       await invoke("cancel_sync");
     } catch (_) {
@@ -102,8 +147,9 @@ export const MetadataEditor = () => {
     }
   };
 
+  // ── Editor logic ──
+
   const groups = useMemo(() => groupTracks(tracks, editedTracks), [tracks, editedTracks]);
-  const theArtistCount = useMemo(() => countTheArtists(tracks), [tracks]);
 
   const dirtyCount = useMemo(() => {
     let count = 0;
@@ -115,9 +161,7 @@ export const MetadataEditor = () => {
   }, [editedTracks, tracks]);
 
   const selectedTracks = useMemo(() => tracks.filter((t) => selected.has(t.file_path)), [tracks, selected]);
-
   const batchFields = useMemo(() => computeBatchFields(selectedTracks, editedTracks), [selectedTracks, editedTracks]);
-
   const mixedFlags = useMemo(() => computeMixedFlags(selectedTracks, editedTracks), [selectedTracks, editedTracks]);
 
   const toggleTrack = useCallback((filePath: string) => {
@@ -165,12 +209,6 @@ export const MetadataEditor = () => {
     });
   }, [selected]);
 
-  const handleFixTheArtists = useCallback(() => {
-    const count = tracks.filter((t) => /^the\s/i.test(t.artist ?? "")).length;
-    setEditedTracks((prev) => fixTheArtists(tracks, prev));
-    setTheArtistsFixedCount(count);
-  }, [tracks]);
-
   const handleSave = async () => {
     const updates = [];
     for (const [filePath, edited] of Object.entries(editedTracks)) {
@@ -184,12 +222,12 @@ export const MetadataEditor = () => {
     setPhase("saving");
     setSaveResult(null);
     setSaveProgress(null);
+    startProgress("Saving metadata...", cancel);
     try {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       setSaveProgress(null);
       setSaveResult(result);
       if (result.succeeded > 0) {
-        // Update tracks in-place with saved values
         setTracks((prev) =>
           prev.map((t) => {
             const edited = editedTracks[t.file_path];
@@ -203,6 +241,7 @@ export const MetadataEditor = () => {
               album: update.album ?? t.album,
               album_artist: update.album_artist ?? t.album_artist,
               sort_artist: update.sort_artist ?? t.sort_artist,
+              sort_album_artist: update.sort_album_artist ?? t.sort_album_artist,
               track: update.track ?? t.track,
               track_total: update.track_total ?? t.track_total,
               year: update.year ?? t.year,
@@ -211,14 +250,152 @@ export const MetadataEditor = () => {
           }),
         );
         setEditedTracks({});
-        setTheArtistsFixedCount(null);
       }
       setPhase("scanned");
+      finishProgress(`Saved ${result.succeeded} of ${result.total} files`);
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");
+      failProgress(`${e}`);
     }
   };
+
+  // ── Repair logic ──
+
+  const startRepair = async () => {
+    if (tracks.length === 0) return;
+    setPhase("looking_up");
+    setError(null);
+    setLookupProgress(null);
+    setReport(null);
+    setAcceptedFixes(new Set());
+    setSelectedAlbum(null);
+    startProgress("Looking up albums on MusicBrainz...", cancel);
+
+    try {
+      const data = await invoke<RepairReport>("repair_analyze", { tracks });
+      setReport(data);
+      const sorted = sortAlbumsByIssues(data.albums);
+      if (sorted.length > 0) setSelectedAlbum(sorted[0].folder_path);
+      setView("repair");
+      setPhase("scanned");
+      const totalIssues =
+        data.total_issues.error_count + data.total_issues.warning_count + data.total_issues.info_count;
+      finishProgress(`Found ${totalIssues} issues across ${data.albums.length} albums`);
+    } catch (e) {
+      const msg = `${e}`;
+      if (msg === "Cancelled") {
+        setPhase("scanned");
+        failProgress("Lookup cancelled");
+      } else {
+        setError(msg);
+        setPhase("scanned");
+        failProgress(msg);
+      }
+    }
+  };
+
+  const sortedAlbums = useMemo(() => (report ? sortAlbumsByIssues(report.albums) : []), [report]);
+
+  const selectedAlbumData = useMemo(
+    () => sortedAlbums.find((a) => a.folder_path === selectedAlbum) ?? null,
+    [sortedAlbums, selectedAlbum],
+  );
+
+  const totalAccepted = acceptedFixes.size;
+
+  const toggleFix = useCallback((key: string) => {
+    setAcceptedFixes((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
+
+  const acceptAllForAlbum = useCallback((album: AlbumRepairReport) => {
+    setAcceptedFixes((prev) => {
+      const next = new Set(prev);
+      for (const tm of album.track_matches) {
+        for (const issue of tm.issues) {
+          if (issue.suggested_value) next.add(issueKey(issue));
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const clearAllForAlbum = useCallback((album: AlbumRepairReport) => {
+    setAcceptedFixes((prev) => {
+      const next = new Set(prev);
+      for (const tm of album.track_matches) {
+        for (const issue of tm.issues) {
+          next.delete(issueKey(issue));
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSwitchRelease = useCallback(
+    async (mbid: string) => {
+      if (!selectedAlbumData) return;
+      setSwitching(true);
+      try {
+        const localTracks = selectedAlbumData.track_matches.map((tm) => tm.local_track);
+        const updated = await invoke<AlbumRepairReport>("repair_compare_release", { tracks: localTracks, mbid });
+        setReport((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            albums: prev.albums.map((a) =>
+              a.folder_path === selectedAlbum ? { ...updated, alternative_releases: a.alternative_releases } : a,
+            ),
+          };
+        });
+        clearAllForAlbum(selectedAlbumData);
+      } catch (e) {
+        setError(`Failed to switch release: ${e}`);
+      } finally {
+        setSwitching(false);
+      }
+    },
+    [selectedAlbumData, selectedAlbum, clearAllForAlbum],
+  );
+
+  const handleApplyRepairs = async () => {
+    if (!report || totalAccepted === 0) return;
+    const updates = report.albums.flatMap((album) => issuesToUpdates(album, acceptedFixes));
+    if (updates.length === 0) return;
+
+    setPhase("saving");
+    setSaveProgress(null);
+    setSaveResult(null);
+    startProgress("Applying fixes...", cancel);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      setSaveResult(result);
+      setSaveProgress(null);
+      finishProgress(`Applied fixes to ${result.succeeded} of ${result.total} files`);
+      if (result.succeeded > 0) {
+        scan();
+      } else {
+        setPhase("scanned");
+      }
+    } catch (e) {
+      setError(`${e}`);
+      setPhase("scanned");
+      failProgress(`${e}`);
+    }
+  };
+
+  const handleAcceptAllRepairs = useCallback(() => {
+    if (!report) return;
+    setAcceptedFixes(allIssueKeys(report.albums));
+  }, [report]);
+
+  const handleClearAllRepairs = useCallback(() => {
+    setAcceptedFixes(new Set());
+  }, []);
 
   // ── Idle ──
 
@@ -226,7 +403,7 @@ export const MetadataEditor = () => {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-sm">
-          <p className="text-text-tertiary text-xs mb-4">Choose a music folder to view and edit metadata</p>
+          <p className="text-text-tertiary text-xs mb-4">Choose a music folder to view, edit, and repair metadata</p>
           <div className="mb-4">
             <FolderPicker label="Folder" path={scanPath || null} onBrowse={browse} />
           </div>
@@ -263,7 +440,7 @@ export const MetadataEditor = () => {
             </>
           )}
           <button
-            onClick={cancelScan}
+            onClick={cancel}
             className="mt-4 px-4 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-xs hover:text-text-primary hover:border-border-active transition-all"
           >
             Cancel
@@ -273,7 +450,43 @@ export const MetadataEditor = () => {
     );
   }
 
-  // ── Scanned / Saving ──
+  // ── Looking up (MusicBrainz) ──
+
+  if (phase === "looking_up") {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-text-tertiary text-xs mb-1">
+            <Spinner /> Looking up albums on MusicBrainz...
+          </div>
+          {lookupProgress && (
+            <>
+              <div className="text-[11px] text-text-secondary font-medium">
+                {lookupProgress.completed_albums} of {lookupProgress.total_albums} albums
+              </div>
+              <div className="text-[10px] text-text-tertiary mt-1 max-w-xs truncate mx-auto">
+                {lookupProgress.current_album}
+              </div>
+              <div className="w-64 h-1.5 bg-bg-card rounded-full overflow-hidden mt-2 mx-auto">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-200"
+                  style={{ width: `${(lookupProgress.completed_albums / lookupProgress.total_albums) * 100}%` }}
+                />
+              </div>
+            </>
+          )}
+          <button
+            onClick={cancel}
+            className="mt-4 px-4 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-xs hover:text-text-primary hover:border-border-active transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Scanned / Saving (main view) ──
 
   return (
     <>
@@ -289,19 +502,6 @@ export const MetadataEditor = () => {
         >
           Browse
         </button>
-        {theArtistCount > 0 && (
-          <button
-            onClick={handleFixTheArtists}
-            disabled={theArtistsFixedCount !== null}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
-              theArtistsFixedCount !== null
-                ? "bg-accent/10 border border-accent/30 text-accent cursor-default"
-                : "bg-bg-card border border-border text-text-secondary hover:text-text-primary hover:border-border-active"
-            }`}
-          >
-            {theArtistsFixedCount !== null ? `Fixed "The" Artists` : `Fix "The" Artists (${theArtistCount})`}
-          </button>
-        )}
         <button
           onClick={() => scan()}
           disabled={phase === "saving"}
@@ -309,35 +509,91 @@ export const MetadataEditor = () => {
         >
           ↻ Rescan
         </button>
-        {dirtyCount > 0 && (
+
+        {/* View toggle */}
+        {report && (
+          <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+            <button
+              onClick={() => setView("edit")}
+              className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
+                view === "edit" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => setView("repair")}
+              className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
+                view === "repair" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              Repair
+            </button>
+          </div>
+        )}
+
+        {/* Repair button (when no report yet) */}
+        {!report && phase !== "saving" && (
+          <button
+            onClick={startRepair}
+            className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium shrink-0 hover:text-text-primary hover:border-border-active transition-all"
+          >
+            Repair with MusicBrainz
+          </button>
+        )}
+
+        {/* Editor unsaved changes */}
+        {view === "edit" && dirtyCount > 0 && (
           <span className="text-[11px] font-medium text-accent shrink-0">
             {dirtyCount} unsaved {dirtyCount === 1 ? "change" : "changes"}
           </span>
         )}
+
+        {/* Repair actions */}
+        {view === "repair" && totalAccepted > 0 && (
+          <>
+            <button
+              onClick={handleClearAllRepairs}
+              className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={handleApplyRepairs}
+              className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium shrink-0 hover:opacity-90 transition-all"
+            >
+              Apply {totalAccepted} {totalAccepted === 1 ? "Fix" : "Fixes"}
+            </button>
+          </>
+        )}
+        {view === "repair" &&
+          totalAccepted === 0 &&
+          report &&
+          report.total_issues.error_count + report.total_issues.warning_count + report.total_issues.info_count > 0 && (
+            <button
+              onClick={handleAcceptAllRepairs}
+              className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
+            >
+              Accept All Fixes
+            </button>
+          )}
       </div>
 
-      {/* Fix The Artists banner */}
-      {theArtistsFixedCount !== null && phase !== "saving" && (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] leading-relaxed bg-accent/10 text-accent shrink-0">
-          <span className="flex-1">
-            Updated album artist &amp; sort artist for {theArtistsFixedCount}{" "}
-            {theArtistsFixedCount === 1 ? "track" : "tracks"}
-          </span>
-          <button
-            onClick={() => {
-              setEditedTracks({});
-              setTheArtistsFixedCount(null);
-            }}
-            className="px-3 py-1 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] hover:text-text-primary hover:border-border-active transition-all"
-          >
-            Undo
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-3 py-1 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium hover:opacity-90 transition-all"
-          >
-            Save All
-          </button>
+      {/* Issue summary bar (repair view only) */}
+      {view === "repair" && report && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] bg-bg-secondary border border-border shrink-0">
+          {report.total_issues.error_count > 0 && (
+            <span className="text-danger">{report.total_issues.error_count} errors</span>
+          )}
+          {report.total_issues.warning_count > 0 && (
+            <span className="text-warning">{report.total_issues.warning_count} warnings</span>
+          )}
+          {report.total_issues.info_count > 0 && (
+            <span className="text-accent">{report.total_issues.info_count} info</span>
+          )}
+          {report.total_issues.error_count === 0 &&
+            report.total_issues.warning_count === 0 &&
+            report.total_issues.info_count === 0 && <span className="text-success">All metadata looks good</span>}
         </div>
       )}
 
@@ -374,7 +630,7 @@ export const MetadataEditor = () => {
               <Spinner /> Saving metadata...
             </div>
             <button
-              onClick={cancelScan}
+              onClick={cancel}
               className="px-3 py-1 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] hover:text-text-primary hover:border-border-active transition-all"
             >
               Cancel
@@ -401,28 +657,71 @@ export const MetadataEditor = () => {
 
       {error && <div className="px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger shrink-0">{error}</div>}
 
-      {/* Main content: tree + edit panel */}
+      {/* Main content */}
       <div className="flex-1 flex gap-3 min-h-0">
-        <MetadataTree
-          groups={groups}
-          editedTracks={editedTracks}
-          selected={selected}
-          onToggleTrack={toggleTrack}
-          onSelectAlbum={selectGroup}
-          onSelectArtist={selectGroup}
-        />
+        {view === "edit" && (
+          <>
+            <MetadataTree
+              groups={groups}
+              editedTracks={editedTracks}
+              selected={selected}
+              onToggleTrack={toggleTrack}
+              onSelectAlbum={selectGroup}
+              onSelectArtist={selectGroup}
+            />
+            {selected.size > 0 && batchFields && mixedFlags && (
+              <MetadataEditPanel
+                fields={batchFields}
+                mixed={mixedFlags}
+                selectedCount={selected.size}
+                dirtyCount={dirtyCount}
+                saving={phase === "saving"}
+                onFieldChange={handleFieldChange}
+                onSave={handleSave}
+                onRevert={handleRevert}
+              />
+            )}
+          </>
+        )}
 
-        {selected.size > 0 && batchFields && mixedFlags && (
-          <MetadataEditPanel
-            fields={batchFields}
-            mixed={mixedFlags}
-            selectedCount={selected.size}
-            dirtyCount={dirtyCount}
-            saving={phase === "saving"}
-            onFieldChange={handleFieldChange}
-            onSave={handleSave}
-            onRevert={handleRevert}
-          />
+        {view === "repair" && report && (
+          <>
+            {/* Album list */}
+            <div className="w-72 shrink-0 bg-bg-secondary border border-border rounded-2xl flex flex-col min-h-0">
+              <div className="px-4 py-3 border-b border-border shrink-0">
+                <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">
+                  Albums ({sortedAlbums.length})
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-1.5">
+                {sortedAlbums.map((album) => (
+                  <RepairAlbumCard
+                    key={album.folder_path}
+                    album={album}
+                    selected={selectedAlbum === album.folder_path}
+                    onClick={() => setSelectedAlbum(album.folder_path)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Detail panel */}
+            {selectedAlbumData ? (
+              <RepairDetailPanel
+                album={selectedAlbumData}
+                acceptedFixes={acceptedFixes}
+                onToggleFix={toggleFix}
+                onAcceptAll={() => acceptAllForAlbum(selectedAlbumData)}
+                onClearAll={() => clearAllForAlbum(selectedAlbumData)}
+                onSwitchRelease={handleSwitchRelease}
+                switching={switching}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-bg-secondary border border-border rounded-2xl">
+                <span className="text-text-tertiary text-xs">Select an album to see details</span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

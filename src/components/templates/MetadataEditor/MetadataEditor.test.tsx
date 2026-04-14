@@ -4,15 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MetadataEditor } from "./MetadataEditor";
-import {
-  groupTracks,
-  buildUpdate,
-  computeBatchFields,
-  computeMixedFlags,
-  trackToEditable,
-  countTheArtists,
-  fixTheArtists,
-} from "./helpers";
+import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
 import type { TrackMetadata } from "../../../types/metadata";
 
 const mockInvoke = vi.mocked(invoke);
@@ -27,6 +19,7 @@ const TRACKS: TrackMetadata[] = [
     album: "Abbey Road",
     album_artist: null,
     sort_artist: null,
+    sort_album_artist: null,
     track: 1,
     track_total: 17,
     year: 1969,
@@ -40,6 +33,7 @@ const TRACKS: TrackMetadata[] = [
     album: "Abbey Road",
     album_artist: null,
     sort_artist: null,
+    sort_album_artist: null,
     track: 2,
     track_total: 17,
     year: 1969,
@@ -53,6 +47,7 @@ const TRACKS: TrackMetadata[] = [
     album: "The Dark Side of the Moon",
     album_artist: "Pink Floyd",
     sort_artist: null,
+    sort_album_artist: null,
     track: 1,
     track_total: 10,
     year: 1973,
@@ -68,7 +63,7 @@ beforeEach(() => {
 describe("MetadataEditor", () => {
   it("renders idle state with folder picker", () => {
     render(<MetadataEditor />);
-    expect(screen.getByText("Choose a music folder to view and edit metadata")).toBeInTheDocument();
+    expect(screen.getByText("Choose a music folder to view, edit, and repair metadata")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scan Metadata" })).toBeDisabled();
   });
 
@@ -98,20 +93,6 @@ describe("MetadataEditor", () => {
       expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
       expect(screen.getByText("Abbey Road")).toBeInTheDocument();
       expect(screen.getByText("3 tracks")).toBeInTheDocument();
-    });
-  });
-
-  it("shows Fix The Artists button when applicable", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music");
-    mockInvoke.mockResolvedValue(TRACKS);
-
-    render(<MetadataEditor />);
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      const btn = screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)');
-      expect(btn).toBeInTheDocument();
     });
   });
 
@@ -168,74 +149,10 @@ describe("MetadataEditor", () => {
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Choose a music folder to view and edit metadata")).toBeInTheDocument();
+      expect(screen.getByText("Choose a music folder to view, edit, and repair metadata")).toBeInTheDocument();
     });
     // Should not show error for cancellation
     expect(screen.queryByText("Cancelled")).not.toBeInTheDocument();
-  });
-
-  it("shows banner and changes button after Fix The Artists", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music");
-    mockInvoke.mockResolvedValue(TRACKS);
-
-    render(<MetadataEditor />);
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      expect(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)'));
-
-    await waitFor(() => {
-      // Banner shows with track count and action buttons
-      expect(screen.getByText(/Updated album artist & sort artist for 2 tracks/)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Save All" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
-      // Button changes to "Fixed" state and is disabled
-      expect(screen.getByText((_, el) => el?.textContent === 'Fixed "The" Artists')).toBeInTheDocument();
-      // Unsaved changes count shows
-      expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
-    });
-  });
-
-  it("shows save progress with cancel button during save", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music");
-    // First invoke: scan_metadata returns tracks. Second: save_metadata hangs.
-    mockInvoke.mockResolvedValueOnce(TRACKS).mockReturnValueOnce(new Promise(() => {}));
-
-    render(<MetadataEditor />);
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    // Wait for scanned state
-    await waitFor(() => {
-      expect(screen.getByText("The Beatles")).toBeInTheDocument();
-    });
-
-    // Fix "The" artists to create dirty tracks
-    await user.click(screen.getByText((_, el) => el?.textContent === 'Fix "The" Artists (1)'));
-
-    await waitFor(() => {
-      expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
-    });
-
-    // Select all Beatles tracks to see the edit panel + save button
-    const beatlesCheckbox = screen.getAllByRole("checkbox")[0];
-    await user.click(beatlesCheckbox);
-
-    // Click save
-    await waitFor(() => {
-      expect(screen.getByText(/Save 2 Change/)).toBeInTheDocument();
-    });
-    await user.click(screen.getByText(/Save 2 Change/));
-
-    // Should show saving progress UI with cancel button
-    await waitFor(() => {
-      expect(screen.getByText("Saving metadata...")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    });
   });
 });
 
@@ -341,44 +258,5 @@ describe("trackToEditable", () => {
     const edited = trackToEditable(TRACKS[0]);
     expect(edited.track).toBe("1");
     expect(edited.year).toBe("1969");
-  });
-});
-
-describe("countTheArtists", () => {
-  it("counts unique artists starting with The", () => {
-    expect(countTheArtists(TRACKS)).toBe(1); // "The Beatles"
-  });
-
-  it("ignores artists where The is mid-name", () => {
-    const tracks: TrackMetadata[] = [{ ...TRACKS[0], artist: "Jimmy and The Bangles" }];
-    expect(countTheArtists(tracks)).toBe(0);
-  });
-
-  it("returns 0 when no The artists", () => {
-    expect(countTheArtists([TRACKS[2]])).toBe(0); // Pink Floyd
-  });
-});
-
-describe("fixTheArtists", () => {
-  it("stages album_artist and sort_artist for The artists", () => {
-    const result = fixTheArtists(TRACKS, {});
-
-    // Beatles tracks should be edited
-    const edited0 = result[TRACKS[0].file_path];
-    expect(edited0.album_artist).toBe("Beatles, The");
-    expect(edited0.sort_artist).toBe("Beatles, The");
-    expect(edited0.artist).toBe("The Beatles"); // Artist untouched
-
-    // Floyd should not be edited
-    expect(result[TRACKS[2].file_path]).toBeUndefined();
-  });
-
-  it("preserves existing edits", () => {
-    const existing = {
-      [TRACKS[0].file_path]: { ...trackToEditable(TRACKS[0]), genre: "Pop" },
-    };
-    const result = fixTheArtists(TRACKS, existing);
-    expect(result[TRACKS[0].file_path].genre).toBe("Pop");
-    expect(result[TRACKS[0].file_path].album_artist).toBe("Beatles, The");
   });
 });

@@ -3,7 +3,6 @@ use lofty::prelude::{Accessor, TaggedFileExt};
 use lofty::probe::Probe;
 use serde::Serialize;
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -241,48 +240,15 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
 
 /// Fetch cover art from the MusicBrainz Cover Art Archive.
 fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), String> {
-    let query = format!(
-        "artist:\"{}\" AND release:\"{}\"",
-        artist.replace('"', "\\\""),
-        album.replace('"', "\\\""),
-    );
+    let releases = crate::musicbrainz::search_releases(artist, album)?;
+    if releases.is_empty() {
+        return Err("No results from MusicBrainz".into());
+    }
 
-    let resp = ureq::get("https://musicbrainz.org/ws/2/release/")
-        .query("query", &query)
-        .query("fmt", "json")
-        .query("limit", "5")
-        .set("User-Agent", "iPodManager/1.0 (ipod-manager-app)")
-        .call()
-        .map_err(|e| format!("Search failed: {}", e))?;
-
-    let body: serde_json::Value = {
-        let text = resp
-            .into_string()
-            .map_err(|e| format!("Read failed: {}", e))?;
-        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
-    };
-
-    let releases = body["releases"]
-        .as_array()
-        .ok_or_else(|| "No results from MusicBrainz".to_string())?;
-
-    for release in releases {
-        let Some(mbid) = release["id"].as_str() else {
+    for release in &releases {
+        let Ok(bytes) = crate::musicbrainz::fetch_cover_art(&release.id) else {
             continue;
         };
-
-        let url = format!("https://coverartarchive.org/release/{}/front-500", mbid);
-        let Ok(img_resp) = ureq::get(&url)
-            .set("User-Agent", "iPodManager/1.0 (ipod-manager-app)")
-            .call()
-        else {
-            continue;
-        };
-
-        let mut bytes = Vec::new();
-        if img_resp.into_reader().read_to_end(&mut bytes).is_err() {
-            continue;
-        }
 
         let Ok(img) = image::load_from_memory(&bytes) else {
             continue;
@@ -357,17 +323,13 @@ pub fn fix_album_art(
         // Fall back to MusicBrainz API
         let (artist, album, _) = read_metadata(dir);
         match (artist, album) {
-            (Some(a), Some(b)) => {
-                // MusicBrainz rate limit: 1 request/sec
-                std::thread::sleep(std::time::Duration::from_secs(1));
-                match fetch_from_musicbrainz(&a, &b, dir) {
-                    Ok(()) => fixed += 1,
-                    Err(e) => {
-                        errors.push(format!("{}: {}", name, e));
-                        failed += 1;
-                    }
+            (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir) {
+                Ok(()) => fixed += 1,
+                Err(e) => {
+                    errors.push(format!("{}: {}", name, e));
+                    failed += 1;
                 }
-            }
+            },
             _ => {
                 errors.push(format!("{}: no artist/album tags", name));
                 failed += 1;

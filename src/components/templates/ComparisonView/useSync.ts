@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useProgress } from "../../../contexts/ProgressContext";
 import type { CompareEntry, CopyOp, CopyResult, SyncProgress } from "./types";
 
 export const useSync = (
@@ -11,6 +12,7 @@ export const useSync = (
   compare: () => Promise<void>,
   setError: (err: string | null) => void,
 ) => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [result, setResult] = useState<CopyResult | null>(null);
@@ -19,7 +21,10 @@ export const useSync = (
   useEffect(() => {
     let active = true;
     listen<SyncProgress>("sync-progress", (event) => {
-      if (active) setProgress(event.payload);
+      if (active) {
+        setProgress(event.payload);
+        updateProgress(event.payload.completed, event.payload.total, event.payload.current_file);
+      }
     }).then((fn) => {
       if (active) unlistenRef.current = fn;
       else fn();
@@ -30,15 +35,18 @@ export const useSync = (
     };
   }, []);
 
-  const run = async (fn: () => Promise<void>) => {
+  const run = async (label: string, fn: () => Promise<void>) => {
     setSyncing(true);
     setResult(null);
     setProgress(null);
+    startProgress(label, handleCancel);
     try {
       await fn();
       await compare();
+      finishProgress("Sync complete");
     } catch (e) {
       setError(`${e}`);
+      failProgress(`${e}`);
     } finally {
       setSyncing(false);
       setProgress(null);
@@ -54,7 +62,7 @@ export const useSync = (
   };
 
   const copyToTarget = () =>
-    run(async () => {
+    run("Copying files to target...", async () => {
       const ops: CopyOp[] = visibleEntries
         .filter((e) => selected.has(e.relative_path) && (e.status === "source_only" || e.status === "modified"))
         .map((e) => ({
@@ -65,7 +73,7 @@ export const useSync = (
     });
 
   const copyToSource = () =>
-    run(async () => {
+    run("Copying files to source...", async () => {
       const ops: CopyOp[] = visibleEntries
         .filter((e) => selected.has(e.relative_path) && (e.status === "target_only" || e.status === "modified"))
         .map((e) => ({
@@ -76,7 +84,7 @@ export const useSync = (
     });
 
   const deleteTarget = () =>
-    run(async () => {
+    run("Deleting files...", async () => {
       const paths = visibleEntries
         .filter((e) => selected.has(e.relative_path) && e.status === "target_only")
         .map((e) => `${targetPath}/${e.relative_path}`);
@@ -84,7 +92,7 @@ export const useSync = (
     });
 
   const mirrorToTarget = () =>
-    run(async () => {
+    run("Mirroring to target...", async () => {
       const toCopy = visibleEntries.filter((e) => e.status === "source_only" || e.status === "modified");
       const toDelete = visibleEntries.filter((e) => e.status === "target_only");
       const total = toCopy.length + toDelete.length;

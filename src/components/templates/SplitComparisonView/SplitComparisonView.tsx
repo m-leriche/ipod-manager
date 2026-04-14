@@ -139,12 +139,12 @@ export const SplitComparisonView = ({
       />
 
       {loading && (
-        <div className="py-12 text-center text-text-tertiary text-xs">
+        <div className="py-12 text-center text-text-tertiary text-xs shrink-0">
           <Spinner />
           Comparing...
         </div>
       )}
-      {error && <div className="py-12 text-center text-danger text-xs">{error}</div>}
+      {error && <div className="py-12 text-center text-danger text-xs shrink-0">{error}</div>}
 
       {/* Split tree view */}
       {!loading && !error && (

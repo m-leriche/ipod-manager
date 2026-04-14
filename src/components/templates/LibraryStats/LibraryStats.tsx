@@ -7,10 +7,12 @@ import type { Phase, StatsMode } from "./types";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { StatsOverview } from "./StatsOverview";
 import { PlayDataView } from "./PlayDataView";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 const DEFAULT_IPOD_PATH = "/Volumes/IPOD";
 
 export const LibraryStats = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [mode, setMode] = useState<StatsMode>("library");
 
   // Library stats state
@@ -32,7 +34,10 @@ export const LibraryStats = () => {
     const unsubs: UnlistenFn[] = [];
 
     listen<LibStatsScanProgress>("libstats-scan-progress", (e) => {
-      if (active) setScanProgress(e.payload);
+      if (active) {
+        setScanProgress(e.payload);
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
@@ -56,13 +61,16 @@ export const LibraryStats = () => {
     setPhase("scanning");
     setError(null);
     setScanProgress(null);
+    startProgress("Scanning library stats...");
     try {
       const data = await invoke<LibraryStatsData>("scan_library_stats", { path });
       setStats(data);
       setPhase("scanned");
+      finishProgress(`Scanned ${data.total_tracks} tracks`);
     } catch (e) {
       setError(`${e}`);
       setPhase("idle");
+      failProgress(`${e}`);
     }
   };
 

@@ -6,6 +6,8 @@ mod files;
 mod libstats;
 mod localvideo;
 mod metadata;
+mod metarepair;
+mod musicbrainz;
 mod profiles;
 mod rockbox;
 mod youtube;
@@ -53,6 +55,8 @@ pub fn run() {
             commands::extract_audio_from_video,
             commands::scan_metadata,
             commands::save_metadata,
+            commands::repair_analyze,
+            commands::repair_compare_release,
             commands::scan_audio_quality,
             commands::generate_spectrogram,
             commands::scan_library_stats,

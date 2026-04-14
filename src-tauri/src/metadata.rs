@@ -14,7 +14,7 @@ const AUDIO_EXT: &[&str] = &[
     "mp3", "flac", "m4a", "ogg", "opus", "wav", "aiff", "wma", "aac",
 ];
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackMetadata {
     pub file_path: String,
     pub file_name: String,
@@ -23,6 +23,7 @@ pub struct TrackMetadata {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub sort_artist: Option<String>,
+    pub sort_album_artist: Option<String>,
     pub track: Option<u32>,
     pub track_total: Option<u32>,
     pub year: Option<u32>,
@@ -37,6 +38,7 @@ pub struct MetadataUpdate {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub sort_artist: Option<String>,
+    pub sort_album_artist: Option<String>,
     pub track: Option<u32>,
     pub track_total: Option<u32>,
     pub year: Option<u32>,
@@ -134,6 +136,9 @@ fn read_track(path: &Path) -> TrackMetadata {
         sort_artist: tag
             .get_string(&ItemKey::TrackArtistSortOrder)
             .map(|s| s.to_string()),
+        sort_album_artist: tag
+            .get_string(&ItemKey::AlbumArtistSortOrder)
+            .map(|s| s.to_string()),
         track: tag.track(),
         track_total: tag.track_total(),
         year: tag.year(),
@@ -150,6 +155,7 @@ fn empty_track(file_path: String, file_name: String) -> TrackMetadata {
         album: None,
         album_artist: None,
         sort_artist: None,
+        sort_album_artist: None,
         track: None,
         track_total: None,
         year: None,
@@ -307,6 +313,9 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
     if let Some(ref v) = update.sort_artist {
         tag.add_frame(id3::frame::Frame::text("TSOP", v.as_str()));
     }
+    if let Some(ref v) = update.sort_album_artist {
+        tag.add_frame(id3::frame::Frame::text("TSO2", v.as_str()));
+    }
 
     tag.write_to_path(path, id3::Version::Id3v24)
         .map_err(|e| format!("Save failed: {}", e))?;
@@ -355,6 +364,9 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
     }
     if let Some(ref v) = update.sort_artist {
         tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
+    }
+    if let Some(ref v) = update.sort_album_artist {
+        tag.insert_text(ItemKey::AlbumArtistSortOrder, v.to_string());
     }
 
     tag.save_to_path(path, WriteOptions::default())

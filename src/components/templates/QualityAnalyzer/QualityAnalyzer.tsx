@@ -9,8 +9,10 @@ import { QualityDetailPanel } from "./QualityDetailPanel";
 import { groupByVerdict, verdictColor } from "./helpers";
 import type { AudioFileInfo, QualityScanProgress } from "../../../types/quality";
 import type { Phase } from "./types";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 export const QualityAnalyzer = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
   const [depsOk, setDepsOk] = useState<boolean | null>(null);
   const [depsError, setDepsError] = useState<string | null>(null);
@@ -32,7 +34,10 @@ export const QualityAnalyzer = () => {
     let active = true;
     const unsubs: UnlistenFn[] = [];
     listen<QualityScanProgress>("quality-scan-progress", (e) => {
-      if (active) setScanProgress(e.payload);
+      if (active) {
+        setScanProgress(e.payload);
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
@@ -64,13 +69,16 @@ export const QualityAnalyzer = () => {
     setSelectedFile(null);
     setSpectrograms({});
     setScanProgress(null);
+    startProgress("Analyzing audio quality...");
     try {
       const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
       setFiles(data);
       setPhase("scanned");
+      finishProgress(`Analyzed ${data.length} files`);
     } catch (e) {
       setError(`${e}`);
       setPhase("idle");
+      failProgress(`${e}`);
     }
   };
 

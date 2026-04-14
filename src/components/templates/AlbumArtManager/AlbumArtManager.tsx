@@ -7,8 +7,10 @@ import { Pill } from "../../atoms/Pill/Pill";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { AlbumGroup } from "./AlbumGroup";
 import type { AlbumInfo, AlbumArtProgress, ScanProgress, AlbumArtResult, Phase } from "./types";
+import { useProgress } from "../../../contexts/ProgressContext";
 
 export const AlbumArtManager = () => {
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
   const [albums, setAlbums] = useState<AlbumInfo[]>([]);
@@ -22,13 +24,19 @@ export const AlbumArtManager = () => {
     let active = true;
     const unsubs: UnlistenFn[] = [];
     listen<AlbumArtProgress>("albumart-progress", (e) => {
-      if (active) setProgress(e.payload);
+      if (active) {
+        setProgress(e.payload);
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_album);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
     });
     listen<ScanProgress>("albumart-scan-progress", (e) => {
-      if (active) setScanProgress(e.payload);
+      if (active) {
+        setScanProgress(e.payload);
+        updateProgress(0, 0, e.payload.current_folder);
+      }
     }).then((fn) => {
       if (active) unsubs.push(fn);
       else fn();
@@ -63,14 +71,18 @@ export const AlbumArtManager = () => {
     setResult(null);
     setAlbums([]);
     setScanProgress(null);
+    startProgress("Scanning for album art...");
     try {
       const data = await invoke<AlbumInfo[]>("scan_album_art", { path: targetPath });
       setAlbums(data);
       setSelected(new Set(data.filter((a) => !a.has_cover_file).map((a) => a.folder_path)));
       setPhase("scanned");
+      const missingCount = data.filter((a) => !a.has_cover_file).length;
+      finishProgress(`Found ${data.length} albums, ${missingCount} missing art`);
     } catch (e) {
       setError(`${e}`);
       setPhase("idle");
+      failProgress(`${e}`);
     }
   };
 
@@ -78,11 +90,15 @@ export const AlbumArtManager = () => {
     setPhase("fixing");
     setProgress(null);
     setResult(null);
+    startProgress("Fixing album art...", cancel);
     try {
       const res = await invoke<AlbumArtResult>("fix_album_art", { folders: [...selected] });
       setResult(res);
       setProgress(null);
       setPhase("scanned");
+      finishProgress(
+        `Fixed ${res.fixed} album${res.fixed !== 1 ? "s" : ""}${res.failed > 0 ? `, ${res.failed} failed` : ""}`,
+      );
       // Re-scan in background to update album list
       try {
         const data = await invoke<AlbumInfo[]>("scan_album_art", { path: scanPath });
@@ -94,6 +110,7 @@ export const AlbumArtManager = () => {
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");
+      failProgress(`${e}`);
     }
   };
 

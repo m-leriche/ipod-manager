@@ -32,3 +32,4 @@ id3 = "1"
 ureq = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 base64 = "0.22"
+strsim = "0.11"

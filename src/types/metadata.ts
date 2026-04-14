@@ -6,6 +6,7 @@ export interface TrackMetadata {
   album: string | null;
   album_artist: string | null;
   sort_artist: string | null;
+  sort_album_artist: string | null;
   track: number | null;
   track_total: number | null;
   year: number | null;
@@ -19,6 +20,7 @@ export interface MetadataUpdate {
   album?: string;
   album_artist?: string;
   sort_artist?: string;
+  sort_album_artist?: string;
   track?: number;
   track_total?: number;
   year?: number;

@@ -366,7 +366,14 @@ pub fn download_audio(
                 format!("{}", chapter.end_time),
             ];
             ffmpeg_args.extend(localvideo::build_codec_args(format));
-            ffmpeg_args.extend(["-y".to_string(), output_path.clone()]);
+            ffmpeg_args.extend([
+                "-metadata".to_string(),
+                format!("track={}/{}", i + 1, total),
+                "-metadata".to_string(),
+                format!("title={}", chapter.title),
+                "-y".to_string(),
+                output_path.clone(),
+            ]);
 
             let output = match Command::new("ffmpeg").args(&ffmpeg_args).output() {
                 Ok(o) => o,

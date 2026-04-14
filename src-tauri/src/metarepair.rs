@@ -251,31 +251,34 @@ fn detect_issues(track_match: &mut TrackMatch, mb_release: &MbReleaseDetail) {
         });
     }
 
-    // Track number missing
-    if local.track.is_none() {
-        track_match.issues.push(TrackIssue {
-            file_path: file_path.clone(),
-            kind: IssueKind::TrackNumberMissing,
-            severity: IssueSeverity::Error,
-            field: "track".to_string(),
-            local_value: None,
-            suggested_value: Some(mb.position.to_string()),
-            description: format!("Missing track number (should be {})", mb.position),
-        });
-    } else if local.track != Some(mb.position) {
-        track_match.issues.push(TrackIssue {
-            file_path: file_path.clone(),
-            kind: IssueKind::TrackNumberWrong,
-            severity: IssueSeverity::Warning,
-            field: "track".to_string(),
-            local_value: local.track.map(|n| n.to_string()),
-            suggested_value: Some(mb.position.to_string()),
-            description: format!(
-                "Track number {} doesn't match MusicBrainz position {}",
-                local.track.unwrap(),
-                mb.position
-            ),
-        });
+    // Track number missing or wrong
+    match local.track {
+        None => {
+            track_match.issues.push(TrackIssue {
+                file_path: file_path.clone(),
+                kind: IssueKind::TrackNumberMissing,
+                severity: IssueSeverity::Error,
+                field: "track".to_string(),
+                local_value: None,
+                suggested_value: Some(mb.position.to_string()),
+                description: format!("Missing track number (should be {})", mb.position),
+            });
+        }
+        Some(n) if n != mb.position => {
+            track_match.issues.push(TrackIssue {
+                file_path: file_path.clone(),
+                kind: IssueKind::TrackNumberWrong,
+                severity: IssueSeverity::Warning,
+                field: "track".to_string(),
+                local_value: Some(n.to_string()),
+                suggested_value: Some(mb.position.to_string()),
+                description: format!(
+                    "Track number {} doesn't match MusicBrainz position {}",
+                    n, mb.position
+                ),
+            });
+        }
+        _ => {}
     }
 
     // Artist inconsistency (compare against track-level artist from MB)
@@ -321,30 +324,30 @@ fn detect_issues(track_match: &mut TrackMatch, mb_release: &MbReleaseDetail) {
         .and_then(|d| d.split('-').next())
         .and_then(|y| y.parse::<u32>().ok());
     if let Some(mb_y) = mb_year {
-        if local.year.is_none() {
-            track_match.issues.push(TrackIssue {
-                file_path: file_path.clone(),
-                kind: IssueKind::YearMissing,
-                severity: IssueSeverity::Info,
-                field: "year".to_string(),
-                local_value: None,
-                suggested_value: Some(mb_y.to_string()),
-                description: format!("Missing year (MusicBrainz: {})", mb_y),
-            });
-        } else if local.year != Some(mb_y) {
-            track_match.issues.push(TrackIssue {
-                file_path: file_path.clone(),
-                kind: IssueKind::YearMismatch,
-                severity: IssueSeverity::Info,
-                field: "year".to_string(),
-                local_value: local.year.map(|y| y.to_string()),
-                suggested_value: Some(mb_y.to_string()),
-                description: format!(
-                    "Year {} differs from MusicBrainz ({})",
-                    local.year.unwrap(),
-                    mb_y
-                ),
-            });
+        match local.year {
+            None => {
+                track_match.issues.push(TrackIssue {
+                    file_path: file_path.clone(),
+                    kind: IssueKind::YearMissing,
+                    severity: IssueSeverity::Info,
+                    field: "year".to_string(),
+                    local_value: None,
+                    suggested_value: Some(mb_y.to_string()),
+                    description: format!("Missing year (MusicBrainz: {})", mb_y),
+                });
+            }
+            Some(y) if y != mb_y => {
+                track_match.issues.push(TrackIssue {
+                    file_path: file_path.clone(),
+                    kind: IssueKind::YearMismatch,
+                    severity: IssueSeverity::Info,
+                    field: "year".to_string(),
+                    local_value: Some(y.to_string()),
+                    suggested_value: Some(mb_y.to_string()),
+                    description: format!("Year {} differs from MusicBrainz ({})", y, mb_y),
+                });
+            }
+            _ => {}
         }
     }
 

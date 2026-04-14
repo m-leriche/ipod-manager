@@ -3,9 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { LibraryStats as LibraryStatsData, LibStatsScanProgress, RockboxPlayData } from "../../../types/libstats";
-import type { Phase, StatsMode } from "./types";
+import type { Phase, StatsMode, StatsFilter } from "./types";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { StatsOverview } from "./StatsOverview";
+import { StatsDetailModal } from "./StatsDetailModal";
 import { PlayDataView } from "./PlayDataView";
 import { useProgress } from "../../../contexts/ProgressContext";
 
@@ -21,6 +22,7 @@ export const LibraryStats = () => {
   const [stats, setStats] = useState<LibraryStatsData | null>(null);
   const [scanProgress, setScanProgress] = useState<LibStatsScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<StatsFilter | null>(null);
 
   // Rockbox play data state
   const [playData, setPlayData] = useState<RockboxPlayData | null>(null);
@@ -121,7 +123,12 @@ export const LibraryStats = () => {
           error={error}
           onBrowse={browseLibrary}
           onRescan={() => scanLibrary(scanPath)}
+          onFilterSelect={setActiveFilter}
         />
+      )}
+
+      {activeFilter && stats && (
+        <StatsDetailModal filter={activeFilter} files={stats.file_details} onClose={() => setActiveFilter(null)} />
       )}
 
       {mode === "rockbox" && (
@@ -148,6 +155,7 @@ const LibraryMode = ({
   error,
   onBrowse,
   onRescan,
+  onFilterSelect,
 }: {
   phase: Phase;
   scanPath: string;
@@ -156,6 +164,7 @@ const LibraryMode = ({
   error: string | null;
   onBrowse: () => void;
   onRescan: () => void;
+  onFilterSelect: (filter: StatsFilter) => void;
 }) => {
   if (phase === "idle") {
     return (
@@ -222,7 +231,7 @@ const LibraryMode = ({
           Browse
         </button>
       </div>
-      {stats && <StatsOverview stats={stats} />}
+      {stats && <StatsOverview stats={stats} onFilterSelect={onFilterSelect} />}
     </>
   );
 };

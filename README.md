@@ -150,7 +150,7 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 - [x] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Part of the Metadata Repair tab.
 - [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
 - [ ] **Audio waveform preview** — Waveform visualization when selecting a file in the explorer. Quick visual check for corruption or silence.
-- [ ] **Persist tab state across switches** — Switching tabs unmounts the active component, killing in-progress operations (scans, copies, art fixes) and discarding all state. Lift long-running process state out of individual tab components so progress survives tab switches and users can navigate freely without losing work.
+- [x] **Persist tab state across switches** — Global progress modal blocks tab switching during any long-running operation, preventing processes from being killed by navigation.
 - [x] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
 
 ## License

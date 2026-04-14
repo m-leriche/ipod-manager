@@ -1,4 +1,5 @@
 import type { LibraryStats } from "../../../types/libstats";
+import type { StatsFilter } from "./types";
 import { formatBytes, formatDuration, formatBitrate, formatPercentage, formatNumber } from "./helpers";
 
 const FORMAT_COLORS: Record<string, string> = {
@@ -20,7 +21,13 @@ const StatCard = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const StatsOverview = ({ stats }: { stats: LibraryStats }) => {
+export const StatsOverview = ({
+  stats,
+  onFilterSelect,
+}: {
+  stats: LibraryStats;
+  onFilterSelect: (filter: StatsFilter) => void;
+}) => {
   const maxFormatCount = Math.max(...stats.format_breakdown.map((f) => f.count), 1);
 
   return (
@@ -40,7 +47,17 @@ export const StatsOverview = ({ stats }: { stats: LibraryStats }) => {
         <Section title="Format Breakdown">
           <div className="space-y-2">
             {stats.format_breakdown.map((f) => (
-              <div key={f.format} className="flex items-center gap-3 text-xs">
+              <div
+                key={f.format}
+                className="flex items-center gap-3 text-xs cursor-pointer rounded-lg px-1 -mx-1 hover:bg-bg-hover/50 transition-colors"
+                onClick={() =>
+                  onFilterSelect({
+                    category: "format",
+                    value: f.format,
+                    displayLabel: `${f.format} — ${formatNumber(f.count)} tracks`,
+                  })
+                }
+              >
                 <span className="w-12 text-text-secondary font-medium shrink-0">{f.format}</span>
                 <div className="flex-1 h-2 bg-bg-card rounded-full overflow-hidden">
                   <div
@@ -61,12 +78,19 @@ export const StatsOverview = ({ stats }: { stats: LibraryStats }) => {
         <Section title="Top Genres">
           <div className="flex flex-wrap gap-2">
             {stats.genre_distribution.slice(0, 20).map((g) => (
-              <span
+              <button
                 key={g.label}
-                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary"
+                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary cursor-pointer hover:border-border-active hover:text-text-primary transition-all"
+                onClick={() =>
+                  onFilterSelect({
+                    category: "genre",
+                    value: g.label,
+                    displayLabel: `${g.label} — ${formatNumber(g.count)} tracks`,
+                  })
+                }
               >
                 {g.label} <span className="text-text-tertiary">{formatNumber(g.count)}</span>
-              </span>
+              </button>
             ))}
           </div>
         </Section>
@@ -77,12 +101,19 @@ export const StatsOverview = ({ stats }: { stats: LibraryStats }) => {
         <Section title="Sample Rates">
           <div className="flex flex-wrap gap-2">
             {stats.sample_rate_distribution.map((s) => (
-              <span
+              <button
                 key={s.label}
-                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary"
+                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary cursor-pointer hover:border-border-active hover:text-text-primary transition-all"
+                onClick={() =>
+                  onFilterSelect({
+                    category: "sample_rate",
+                    value: s.label,
+                    displayLabel: `${s.label} — ${formatNumber(s.count)} tracks`,
+                  })
+                }
               >
                 {s.label} <span className="text-text-tertiary">{formatNumber(s.count)}</span>
-              </span>
+              </button>
             ))}
           </div>
         </Section>
@@ -93,12 +124,19 @@ export const StatsOverview = ({ stats }: { stats: LibraryStats }) => {
         <Section title={yearTitle(stats)}>
           <div className="flex flex-wrap gap-2">
             {stats.year_distribution.map((y) => (
-              <span
+              <button
                 key={y.year}
-                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary"
+                className="px-2.5 py-1 bg-bg-card border border-border rounded-lg text-[11px] text-text-secondary cursor-pointer hover:border-border-active hover:text-text-primary transition-all"
+                onClick={() =>
+                  onFilterSelect({
+                    category: "year",
+                    value: String(y.year),
+                    displayLabel: `${y.year} — ${formatNumber(y.count)} tracks`,
+                  })
+                }
               >
                 {y.year} <span className="text-text-tertiary">{formatNumber(y.count)}</span>
-              </span>
+              </button>
             ))}
           </div>
         </Section>

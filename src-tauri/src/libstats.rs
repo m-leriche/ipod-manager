@@ -268,7 +268,7 @@ pub fn scan_library_stats(
             .to_string();
 
         let sample_rate_display = file_sample_rate
-            .map(|sr| format_sample_rate(sr))
+            .map(format_sample_rate)
             .unwrap_or_default();
 
         file_details.push(FileDetail {

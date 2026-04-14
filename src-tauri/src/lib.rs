@@ -14,8 +14,26 @@ mod youtube;
 
 use files::SyncCancel;
 
+/// Ensure Homebrew binary paths are on PATH so bundled .app can find
+/// tools like ffmpeg, ffprobe, and yt-dlp.
+fn ensure_homebrew_path() {
+    let path = std::env::var("PATH").unwrap_or_default();
+    let extras = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"];
+    let missing: Vec<&str> = extras
+        .iter()
+        .copied()
+        .filter(|p| !path.contains(p))
+        .collect();
+    if !missing.is_empty() {
+        let new_path = format!("{}:{}", missing.join(":"), path);
+        std::env::set_var("PATH", new_path);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    ensure_homebrew_path();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())

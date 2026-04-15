@@ -82,6 +82,7 @@ pub fn run() {
             commands::repair_compare_release,
             commands::scan_audio_quality,
             commands::generate_spectrogram,
+            commands::generate_waveform,
             commands::scan_library_stats,
             commands::read_rockbox_playdata,
         ])

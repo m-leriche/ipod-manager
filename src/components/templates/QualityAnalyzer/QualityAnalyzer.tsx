@@ -6,10 +6,17 @@ import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { QualityList } from "./QualityList";
 import { QualityDetailPanel } from "./QualityDetailPanel";
+import { AudioPreviewModal } from "./AudioPreviewModal";
+import { useAudioPlayback } from "../../molecules/MiniPlayer/useAudioPlayback";
 import { groupByVerdict, verdictColor } from "./helpers";
-import type { AudioFileInfo, QualityScanProgress } from "../../../types/quality";
+import type { AudioFileInfo, QualityScanProgress, WaveformResult } from "../../../types/quality";
 import type { Phase } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
+
+interface PreviewModal {
+  type: "spectrogram" | "waveform";
+  filePath: string;
+}
 
 export const QualityAnalyzer = () => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
@@ -20,7 +27,10 @@ export const QualityAnalyzer = () => {
   const [files, setFiles] = useState<AudioFileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [spectrograms, setSpectrograms] = useState<Record<string, string>>({});
+  const [waveforms, setWaveforms] = useState<Record<string, WaveformResult>>({});
+  const [previewModal, setPreviewModal] = useState<PreviewModal | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const audio = useAudioPlayback(selectedFile);
 
   useEffect(() => {
     invoke("check_ffmpeg")
@@ -72,6 +82,7 @@ export const QualityAnalyzer = () => {
     setFiles([]);
     setSelectedFile(null);
     setSpectrograms({});
+    setWaveforms({});
     startProgress("Analyzing audio quality...", cancel);
     try {
       const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
@@ -106,6 +117,19 @@ export const QualityAnalyzer = () => {
   const handleSpectrogramLoaded = useCallback((filePath: string, base64: string) => {
     setSpectrograms((prev) => ({ ...prev, [filePath]: base64 }));
   }, []);
+
+  const handleWaveformLoaded = useCallback((filePath: string, result: WaveformResult) => {
+    setWaveforms((prev) => ({ ...prev, [filePath]: result }));
+  }, []);
+
+  const handleOpenPreview = useCallback(
+    (type: "spectrogram" | "waveform") => {
+      if (selectedFile) {
+        setPreviewModal({ type, filePath: selectedFile });
+      }
+    },
+    [selectedFile],
+  );
 
   // ── Dependencies missing ──
 
@@ -179,6 +203,8 @@ export const QualityAnalyzer = () => {
 
   // ── Scanned ──
 
+  const modalFile = previewModal ? (files.find((f) => f.file_path === previewModal.filePath) ?? null) : null;
+
   return (
     <>
       {/* Toolbar */}
@@ -217,9 +243,25 @@ export const QualityAnalyzer = () => {
             file={selected}
             spectrogramCache={spectrograms}
             onSpectrogramLoaded={handleSpectrogramLoaded}
+            waveformCache={waveforms}
+            onWaveformLoaded={handleWaveformLoaded}
+            onOpenPreview={handleOpenPreview}
+            audio={audio}
           />
         )}
       </div>
+
+      {/* Preview modal */}
+      {previewModal && modalFile && (
+        <AudioPreviewModal
+          type={previewModal.type}
+          file={modalFile}
+          spectrogramBase64={spectrograms[previewModal.filePath]}
+          waveformResult={waveforms[previewModal.filePath]}
+          audio={audio}
+          onClose={() => setPreviewModal(null)}
+        />
+      )}
     </>
   );
 };

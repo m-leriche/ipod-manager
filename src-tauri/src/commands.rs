@@ -8,6 +8,7 @@ use crate::metadata;
 use crate::metarepair;
 use crate::profiles::{self, BrowseProfileStore, ProfileStore};
 use crate::rockbox;
+use crate::sanitize;
 use crate::youtube;
 use tauri::{AppHandle, State};
 
@@ -271,6 +272,19 @@ pub async fn download_audio(
 }
 
 #[tauri::command]
+pub async fn scan_metadata_paths(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<Vec<metadata::TrackMetadata>, String> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata_paths(paths, app, flag))
+        .await
+        .map_err(|e| format!("Scan failed: {}", e))?
+}
+
+#[tauri::command]
 pub async fn scan_metadata(
     path: String,
     app: AppHandle,
@@ -321,6 +335,22 @@ pub async fn repair_compare_release(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn sanitize_tags(
+    options: sanitize::SanitizeOptions,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<sanitize::SanitizeResult, String> {
+    let flag = cancel.new_flag();
+
+    let result =
+        tauri::async_runtime::spawn_blocking(move || sanitize::sanitize_tags(options, app, flag))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
 }
 
 #[tauri::command]

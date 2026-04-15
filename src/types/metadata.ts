@@ -46,3 +46,17 @@ export interface MetadataSaveResult {
   cancelled: boolean;
   errors: string[];
 }
+
+export interface SanitizeProgress {
+  total: number;
+  completed: number;
+  current_file: string;
+}
+
+export interface SanitizeResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  cancelled: boolean;
+  errors: string[];
+}

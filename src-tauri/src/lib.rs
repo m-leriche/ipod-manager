@@ -65,6 +65,8 @@ pub fn run() {
             commands::move_files,
             commands::get_profiles,
             commands::save_profiles,
+            commands::get_browse_profiles,
+            commands::save_browse_profiles,
             commands::check_yt_dependencies,
             commands::fetch_video_info,
             commands::download_audio,

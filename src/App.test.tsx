@@ -11,6 +11,7 @@ beforeEach(() => {
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === "detect_ipod") return null;
     if (cmd === "get_profiles") return { profiles: [] };
+    if (cmd === "get_browse_profiles") return { profiles: [] };
     return null;
   });
 });
@@ -28,23 +29,22 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Album Art" })).toBeInTheDocument();
   });
 
-  it("defaults to File Explorer tab", () => {
+  it("defaults to File Explorer tab", async () => {
     render(<App />);
-    expect(screen.getByText("Choose a folder to explore its contents")).toBeInTheDocument();
+    expect(await screen.findByText("Choose a folder to explore its contents")).toBeInTheDocument();
   });
 
   it("switches to File Sync tab on click", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "File Sync" }));
-    expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Select or create a profile to start syncing folders")).toBeInTheDocument();
+    expect(await screen.findByText("Select or create a profile to start syncing folders")).toBeInTheDocument();
   });
 
   it("switches to Album Art tab on click", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Album Art" }));
-    expect(screen.getByText("Choose a music folder to scan for missing album art")).toBeInTheDocument();
+    expect(await screen.findByText("Choose a music folder to scan for missing album art")).toBeInTheDocument();
   });
 });

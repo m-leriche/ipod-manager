@@ -6,7 +6,7 @@ use crate::libstats;
 use crate::localvideo;
 use crate::metadata;
 use crate::metarepair;
-use crate::profiles::{self, ProfileStore};
+use crate::profiles::{self, BrowseProfileStore, ProfileStore};
 use crate::rockbox;
 use crate::youtube;
 use tauri::{AppHandle, State};
@@ -190,6 +190,16 @@ pub fn get_profiles(app: AppHandle) -> Result<ProfileStore, String> {
 #[tauri::command]
 pub fn save_profiles(store: ProfileStore, app: AppHandle) -> Result<(), String> {
     profiles::save_profiles(&app, &store)
+}
+
+#[tauri::command]
+pub fn get_browse_profiles(app: AppHandle) -> Result<BrowseProfileStore, String> {
+    profiles::load_browse_profiles(&app)
+}
+
+#[tauri::command]
+pub fn save_browse_profiles(store: BrowseProfileStore, app: AppHandle) -> Result<(), String> {
+    profiles::save_browse_profiles(&app, &store)
 }
 
 #[tauri::command]

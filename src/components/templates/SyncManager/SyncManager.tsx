@@ -39,9 +39,19 @@ export const SyncManager = () => {
   const targetFolder = localProfile?.target_path ?? null;
   const exclusions = localProfile?.exclusions ?? [];
 
+  const save = useCallback((store: ProfileStore) => {
+    setProfileStore(store);
+    invoke("save_profiles", { store }).catch((e) => console.error("Failed to save profiles:", e));
+  }, []);
+
   useEffect(() => {
     invoke<ProfileStore>("get_profiles")
-      .then(setProfileStore)
+      .then((store) => {
+        setProfileStore(store);
+        if (store.active_profile) {
+          setActiveProfileName(store.active_profile);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -54,34 +64,30 @@ export const SyncManager = () => {
     }
   }, [savedProfile]);
 
-  const persistStore = useCallback((store: ProfileStore) => {
-    setProfileStore(store);
-    invoke("save_profiles", { store }).catch(() => {});
-  }, []);
-
   const switchProfile = (name: string) => {
-    setActiveProfileName(name || null);
+    const profileName = name || null;
+    setActiveProfileName(profileName);
     setShowFilters(false);
     setComparing(false);
+    save({ ...profileStore, active_profile: profileName });
   };
 
   const createProfile = (name: string) => {
     if (profileStore.profiles.some((p) => p.name === name)) return;
     const newProfile = emptyProfile(name);
-    const updated = { profiles: [...profileStore.profiles, newProfile] };
-    persistStore(updated);
+    save({ profiles: [...profileStore.profiles, newProfile], active_profile: name });
     setActiveProfileName(name);
   };
 
   const deleteProfile = (name: string) => {
-    const updated = { profiles: profileStore.profiles.filter((p) => p.name !== name) };
-    persistStore(updated);
+    const newActive = activeProfileName === name ? null : activeProfileName;
+    save({ profiles: profileStore.profiles.filter((p) => p.name !== name), active_profile: newActive });
     if (activeProfileName === name) {
       setActiveProfileName(null);
       setLocalProfile(null);
+      setShowFilters(false);
+      setComparing(false);
     }
-    setShowFilters(false);
-    setComparing(false);
   };
 
   // Local mutations (unsaved until user clicks Save)
@@ -110,14 +116,35 @@ export const SyncManager = () => {
 
   const saveProfile = () => {
     if (!localProfile) return;
-    const updated = {
+    save({
       profiles: profileStore.profiles.map((p) => (p.name === localProfile.name ? { ...localProfile } : p)),
-    };
-    persistStore(updated);
+      active_profile: activeProfileName,
+    });
   };
 
   const discardChanges = () => {
     if (savedProfile) setLocalProfile({ ...savedProfile });
+  };
+
+  const renameProfile = (oldName: string, newName: string) => {
+    save({
+      profiles: profileStore.profiles.map((p) => (p.name === oldName ? { ...p, name: newName } : p)),
+      active_profile: activeProfileName === oldName ? newName : activeProfileName,
+    });
+    if (activeProfileName === oldName) {
+      setActiveProfileName(newName);
+      if (localProfile) setLocalProfile({ ...localProfile, name: newName });
+    }
+  };
+
+  const duplicateProfile = (sourceName: string, newName: string) => {
+    const source = profileStore.profiles.find((p) => p.name === sourceName);
+    if (!source) return;
+    const copy = { ...source, name: newName };
+    save({ profiles: [...profileStore.profiles, copy], active_profile: newName });
+    setActiveProfileName(newName);
+    setLocalProfile({ ...copy });
+    setComparing(false);
   };
 
   const browse = async (setter: (path: string) => void, title: string) => {
@@ -135,6 +162,8 @@ export const SyncManager = () => {
           onSwitch={switchProfile}
           onCreate={createProfile}
           onDelete={deleteProfile}
+          onRename={renameProfile}
+          onDuplicate={duplicateProfile}
           onToggleFilters={() => setShowFilters(!showFilters)}
           filterCount={exclusions.length}
           isDirty={isDirty}

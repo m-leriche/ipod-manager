@@ -107,11 +107,14 @@ describe("ProfileSelector", () => {
     expect(screen.queryByText(/Filters/)).not.toBeInTheDocument();
   });
 
-  it("calls onDelete when delete button is clicked", async () => {
+  it("calls onDelete after confirmation when delete button is clicked", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();
     render(<ProfileSelector {...defaults} activeProfile={PROFILES[0]} onDelete={onDelete} />);
     await user.click(screen.getByTitle("Delete profile"));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText(/Are you sure/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("My iPod");
   });
 

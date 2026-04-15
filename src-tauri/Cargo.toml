@@ -33,3 +33,4 @@ ureq = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 base64 = "0.22"
 strsim = "0.11"
+rayon = "1.10"

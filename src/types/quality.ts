@@ -22,3 +22,9 @@ export interface SpectrogramResult {
   file_path: string;
   image_base64: string;
 }
+
+export interface WaveformResult {
+  file_path: string;
+  peaks: [number, number][];
+  duration: number;
+}

@@ -1,4 +1,4 @@
-export type { AudioFileInfo, QualityScanProgress, SpectrogramResult } from "../../../types/quality";
+export type { AudioFileInfo, QualityScanProgress, SpectrogramResult, WaveformResult } from "../../../types/quality";
 
 import type { AudioFileInfo } from "../../../types/quality";
 

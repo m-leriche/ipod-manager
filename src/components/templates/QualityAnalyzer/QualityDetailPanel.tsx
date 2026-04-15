@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import type { AudioFileInfo, SpectrogramResult } from "../../../types/quality";
+import { MiniPlayer } from "../../molecules/MiniPlayer/MiniPlayer";
+import type { AudioPlaybackState } from "../../molecules/MiniPlayer/types";
+import type { AudioFileInfo, SpectrogramResult, WaveformResult } from "../../../types/quality";
 import { formatBitrate, formatSampleRate, formatBitDepth, formatDuration, verdictColor } from "./helpers";
 
 interface QualityDetailPanelProps {
   file: AudioFileInfo;
   spectrogramCache: Record<string, string>;
   onSpectrogramLoaded: (filePath: string, base64: string) => void;
+  waveformCache: Record<string, WaveformResult>;
+  onWaveformLoaded: (filePath: string, result: WaveformResult) => void;
+  onOpenPreview: (type: "spectrogram" | "waveform") => void;
+  audio: AudioPlaybackState;
 }
 
 const Row = ({ label, value }: { label: string; value: string }) => (
@@ -17,24 +23,50 @@ const Row = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const QualityDetailPanel = ({ file, spectrogramCache, onSpectrogramLoaded }: QualityDetailPanelProps) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const QualityDetailPanel = ({
+  file,
+  spectrogramCache,
+  onSpectrogramLoaded,
+  waveformCache,
+  onWaveformLoaded,
+  onOpenPreview,
+  audio,
+}: QualityDetailPanelProps) => {
+  const [specLoading, setSpecLoading] = useState(false);
+  const [specError, setSpecError] = useState<string | null>(null);
+  const [waveLoading, setWaveLoading] = useState(false);
+  const [waveError, setWaveError] = useState<string | null>(null);
 
   const cachedSpectrogram = spectrogramCache[file.file_path];
+  const cachedWaveform = waveformCache[file.file_path];
 
   const generateSpectrogram = async () => {
-    setLoading(true);
-    setError(null);
+    setSpecLoading(true);
+    setSpecError(null);
     try {
       const result = await invoke<SpectrogramResult>("generate_spectrogram", {
         filePath: file.file_path,
       });
       onSpectrogramLoaded(file.file_path, result.image_base64);
     } catch (e) {
-      setError(`${e}`);
+      setSpecError(`${e}`);
     } finally {
-      setLoading(false);
+      setSpecLoading(false);
+    }
+  };
+
+  const generateWaveform = async () => {
+    setWaveLoading(true);
+    setWaveError(null);
+    try {
+      const result = await invoke<WaveformResult>("generate_waveform", {
+        filePath: file.file_path,
+      });
+      onWaveformLoaded(file.file_path, result);
+    } catch (e) {
+      setWaveError(`${e}`);
+    } finally {
+      setWaveLoading(false);
     }
   };
 
@@ -45,7 +77,7 @@ export const QualityDetailPanel = ({ file, spectrogramCache, onSpectrogramLoaded
         <p className="text-xs font-medium text-text-primary truncate">{file.file_name}</p>
       </div>
 
-      {/* Properties + spectrogram */}
+      {/* Properties + spectrogram + waveform */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {/* Properties grid */}
         <div className="mb-4">
@@ -72,7 +104,7 @@ export const QualityDetailPanel = ({ file, spectrogramCache, onSpectrogramLoaded
         </div>
 
         {/* Spectrogram */}
-        <div>
+        <div className="mb-4">
           <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-2">
             Spectrogram
           </span>
@@ -80,9 +112,11 @@ export const QualityDetailPanel = ({ file, spectrogramCache, onSpectrogramLoaded
             <img
               src={`data:image/png;base64,${cachedSpectrogram}`}
               alt="Audio spectrogram"
-              className="w-full rounded-lg border border-border"
+              className="w-full rounded-lg border border-border cursor-pointer hover:border-border-active transition-colors"
+              onClick={() => onOpenPreview("spectrogram")}
+              data-testid="spectrogram-image"
             />
-          ) : loading ? (
+          ) : specLoading ? (
             <div className="py-6 text-center text-text-tertiary text-[11px]">
               <Spinner /> Generating...
             </div>
@@ -94,7 +128,35 @@ export const QualityDetailPanel = ({ file, spectrogramCache, onSpectrogramLoaded
               Generate Spectrogram
             </button>
           )}
-          {error && <p className="mt-2 text-[11px] text-danger">{error}</p>}
+          {specError && <p className="mt-2 text-[11px] text-danger">{specError}</p>}
+        </div>
+
+        {/* Waveform + Player */}
+        <div>
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-2">
+            Waveform
+          </span>
+          {cachedWaveform ? (
+            <MiniPlayer
+              audio={audio}
+              peaks={cachedWaveform.peaks}
+              duration={cachedWaveform.duration}
+              onExpand={() => onOpenPreview("waveform")}
+            />
+          ) : waveLoading ? (
+            <div className="py-6 text-center text-text-tertiary text-[11px]">
+              <Spinner /> Generating...
+            </div>
+          ) : (
+            <button
+              onClick={generateWaveform}
+              className="w-full py-3 bg-bg-card border border-border rounded-xl text-xs font-medium text-text-secondary hover:text-text-primary hover:border-border-active transition-all"
+              data-testid="generate-waveform-btn"
+            >
+              Generate Waveform
+            </button>
+          )}
+          {waveError && <p className="mt-2 text-[11px] text-danger">{waveError}</p>}
         </div>
       </div>
     </div>

@@ -376,6 +376,13 @@ pub async fn generate_spectrogram(
 }
 
 #[tauri::command]
+pub async fn generate_waveform(file_path: String) -> Result<audioquality::WaveformResult, String> {
+    tauri::async_runtime::spawn_blocking(move || audioquality::generate_waveform(&file_path, 800))
+        .await
+        .map_err(|e| format!("Generation failed: {}", e))?
+}
+
+#[tauri::command]
 pub async fn scan_library_stats(
     path: String,
     app: AppHandle,

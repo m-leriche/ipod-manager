@@ -12,6 +12,11 @@ beforeEach(() => {
     if (cmd === "detect_ipod") return null;
     if (cmd === "get_profiles") return { profiles: [] };
     if (cmd === "get_browse_profiles") return { profiles: [] };
+    if (cmd === "get_library_folders") return [];
+    if (cmd === "get_library_tracks") return [];
+    if (cmd === "get_library_artists") return [];
+    if (cmd === "get_library_albums") return [];
+    if (cmd === "get_library_genres") return [];
     return null;
   });
 });
@@ -22,29 +27,30 @@ describe("App", () => {
     expect(screen.getByText("Crate")).toBeInTheDocument();
   });
 
-  it("shows all three tab buttons", () => {
+  it("shows Library and Tools top-level tabs", () => {
     render(<App />);
+    expect(screen.getByRole("button", { name: "Library" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tools" })).toBeInTheDocument();
+  });
+
+  it("defaults to Library tab with empty state", async () => {
+    render(<App />);
+    expect(await screen.findByText("Add your music library")).toBeInTheDocument();
+  });
+
+  it("switches to Tools tab and shows tool sub-tabs", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Tools" }));
     expect(screen.getByRole("button", { name: "File Explorer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "File Sync" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Album Art" })).toBeInTheDocument();
   });
 
-  it("defaults to File Explorer tab", async () => {
+  it("shows File Explorer content within Tools tab", async () => {
+    const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole("button", { name: "Tools" }));
     expect(await screen.findByText("Choose a folder to explore its contents")).toBeInTheDocument();
-  });
-
-  it("switches to File Sync tab on click", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole("button", { name: "File Sync" }));
-    expect(await screen.findByText("Select or create a profile to start syncing folders")).toBeInTheDocument();
-  });
-
-  it("switches to Album Art tab on click", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole("button", { name: "Album Art" }));
-    expect(await screen.findByText("Choose a music folder to scan for missing album art")).toBeInTheDocument();
   });
 });

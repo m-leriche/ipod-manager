@@ -2,6 +2,7 @@ use crate::albumart;
 use crate::audioquality;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::library::{self, LibraryDb};
 use crate::libstats;
 use crate::localvideo;
 use crate::metadata;
@@ -400,4 +401,156 @@ pub async fn read_rockbox_playdata(ipod_path: String) -> Result<rockbox::Rockbox
     tauri::async_runtime::spawn_blocking(move || rockbox::read_rockbox_playdata(&ipod_path))
         .await
         .map_err(|e| format!("Read failed: {}", e))?
+}
+
+// ── Library commands ────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn add_library_folder(
+    path: String,
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<(), String> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+
+    // Add folder record
+    {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::add_folder(&conn, &path)?;
+    }
+
+    // Scan in blocking task
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::scan_folder(&conn, &path, &app, &flag)
+    })
+    .await
+    .map_err(|e| format!("Scan failed: {}", e))??;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::remove_folder(&conn, &path)
+}
+
+#[tauri::command]
+pub async fn get_library_folders(
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::LibraryFolder>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_folders(&conn)
+}
+
+#[tauri::command]
+pub async fn refresh_library(
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<(), String> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let folders = library::get_folders(&conn)?;
+
+        for folder in folders {
+            if flag.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err("Cancelled".to_string());
+            }
+            library::scan_folder(&conn, &folder.path, &app, &flag)?;
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_library_tracks(
+    filter: library::LibraryFilter,
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::LibraryTrack>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_tracks(&conn, &filter)
+}
+
+#[tauri::command]
+pub async fn get_library_artists(
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::ArtistSummary>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_artists(&conn)
+}
+
+#[tauri::command]
+pub async fn get_library_albums(
+    artist: Option<String>,
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::AlbumSummary>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_albums(&conn, artist.as_deref())
+}
+
+#[tauri::command]
+pub async fn get_library_genres(
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::GenreSummary>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_genres(&conn)
+}
+
+#[tauri::command]
+pub async fn search_library(
+    query: String,
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::LibraryTrack>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::search_tracks(&conn, &query)
+}
+
+#[tauri::command]
+pub async fn show_in_finder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open Finder: {}", e))?;
+    }
+    Ok(())
 }

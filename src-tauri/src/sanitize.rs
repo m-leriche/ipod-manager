@@ -201,11 +201,8 @@ fn sanitize_lofty(
     if options.drop_disc_for_single {
         let disc_num = old_tag.get_string(&ItemKey::DiscNumber);
         let disc_total = old_tag.get_string(&ItemKey::DiscTotal);
-        let is_single = match (disc_num, disc_total) {
-            (Some(n), Some(t)) => n.trim() == "1" && t.trim() == "1",
-            (Some(n), None) => n.trim() == "1",
-            _ => false,
-        };
+        let is_single = disc_num.map(|n| n.trim() == "1").unwrap_or(false)
+            && disc_total.map_or(true, |t| t.trim() == "1");
         if is_single {
             text_items.retain(|(k, _)| *k != ItemKey::DiscNumber && *k != ItemKey::DiscTotal);
         }
@@ -369,11 +366,7 @@ fn sanitize_id3(
     if options.drop_disc_for_single {
         let disc = old_tag.disc();
         let total = old_tag.total_discs();
-        let is_single = match (disc, total) {
-            (Some(1), Some(1)) => true,
-            (Some(1), None) => true,
-            _ => false,
-        };
+        let is_single = matches!((disc, total), (Some(1), Some(1)) | (Some(1), None));
         if is_single {
             new_tag.remove("TPOS");
         }

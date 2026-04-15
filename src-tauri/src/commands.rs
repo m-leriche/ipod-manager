@@ -497,6 +497,18 @@ pub async fn get_library_tracks(
 }
 
 #[tauri::command]
+pub async fn get_library_browser_data(
+    filter: library::LibraryFilter,
+    db: State<'_, LibraryDb>,
+) -> Result<library::BrowserData, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::get_browser_data(&conn, &filter)
+}
+
+#[tauri::command]
 pub async fn get_library_artists(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::ArtistSummary>, String> {

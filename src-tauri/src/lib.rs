@@ -106,6 +106,7 @@ pub fn run() {
             commands::get_library_folders,
             commands::refresh_library,
             commands::get_library_tracks,
+            commands::get_library_browser_data,
             commands::get_library_artists,
             commands::get_library_albums,
             commands::get_library_genres,

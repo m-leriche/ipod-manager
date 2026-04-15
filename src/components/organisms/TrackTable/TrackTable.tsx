@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { memo, useState, useCallback, useMemo } from "react";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useColumnResize } from "./useColumnResize";
@@ -69,7 +69,7 @@ const COLUMNS: { key: string; label: string; sortKey: string; align: "left" | "r
 
 const columnDefs = COLUMNS.map((c) => c.def);
 
-export const TrackTable = ({
+export const TrackTable = memo(function TrackTable({
   tracks,
   sortBy,
   sortDirection,
@@ -77,7 +77,7 @@ export const TrackTable = ({
   onTrackSelect,
   onNavigateToArtist,
   onNavigateToAlbum,
-}: TrackTableProps) => {
+}: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -241,7 +241,7 @@ export const TrackTable = ({
       )}
     </div>
   );
-};
+});
 
 // Inline row that matches the 7-column layout
 const formatDuration = (secs: number): string => {
@@ -251,7 +251,7 @@ const formatDuration = (secs: number): string => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const TrackRowResizable = ({
+const TrackRowResizable = memo(function TrackRowResizable({
   track,
   index,
   isPlaying,
@@ -267,39 +267,41 @@ const TrackRowResizable = ({
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-}) => (
-  <tr
-    onClick={onClick}
-    onDoubleClick={onDoubleClick}
-    onContextMenu={onContextMenu}
-    className={`group cursor-default select-none transition-colors ${
-      isSelected ? "bg-accent/10" : isPlaying ? "bg-accent/5" : "hover:bg-bg-hover/50"
-    }`}
-  >
-    <td className="px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden">
-      {isPlaying ? (
-        <div className="flex items-center justify-center gap-[2px] h-3">
-          <span className="w-[3px] bg-accent rounded-full animate-equalizer-1" />
-          <span className="w-[3px] bg-accent rounded-full animate-equalizer-2" />
-          <span className="w-[3px] bg-accent rounded-full animate-equalizer-3" />
+}) {
+  return (
+    <tr
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+      className={`group cursor-default select-none transition-colors ${
+        isSelected ? "bg-accent/10" : isPlaying ? "bg-accent/5" : "hover:bg-bg-hover/50"
+      }`}
+    >
+      <td className="px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden">
+        {isPlaying ? (
+          <div className="flex items-center justify-center gap-[2px] h-3">
+            <span className="w-[3px] bg-accent rounded-full animate-equalizer-1" />
+            <span className="w-[3px] bg-accent rounded-full animate-equalizer-2" />
+            <span className="w-[3px] bg-accent rounded-full animate-equalizer-3" />
+          </div>
+        ) : (
+          <span className="text-text-tertiary">{index + 1}</span>
+        )}
+      </td>
+      <td className="px-3 py-[7px] overflow-hidden">
+        <div className={`text-xs font-medium truncate ${isPlaying ? "text-accent" : "text-text-primary"}`}>
+          {track.title || track.file_name}
         </div>
-      ) : (
-        <span className="text-text-tertiary">{index + 1}</span>
-      )}
-    </td>
-    <td className="px-3 py-[7px] overflow-hidden">
-      <div className={`text-xs font-medium truncate ${isPlaying ? "text-accent" : "text-text-primary"}`}>
-        {track.title || track.file_name}
-      </div>
-    </td>
-    <td className="px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate">{track.artist || "—"}</td>
-    <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.album || "—"}</td>
-    <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.genre || "—"}</td>
-    <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-      {track.year || "—"}
-    </td>
-    <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-      {formatDuration(track.duration_secs)}
-    </td>
-  </tr>
-);
+      </td>
+      <td className="px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate">{track.artist || "—"}</td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.album || "—"}</td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.genre || "—"}</td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
+        {track.year || "—"}
+      </td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
+        {formatDuration(track.duration_secs)}
+      </td>
+    </tr>
+  );
+});

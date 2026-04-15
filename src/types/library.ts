@@ -46,6 +46,13 @@ export interface GenreSummary {
   track_count: number;
 }
 
+export interface BrowserData {
+  tracks: LibraryTrack[];
+  genres: GenreSummary[];
+  artists: ArtistSummary[];
+  albums: AlbumSummary[];
+}
+
 export interface LibraryFilter {
   artist?: string;
   album?: string;

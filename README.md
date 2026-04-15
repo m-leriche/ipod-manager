@@ -145,13 +145,26 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 
 ## TODO
 
+### Library Management
+- [ ] **iTunes-style library player** — Full library browser with artist/album/track views, smart filtering, queue management, and gapless playback. The central hub for browsing and playing a music collection without leaving the app.
 - [ ] **Folder structure normalization** — Scan a library and flag/fix naming inconsistencies. Target convention like `Artist/Album/01 Track.flac`. Preview renames as a diff before applying.
 - [ ] **Duplicate detection** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison, pick which to keep.
-- [x] **Missing track detector** — Cross-reference album folders against MusicBrainz to find incomplete albums (e.g., 11 of 12 tracks). Part of the Metadata Repair tab.
 - [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
-- [ ] **Audio waveform preview** — Waveform visualization when selecting a file in the explorer. Quick visual check for corruption or silence.
-- [x] **Persist tab state across switches** — Global progress modal blocks tab switching during any long-running operation, preventing processes from being killed by navigation.
-- [x] **Library statistics dashboard** — Total tracks, format breakdown, total size, artist count, average bitrate. Health-check overview of a music library.
+- [ ] **Format conversion** — Batch transcode between formats (FLAC → MP3/AAC) during sync or on demand. Keeps master library lossless while fitting more on the iPod.
+
+### Audio Analysis & Visualization
+- [ ] **Real-time frequency spectrum** — Animated bar/curve visualization showing frequency distribution during playback. Bass on the left, treble on the right, powered by Web Audio API's AnalyserNode.
+- [ ] **Oscilloscope** — Real-time waveform display showing the actual signal shape as audio plays. Useful for spotting distortion, clipping, or artifacts at a glance.
+- [ ] **Stereo vectorscope** — Lissajous XY plot of left vs right channels. Mono signals appear as a vertical line, wide stereo as a cloud, phase issues as a horizontal line.
+- [ ] **Peak/RMS level meters** — Classic VU-style meters showing peak and RMS levels per channel during playback. Horizontal or vertical bars alongside the player.
+- [ ] **Spectral waterfall** — Scrolling real-time spectrogram during playback. Frequency on Y, time scrolling on X, color for amplitude.
+- [ ] **Clipping detection** — Scan for digital clipping (samples at 0dBFS) via ffmpeg's `astats` filter. Surface as a verdict alongside lossy/lossless/suspect in the Quality tab.
+- [ ] **Dynamic range (DR score)** — Measure album dynamic range to identify overly compressed loudness-war masters. Pairs with the spectrogram for visual confirmation.
+- [ ] **ReplayGain scanning** — Calculate track + album gain values and write them as tags. Rockbox reads ReplayGain natively for consistent playback volume.
+- [ ] **Audio fingerprinting (AcoustID)** — Identify unknown or poorly-tagged tracks by audio fingerprint via Chromaprint. Queries AcoustID for MusicBrainz IDs to complement metadata repair.
+- [ ] **Silence detection** — Flag tracks with excessive silence at start or end. Offer to trim or surface as a quality issue.
+- [ ] **Mono/stereo verification** — Detect files encoded as stereo but actually mono (dual-mono). Wastes space storing duplicate channels.
+- [ ] **Loudness metering (LUFS)** — Real-time EBU R128 integrated loudness measurement with momentary, short-term, and integrated readouts.
 
 ## License
 

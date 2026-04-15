@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { TrackMetadata } from "../../../types/metadata";
 import type { ArtistGroup, EditableFields } from "./types";
 import { isTrackDirty } from "./helpers";
+import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import type { ContextMenuItem } from "../../molecules/ContextMenu/types";
 
 interface MetadataTreeProps {
   groups: ArtistGroup[];
@@ -10,6 +12,7 @@ interface MetadataTreeProps {
   onToggleTrack: (filePath: string) => void;
   onSelectAlbum: (filePaths: string[]) => void;
   onSelectArtist: (filePaths: string[]) => void;
+  onSanitize?: () => void;
 }
 
 export const MetadataTree = ({
@@ -19,9 +22,11 @@ export const MetadataTree = ({
   onToggleTrack,
   onSelectAlbum,
   onSelectArtist,
+  onSanitize,
 }: MetadataTreeProps) => {
   const [expandedArtists, setExpandedArtists] = useState<Set<string>>(() => new Set(groups.map((g) => g.artist)));
   const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const toggleArtist = (artist: string) => {
     setExpandedArtists((prev) => {
@@ -53,8 +58,31 @@ export const MetadataTree = ({
     return track[field];
   };
 
+  const handleContextMenu = (e: React.MouseEvent, filePath?: string) => {
+    e.preventDefault();
+    // If right-clicked a specific track that isn't selected, select just that track
+    if (filePath && !selected.has(filePath)) {
+      onToggleTrack(filePath);
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const menuItems: ContextMenuItem[] = [
+    {
+      label: "Sanitize Tags",
+      onClick: () => onSanitize?.(),
+      disabled: selected.size === 0,
+    },
+  ];
+
   return (
-    <div className="flex-1 overflow-y-auto bg-bg-secondary border border-border rounded-2xl min-h-0">
+    <div
+      className="flex-1 overflow-y-auto bg-bg-secondary border border-border rounded-2xl min-h-0 relative"
+      onContextMenu={(e) => {
+        // Catch context menu on empty space too
+        if (e.target === e.currentTarget) handleContextMenu(e);
+      }}
+    >
       {groups.length === 0 ? (
         <div className="py-12 text-center text-text-tertiary text-xs">No audio files found</div>
       ) : (
@@ -71,6 +99,7 @@ export const MetadataTree = ({
                 <div
                   className="flex items-center gap-2.5 py-2 px-4 cursor-pointer select-none hover:bg-bg-hover/50 transition-colors"
                   onClick={() => toggleArtist(artistGroup.artist)}
+                  onContextMenu={(e) => handleContextMenu(e)}
                 >
                   <input
                     type="checkbox"
@@ -110,6 +139,7 @@ export const MetadataTree = ({
                           className="flex items-center gap-2.5 py-1.5 pr-4 cursor-pointer select-none hover:bg-bg-hover/50 transition-colors"
                           style={{ paddingLeft: "40px" }}
                           onClick={() => toggleAlbum(albumKey)}
+                          onContextMenu={(e) => handleContextMenu(e)}
                         >
                           <input
                             type="checkbox"
@@ -149,6 +179,7 @@ export const MetadataTree = ({
                                 }`}
                                 style={{ paddingLeft: "64px" }}
                                 onClick={() => onToggleTrack(track.file_path)}
+                                onContextMenu={(e) => handleContextMenu(e, track.file_path)}
                               >
                                 <input
                                   type="checkbox"
@@ -179,6 +210,9 @@ export const MetadataTree = ({
             );
           })}
         </div>
+      )}
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={menuItems} onClose={() => setContextMenu(null)} />
       )}
     </div>
   );

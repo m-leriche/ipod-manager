@@ -114,3 +114,16 @@ export interface RepairLookupProgress {
   current_album: string;
   phase: string;
 }
+
+// ── Sanitize types ─────────────────────────────────────────────
+
+export type PictureAction = "clear" | "retain_front" | "move_front";
+
+export interface SanitizeModalOptions {
+  retainFields: string[];
+  pictureAction: PictureAction;
+  coverFilename: string;
+  preserveReplayGain: boolean;
+  reduceDateToYear: boolean;
+  dropDiscForSingle: boolean;
+}

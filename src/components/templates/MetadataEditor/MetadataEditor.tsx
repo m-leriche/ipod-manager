@@ -1,13 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MetadataTree } from "./MetadataTree";
 import { MetadataEditPanel } from "./MetadataEditPanel";
 import { RepairAlbumCard } from "./RepairAlbumCard";
 import { RepairDetailPanel } from "./RepairDetailPanel";
+import { TagSanitizerModal } from "./TagSanitizerModal";
 import {
   groupTracks,
   buildUpdate,
@@ -24,8 +26,18 @@ import type {
   MetadataScanProgress,
   MetadataSaveProgress,
   MetadataSaveResult,
+  SanitizeProgress,
+  SanitizeResult,
 } from "../../../types/metadata";
-import type { Phase, View, EditableFields, RepairReport, RepairLookupProgress, AlbumRepairReport } from "./types";
+import type {
+  Phase,
+  View,
+  EditableFields,
+  RepairReport,
+  RepairLookupProgress,
+  AlbumRepairReport,
+  SanitizeModalOptions,
+} from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 
 export const MetadataEditor = () => {
@@ -48,6 +60,13 @@ export const MetadataEditor = () => {
   // ── Editor state ──
   const [editedTracks, setEditedTracks] = useState<Record<string, EditableFields>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // ── Drag-and-drop state ──
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [sanitizerOpen, setSanitizerOpen] = useState(false);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const lastScanPaths = useRef<string[]>([]);
 
   // ── Repair state ──
   const [report, setReport] = useState<RepairReport | null>(null);
@@ -79,6 +98,15 @@ export const MetadataEditor = () => {
       else fn();
     });
 
+    listen<SanitizeProgress>("sanitize-progress", (e) => {
+      if (active) {
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      }
+    }).then((fn) => {
+      if (active) unsubs.push(fn);
+      else fn();
+    });
+
     listen<RepairLookupProgress>("repair-lookup-progress", (e) => {
       if (active) {
         updateProgress(e.payload.completed_albums, e.payload.total_albums, e.payload.current_album);
@@ -94,7 +122,70 @@ export const MetadataEditor = () => {
     };
   }, []);
 
+  // ── Drag-and-drop listener ──
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | null = null;
+
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (!active) return;
+        if (event.payload.type === "enter") {
+          setIsDragOver(true);
+        } else if (event.payload.type === "leave") {
+          setIsDragOver(false);
+        } else if (event.payload.type === "drop") {
+          setIsDragOver(false);
+          const p = phaseRef.current;
+          if ((p === "idle" || p === "scanned") && event.payload.paths.length > 0) {
+            scanPaths(event.payload.paths);
+          }
+        }
+      })
+      .then((fn) => {
+        if (active) unlisten = fn;
+        else fn();
+      });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
+
   // ── Shared actions ──
+
+  const scanPaths = async (paths: string[]) => {
+    lastScanPaths.current = paths;
+    setPhase("scanning");
+    setError(null);
+    setSaveResult(null);
+    setTracks([]);
+    setEditedTracks({});
+    setSelected(new Set());
+    setReport(null);
+    setAcceptedFixes(new Set());
+    setSelectedAlbum(null);
+    startProgress("Scanning metadata...", cancel);
+    try {
+      const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
+      setTracks(data);
+      setScanPath(paths.length === 1 ? paths[0] : `${paths.length} dropped items`);
+      setPhase("scanned");
+      setView("edit");
+      finishProgress(`Scanned ${data.length} tracks`);
+    } catch (e) {
+      const msg = `${e}`;
+      if (msg === "Cancelled") {
+        setPhase("idle");
+        failProgress("Scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("idle");
+        failProgress(msg);
+      }
+    }
+  };
 
   const browse = async () => {
     try {
@@ -111,6 +202,7 @@ export const MetadataEditor = () => {
 
   const scan = async (path?: string) => {
     const targetPath = path ?? scanPath;
+    lastScanPaths.current = [targetPath];
     setPhase("scanning");
     setError(null);
     setSaveResult(null);
@@ -137,6 +229,24 @@ export const MetadataEditor = () => {
         setPhase("idle");
         failProgress(msg);
       }
+    }
+  };
+
+  const refreshTracks = async () => {
+    const paths = lastScanPaths.current;
+    if (paths.length === 0) return;
+
+    setEditedTracks({});
+    setSaveResult(null);
+    setError(null);
+
+    try {
+      const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
+      setTracks(data);
+      setPhase("scanned");
+    } catch (e) {
+      setError(`Refresh failed: ${e}`);
+      setPhase("scanned");
     }
   };
 
@@ -377,7 +487,7 @@ export const MetadataEditor = () => {
       setSaveProgress(null);
       finishProgress(`Applied fixes to ${result.succeeded} of ${result.total} files`);
       if (result.succeeded > 0) {
-        scan();
+        refreshTracks();
       } else {
         setPhase("scanned");
       }
@@ -397,26 +507,80 @@ export const MetadataEditor = () => {
     setAcceptedFixes(new Set());
   }, []);
 
+  // ── Sanitize logic ──
+
+  const handleSanitize = async (options: SanitizeModalOptions) => {
+    setSanitizerOpen(false);
+    const filePaths = [...selected];
+
+    setPhase("saving");
+    startProgress("Sanitizing tags...", cancel);
+
+    try {
+      const result = await invoke<SanitizeResult>("sanitize_tags", {
+        options: {
+          file_paths: filePaths,
+          retain_fields: options.retainFields,
+          picture_action:
+            options.pictureAction === "clear"
+              ? { type: "ClearAll" }
+              : options.pictureAction === "retain_front"
+                ? { type: "RetainFrontCover" }
+                : { type: "MoveFrontCoverToFile", filename: options.coverFilename },
+          preserve_replay_gain: options.preserveReplayGain,
+          reduce_date_to_year: options.reduceDateToYear,
+          drop_disc_for_single: options.dropDiscForSingle,
+        },
+      });
+
+      finishProgress(`Sanitized ${result.succeeded} of ${result.total} files`);
+      if (result.succeeded > 0) {
+        refreshTracks();
+      } else {
+        setPhase("scanned");
+      }
+    } catch (e) {
+      setError(`${e}`);
+      setPhase("scanned");
+      failProgress(`${e}`);
+    }
+  };
+
   // ── Idle ──
 
   if (phase === "idle") {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center max-w-sm">
-          <p className="text-text-tertiary text-xs mb-4">Choose a music folder to view, edit, and repair metadata</p>
-          <div className="mb-4">
-            <FolderPicker label="Folder" path={scanPath || null} onBrowse={browse} />
-          </div>
+      <>
+        {/* Folder picker bar */}
+        <div className="flex items-center gap-2 bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
+          <FolderPicker label="Folder" path={scanPath || null} onBrowse={browse} />
           <button
             onClick={() => scan()}
             disabled={!scanPath}
-            className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
           >
-            Scan Metadata
+            Scan
           </button>
-          {error && <p className="mt-3 text-danger text-[11px]">{error}</p>}
+          {error && <span className="text-danger text-[11px] ml-2">{error}</span>}
         </div>
-      </div>
+
+        {/* Drop zone */}
+        <div
+          className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
+            isDragOver ? "border-accent bg-accent/5" : "border-border hover:border-border-active"
+          }`}
+        >
+          <div className={`text-3xl mb-3 transition-colors ${isDragOver ? "text-accent" : "text-text-tertiary"}`}>
+            {isDragOver ? "\u2193" : "\u266B"}
+          </div>
+          <p
+            className={`text-xs font-medium mb-1 transition-colors ${isDragOver ? "text-accent" : "text-text-secondary"}`}
+          >
+            {isDragOver ? "Drop to scan" : "Drop audio files or folders here"}
+          </p>
+          <p className="text-[11px] text-text-tertiary">Drag from Finder to scan metadata</p>
+        </div>
+      </>
     );
   }
 
@@ -614,6 +778,7 @@ export const MetadataEditor = () => {
               onToggleTrack={toggleTrack}
               onSelectAlbum={selectGroup}
               onSelectArtist={selectGroup}
+              onSanitize={() => setSanitizerOpen(true)}
             />
             {selected.size > 0 && batchFields && mixedFlags && (
               <MetadataEditPanel
@@ -670,6 +835,22 @@ export const MetadataEditor = () => {
           </>
         )}
       </div>
+
+      {/* Drag-over overlay for re-dropping in scanned state */}
+      {isDragOver && phase === "scanned" && (
+        <div className="absolute inset-0 bg-accent/5 border-2 border-dashed border-accent rounded-2xl flex items-center justify-center pointer-events-none z-40">
+          <span className="text-accent text-xs font-medium">Drop to rescan</span>
+        </div>
+      )}
+
+      {/* Tag Sanitizer modal */}
+      {sanitizerOpen && (
+        <TagSanitizerModal
+          selectedCount={selected.size}
+          onStart={handleSanitize}
+          onClose={() => setSanitizerOpen(false)}
+        />
+      )}
     </>
   );
 };

@@ -10,6 +10,7 @@ mod metarepair;
 mod musicbrainz;
 mod profiles;
 mod rockbox;
+mod sanitize;
 mod youtube;
 
 use files::SyncCancel;
@@ -73,7 +74,9 @@ pub fn run() {
             commands::check_ffmpeg,
             commands::probe_video,
             commands::extract_audio_from_video,
+            commands::scan_metadata_paths,
             commands::scan_metadata,
+            commands::sanitize_tags,
             commands::save_metadata,
             commands::repair_analyze,
             commands::repair_compare_release,

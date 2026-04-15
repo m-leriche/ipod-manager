@@ -61,10 +61,10 @@ beforeEach(() => {
 });
 
 describe("MetadataEditor", () => {
-  it("renders idle state with folder picker", () => {
+  it("renders idle state with folder picker bar and drop zone", () => {
     render(<MetadataEditor />);
-    expect(screen.getByText("Choose a music folder to view, edit, and repair metadata")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Scan Metadata" })).toBeDisabled();
+    expect(screen.getByText("Drop audio files or folders here")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scan" })).toBeDisabled();
   });
 
   it("scans after folder selection", async () => {
@@ -118,7 +118,7 @@ describe("MetadataEditor", () => {
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Choose a music folder to view, edit, and repair metadata")).toBeInTheDocument();
+      expect(screen.getByText("Drop audio files or folders here")).toBeInTheDocument();
     });
     // Should not show error for cancellation
     expect(screen.queryByText("Cancelled")).not.toBeInTheDocument();

@@ -165,6 +165,58 @@ fn empty_track(file_path: String, file_name: String) -> TrackMetadata {
 
 // ── Scan ─────────────────────────────────────────────────────────
 
+pub fn scan_metadata_paths(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<TrackMetadata>, String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut audio_files = Vec::new();
+
+    for p in &paths {
+        let path = Path::new(p);
+        if !path.exists() {
+            continue;
+        }
+        if path.is_dir() {
+            collect_audio_files(path, &mut audio_files);
+        } else if is_audio(path) {
+            audio_files.push(path.to_path_buf());
+        }
+    }
+
+    // Deduplicate (a dir and its child file could both be dropped)
+    audio_files.retain(|f| seen.insert(f.clone()));
+    audio_files.sort();
+
+    let total = audio_files.len();
+    let mut tracks = Vec::with_capacity(total);
+
+    for (i, file_path) in audio_files.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".to_string());
+        }
+
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let _ = app.emit(
+            "metadata-scan-progress",
+            MetadataScanProgress {
+                total,
+                completed: i,
+                current_file: file_name,
+            },
+        );
+
+        tracks.push(read_track(file_path));
+    }
+
+    Ok(tracks)
+}
+
 pub fn scan_metadata(
     path: &str,
     app: AppHandle,

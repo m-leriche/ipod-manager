@@ -42,11 +42,11 @@ export const ColumnBrowser = ({
       onSelect={onSelectArtist}
     />
 
-    {/* Albums column */}
+    {/* Albums column — key includes artist to disambiguate albums with the same name */}
     <BrowserColumn
       title="Albums"
       allLabel={`All Albums (${albums.length})`}
-      items={albums.map((a) => ({ label: a.name, count: a.track_count }))}
+      items={albums.map((a) => ({ key: `${a.artist}::${a.name}`, label: a.name, count: a.track_count }))}
       selected={selectedAlbum}
       onSelect={onSelectAlbum}
       isLast
@@ -57,7 +57,7 @@ export const ColumnBrowser = ({
 interface BrowserColumnProps {
   title: string;
   allLabel: string;
-  items: { label: string; count: number }[];
+  items: { key?: string; label: string; count: number }[];
   selected: string | null;
   onSelect: (value: string | null) => void;
   isLast?: boolean;
@@ -81,7 +81,7 @@ const BrowserColumn = ({ title, allLabel, items, selected, onSelect, isLast }: B
 
       {items.map((item) => (
         <button
-          key={item.label}
+          key={item.key ?? item.label}
           onClick={() => onSelect(item.label)}
           className={`w-full text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
             selected === item.label ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"

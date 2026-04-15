@@ -11,62 +11,10 @@ import type {
   ArtistSummary,
   AlbumSummary,
   GenreSummary,
+  BrowserData,
   LibraryFilter,
   LibraryScanProgress,
 } from "../../../types/library";
-
-// ── Helpers to derive column lists from tracks ──────────────────
-
-const deriveGenres = (tracks: LibraryTrack[]): GenreSummary[] => {
-  const map = new Map<string, number>();
-  for (const t of tracks) {
-    if (!t.genre) continue;
-    map.set(t.genre, (map.get(t.genre) ?? 0) + 1);
-  }
-  return [...map.entries()]
-    .map(([name, track_count]) => ({ name, track_count }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
-
-const deriveArtists = (tracks: LibraryTrack[]): ArtistSummary[] => {
-  const map = new Map<string, { count: number; albums: Set<string> }>();
-  for (const t of tracks) {
-    const name = t.album_artist || t.artist;
-    if (!name) continue;
-    const entry = map.get(name) ?? { count: 0, albums: new Set() };
-    entry.count++;
-    if (t.album) entry.albums.add(t.album);
-    map.set(name, entry);
-  }
-  return [...map.entries()]
-    .map(([name, { count, albums }]) => ({
-      name,
-      track_count: count,
-      album_count: albums.size,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
-
-const deriveAlbums = (tracks: LibraryTrack[]): AlbumSummary[] => {
-  const map = new Map<string, { artist: string; year: number | null; count: number; folder: string }>();
-  for (const t of tracks) {
-    if (!t.album) continue;
-    const artist = t.album_artist || t.artist || "";
-    const key = `${artist}::${t.album}`;
-    const entry = map.get(key) ?? { artist, year: t.year, count: 0, folder: t.folder_path };
-    entry.count++;
-    map.set(key, entry);
-  }
-  return [...map.entries()]
-    .map(([key, { artist, year, count, folder }]) => ({
-      name: key.split("::").slice(1).join("::"),
-      artist,
-      year,
-      track_count: count,
-      folder_path: folder,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -82,13 +30,11 @@ export const LibraryPlayer = () => {
   const [sortBy, setSortBy] = useState("artist");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedTrack, setSelectedTrack] = useState<LibraryTrack | null>(null);
 
-  // All tracks from the database (unfiltered except by search)
-  const [allTracks, setAllTracks] = useState<LibraryTrack[]>([]);
-  // Displayed tracks (filtered by all 3 columns + search + sorted)
+  // All data from backend (pre-filtered by column selections)
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
-  // Column lists — each derived from tracks matching the OTHER columns
   const [genreList, setGenreList] = useState<GenreSummary[]>([]);
   const [artistList, setArtistList] = useState<ArtistSummary[]>([]);
   const [albumList, setAlbumList] = useState<AlbumSummary[]>([]);
@@ -97,84 +43,72 @@ export const LibraryPlayer = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const fetchIdRef = useRef(0);
 
-  // ── Load all tracks from backend ──────────────────────────────
+  // ── Debounce search input ─────────────────────────────────────
 
-  const fetchTracks = useCallback(async () => {
+  useEffect(() => {
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(searchTimerRef.current);
+  }, [search]);
+
+  // ── Fetch all browser data from backend ───────────────────────
+
+  const fetchBrowserData = useCallback(async () => {
+    const id = ++fetchIdRef.current;
     try {
       const filter: LibraryFilter = {
         sort_by: sortBy,
         sort_direction: sortDirection,
-        ...(search ? { search } : {}),
+        ...(selectedGenre ? { genre: selectedGenre } : {}),
+        ...(selectedArtist ? { artist: selectedArtist } : {}),
+        ...(selectedAlbum ? { album: selectedAlbum } : {}),
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
       };
-      const result = await invoke<LibraryTrack[]>("get_library_tracks", { filter });
-      setAllTracks(result ?? []);
+      const data = await invoke<BrowserData>("get_library_browser_data", { filter });
+      if (id !== fetchIdRef.current) return;
+      setTracks(data.tracks);
+      setGenreList(data.genres);
+      setArtistList(data.artists);
+      setAlbumList(data.albums);
     } catch {
-      setAllTracks([]);
+      if (id !== fetchIdRef.current) return;
+      setTracks([]);
+      setGenreList([]);
+      setArtistList([]);
+      setAlbumList([]);
     }
-  }, [sortBy, sortDirection, search]);
-
-  // ── Derive filtered data from allTracks + column selections ───
-
-  useEffect(() => {
-    // Filter helpers — must use the same derived field as the column derivation functions
-    const matchGenre = (t: LibraryTrack) => !selectedGenre || t.genre === selectedGenre;
-    const matchArtist = (t: LibraryTrack) => !selectedArtist || (t.album_artist || t.artist) === selectedArtist;
-    const matchAlbum = (t: LibraryTrack) => !selectedAlbum || t.album === selectedAlbum;
-
-    // Tracks for display: match ALL three filters
-    setTracks(allTracks.filter((t) => matchGenre(t) && matchArtist(t) && matchAlbum(t)));
-
-    // Genre column: derived from tracks matching Artist + Album (not Genre)
-    setGenreList(deriveGenres(allTracks.filter((t) => matchArtist(t) && matchAlbum(t))));
-
-    // Artist column: derived from tracks matching Genre + Album (not Artist)
-    setArtistList(deriveArtists(allTracks.filter((t) => matchGenre(t) && matchAlbum(t))));
-
-    // Album column: derived from tracks matching Genre + Artist (not Album)
-    setAlbumList(deriveAlbums(allTracks.filter((t) => matchGenre(t) && matchArtist(t))));
-  }, [allTracks, selectedGenre, selectedArtist, selectedAlbum]);
+  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch]);
 
   // ── Initial load ──────────────────────────────────────────────
-
-  const loadLibrary = useCallback(async () => {
-    await fetchTracks();
-    setDataLoaded(true);
-  }, [fetchTracks]);
 
   const checkLibrary = useCallback(async () => {
     try {
       const folders = await invoke<{ id: number; path: string }[]>("get_library_folders");
       const hasFolders = Array.isArray(folders) && folders.length > 0;
       setHasLibrary(hasFolders);
-      if (hasFolders) await loadLibrary();
+      if (hasFolders) {
+        await fetchBrowserData();
+        setDataLoaded(true);
+      }
     } catch {
       setHasLibrary(false);
     }
-  }, [loadLibrary]);
+  }, [fetchBrowserData]);
 
   useEffect(() => {
     checkLibrary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch when sort changes
-  useEffect(() => {
-    if (dataLoaded) fetchTracks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy, sortDirection]);
+  // ── Re-fetch when any filter/sort changes ─────────────────────
 
-  // Debounced search
   useEffect(() => {
-    if (!dataLoaded) return;
-    clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(fetchTracks, 200);
-    return () => clearTimeout(searchTimerRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+    if (dataLoaded) fetchBrowserData();
+  }, [dataLoaded, fetchBrowserData]);
 
   // ── Column selection handlers ─────────────────────────────────
-  // Don't reset other columns — cross-filter lets each column narrow independently
 
   const handleSelectGenre = useCallback((genre: string | null) => {
     setSelectedGenre(genre);
@@ -204,13 +138,14 @@ export const LibraryPlayer = () => {
       await invoke("add_library_folder", { path: selected });
       finishProgress("Library scan complete");
       setHasLibrary(true);
-      await loadLibrary();
+      await fetchBrowserData();
+      setDataLoaded(true);
     } catch (e) {
       failProgress(`Scan failed: ${e}`);
     } finally {
       unlisten();
     }
-  }, [startProgress, updateProgress, finishProgress, failProgress, loadLibrary]);
+  }, [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData]);
 
   // ── Sort handling ─────────────────────────────────────────────
 

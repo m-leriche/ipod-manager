@@ -77,6 +77,14 @@ pub struct LibraryFilter {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct BrowserData {
+    pub tracks: Vec<LibraryTrack>,
+    pub genres: Vec<GenreSummary>,
+    pub artists: Vec<ArtistSummary>,
+    pub albums: Vec<AlbumSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct LibraryScanProgress {
     pub total: usize,
     pub completed: usize,
@@ -457,8 +465,7 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(ref artist) = filter.artist {
-        conditions.push("(artist = ? OR album_artist = ?)");
-        param_values.push(Box::new(artist.clone()));
+        conditions.push("COALESCE(album_artist, artist) = ?");
         param_values.push(Box::new(artist.clone()));
     }
     if let Some(ref album) = filter.album {
@@ -652,6 +659,152 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))
+}
+
+// ── Browser data (combined endpoint for column browser) ────────
+
+fn build_filter_conditions(
+    genre: Option<&str>,
+    artist: Option<&str>,
+    album: Option<&str>,
+    search: Option<&str>,
+) -> (Vec<String>, Vec<Box<dyn rusqlite::types::ToSql>>) {
+    let mut conditions = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(genre) = genre {
+        conditions.push("genre = ?".to_string());
+        params.push(Box::new(genre.to_string()));
+    }
+    if let Some(artist) = artist {
+        conditions.push("COALESCE(album_artist, artist) = ?".to_string());
+        params.push(Box::new(artist.to_string()));
+    }
+    if let Some(album) = album {
+        conditions.push("album = ?".to_string());
+        params.push(Box::new(album.to_string()));
+    }
+    if let Some(search) = search {
+        if !search.is_empty() {
+            conditions.push(
+                "(title LIKE ? OR artist LIKE ? OR album LIKE ? OR album_artist LIKE ? OR genre LIKE ?)".to_string(),
+            );
+            let like = format!("%{}%", search);
+            for _ in 0..5 {
+                params.push(Box::new(like.clone()));
+            }
+        }
+    }
+
+    (conditions, params)
+}
+
+fn where_clause(conditions: &[String]) -> String {
+    if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    }
+}
+
+pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<BrowserData, String> {
+    let genre = filter.genre.as_deref();
+    let artist = filter.artist.as_deref();
+    let album = filter.album.as_deref();
+    let search = filter.search.as_deref();
+
+    // Tracks: filtered by all 3 columns + search
+    let tracks = get_tracks(conn, filter)?;
+
+    // Genres: filtered by artist + album (NOT genre) + search
+    let genres = {
+        let (mut conds, params) = build_filter_conditions(None, artist, album, search);
+        conds.insert(0, "genre IS NOT NULL AND genre != ''".to_string());
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT genre, COUNT(*) as track_count FROM tracks {} GROUP BY genre ORDER BY genre COLLATE NOCASE ASC",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(GenreSummary {
+                    name: row.get(0)?,
+                    track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?
+    };
+
+    // Artists: filtered by genre + album (NOT artist) + search
+    let artists = {
+        let (mut conds, params) = build_filter_conditions(genre, None, album, search);
+        conds.insert(
+            0,
+            "COALESCE(album_artist, artist) IS NOT NULL AND COALESCE(album_artist, artist) != ''"
+                .to_string(),
+        );
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT COALESCE(album_artist, artist) as display_artist, COUNT(*) as track_count, COUNT(DISTINCT album) as album_count FROM tracks {} GROUP BY display_artist ORDER BY display_artist COLLATE NOCASE ASC",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(ArtistSummary {
+                    name: row.get(0)?,
+                    track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
+                    album_count: row.get::<_, i64>(2).map(|v| v as usize)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?
+    };
+
+    // Albums: filtered by genre + artist (NOT album) + search
+    let albums = {
+        let (mut conds, params) = build_filter_conditions(genre, artist, None, search);
+        conds.insert(0, "album IS NOT NULL AND album != ''".to_string());
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT album, COALESCE(album_artist, artist) as display_artist, MIN(year) as year, COUNT(*) as track_count, MIN(folder_path) as folder_path FROM tracks {} GROUP BY album, display_artist ORDER BY album COLLATE NOCASE ASC",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(AlbumSummary {
+                    name: row.get(0)?,
+                    artist: row.get(1)?,
+                    year: row.get(2)?,
+                    track_count: row.get::<_, i64>(3).map(|v| v as usize)?,
+                    folder_path: row.get(4)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?
+    };
+
+    Ok(BrowserData {
+        tracks,
+        genres,
+        artists,
+        albums,
+    })
 }
 
 pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<LibraryTrack>, String> {
@@ -854,6 +1007,89 @@ mod tests {
         let a1 = artists.iter().find(|a| a.name == "Artist1").unwrap();
         assert_eq!(a1.track_count, 2);
         assert_eq!(a1.album_count, 2);
+    }
+
+    #[test]
+    fn browser_data_filters_albums_by_artist() {
+        let conn = test_db();
+        // Beatles: 2 albums
+        insert_test_track(
+            &conn,
+            "/m/a1.mp3",
+            "Come Together",
+            "Beatles",
+            "Abbey Road",
+            "Rock",
+            1969,
+        );
+        insert_test_track(
+            &conn,
+            "/m/a2.mp3",
+            "Let It Be",
+            "Beatles",
+            "Let It Be",
+            "Rock",
+            1970,
+        );
+        // Pink Floyd: 2 albums
+        insert_test_track(
+            &conn,
+            "/m/b1.mp3",
+            "Money",
+            "Pink Floyd",
+            "Dark Side",
+            "Rock",
+            1973,
+        );
+        insert_test_track(
+            &conn,
+            "/m/b2.mp3",
+            "Brick",
+            "Pink Floyd",
+            "The Wall",
+            "Rock",
+            1979,
+        );
+        // Jazz artist
+        insert_test_track(
+            &conn,
+            "/m/c1.mp3",
+            "So What",
+            "Miles Davis",
+            "Kind of Blue",
+            "Jazz",
+            1959,
+        );
+
+        // Filter by Beatles
+        let filter = LibraryFilter {
+            artist: Some("Beatles".to_string()),
+            genre: None,
+            album: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
+        };
+        let data = get_browser_data(&conn, &filter).unwrap();
+
+        // Tracks: only Beatles tracks
+        assert_eq!(data.tracks.len(), 2);
+
+        // Albums: only Beatles albums
+        assert_eq!(data.albums.len(), 2);
+        let album_names: Vec<&str> = data.albums.iter().map(|a| a.name.as_str()).collect();
+        assert!(album_names.contains(&"Abbey Road"));
+        assert!(album_names.contains(&"Let It Be"));
+        assert!(!album_names.contains(&"Dark Side"));
+        assert!(!album_names.contains(&"The Wall"));
+        assert!(!album_names.contains(&"Kind of Blue"));
+
+        // Genres: only genres Beatles tracks have (Rock)
+        assert_eq!(data.genres.len(), 1);
+        assert_eq!(data.genres[0].name, "Rock");
+
+        // Artists: should show ALL artists (not filtered by artist)
+        assert_eq!(data.artists.len(), 3);
     }
 
     #[test]

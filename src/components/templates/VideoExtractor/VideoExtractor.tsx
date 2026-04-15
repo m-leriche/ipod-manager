@@ -215,10 +215,10 @@ export const VideoExtractor = () => {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
           {result.cancelled ? (
-            <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Extraction cancelled</div>
+            <div className="px-3 py-2 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Extraction cancelled</div>
           ) : result.success ? (
             <>
-              <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+              <div className="px-3 py-2 rounded-xl bg-success/10 text-success text-[11px] mb-4">
                 {result.file_paths.length > 1
                   ? `Extraction complete — ${result.file_paths.length} tracks`
                   : "Extraction complete — 1 audio file created"}
@@ -238,7 +238,7 @@ export const VideoExtractor = () => {
               )}
             </>
           ) : (
-            <div className="px-4 py-3 rounded-xl bg-danger/10 text-danger text-[11px] mb-4">
+            <div className="px-3 py-2 rounded-xl bg-danger/10 text-danger text-[11px] mb-4">
               {result.error || "Extraction failed"}
             </div>
           )}
@@ -263,30 +263,28 @@ export const VideoExtractor = () => {
 
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="w-full max-w-lg">
-        <p className="text-text-tertiary text-xs mb-4 text-center">Select a video file to extract audio</p>
+      <div className="w-full max-w-md flex flex-col gap-3">
+        <p className="text-text-tertiary text-xs text-center">Select a video file to extract audio</p>
 
         {/* Video file picker */}
-        <div className="mb-3">
-          <div
-            className="flex items-center gap-3 bg-bg-secondary border border-border rounded-xl px-4 py-2.5 cursor-pointer hover:border-border-active transition-colors"
-            onClick={browseVideo}
+        <div
+          className="flex items-center gap-3 bg-bg-secondary border border-border rounded-xl px-4 py-2.5 cursor-pointer hover:border-border-active transition-colors"
+          onClick={browseVideo}
+        >
+          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Video</span>
+          <span
+            className={`flex-1 min-w-0 text-xs font-medium truncate ${videoPath ? "text-text-secondary" : "text-text-tertiary"}`}
           >
-            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Video</span>
-            <span
-              className={`flex-1 min-w-0 text-xs font-medium truncate ${videoPath ? "text-text-secondary" : "text-text-tertiary"}`}
-            >
-              {videoPath ? fileNameFromPath(videoPath) : "No file selected"}
-            </span>
-            <span className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-[11px] font-medium shrink-0">
-              Browse
-            </span>
-          </div>
+            {videoPath ? fileNameFromPath(videoPath) : "No file selected"}
+          </span>
+          <span className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-[11px] font-medium shrink-0">
+            Browse
+          </span>
         </div>
 
         {/* Video info */}
         {videoInfo && (
-          <div className="bg-bg-secondary border border-border rounded-xl px-4 py-2.5 mb-3">
+          <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
             <p className="text-xs font-medium text-text-primary truncate">{videoInfo.title}</p>
             <p className="text-[11px] text-text-tertiary mt-0.5">Duration: {videoInfo.duration_display}</p>
           </div>
@@ -294,24 +292,20 @@ export const VideoExtractor = () => {
 
         {/* Chapter editor */}
         {videoInfo && (
-          <div className="mb-3">
-            <ChapterEditor
-              chapters={chapters}
-              errors={chapterErrors}
-              onAdd={addChapter}
-              onRemove={removeChapter}
-              onChange={updateChapter}
-            />
-          </div>
+          <ChapterEditor
+            chapters={chapters}
+            errors={chapterErrors}
+            onAdd={addChapter}
+            onRemove={removeChapter}
+            onChange={updateChapter}
+          />
         )}
 
         {/* Output folder */}
-        <div className="mb-3">
-          <FolderPicker label="Output" path={outputDir || null} onBrowse={browseOutput} />
-        </div>
+        <FolderPicker label="Output" path={outputDir || null} onBrowse={browseOutput} />
 
         {/* Format selector */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
           <div className="flex gap-1">
             <FormatButton label="FLAC" active={format === "flac"} onClick={() => setFormat("flac")} />
@@ -326,12 +320,12 @@ export const VideoExtractor = () => {
         <button
           onClick={startExtract}
           disabled={!canExtract}
-          className="w-full px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
         >
           {chapters.length > 0 ? `Extract ${chapters.length} Tracks` : "Extract Audio"}
         </button>
 
-        {error && <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
+        {error && <div className="px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
       </div>
     </div>
   );

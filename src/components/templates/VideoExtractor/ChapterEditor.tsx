@@ -21,7 +21,7 @@ export const ChapterEditor = ({ chapters, errors, onAdd, onRemove, onChange }: C
     </div>
 
     {chapters.length === 0 ? (
-      <div className="px-5 py-6 text-center text-text-tertiary text-xs">
+      <div className="px-5 py-12 text-center text-text-tertiary text-xs">
         No chapters — audio will be extracted as a single file
       </div>
     ) : (

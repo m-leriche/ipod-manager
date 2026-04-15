@@ -234,13 +234,15 @@ export const SyncManager = () => {
             path={targetFolder}
             onBrowse={() => browse(setTargetPath, "Select target folder")}
           />
-          <button
-            disabled={!sourceFolder || !targetFolder}
-            onClick={() => setComparing(true)}
-            className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium shrink-0 transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            Compare Folders
-          </button>
+          <div className="flex justify-end shrink-0">
+            <button
+              disabled={!sourceFolder || !targetFolder}
+              onClick={() => setComparing(true)}
+              className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+            >
+              Compare Folders
+            </button>
+          </div>
         </>
       )}
     </div>

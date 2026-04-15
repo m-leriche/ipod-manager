@@ -156,7 +156,7 @@ export const AlbumArtManager = () => {
           <button
             onClick={() => scan()}
             disabled={!scanPath}
-            className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
           >
             Scan for Missing Art
           </button>
@@ -177,7 +177,7 @@ export const AlbumArtManager = () => {
   return (
     <>
       {/* Path bar */}
-      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-5 py-2.5 shrink-0">
+      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
         <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Folder</span>
         <span className="flex-1 min-w-0 text-[11px] text-text-secondary font-medium truncate">{scanPath}</span>
         <button
@@ -190,7 +190,7 @@ export const AlbumArtManager = () => {
       </div>
 
       {/* Stats */}
-      <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
+      <div className="flex gap-5 px-5 py-3 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
         <span className="text-text-secondary">{albums.length} albums</span>
         <span className="text-success">{hasCover.length} have art</span>
         <span className="text-accent">{extractable.length} extractable</span>
@@ -231,7 +231,7 @@ export const AlbumArtManager = () => {
           <button
             onClick={fix}
             disabled={selected.size === 0}
-            className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
           >
             Fix {selected.size} Albums
           </button>

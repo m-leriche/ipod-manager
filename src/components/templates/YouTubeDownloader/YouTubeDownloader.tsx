@@ -167,15 +167,15 @@ export const YouTubeDownloader = () => {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
           {result.cancelled ? (
-            <div className="px-4 py-3 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Download cancelled</div>
+            <div className="px-3 py-2 rounded-xl bg-warning/10 text-warning text-[11px] mb-4">Download cancelled</div>
           ) : result.success ? (
             <>
               {hasChapters ? (
-                <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+                <div className="px-3 py-2 rounded-xl bg-success/10 text-success text-[11px] mb-4">
                   {`Download complete — ${result.file_paths.length} tracks`}
                 </div>
               ) : (
-                <div className="px-4 py-3 rounded-xl bg-success/10 text-success text-[11px] mb-4">
+                <div className="px-3 py-2 rounded-xl bg-success/10 text-success text-[11px] mb-4">
                   No chapters found. One audio file created.
                 </div>
               )}
@@ -194,7 +194,7 @@ export const YouTubeDownloader = () => {
               )}
             </>
           ) : (
-            <div className="px-4 py-3 rounded-xl bg-danger/10 text-danger text-[11px] mb-4">
+            <div className="px-3 py-2 rounded-xl bg-danger/10 text-danger text-[11px] mb-4">
               {result.error || "Download failed"}
             </div>
           )}
@@ -232,8 +232,8 @@ export const YouTubeDownloader = () => {
   if (phase === "ready" && videoInfo) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-md">
-          <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-4">
+        <div className="w-full max-w-md flex flex-col gap-3">
+          <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
             <p className="text-[11px] font-medium text-text-primary mb-1 truncate">{videoInfo.title}</p>
             <p className="text-[10px] text-text-tertiary">
               {videoInfo.uploader} — {videoInfo.duration}
@@ -241,7 +241,7 @@ export const YouTubeDownloader = () => {
           </div>
 
           {videoInfo.chapters.length > 0 && (
-            <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3 mb-4">
+            <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
               <p className="text-[10px] font-medium text-text-secondary mb-2">
                 {videoInfo.chapters.length} chapters — will split into individual tracks
               </p>
@@ -258,7 +258,7 @@ export const YouTubeDownloader = () => {
             </div>
           )}
 
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2">
             <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
             <div className="flex gap-1">
               <FormatButton label="FLAC" active={format === "flac"} onClick={() => setFormat("flac")} />
@@ -269,7 +269,7 @@ export const YouTubeDownloader = () => {
           <div className="flex gap-2">
             <button
               onClick={startDownload}
-              className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
+              className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
             >
               {hasChapters
                 ? `Download ${videoInfo.chapters.length} tracks as ${format.toUpperCase()}`
@@ -281,13 +281,13 @@ export const YouTubeDownloader = () => {
                 setVideoInfo(null);
                 setError(null);
               }}
-              className="px-3 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium hover:bg-bg-hover hover:text-text-primary transition-all"
+              className="px-3 py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium hover:bg-bg-hover hover:text-text-primary transition-all"
             >
               Back
             </button>
           </div>
 
-          {error && <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
+          {error && <div className="px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
         </div>
       </div>
     );
@@ -297,24 +297,20 @@ export const YouTubeDownloader = () => {
 
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="w-full max-w-md">
-        <p className="text-text-tertiary text-xs mb-4 text-center">Paste a YouTube URL to download audio</p>
+      <div className="w-full max-w-md flex flex-col gap-3">
+        <p className="text-text-tertiary text-xs text-center">Paste a YouTube URL to download audio</p>
 
-        <div className="mb-3">
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
-            className="w-full px-3 py-2 bg-bg-card border border-border rounded-xl text-[11px] text-text-primary outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
-          />
-        </div>
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://www.youtube.com/watch?v=..."
+          className="w-full px-3 py-2 bg-bg-card border border-border rounded-xl text-[11px] text-text-primary outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
+        />
 
-        <div className="mb-3">
-          <FolderPicker label="Output" path={outputDir || null} onBrowse={browse} />
-        </div>
+        <FolderPicker label="Output" path={outputDir || null} onBrowse={browse} />
 
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2">
           <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Format</span>
           <div className="flex gap-1">
             <FormatButton label="FLAC" active={format === "flac"} onClick={() => setFormat("flac")} />
@@ -328,12 +324,12 @@ export const YouTubeDownloader = () => {
         <button
           onClick={fetchInfo}
           disabled={!canDownload}
-          className="w-full px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
         >
           Download
         </button>
 
-        {error && <div className="mt-3 px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
+        {error && <div className="px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger">{error}</div>}
       </div>
     </div>
   );

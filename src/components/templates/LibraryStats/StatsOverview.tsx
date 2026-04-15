@@ -16,7 +16,7 @@ const FORMAT_COLORS: Record<string, string> = {
 
 const StatCard = ({ label, value }: { label: string; value: string }) => (
   <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
-    <p className="text-[10px] text-text-tertiary uppercase tracking-wider mb-1">{label}</p>
+    <p className="text-[10px] text-text-tertiary uppercase tracking-widest mb-1">{label}</p>
     <p className="text-lg font-bold text-text-primary">{value}</p>
   </div>
 );
@@ -147,7 +147,7 @@ export const StatsOverview = ({
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-4">
-    <h3 className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider mb-3">{title}</h3>
+    <h3 className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest mb-3">{title}</h3>
     {children}
   </div>
 );

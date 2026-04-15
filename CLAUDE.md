@@ -115,6 +115,22 @@ cd src-tauri && cargo check
 npm test
 ```
 
+## Library Player TODOs
+
+- [ ] Refine playback engine — gapless transitions, handle unsupported formats gracefully, persist queue across restarts
+- [ ] Improve library loading — show skeleton/shimmer while scanning, background incremental re-scan on app launch
+- [ ] Virtual scrolling for large track tables (10k+ rows)
+- [ ] Scroll position preservation when switching between column browser selections
+- [ ] Lazy-load album artwork in column browser and grid views (batch load visible items)
+- [ ] Waveform preview in now-playing bar
+- [ ] Playlist support — create, edit, reorder, persist to database
+- [ ] Drag-to-reorder queue panel
+- [ ] Keyboard navigation in column browser (arrow keys to move selection, enter to confirm)
+- [ ] Resizable column browser height (drag the divider between browser and track table)
+- [ ] Remember column widths, sort preferences, and column browser selections in localStorage
+- [ ] Right-click context menus in column browser (play all by artist, etc.)
+- [ ] Status bar with total library stats (tracks, duration, size)
+
 ## Code Style
 
 - Write clean, concise code. No fluff, no over-engineering.

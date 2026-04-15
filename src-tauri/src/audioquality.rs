@@ -1,15 +1,11 @@
+use crate::audio_utils::collect_audio_files;
 use base64::Engine;
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
-
-const AUDIO_EXT: &[&str] = &[
-    "mp3", "flac", "m4a", "ogg", "opus", "wav", "aiff", "wma", "aac",
-];
 
 const LOSSLESS_CODECS: &[&str] = &[
     "flac",
@@ -58,45 +54,8 @@ pub struct SpectrogramResult {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-fn is_audio(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| AUDIO_EXT.contains(&e.to_lowercase().as_str()))
-        .unwrap_or(false)
-}
-
 fn is_lossless_codec(codec: &str) -> bool {
     LOSSLESS_CODECS.contains(&codec.to_lowercase().as_str())
-}
-
-fn collect_audio_files(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    let mut dirs = Vec::new();
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        if path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|n| n.starts_with('.'))
-            .unwrap_or(false)
-        {
-            continue;
-        }
-        if path.is_dir() {
-            dirs.push(path);
-        } else if is_audio(&path) {
-            files.push(path);
-        }
-    }
-
-    dirs.sort();
-    for d in dirs {
-        collect_audio_files(&d, files);
-    }
 }
 
 fn highpass_cutoff(sample_rate: u32) -> u32 {
@@ -544,13 +503,6 @@ mod tests {
         assert_eq!(format_sample_rate(44100), "44.1kHz");
         assert_eq!(format_sample_rate(48000), "48kHz");
         assert_eq!(format_sample_rate(96000), "96kHz");
-    }
-
-    #[test]
-    fn is_audio_recognizes_formats() {
-        assert!(is_audio(Path::new("song.flac")));
-        assert!(is_audio(Path::new("song.MP3")));
-        assert!(!is_audio(Path::new("readme.txt")));
     }
 
     #[test]

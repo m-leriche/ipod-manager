@@ -1,8 +1,10 @@
 mod albumart;
+mod audio_utils;
 mod audioquality;
 mod commands;
 mod disk;
 mod files;
+mod library;
 mod libstats;
 mod localvideo;
 mod metadata;
@@ -14,6 +16,8 @@ mod sanitize;
 mod youtube;
 
 use files::SyncCancel;
+use library::LibraryDb;
+use tauri::Manager;
 
 /// Ensure Homebrew binary paths are on PATH so bundled .app can find
 /// tools like ffmpeg, ffprobe, and yt-dlp.
@@ -40,6 +44,18 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(SyncCancel::new())
         .setup(|app| {
+            // Initialize library database
+            let db_path = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Failed to resolve app data dir: {}", e))
+                .unwrap()
+                .join("library.db");
+
+            let conn = library::init_db(&db_path).expect("Failed to initialize library database");
+
+            app.manage(LibraryDb::new(conn));
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -85,6 +101,16 @@ pub fn run() {
             commands::generate_waveform,
             commands::scan_library_stats,
             commands::read_rockbox_playdata,
+            commands::add_library_folder,
+            commands::remove_library_folder,
+            commands::get_library_folders,
+            commands::refresh_library,
+            commands::get_library_tracks,
+            commands::get_library_artists,
+            commands::get_library_albums,
+            commands::get_library_genres,
+            commands::search_library,
+            commands::show_in_finder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

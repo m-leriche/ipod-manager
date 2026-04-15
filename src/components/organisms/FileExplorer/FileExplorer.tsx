@@ -46,6 +46,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
     const [renamingEntry, setRenamingEntry] = useState<string | null>(null);
     const [creatingFolder, setCreatingFolder] = useState(false);
+    const [filter, setFilter] = useState("");
 
     const containerRef = useRef<HTMLDivElement>(null);
     const pathRef = useRef(path);
@@ -60,6 +61,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
       setError(null);
       setRenamingEntry(null);
       setCreatingFolder(false);
+      setFilter("");
       try {
         const r = await invoke<FileEntry[]>("list_directory", { path: p });
         setEntries(r);
@@ -235,6 +237,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     // ── Navigation ─────────────────────────────────────────────────
 
+    const filteredEntries = useMemo(() => {
+      if (!filter) return entries;
+      const lower = filter.toLowerCase();
+      return entries.filter((e) => e.name.toLowerCase().includes(lower));
+    }, [entries, filter]);
+
     const canUp = allowParentNavigation ? path !== "/" : path !== rootPath;
     const above = !path.startsWith(rootPath);
     const rel = path.startsWith(rootPath) ? path.slice(rootPath.length) : path;
@@ -287,6 +295,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
               </span>
             ))}
           </div>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setFilter("");
+              e.stopPropagation();
+            }}
+            placeholder="Filter..."
+            className="w-28 px-2 py-1 rounded-lg text-[11px] bg-bg-card border border-border text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 transition-all shrink-0"
+          />
           {onSelectFolder && (
             <button
               onClick={() => onSelectFolder(path)}
@@ -308,9 +327,11 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
           </CenterMsg>
         )}
         {error && <CenterMsg className="text-danger">{error}</CenterMsg>}
-        {!loading && !error && entries.length === 0 && !creatingFolder && <CenterMsg>Empty folder</CenterMsg>}
+        {!loading && !error && filteredEntries.length === 0 && !creatingFolder && (
+          <CenterMsg>{filter ? "No matches" : "Empty folder"}</CenterMsg>
+        )}
 
-        {!loading && !error && (entries.length > 0 || creatingFolder) && (
+        {!loading && !error && (filteredEntries.length > 0 || creatingFolder) && (
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <table className="w-full border-collapse table-fixed">
               <thead className="sticky top-0 z-10">
@@ -339,7 +360,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                   </tr>
                 )}
 
-                {entries.map((e) => {
+                {filteredEntries.map((e) => {
                   const rowSelected = isSelected(e.name);
                   const rowCut = isCut(joinPath(path, e.name));
                   const isFolderDropTarget = e.is_dir && dnd.dropTargetFolder === joinPath(path, e.name);
@@ -402,7 +423,9 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         <div className="px-4 py-2 border-t border-border text-[11px] text-text-tertiary shrink-0">
           {!loading && !error && (
             <>
-              {entries.filter((e) => e.is_dir).length} folders, {entries.filter((e) => !e.is_dir).length} files
+              {filteredEntries.filter((e) => e.is_dir).length} folders,{" "}
+              {filteredEntries.filter((e) => !e.is_dir).length} files
+              {filter && ` (of ${entries.length})`}
               {selected.size > 0 && ` \u2014 ${selected.size} selected`}
             </>
           )}

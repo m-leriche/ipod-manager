@@ -1,13 +1,13 @@
-import type { Profile } from "../../../types/profiles";
-
 export interface ProfileSelectorProps {
-  profiles: Profile[];
-  activeProfile: Profile | null;
+  profiles: { name: string }[];
+  activeProfile: { name: string } | null;
   onSwitch: (name: string) => void;
   onCreate: (name: string) => void;
   onDelete: (name: string) => void;
-  onToggleFilters: () => void;
-  filterCount: number;
+  onRename?: (oldName: string, newName: string) => void;
+  onDuplicate?: (sourceName: string, newName: string) => void;
+  onToggleFilters?: () => void;
+  filterCount?: number;
   isDirty?: boolean;
   onSave?: () => void;
   onDiscard?: () => void;

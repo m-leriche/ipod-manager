@@ -17,6 +17,8 @@ pub struct Profile {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ProfileStore {
     pub profiles: Vec<Profile>,
+    #[serde(default)]
+    pub active_profile: Option<String>,
 }
 
 fn profiles_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -44,6 +46,60 @@ pub fn save_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), String
     let data = serde_json::to_string_pretty(store)
         .map_err(|e| format!("Failed to serialize profiles: {}", e))?;
     fs::write(&path, data).map_err(|e| format!("Failed to write profiles: {}", e))
+}
+
+// ── Browse profiles ──────────────────────────────────────────────
+
+fn default_layout() -> String {
+    "horizontal".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BrowseProfile {
+    pub name: String,
+    #[serde(default)]
+    pub left_path: Option<String>,
+    #[serde(default)]
+    pub right_path: Option<String>,
+    #[serde(default)]
+    pub dual_pane: bool,
+    #[serde(default = "default_layout")]
+    pub layout: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct BrowseProfileStore {
+    pub profiles: Vec<BrowseProfile>,
+    #[serde(default)]
+    pub active_profile: Option<String>,
+}
+
+fn browse_profiles_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    Ok(dir.join("browse_profiles.json"))
+}
+
+pub fn load_browse_profiles(app: &AppHandle) -> Result<BrowseProfileStore, String> {
+    let path = browse_profiles_path(app)?;
+    if !path.exists() {
+        return Ok(BrowseProfileStore::default());
+    }
+    let data =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read browse profiles: {}", e))?;
+    serde_json::from_str(&data).map_err(|e| format!("Failed to parse browse profiles: {}", e))
+}
+
+pub fn save_browse_profiles(app: &AppHandle, store: &BrowseProfileStore) -> Result<(), String> {
+    let path = browse_profiles_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create data dir: {}", e))?;
+    }
+    let data = serde_json::to_string_pretty(store)
+        .map_err(|e| format!("Failed to serialize browse profiles: {}", e))?;
+    fs::write(&path, data).map_err(|e| format!("Failed to write browse profiles: {}", e))
 }
 
 /// Check if a relative path should be excluded.

@@ -280,8 +280,7 @@ pub fn scan_library_stats(
         .collect();
     year_distribution.sort_by_key(|e| e.year);
 
-    let average_bitrate_kbps =
-        (total_bitrate_kbps.checked_div(bitrate_count).unwrap_or(0)) as u32;
+    let average_bitrate_kbps = (total_bitrate_kbps.checked_div(bitrate_count).unwrap_or(0)) as u32;
 
     Ok(LibraryStats {
         total_tracks: total,

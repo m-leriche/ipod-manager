@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export interface ColumnDef {
   key: string;
@@ -6,10 +6,36 @@ export interface ColumnDef {
   initialWidth: number;
 }
 
+const STORAGE_KEY = "crate-column-widths";
+
+const loadWidths = (columns: ColumnDef[]): number[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return columns.map((c) => c.initialWidth);
+    const saved = JSON.parse(raw) as Record<string, number>;
+    return columns.map((c) => saved[c.key] ?? c.initialWidth);
+  } catch {
+    return columns.map((c) => c.initialWidth);
+  }
+};
+
+const saveWidths = (columns: ColumnDef[], widths: number[]) => {
+  const map: Record<string, number> = {};
+  columns.forEach((c, i) => {
+    map[c.key] = widths[i];
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+};
+
 export const useColumnResize = (columns: ColumnDef[]) => {
-  const [widths, setWidths] = useState<number[]>(() => columns.map((c) => c.initialWidth));
+  const [widths, setWidths] = useState<number[]>(() => loadWidths(columns));
   const draggingRef = useRef(false);
   const didDragRef = useRef(false);
+
+  // Persist widths to localStorage when they change
+  useEffect(() => {
+    saveWidths(columns, widths);
+  }, [columns, widths]);
 
   const onResizeStart = useCallback(
     (colIndex: number, e: React.MouseEvent) => {

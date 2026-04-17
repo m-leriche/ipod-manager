@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
@@ -15,6 +15,7 @@ import { QualityAnalyzer } from "./components/templates/QualityAnalyzer/QualityA
 import { LibraryStats } from "./components/templates/LibraryStats/LibraryStats";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
+import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
 import type { LibraryScanProgress } from "./types/library";
 
 type TopTab = "library" | "tools";
@@ -32,8 +33,17 @@ const App = () => (
 const AppContent = () => {
   const [topTab, setTopTab] = useState<TopTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("browse");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const libraryRefreshRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("open-settings", () => setSettingsOpen(true)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
 
   const handleRescan = useCallback(async () => {
     startProgress("Rescanning library...", () => invoke("cancel_sync"));
@@ -130,6 +140,10 @@ const AppContent = () => {
       </main>
 
       <NowPlayingBar />
+
+      {settingsOpen && (
+        <SettingsModal onClose={() => setSettingsOpen(false)} onLibraryChanged={() => libraryRefreshRef.current?.()} />
+      )}
     </div>
   );
 };

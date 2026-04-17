@@ -199,7 +199,7 @@ export const TrackTable = memo(function TrackTable({
 
   return (
     <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
-      <table className="table-fixed" style={{ minWidth: totalWidth }}>
+      <table className="table-fixed" style={{ width: totalWidth }}>
         <colgroup>
           {widths.map((w, i) => (
             <col key={COLUMNS[i].key} style={{ width: w }} />

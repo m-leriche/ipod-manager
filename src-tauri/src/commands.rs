@@ -237,7 +237,14 @@ pub async fn probe_video(path: String) -> Result<localvideo::VideoProbe, String>
 pub async fn get_accurate_duration(path: String) -> Result<f64, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let output = Command::new("ffprobe")
-            .args(["-v", "quiet", "-print_format", "json", "-show_format", &path])
+            .args([
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_format",
+                &path,
+            ])
             .output()
             .map_err(|e| format!("ffprobe failed: {}", e))?;
 

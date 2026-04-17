@@ -409,11 +409,9 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       // Show requested position immediately for responsiveness
       setTime((prev) => ({ ...prev, currentTime: t }));
       // Correct to the actual position once the browser finishes seeking
-      audio.addEventListener(
-        "seeked",
-        () => setTime((prev) => ({ ...prev, currentTime: audio.currentTime })),
-        { once: true },
-      );
+      audio.addEventListener("seeked", () => setTime((prev) => ({ ...prev, currentTime: audio.currentTime })), {
+        once: true,
+      });
     },
     [getActiveAudio],
   );

@@ -17,7 +17,8 @@ mod youtube;
 
 use files::SyncCancel;
 use library::LibraryDb;
-use tauri::Manager;
+use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
+use tauri::{Emitter, Manager};
 
 /// Ensure Homebrew binary paths are on PATH so bundled .app can find
 /// tools like ffmpeg, ffprobe, and yt-dlp.
@@ -63,6 +64,69 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // ── Native macOS menu bar ───────────────────────────────────
+            let settings_item = MenuItemBuilder::new("Settings...")
+                .id("settings")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?;
+
+            let app_submenu = Submenu::with_items(
+                app,
+                "Crate",
+                true,
+                &[
+                    &PredefinedMenuItem::about(app, Some("About Crate"), None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &settings_item,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::services(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::hide(app, None)?,
+                    &PredefinedMenuItem::hide_others(app, None)?,
+                    &PredefinedMenuItem::show_all(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, None)?,
+                ],
+            )?;
+
+            let edit_submenu = Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app, None)?,
+                    &PredefinedMenuItem::redo(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::cut(app, None)?,
+                    &PredefinedMenuItem::copy(app, None)?,
+                    &PredefinedMenuItem::paste(app, None)?,
+                    &PredefinedMenuItem::select_all(app, None)?,
+                ],
+            )?;
+
+            let window_submenu = Submenu::with_items(
+                app,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(app, None)?,
+                    &PredefinedMenuItem::maximize(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::close_window(app, None)?,
+                ],
+            )?;
+
+            let menu = Menu::with_items(app, &[&app_submenu, &edit_submenu, &window_submenu])?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(move |app_handle, event| {
+                if event.id().as_ref() == "settings" {
+                    let _ = app_handle.emit("open-settings", ());
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

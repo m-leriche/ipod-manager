@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { PlaybackButton } from "../../atoms/PlaybackButton/PlaybackButton";
 import { SeekBar } from "../../atoms/SeekBar/SeekBar";
 
@@ -35,7 +36,14 @@ export const TransportControls = ({
   onToggleShuffle,
   onCycleRepeat,
 }: TransportControlsProps) => {
-  const fraction = duration > 0 ? currentTime / duration : 0;
+  const [scrubFraction, setScrubFraction] = useState<number | null>(null);
+
+  const handleScrub = useCallback((fraction: number | null) => {
+    setScrubFraction(fraction);
+  }, []);
+
+  const fraction = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  const displayTime = scrubFraction !== null ? scrubFraction * duration : Math.min(currentTime, duration || Infinity);
 
   return (
     <div className="flex flex-col items-center gap-1 w-full max-w-[600px]">
@@ -102,8 +110,8 @@ export const TransportControls = ({
       </div>
 
       <div className="flex items-center gap-2 w-full">
-        <span className="text-[10px] text-text-tertiary tabular-nums w-8 text-right">{formatTime(currentTime)}</span>
-        <SeekBar value={fraction} onChange={onSeek} className="flex-1" />
+        <span className="text-[10px] text-text-tertiary tabular-nums w-8 text-right">{formatTime(displayTime)}</span>
+        <SeekBar value={fraction} onChange={onSeek} onScrub={handleScrub} className="flex-1" />
         <span className="text-[10px] text-text-tertiary tabular-nums w-8">{formatTime(duration)}</span>
       </div>
     </div>

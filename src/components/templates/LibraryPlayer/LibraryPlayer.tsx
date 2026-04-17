@@ -156,11 +156,16 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
 
   const handleSelectAlbum = useCallback((album: string | null) => {
     setSelectedAlbum(album);
+    if (album) {
+      setSortBy("track_number");
+      setSortDirection("asc");
+    }
   }, []);
 
   const handlePlayColumn = useCallback(() => {
     playAfterFetchRef.current = true;
-  }, []);
+    fetchBrowserData();
+  }, [fetchBrowserData]);
 
   // ── Add folder ────────────────────────────────────────────────
 

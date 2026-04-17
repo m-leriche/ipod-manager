@@ -11,6 +11,7 @@ use crate::profiles::{self, BrowseProfileStore, ProfileStore};
 use crate::rockbox;
 use crate::sanitize;
 use crate::youtube;
+use std::process::Command;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -230,6 +231,37 @@ pub async fn probe_video(path: String) -> Result<localvideo::VideoProbe, String>
     tauri::async_runtime::spawn_blocking(move || localvideo::probe_video(&path))
         .await
         .map_err(|e| format!("Probe failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_accurate_duration(path: String) -> Result<f64, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = Command::new("ffprobe")
+            .args([
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_format",
+                &path,
+            ])
+            .output()
+            .map_err(|e| format!("ffprobe failed: {}", e))?;
+
+        if !output.status.success() {
+            return Err("ffprobe error".to_string());
+        }
+
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse ffprobe output: {}", e))?;
+
+        json["format"]["duration"]
+            .as_str()
+            .and_then(|s| s.parse::<f64>().ok())
+            .ok_or_else(|| "No duration in ffprobe output".to_string())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]

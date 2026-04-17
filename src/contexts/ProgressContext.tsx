@@ -36,6 +36,8 @@ const ProgressContext = createContext<ProgressContextValue | null>(null);
 export const ProgressProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<ProgressState>(initial);
   const cancelRef = useRef<(() => void) | null>(null);
+  const lastDockPercentRef = useRef<number | null>(null);
+  const generationRef = useRef(0);
 
   const win = getCurrentWindow();
 
@@ -57,6 +59,8 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
 
   const start = useCallback(
     (title: string, cancelFn?: () => void) => {
+      generationRef.current++;
+      lastDockPercentRef.current = null;
       cancelRef.current = cancelFn ?? null;
       setState({
         active: true,
@@ -74,14 +78,19 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
 
   const update = useCallback(
     (completed: number, total: number, currentItem?: string) => {
+      const gen = generationRef.current;
       setState((prev) => ({
         ...prev,
         completed,
         total,
         currentItem: currentItem ?? prev.currentItem,
       }));
-      if (total > 0) {
-        setDockIndicator(Math.round((completed / total) * 100));
+      if (total > 0 && gen === generationRef.current) {
+        const pct = Math.round((completed / total) * 100);
+        if (pct !== lastDockPercentRef.current) {
+          lastDockPercentRef.current = pct;
+          setDockIndicator(pct);
+        }
       }
     },
     [setDockIndicator],
@@ -89,20 +98,24 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
 
   const finish = useCallback(
     (message: string) => {
+      generationRef.current++;
       cancelRef.current = null;
+      lastDockPercentRef.current = 100;
       setState((prev) => ({
         ...prev,
         canCancel: false,
         result: { message, success: true },
       }));
-      setDockIndicator();
+      setDockIndicator(100);
     },
     [setDockIndicator],
   );
 
   const fail = useCallback(
     (message: string) => {
+      generationRef.current++;
       cancelRef.current = null;
+      lastDockPercentRef.current = null;
       setState((prev) => ({
         ...prev,
         canCancel: false,
@@ -115,6 +128,7 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
 
   const dismiss = useCallback(() => {
     cancelRef.current = null;
+    lastDockPercentRef.current = null;
     setState(initial);
     setDockIndicator();
   }, [setDockIndicator]);

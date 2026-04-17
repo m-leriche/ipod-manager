@@ -5,7 +5,7 @@ use lofty::tag::ItemKey;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -301,6 +301,107 @@ pub fn scan_folder(
     Ok(scanned)
 }
 
+pub fn rescan_all_folders(
+    conn: &Connection,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    let folders = get_folders(conn)?;
+
+    // Collect all audio files across all folders upfront for unified progress
+    let mut all_files: Vec<(PathBuf, String)> = Vec::new();
+    for folder in &folders {
+        let root = Path::new(&folder.path);
+        if !root.exists() {
+            continue;
+        }
+        let mut folder_files = Vec::new();
+        collect_audio_files(root, &mut folder_files);
+        for f in folder_files {
+            all_files.push((f, folder.path.clone()));
+        }
+    }
+
+    let total = all_files.len();
+    let now = now_epoch();
+
+    for (i, (file_path, _folder_path)) in all_files.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".to_string());
+        }
+
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let _ = app.emit(
+            "library-scan-progress",
+            LibraryScanProgress {
+                total,
+                completed: i,
+                current_file: file_name,
+            },
+        );
+
+        let file_path_str = file_path.to_string_lossy().to_string();
+        let mtime = fs::metadata(file_path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        let existing_mtime: Option<i64> = conn
+            .query_row(
+                "SELECT modified_at FROM tracks WHERE file_path = ?1",
+                params![file_path_str],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if existing_mtime == Some(mtime) {
+            continue;
+        }
+
+        if let Some(track_data) = read_track_for_library(file_path) {
+            upsert_track(conn, &track_data, mtime, now)?;
+        }
+    }
+
+    // Remove orphaned tracks for each folder
+    for folder in &folders {
+        let mut stmt = conn
+            .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        let db_paths: Vec<String> = stmt
+            .query_map(params![format!("{}%", folder.path)], |row| row.get(0))
+            .map_err(|e| format!("Query failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for db_path in &db_paths {
+            if !Path::new(db_path).exists() {
+                conn.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
+                    .ok();
+            }
+        }
+    }
+
+    // Emit final progress
+    let _ = app.emit(
+        "library-scan-progress",
+        LibraryScanProgress {
+            total,
+            completed: total,
+            current_file: String::new(),
+        },
+    );
+
+    Ok(())
+}
+
 struct TrackData {
     file_path: String,
     file_name: String,
@@ -350,6 +451,15 @@ fn read_track_for_library(path: &Path) -> Option<TrackData> {
 
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
 
+    let trim_tag = |s: &str| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    };
+
     let (
         title,
         artist,
@@ -364,19 +474,19 @@ fn read_track_for_library(path: &Path) -> Option<TrackData> {
         genre,
     ) = if let Some(tag) = tag {
         (
-            tag.title().map(|s| s.to_string()),
-            tag.artist().map(|s| s.to_string()),
-            tag.album().map(|s| s.to_string()),
-            tag.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string()),
+            tag.title().and_then(|s| trim_tag(&s)),
+            tag.artist().and_then(|s| trim_tag(&s)),
+            tag.album().and_then(|s| trim_tag(&s)),
+            tag.get_string(&ItemKey::AlbumArtist).and_then(trim_tag),
             tag.get_string(&ItemKey::TrackArtistSortOrder)
-                .map(|s| s.to_string()),
+                .and_then(trim_tag),
             tag.get_string(&ItemKey::AlbumArtistSortOrder)
-                .map(|s| s.to_string()),
+                .and_then(trim_tag),
             tag.track(),
             tag.track_total(),
             tag.disk(),
             tag.year(),
-            tag.genre().map(|s| s.to_string()),
+            tag.genre().and_then(|s| trim_tag(&s)),
         )
     } else {
         (

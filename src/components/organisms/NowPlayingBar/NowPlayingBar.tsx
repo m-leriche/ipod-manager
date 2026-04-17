@@ -1,11 +1,16 @@
-import { useEffect, useCallback } from "react";
-import { usePlayback } from "../../../contexts/PlaybackContext";
+import { useEffect, useCallback, useRef } from "react";
+import { usePlayback, usePlaybackTime } from "../../../contexts/PlaybackContext";
 import { NowPlayingInfo } from "../../molecules/NowPlayingInfo/NowPlayingInfo";
 import { TransportControls } from "../../molecules/TransportControls/TransportControls";
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 
 export const NowPlayingBar = () => {
   const { state, pause, resume, next, previous, seekTo, setVolume, toggleShuffle, cycleRepeat } = usePlayback();
+  const { currentTime, duration } = usePlaybackTime();
+
+  // Use a ref for time values in the keyboard handler to avoid re-registering 60x/sec
+  const timeRef = useRef({ currentTime, duration });
+  timeRef.current = { currentTime, duration };
 
   const handlePlayPause = useCallback(() => {
     if (state.isPlaying) pause();
@@ -20,6 +25,7 @@ export const NowPlayingBar = () => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
+      const t = timeRef.current;
       switch (e.code) {
         case "Space":
           e.preventDefault();
@@ -31,7 +37,7 @@ export const NowPlayingBar = () => {
             previous();
           } else {
             e.preventDefault();
-            const newFrac = Math.max(0, (state.currentTime - 10) / state.duration);
+            const newFrac = Math.max(0, (t.currentTime - 10) / t.duration);
             seekTo(newFrac);
           }
           break;
@@ -41,7 +47,7 @@ export const NowPlayingBar = () => {
             next();
           } else {
             e.preventDefault();
-            const newFrac = Math.min(1, (state.currentTime + 10) / state.duration);
+            const newFrac = Math.min(1, (t.currentTime + 10) / t.duration);
             seekTo(newFrac);
           }
           break;
@@ -50,7 +56,7 @@ export const NowPlayingBar = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state.currentTrack, state.currentTime, state.duration, handlePlayPause, previous, next, seekTo]);
+  }, [state.currentTrack, handlePlayPause, previous, next, seekTo]);
 
   if (!state.currentTrack) return null;
 
@@ -65,8 +71,8 @@ export const NowPlayingBar = () => {
       <div className="flex-1 flex justify-center">
         <TransportControls
           isPlaying={state.isPlaying}
-          currentTime={state.currentTime}
-          duration={state.duration}
+          currentTime={currentTime}
+          duration={duration}
           shuffle={state.shuffle}
           repeat={state.repeat}
           onPlayPause={handlePlayPause}

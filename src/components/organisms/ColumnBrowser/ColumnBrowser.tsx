@@ -1,3 +1,5 @@
+import { memo, useRef, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
 interface ColumnBrowserProps {
@@ -10,9 +12,16 @@ interface ColumnBrowserProps {
   onSelectGenre: (genre: string | null) => void;
   onSelectArtist: (artist: string | null) => void;
   onSelectAlbum: (album: string | null) => void;
+  onPlay?: () => void;
 }
 
-export const ColumnBrowser = ({
+interface BrowserItem {
+  key?: string;
+  label: string;
+  count: number;
+}
+
+export const ColumnBrowser = memo(function ColumnBrowser({
   genres,
   artists,
   albums,
@@ -22,74 +31,130 @@ export const ColumnBrowser = ({
   onSelectGenre,
   onSelectArtist,
   onSelectAlbum,
-}: ColumnBrowserProps) => (
-  <div className="flex border-b border-border shrink-0" style={{ height: "35%" }}>
-    {/* Genres column */}
-    <BrowserColumn
-      title="Genres"
-      allLabel={`All Genres (${genres.length})`}
-      items={genres.map((g) => ({ label: g.name, count: g.track_count }))}
-      selected={selectedGenre}
-      onSelect={onSelectGenre}
-    />
+  onPlay,
+}: ColumnBrowserProps) {
+  const genreItems = useMemo<BrowserItem[]>(
+    () => genres.map((g) => ({ label: g.name, count: g.track_count })),
+    [genres],
+  );
+  const artistItems = useMemo<BrowserItem[]>(
+    () => artists.map((a) => ({ label: a.name, count: a.track_count })),
+    [artists],
+  );
+  const albumItems = useMemo<BrowserItem[]>(
+    () => albums.map((a) => ({ key: `${a.artist}::${a.name}`, label: a.name, count: a.track_count })),
+    [albums],
+  );
 
-    {/* Artists column */}
-    <BrowserColumn
-      title="Artists"
-      allLabel={`All Artists (${artists.length})`}
-      items={artists.map((a) => ({ label: a.name, count: a.track_count }))}
-      selected={selectedArtist}
-      onSelect={onSelectArtist}
-    />
-
-    {/* Albums column — key includes artist to disambiguate albums with the same name */}
-    <BrowserColumn
-      title="Albums"
-      allLabel={`All Albums (${albums.length})`}
-      items={albums.map((a) => ({ key: `${a.artist}::${a.name}`, label: a.name, count: a.track_count }))}
-      selected={selectedAlbum}
-      onSelect={onSelectAlbum}
-      isLast
-    />
-  </div>
-);
+  return (
+    <div className="flex border-b border-border shrink-0" style={{ height: "35%" }}>
+      <BrowserColumn
+        title="Genres"
+        allLabel={`All Genres (${genres.length})`}
+        items={genreItems}
+        selected={selectedGenre}
+        onSelect={onSelectGenre}
+        onPlay={onPlay}
+      />
+      <BrowserColumn
+        title="Artists"
+        allLabel={`All Artists (${artists.length})`}
+        items={artistItems}
+        selected={selectedArtist}
+        onSelect={onSelectArtist}
+        onPlay={onPlay}
+      />
+      <BrowserColumn
+        title="Albums"
+        allLabel={`All Albums (${albums.length})`}
+        items={albumItems}
+        selected={selectedAlbum}
+        onSelect={onSelectAlbum}
+        onPlay={onPlay}
+        isLast
+      />
+    </div>
+  );
+});
 
 interface BrowserColumnProps {
   title: string;
   allLabel: string;
-  items: { key?: string; label: string; count: number }[];
+  items: BrowserItem[];
   selected: string | null;
   onSelect: (value: string | null) => void;
+  onPlay?: () => void;
   isLast?: boolean;
 }
 
-const BrowserColumn = ({ title, allLabel, items, selected, onSelect, isLast }: BrowserColumnProps) => (
-  <div className={`flex-1 min-w-0 flex flex-col ${isLast ? "" : "border-r border-border"}`}>
-    <div className="px-3 py-1.5 border-b border-border bg-bg-secondary shrink-0">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">{title}</span>
-    </div>
-    <div className="flex-1 overflow-y-auto">
-      {/* "All" option */}
-      <button
-        onClick={() => onSelect(null)}
-        className={`w-full text-left px-3 py-[5px] text-[11px] transition-colors ${
-          selected === null ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
-        }`}
-      >
-        {allLabel}
-      </button>
+const ITEM_HEIGHT = 27;
+const ALL_BTN_HEIGHT = 27;
 
-      {items.map((item) => (
+const BrowserColumn = memo(function BrowserColumn({
+  title,
+  allLabel,
+  items,
+  selected,
+  onSelect,
+  onPlay,
+  isLast,
+}: BrowserColumnProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ITEM_HEIGHT,
+    overscan: 10,
+    scrollMargin: ALL_BTN_HEIGHT,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+
+  return (
+    <div className={`flex-1 min-w-0 flex flex-col ${isLast ? "" : "border-r border-border"}`}>
+      <div className="px-3 py-1.5 border-b border-border bg-bg-secondary shrink-0">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">{title}</span>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {/* "All" option — always rendered, outside virtualizer */}
         <button
-          key={item.key ?? item.label}
-          onClick={() => onSelect(item.label)}
-          className={`w-full text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
-            selected === item.label ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+          onClick={() => onSelect(null)}
+          onDoubleClick={onPlay}
+          className={`w-full text-left px-3 py-[5px] text-[11px] transition-colors ${
+            selected === null ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
           }`}
         >
-          {item.label}
+          {allLabel}
         </button>
-      ))}
+
+        {/* Virtualized items */}
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualItems.map((virtualItem) => {
+            const item = items[virtualItem.index];
+            return (
+              <button
+                key={item.key ?? item.label}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: virtualItem.size,
+                  transform: `translateY(${virtualItem.start - virtualizer.options.scrollMargin}px)`,
+                }}
+                onClick={() => onSelect(item.label)}
+                onDoubleClick={onPlay}
+                className={`text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
+                  selected === item.label ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+});

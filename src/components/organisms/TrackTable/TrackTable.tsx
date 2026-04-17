@@ -1,4 +1,5 @@
-import { memo, useState, useCallback, useMemo } from "react";
+import { memo, useState, useCallback, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useColumnResize } from "./useColumnResize";
@@ -68,6 +69,7 @@ const COLUMNS: { key: string; label: string; sortKey: string; align: "left" | "r
 ];
 
 const columnDefs = COLUMNS.map((c) => c.def);
+const ROW_HEIGHT = 31;
 
 export const TrackTable = memo(function TrackTable({
   tracks,
@@ -82,11 +84,25 @@ export const TrackTable = memo(function TrackTable({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const { widths, onResizeStart } = useColumnResize(columnDefs);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Ref for selected so handleClick doesn't depend on selected state
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   const totalWidth = useMemo(() => widths.reduce((a, b) => a + b, 0), [widths]);
 
+  const virtualizer = useVirtualizer({
+    count: tracks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 20,
+  });
+
+  // Stable callbacks — accept track as parameter, no inline closures per row
   const handleClick = useCallback(
     (e: React.MouseEvent, track: LibraryTrack) => {
+      const sel = selectedRef.current;
       if (e.metaKey || e.ctrlKey) {
         setSelected((prev) => {
           const next = new Set(prev);
@@ -94,9 +110,9 @@ export const TrackTable = memo(function TrackTable({
           else next.add(track.id);
           return next;
         });
-      } else if (e.shiftKey && selected.size > 0) {
+      } else if (e.shiftKey && sel.size > 0) {
         const trackIds = tracks.map((t) => t.id);
-        const lastSelected = [...selected].pop()!;
+        const lastSelected = [...sel].pop()!;
         const lastIdx = trackIds.indexOf(lastSelected);
         const currentIdx = trackIds.indexOf(track.id);
         const [start, end] = [Math.min(lastIdx, currentIdx), Math.max(lastIdx, currentIdx)];
@@ -107,7 +123,7 @@ export const TrackTable = memo(function TrackTable({
       }
       onTrackSelect?.(track);
     },
-    [selected, tracks, onTrackSelect],
+    [tracks, onTrackSelect],
   );
 
   const handleDoubleClick = useCallback(
@@ -173,8 +189,15 @@ export const TrackTable = memo(function TrackTable({
       ]
     : [];
 
+  const currentTrackId = state.currentTrack?.id ?? null;
+  const isActivePlaying = state.isPlaying;
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems[0]?.start ?? 0;
+  const paddingBottom =
+    virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
+
   return (
-    <div className="flex-1 min-h-0 overflow-auto">
+    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
       <table className="table-fixed" style={{ minWidth: totalWidth }}>
         <colgroup>
           {widths.map((w, i) => (
@@ -212,18 +235,32 @@ export const TrackTable = memo(function TrackTable({
           </tr>
         </thead>
         <tbody>
-          {tracks.map((track, i) => (
-            <TrackRowResizable
-              key={track.id}
-              track={track}
-              index={i}
-              isPlaying={state.currentTrack?.id === track.id}
-              isSelected={selected.has(track.id)}
-              onClick={(e) => handleClick(e, track)}
-              onDoubleClick={() => handleDoubleClick(track)}
-              onContextMenu={(e) => handleContextMenu(e, track)}
-            />
-          ))}
+          {paddingTop > 0 && (
+            <tr>
+              <td style={{ height: paddingTop, padding: 0 }} colSpan={COLUMNS.length} />
+            </tr>
+          )}
+          {virtualItems.map((virtualRow) => {
+            const track = tracks[virtualRow.index];
+            return (
+              <TrackRowResizable
+                key={track.id}
+                track={track}
+                index={virtualRow.index}
+                isCurrentTrack={currentTrackId === track.id}
+                isPlaying={currentTrackId === track.id && isActivePlaying}
+                isSelected={selected.has(track.id)}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+                onContextMenu={handleContextMenu}
+              />
+            );
+          })}
+          {paddingBottom > 0 && (
+            <tr>
+              <td style={{ height: paddingBottom, padding: 0 }} colSpan={COLUMNS.length} />
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -254,6 +291,7 @@ const formatDuration = (secs: number): string => {
 const TrackRowResizable = memo(function TrackRowResizable({
   track,
   index,
+  isCurrentTrack,
   isPlaying,
   isSelected,
   onClick,
@@ -262,34 +300,35 @@ const TrackRowResizable = memo(function TrackRowResizable({
 }: {
   track: LibraryTrack;
   index: number;
+  isCurrentTrack: boolean;
   isPlaying: boolean;
   isSelected: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  onDoubleClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
+  onDoubleClick: (track: LibraryTrack) => void;
+  onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
 }) {
   return (
     <tr
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={onContextMenu}
+      onClick={(e) => onClick(e, track)}
+      onDoubleClick={() => onDoubleClick(track)}
+      onContextMenu={(e) => onContextMenu(e, track)}
       className={`group cursor-default select-none transition-colors ${
-        isSelected ? "bg-accent/10" : isPlaying ? "bg-accent/5" : "hover:bg-bg-hover/50"
+        isSelected ? "bg-accent/10" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
       }`}
     >
       <td className="px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden">
-        {isPlaying ? (
+        {isCurrentTrack ? (
           <div className="flex items-center justify-center gap-[2px] h-3">
-            <span className="w-[3px] bg-accent rounded-full animate-equalizer-1" />
-            <span className="w-[3px] bg-accent rounded-full animate-equalizer-2" />
-            <span className="w-[3px] bg-accent rounded-full animate-equalizer-3" />
+            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
+            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
+            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
           </div>
         ) : (
           <span className="text-text-tertiary">{index + 1}</span>
         )}
       </td>
       <td className="px-3 py-[7px] overflow-hidden">
-        <div className={`text-xs font-medium truncate ${isPlaying ? "text-accent" : "text-text-primary"}`}>
+        <div className={`text-xs font-medium truncate ${isCurrentTrack ? "text-accent" : "text-text-primary"}`}>
           {track.title || track.file_name}
         </div>
       </td>

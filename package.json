@@ -13,6 +13,7 @@
   },
   "description": "iPod Manager for Rockbox iPod Classic",
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"

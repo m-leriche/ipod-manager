@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../types/library";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -97,6 +97,11 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // Refs that track latest state for use in audio callbacks
   const stateRef = useRef(state);
   stateRef.current = state;
+  const timeRef = useRef(time);
+  timeRef.current = time;
+
+  // Ref for the track-ended handler so both audio elements can use it
+  const onTrackEndedRef = useRef<() => void>(() => {});
 
   const getActiveAudio = useCallback((): HTMLAudioElement | null => {
     return activeRef.current === "A" ? audioARef.current : audioBRef.current;
@@ -123,7 +128,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // rAF loop for smooth time updates — only updates time context
+  // rAF loop — syncs currentTime; extends duration if audio element reports longer
   useEffect(() => {
     if (!state.isPlaying) {
       cancelAnimationFrame(rafRef.current);
@@ -133,9 +138,12 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     const tick = () => {
       const audio = getActiveAudio();
       if (audio) {
+        const audioDur = isFinite(audio.duration) ? audio.duration : 0;
         setTime((prev) => {
-          if (prev.currentTime === audio.currentTime) return prev;
-          return { ...prev, currentTime: audio.currentTime };
+          // Extend duration if audio element or playback position exceeds it
+          const newDur = Math.max(prev.duration, audioDur, audio.currentTime);
+          if (prev.currentTime === audio.currentTime && prev.duration === newDur) return prev;
+          return { currentTime: audio.currentTime, duration: newDur };
         });
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -181,81 +189,110 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, [getNextIndex, getIdleAudio]);
 
+  // Get accurate duration via ffprobe and update time state
+  const probeDuration = useCallback((filePath: string) => {
+    invoke<number>("get_accurate_duration", { path: filePath })
+      .then((dur) => {
+        // Only apply if still playing the same track
+        if (dur > 0 && stateRef.current.currentTrack?.file_path === filePath) {
+          setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, dur) }));
+        }
+      })
+      .catch(() => {}); // Fallback to metadata/audio.duration if ffprobe unavailable
+  }, []);
+
   // Play a specific file path on the active audio element
   const playFile = useCallback(
     (track: LibraryTrack) => {
       const audio = getActiveAudio();
       if (!audio) return;
 
-      audio.src = convertFileSrc(track.file_path);
-      audio.play().catch(() => {});
+      // Set handlers BEFORE loading so we never miss loadedmetadata
+      audio.onloadedmetadata = () => {
+        const audioDur = isFinite(audio.duration) ? audio.duration : 0;
+        setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, audioDur) }));
+        preloadNext();
+      };
+      audio.onended = () => onTrackEndedRef.current();
 
       setState((prev) => ({
         ...prev,
         currentTrack: track,
         isPlaying: true,
       }));
-      setTime({ currentTime: 0, duration: 0 });
+      setTime({ currentTime: 0, duration: track.duration_secs });
 
-      const onLoaded = () => {
-        setTime((prev) => ({ ...prev, duration: audio.duration }));
+      audio.src = convertFileSrc(track.file_path);
+      audio.play().catch(() => {});
+
+      // Probe real duration in background — updates display when ready
+      probeDuration(track.file_path);
+    },
+    [getActiveAudio, preloadNext, probeDuration],
+  );
+
+  // Track-ended handler — uses refs so it always has latest state.
+  // Defined as a useCallback and kept in sync via onTrackEndedRef.
+  const handleTrackEnded = useCallback(() => {
+    const nextIdx = getNextIndex();
+    if (nextIdx === null) {
+      setState((prev) => ({ ...prev, isPlaying: false }));
+      setTime((prev) => ({ ...prev, currentTime: 0 }));
+      return;
+    }
+
+    const s = stateRef.current;
+    const nextTrack = s.queue[nextIdx];
+    if (!nextTrack) return;
+
+    if (s.repeat === "one") {
+      const audio = getActiveAudio();
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+      return;
+    }
+
+    // Try gapless swap to preloaded idle audio
+    const idle = getIdleAudio();
+    if (idle && idle.src) {
+      activeRef.current = activeRef.current === "A" ? "B" : "A";
+
+      // Set handlers on new active audio before playing
+      idle.onended = () => onTrackEndedRef.current();
+      idle.onloadedmetadata = () => {
+        const audioDur = isFinite(idle.duration) ? idle.duration : 0;
+        setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, audioDur) }));
         preloadNext();
       };
 
-      const onEnded = () => {
-        const nextIdx = getNextIndex();
-        if (nextIdx !== null) {
-          const s = stateRef.current;
-          const nextTrack = s.queue[nextIdx];
-          if (!nextTrack) return;
+      idle.play().catch(() => {});
 
-          if (s.repeat === "one") {
-            audio.currentTime = 0;
-            audio.play().catch(() => {});
-            return;
-          }
+      if (s.shuffle) {
+        shufflePositionRef.current += 1;
+      }
 
-          // Swap to idle audio (which should be preloaded)
-          const idle = getIdleAudio();
-          if (idle && idle.src) {
-            activeRef.current = activeRef.current === "A" ? "B" : "A";
-            idle.play().catch(() => {});
+      setState((prev) => ({
+        ...prev,
+        currentTrack: nextTrack,
+        queueIndex: nextIdx,
+      }));
 
-            if (s.shuffle) {
-              shufflePositionRef.current += 1;
-            }
+      setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+      probeDuration(nextTrack.file_path);
+    } else {
+      // Fallback: no preloaded audio, play normally
+      if (s.shuffle) {
+        shufflePositionRef.current += 1;
+      }
+      setState((prev) => ({ ...prev, queueIndex: nextIdx }));
+      playFile(nextTrack);
+    }
+  }, [getNextIndex, getActiveAudio, getIdleAudio, preloadNext, playFile, probeDuration]);
 
-            setState((prev) => ({
-              ...prev,
-              currentTrack: nextTrack,
-              queueIndex: nextIdx,
-            }));
-            setTime({ currentTime: 0, duration: 0 });
-
-            const onNextLoaded = () => {
-              setTime((prev) => ({ ...prev, duration: idle.duration }));
-              preloadNext();
-            };
-            idle.removeEventListener("loadedmetadata", onNextLoaded);
-            idle.addEventListener("loadedmetadata", onNextLoaded, {
-              once: true,
-            });
-          }
-        } else {
-          setState((prev) => ({
-            ...prev,
-            isPlaying: false,
-          }));
-          setTime((prev) => ({ ...prev, currentTime: 0 }));
-        }
-      };
-
-      // Clean up old listeners and attach new ones
-      audio.onloadedmetadata = onLoaded;
-      audio.onended = onEnded;
-    },
-    [getActiveAudio, getIdleAudio, getNextIndex, preloadNext],
-  );
+  // Keep the ref in sync so audio onended always calls latest handler
+  onTrackEndedRef.current = handleTrackEnded;
 
   // ── Public API ────────────────────────────────────────────────
 
@@ -365,11 +402,18 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     (fraction: number) => {
       const audio = getActiveAudio();
       if (!audio) return;
-      const t = fraction * audio.duration;
-      if (isFinite(t)) {
-        audio.currentTime = t;
-        setTime((prev) => ({ ...prev, currentTime: t }));
-      }
+      const dur = timeRef.current.duration;
+      if (dur <= 0) return;
+      const t = Math.min(fraction * dur, dur);
+      audio.currentTime = t;
+      // Show requested position immediately for responsiveness
+      setTime((prev) => ({ ...prev, currentTime: t }));
+      // Correct to the actual position once the browser finishes seeking
+      audio.addEventListener(
+        "seeked",
+        () => setTime((prev) => ({ ...prev, currentTime: audio.currentTime })),
+        { once: true },
+      );
     },
     [getActiveAudio],
   );

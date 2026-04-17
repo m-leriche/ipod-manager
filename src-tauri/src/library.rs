@@ -604,29 +604,44 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         format!("WHERE {}", conditions.join(" AND "))
     };
 
-    let sort_col = match filter.sort_by.as_deref() {
-        Some("title") => "COALESCE(title, file_name)",
-        Some("artist") => "COALESCE(sort_artist, artist, '')",
-        Some("album") => "COALESCE(album, '')",
-        Some("track_number") => "COALESCE(disc_number, 0), COALESCE(track_number, 0)",
-        Some("year") => "COALESCE(year, 0)",
-        Some("duration") => "duration_secs",
-        Some("bitrate") => "COALESCE(bitrate_kbps, 0)",
-        Some("genre") => "COALESCE(genre, '')",
-        _ => "COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)",
-    };
-
-    let direction = match filter.sort_direction.as_deref() {
+    let dir = match filter.sort_direction.as_deref() {
         Some("desc") => "DESC",
         _ => "ASC",
+    };
+
+    // Primary sort gets the user's direction; secondary tiebreakers are always ASC
+    let order_by = match filter.sort_by.as_deref() {
+        Some("title") => format!(
+            "COALESCE(title, file_name) {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
+        Some("artist") => format!(
+            "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
+        Some("album") => format!(
+            "COALESCE(album, '') {dir}, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
+        Some("track_number") => format!(
+            "COALESCE(disc_number, 0) {dir}, COALESCE(track_number, 0) {dir}"
+        ),
+        Some("year") => format!(
+            "COALESCE(year, 0) {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
+        Some("duration") => format!("duration_secs {dir}"),
+        Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
+        Some("genre") => format!(
+            "COALESCE(genre, '') {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
+        _ => format!(
+            "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
     };
 
     let sql = format!(
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
                 year, genre, duration_secs, sample_rate, bitrate_kbps, format, file_size
-         FROM tracks {} ORDER BY {} {}",
-        where_clause, sort_col, direction
+         FROM tracks {} ORDER BY {}",
+        where_clause, order_by
     );
 
     let mut stmt = conn

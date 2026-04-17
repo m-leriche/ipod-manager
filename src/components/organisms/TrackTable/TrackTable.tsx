@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useColumnResize } from "./useColumnResize";
+import { getAlbumTracks } from "./helpers";
 import type { ColumnDef } from "./useColumnResize";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -128,7 +129,7 @@ export const TrackTable = memo(function TrackTable({
 
   const handleDoubleClick = useCallback(
     (track: LibraryTrack) => {
-      playTrack(track, tracks);
+      playTrack(track, getAlbumTracks(track, tracks));
     },
     [playTrack, tracks],
   );
@@ -143,7 +144,7 @@ export const TrackTable = memo(function TrackTable({
         {
           label: "Play",
           onClick: () => {
-            playTrack(contextMenu.track, tracks);
+            playTrack(contextMenu.track, getAlbumTracks(contextMenu.track, tracks));
             setContextMenu(null);
           },
         },

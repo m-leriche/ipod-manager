@@ -89,6 +89,7 @@ pub fn run() {
             commands::download_audio,
             commands::check_ffmpeg,
             commands::probe_video,
+            commands::get_accurate_duration,
             commands::extract_audio_from_video,
             commands::scan_metadata_paths,
             commands::scan_metadata,

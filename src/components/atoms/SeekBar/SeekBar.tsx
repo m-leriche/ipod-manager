@@ -1,14 +1,16 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 
 interface SeekBarProps {
   value: number; // 0-1
   onChange: (value: number) => void;
+  onScrub?: (fraction: number | null) => void;
   className?: string;
 }
 
-export const SeekBar = ({ value, onChange, className = "" }: SeekBarProps) => {
+export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarProps) => {
   const barRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const [dragFraction, setDragFraction] = useState<number | null>(null);
 
   const calcFraction = useCallback((clientX: number): number => {
     if (!barRef.current) return 0;
@@ -18,14 +20,25 @@ export const SeekBar = ({ value, onChange, className = "" }: SeekBarProps) => {
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      e.preventDefault();
       draggingRef.current = true;
-      onChange(calcFraction(e.clientX));
+      const frac = calcFraction(e.clientX);
+      setDragFraction(frac);
+      onScrub?.(frac);
 
       const handleMove = (ev: MouseEvent) => {
-        if (draggingRef.current) onChange(calcFraction(ev.clientX));
+        if (!draggingRef.current) return;
+        const f = calcFraction(ev.clientX);
+        setDragFraction(f);
+        onScrub?.(f);
       };
-      const handleUp = () => {
+      const handleUp = (ev: MouseEvent) => {
+        if (draggingRef.current) {
+          onChange(calcFraction(ev.clientX));
+        }
         draggingRef.current = false;
+        setDragFraction(null);
+        onScrub?.(null);
         window.removeEventListener("mousemove", handleMove);
         window.removeEventListener("mouseup", handleUp);
       };
@@ -33,10 +46,11 @@ export const SeekBar = ({ value, onChange, className = "" }: SeekBarProps) => {
       window.addEventListener("mousemove", handleMove);
       window.addEventListener("mouseup", handleUp);
     },
-    [onChange, calcFraction],
+    [onChange, onScrub, calcFraction],
   );
 
-  const pct = `${(value * 100).toFixed(1)}%`;
+  const displayFraction = dragFraction ?? value;
+  const pct = `${(displayFraction * 100).toFixed(1)}%`;
 
   return (
     <div

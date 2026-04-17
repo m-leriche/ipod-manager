@@ -469,16 +469,7 @@ pub async fn refresh_library(
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
-        let folders = library::get_folders(&conn)?;
-
-        for folder in folders {
-            if flag.load(std::sync::atomic::Ordering::SeqCst) {
-                return Err("Cancelled".to_string());
-            }
-            library::scan_folder(&conn, &folder.path, &app, &flag)?;
-        }
-
-        Ok(())
+        library::rescan_all_folders(&conn, &app, &flag)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

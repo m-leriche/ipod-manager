@@ -25,8 +25,6 @@ vi.mock("../contexts/PlaybackContext", () => ({
     state: {
       currentTrack: null,
       isPlaying: false,
-      currentTime: 0,
-      duration: 0,
       volume: 0.8,
       queue: [],
       queueIndex: -1,
@@ -50,6 +48,7 @@ vi.mock("../contexts/PlaybackContext", () => ({
     toggleShuffle: vi.fn(),
     cycleRepeat: vi.fn(),
   }),
+  usePlaybackTime: () => ({ currentTime: 0, duration: 0 }),
   PlaybackProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 

@@ -257,13 +257,13 @@ pub fn scan_library_stats(
             percentage: (count as f64 / total_f) * 100.0,
         })
         .collect();
-    format_breakdown.sort_by(|a, b| b.count.cmp(&a.count));
+    format_breakdown.sort_by_key(|e| std::cmp::Reverse(e.count));
 
     let mut genre_distribution: Vec<DistributionEntry> = genres
         .into_iter()
         .map(|(label, count)| DistributionEntry { label, count })
         .collect();
-    genre_distribution.sort_by(|a, b| b.count.cmp(&a.count));
+    genre_distribution.sort_by_key(|e| std::cmp::Reverse(e.count));
 
     let mut sample_rate_distribution: Vec<DistributionEntry> = sample_rates
         .into_iter()
@@ -272,7 +272,7 @@ pub fn scan_library_stats(
             count,
         })
         .collect();
-    sample_rate_distribution.sort_by(|a, b| b.count.cmp(&a.count));
+    sample_rate_distribution.sort_by_key(|e| std::cmp::Reverse(e.count));
 
     let mut year_distribution: Vec<YearEntry> = years
         .into_iter()
@@ -280,11 +280,7 @@ pub fn scan_library_stats(
         .collect();
     year_distribution.sort_by_key(|e| e.year);
 
-    let average_bitrate_kbps = if bitrate_count > 0 {
-        (total_bitrate_kbps / bitrate_count) as u32
-    } else {
-        0
-    };
+    let average_bitrate_kbps = (total_bitrate_kbps.checked_div(bitrate_count).unwrap_or(0)) as u32;
 
     Ok(LibraryStats {
         total_tracks: total,

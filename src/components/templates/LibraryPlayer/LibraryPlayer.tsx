@@ -6,6 +6,7 @@ import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { usePlayback } from "../../../contexts/PlaybackContext";
 import type {
   LibraryTrack,
   ArtistSummary,
@@ -15,11 +16,14 @@ import type {
   LibraryFilter,
   LibraryScanProgress,
 } from "../../../types/library";
+import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
 // ── Component ───────────────────────────────────────────────────
 
-export const LibraryPlayer = () => {
+export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRefObject<(() => void) | null> }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const { playTrack } = usePlayback();
+  const playAfterFetchRef = useRef(false);
 
   // Column browser filter state
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -72,18 +76,42 @@ export const LibraryPlayer = () => {
       setGenreList(data.genres);
       setArtistList(data.artists);
       setAlbumList(data.albums);
+      if (!selectedGenre && !selectedArtist && !selectedAlbum && !debouncedSearch) {
+        setCachedLibrary({ hasLibrary: true, browserData: data, cachedAt: Date.now() });
+      }
+      if (playAfterFetchRef.current && data.tracks.length > 0) {
+        playAfterFetchRef.current = false;
+        playTrack(data.tracks[0], data.tracks);
+      }
     } catch {
       if (id !== fetchIdRef.current) return;
+      playAfterFetchRef.current = false;
       setTracks([]);
       setGenreList([]);
       setArtistList([]);
       setAlbumList([]);
     }
-  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch]);
+  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch, playTrack]);
 
   // ── Initial load ──────────────────────────────────────────────
 
   const checkLibrary = useCallback(async () => {
+    // Load cached data first for instant render
+    const cached = await getCachedLibrary();
+    if (cached) {
+      setHasLibrary(cached.hasLibrary);
+      if (cached.hasLibrary) {
+        setTracks(cached.browserData.tracks);
+        setGenreList(cached.browserData.genres);
+        setArtistList(cached.browserData.artists);
+        setAlbumList(cached.browserData.albums);
+        setDataLoaded(true);
+        // Background revalidation happens via the useEffect that watches dataLoaded
+        return;
+      }
+    }
+
+    // No cache (first launch) — fetch from backend
     try {
       const folders = await invoke<{ id: number; path: string }[]>("get_library_folders");
       const hasFolders = Array.isArray(folders) && folders.length > 0;
@@ -101,6 +129,14 @@ export const LibraryPlayer = () => {
     checkLibrary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Expose refresh callback to parent
+  useEffect(() => {
+    if (onRefreshRef) onRefreshRef.current = fetchBrowserData;
+    return () => {
+      if (onRefreshRef) onRefreshRef.current = null;
+    };
+  }, [onRefreshRef, fetchBrowserData]);
 
   // ── Re-fetch when any filter/sort changes ─────────────────────
 
@@ -120,6 +156,10 @@ export const LibraryPlayer = () => {
 
   const handleSelectAlbum = useCallback((album: string | null) => {
     setSelectedAlbum(album);
+  }, []);
+
+  const handlePlayColumn = useCallback(() => {
+    playAfterFetchRef.current = true;
   }, []);
 
   // ── Add folder ────────────────────────────────────────────────
@@ -247,6 +287,7 @@ export const LibraryPlayer = () => {
           onSelectGenre={handleSelectGenre}
           onSelectArtist={handleSelectArtist}
           onSelectAlbum={handleSelectAlbum}
+          onPlay={handlePlayColumn}
         />
 
         {/* Track table */}

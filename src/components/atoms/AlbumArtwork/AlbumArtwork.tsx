@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 const sizes = {
@@ -16,6 +16,11 @@ interface AlbumArtworkProps {
 
 export const AlbumArtwork = ({ folderPath, size = "md", className = "" }: AlbumArtworkProps) => {
   const [failed, setFailed] = useState(false);
+
+  // Reset failed state when the folder changes so the new cover.jpg gets a chance to load
+  useEffect(() => {
+    setFailed(false);
+  }, [folderPath]);
 
   const showFallback = !folderPath || failed;
 

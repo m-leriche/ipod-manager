@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../types/library";
 
@@ -9,13 +9,16 @@ type RepeatMode = "off" | "all" | "one";
 interface PlaybackState {
   currentTrack: LibraryTrack | null;
   isPlaying: boolean;
-  currentTime: number;
-  duration: number;
   volume: number;
   queue: LibraryTrack[];
   queueIndex: number;
   shuffle: boolean;
   repeat: RepeatMode;
+}
+
+interface PlaybackTimeState {
+  currentTime: number;
+  duration: number;
 }
 
 interface PlaybackContextValue {
@@ -54,14 +57,14 @@ const loadVolume = (): number => {
 const initial: PlaybackState = {
   currentTrack: null,
   isPlaying: false,
-  currentTime: 0,
-  duration: 0,
   volume: loadVolume(),
   queue: [],
   queueIndex: -1,
   shuffle: false,
   repeat: "off",
 };
+
+const initialTime: PlaybackTimeState = { currentTime: 0, duration: 0 };
 
 // ── Shuffle helpers ─────────────────────────────────────────────
 
@@ -74,12 +77,14 @@ const shuffleIndices = (length: number, currentIndex: number): number[] => {
   return [currentIndex, ...indices];
 };
 
-// ── Context ─────────────────────────────────────────────────────
+// ── Contexts ────────────────────────────────────────────────────
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
+const PlaybackTimeContext = createContext<PlaybackTimeState>(initialTime);
 
 export const PlaybackProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<PlaybackState>(initial);
+  const [time, setTime] = useState<PlaybackTimeState>(initialTime);
 
   // Dual audio elements for near-gapless playback
   const audioARef = useRef<HTMLAudioElement | null>(null);
@@ -118,7 +123,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // rAF loop for smooth time updates
+  // rAF loop for smooth time updates — only updates time context
   useEffect(() => {
     if (!state.isPlaying) {
       cancelAnimationFrame(rafRef.current);
@@ -128,7 +133,10 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     const tick = () => {
       const audio = getActiveAudio();
       if (audio) {
-        setState((prev) => ({ ...prev, currentTime: audio.currentTime }));
+        setTime((prev) => {
+          if (prev.currentTime === audio.currentTime) return prev;
+          return { ...prev, currentTime: audio.currentTime };
+        });
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -186,12 +194,11 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
         ...prev,
         currentTrack: track,
         isPlaying: true,
-        currentTime: 0,
-        duration: 0,
       }));
+      setTime({ currentTime: 0, duration: 0 });
 
       const onLoaded = () => {
-        setState((prev) => ({ ...prev, duration: audio.duration }));
+        setTime((prev) => ({ ...prev, duration: audio.duration }));
         preloadNext();
       };
 
@@ -222,12 +229,11 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
               ...prev,
               currentTrack: nextTrack,
               queueIndex: nextIdx,
-              currentTime: 0,
-              duration: 0,
             }));
+            setTime({ currentTime: 0, duration: 0 });
 
             const onNextLoaded = () => {
-              setState((prev) => ({ ...prev, duration: idle.duration }));
+              setTime((prev) => ({ ...prev, duration: idle.duration }));
               preloadNext();
             };
             idle.removeEventListener("loadedmetadata", onNextLoaded);
@@ -239,8 +245,8 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
           setState((prev) => ({
             ...prev,
             isPlaying: false,
-            currentTime: 0,
           }));
+          setTime((prev) => ({ ...prev, currentTime: 0 }));
         }
       };
 
@@ -303,9 +309,9 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     setState((prev) => ({
       ...prev,
       isPlaying: false,
-      currentTime: 0,
       currentTrack: null,
     }));
+    setTime({ currentTime: 0, duration: 0 });
   }, [getActiveAudio]);
 
   const next = useCallback(() => {
@@ -329,7 +335,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     // If more than 3 seconds in, restart current track
     if (audio && audio.currentTime > 3) {
       audio.currentTime = 0;
-      setState((prev) => ({ ...prev, currentTime: 0 }));
+      setTime((prev) => ({ ...prev, currentTime: 0 }));
       return;
     }
 
@@ -359,10 +365,10 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     (fraction: number) => {
       const audio = getActiveAudio();
       if (!audio) return;
-      const time = fraction * audio.duration;
-      if (isFinite(time)) {
-        audio.currentTime = time;
-        setState((prev) => ({ ...prev, currentTime: time }));
+      const t = fraction * audio.duration;
+      if (isFinite(t)) {
+        audio.currentTime = t;
+        setTime((prev) => ({ ...prev, currentTime: t }));
       }
     },
     [getActiveAudio],
@@ -447,29 +453,51 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     });
   }, []);
 
+  // Memoize the main context value so time-only updates don't re-render consumers
+  const playbackValue = useMemo<PlaybackContextValue>(
+    () => ({
+      state,
+      playTrack,
+      playAlbum,
+      pause,
+      resume,
+      stop,
+      next,
+      previous,
+      seekTo,
+      setVolume,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      reorderQueue,
+      clearQueue,
+      toggleShuffle,
+      cycleRepeat,
+    }),
+    [
+      state,
+      playTrack,
+      playAlbum,
+      pause,
+      resume,
+      stop,
+      next,
+      previous,
+      seekTo,
+      setVolume,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      reorderQueue,
+      clearQueue,
+      toggleShuffle,
+      cycleRepeat,
+    ],
+  );
+
   return (
-    <PlaybackContext.Provider
-      value={{
-        state,
-        playTrack,
-        playAlbum,
-        pause,
-        resume,
-        stop,
-        next,
-        previous,
-        seekTo,
-        setVolume,
-        addToQueue,
-        playNext,
-        removeFromQueue,
-        reorderQueue,
-        clearQueue,
-        toggleShuffle,
-        cycleRepeat,
-      }}
-    >
-      {children}
+    <PlaybackContext.Provider value={playbackValue}>
+      <PlaybackTimeContext.Provider value={time}>{children}</PlaybackTimeContext.Provider>
     </PlaybackContext.Provider>
   );
 };
@@ -478,4 +506,8 @@ export const usePlayback = (): PlaybackContextValue => {
   const ctx = useContext(PlaybackContext);
   if (!ctx) throw new Error("usePlayback must be used within PlaybackProvider");
   return ctx;
+};
+
+export const usePlaybackTime = (): PlaybackTimeState => {
+  return useContext(PlaybackTimeContext);
 };

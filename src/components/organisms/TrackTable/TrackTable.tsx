@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useColumnResize } from "./useColumnResize";
 import { getAlbumTracks } from "./helpers";
 import type { ColumnDef } from "./useColumnResize";
@@ -72,6 +73,13 @@ const COLUMNS: { key: string; label: string; sortKey: string; align: "left" | "r
 const columnDefs = COLUMNS.map((c) => c.def);
 const ROW_HEIGHT = 31;
 
+const SORT_KEY_TO_TRACK_FIELD: Record<string, keyof LibraryTrack> = {
+  title: "title",
+  artist: "artist",
+  album: "album",
+  genre: "genre",
+};
+
 export const TrackTable = memo(function TrackTable({
   tracks,
   sortBy,
@@ -98,6 +106,27 @@ export const TrackTable = memo(function TrackTable({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
+  });
+
+  const searchField = SORT_KEY_TO_TRACK_FIELD[sortBy] ?? "title";
+  const searchLabels = useMemo(
+    () => tracks.map((t) => String(t[searchField] ?? t.title ?? t.file_name ?? "")),
+    [tracks, searchField],
+  );
+
+  const handleTypeToSelectMatch = useCallback(
+    (index: number) => {
+      const track = tracks[index];
+      setSelected(new Set([track.id]));
+      onTrackSelect?.(track);
+      virtualizer.scrollToIndex(index, { align: "center" });
+    },
+    [tracks, onTrackSelect, virtualizer],
+  );
+
+  const { onKeyDown: handleTypeToSelectKeyDown } = useTypeToSelect({
+    labels: searchLabels,
+    onMatch: handleTypeToSelectMatch,
   });
 
   // Stable callbacks — accept track as parameter, no inline closures per row
@@ -198,7 +227,12 @@ export const TrackTable = memo(function TrackTable({
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   return (
-    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
+    <div
+      ref={scrollRef}
+      className="flex-1 min-h-0 overflow-auto outline-none"
+      tabIndex={0}
+      onKeyDown={handleTypeToSelectKeyDown}
+    >
       <table className="table-fixed" style={{ width: totalWidth }}>
         <colgroup>
           {widths.map((w, i) => (

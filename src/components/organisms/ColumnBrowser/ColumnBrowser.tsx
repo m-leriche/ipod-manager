@@ -1,5 +1,6 @@
-import { memo, useRef, useMemo } from "react";
+import { memo, useRef, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
 interface ColumnBrowserProps {
@@ -109,10 +110,26 @@ const BrowserColumn = memo(function BrowserColumn({
     scrollMargin: ALL_BTN_HEIGHT,
   });
 
+  const labels = useMemo(() => items.map((item) => item.label), [items]);
+
+  const handleTypeToSelectMatch = useCallback(
+    (index: number) => {
+      onSelect(items[index].label);
+      virtualizer.scrollToIndex(index, { align: "center" });
+    },
+    [items, onSelect, virtualizer],
+  );
+
+  const { onKeyDown } = useTypeToSelect({ labels, onMatch: handleTypeToSelectMatch });
+
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
-    <div className={`flex-1 min-w-0 flex flex-col ${isLast ? "" : "border-r border-border"}`}>
+    <div
+      className={`flex-1 min-w-0 flex flex-col outline-none ${isLast ? "" : "border-r border-border"}`}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+    >
       <div className="px-3 py-1.5 border-b border-border bg-bg-secondary shrink-0">
         <span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">{title}</span>
       </div>

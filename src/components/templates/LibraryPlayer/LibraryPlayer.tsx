@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
@@ -15,15 +16,25 @@ import type {
   BrowserData,
   LibraryFilter,
   LibraryScanProgress,
+  ImportProgress,
+  ImportResult,
 } from "../../../types/library";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
 // ── Component ───────────────────────────────────────────────────
 
-export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRefObject<(() => void) | null> }) => {
+export const LibraryPlayer = ({
+  onRefreshRef,
+  isActive = true,
+}: {
+  onRefreshRef?: React.MutableRefObject<(() => void) | null>;
+  isActive?: boolean;
+}) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { playTrack } = usePlayback();
   const playAfterFetchRef = useRef(false);
+  const isActiveRef = useRef(isActive);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Column browser filter state
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -56,6 +67,13 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
     searchTimerRef.current = setTimeout(() => setDebouncedSearch(search), 200);
     return () => clearTimeout(searchTimerRef.current);
   }, [search]);
+
+  // ── Keep isActive ref in sync ──────────────────────────────────
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+    if (!isActive) setIsDragOver(false);
+  }, [isActive]);
 
   // ── Fetch all browser data from backend ───────────────────────
 
@@ -113,10 +131,10 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
 
     // No cache (first launch) — fetch from backend
     try {
-      const folders = await invoke<{ id: number; path: string }[]>("get_library_folders");
-      const hasFolders = Array.isArray(folders) && folders.length > 0;
-      setHasLibrary(hasFolders);
-      if (hasFolders) {
+      const location = await invoke<string | null>("get_library_location");
+      const hasLocation = !!location;
+      setHasLibrary(hasLocation);
+      if (hasLocation) {
         await fetchBrowserData();
         setDataLoaded(true);
       }
@@ -144,6 +162,20 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
     if (dataLoaded) fetchBrowserData();
   }, [dataLoaded, fetchBrowserData]);
 
+  // ── Refresh on library file reorganization ────────────────────
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<number>("library-files-reorganized", () => {
+      fetchBrowserData();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [fetchBrowserData]);
+
   // ── Column selection handlers ─────────────────────────────────
 
   const handleSelectGenre = useCallback((genre: string | null) => {
@@ -167,10 +199,10 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
     fetchBrowserData();
   }, [fetchBrowserData]);
 
-  // ── Add folder ────────────────────────────────────────────────
+  // ── Choose library location ────────────────────────────────────
 
-  const handleAddFolder = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: false });
+  const handleChooseLibrary = useCallback(async () => {
+    const selected = await open({ directory: true, multiple: false, title: "Choose library location" });
     if (!selected) return;
 
     startProgress("Scanning library...", () => invoke("cancel_sync"));
@@ -180,7 +212,7 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
     });
 
     try {
-      await invoke("add_library_folder", { path: selected });
+      await invoke("set_library_location", { path: selected });
       finishProgress("Library scan complete");
       setHasLibrary(true);
       await fetchBrowserData();
@@ -191,6 +223,83 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
       unlisten();
     }
   }, [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData]);
+
+  // ── Drag-and-drop import ───────────────────────────────────────
+
+  const handleDrop = useCallback(
+    async (paths: string[]) => {
+      let location = await invoke<string | null>("get_library_location");
+      if (!location) {
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: "Choose library location",
+        });
+        if (!selected) return;
+        await invoke("set_library_location", { path: selected });
+        location = selected;
+      }
+
+      startProgress("Importing to library...", () => invoke("cancel_sync"));
+
+      const unlistenImport = await listen<ImportProgress>("import-progress", (e) => {
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      });
+
+      const unlistenScan = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+      });
+
+      try {
+        const result = await invoke<ImportResult>("import_to_library", { paths });
+        const msg =
+          result.copied > 0
+            ? `Imported ${result.copied} track${result.copied !== 1 ? "s" : ""}${result.skipped > 0 ? `, ${result.skipped} skipped` : ""}`
+            : result.skipped > 0
+              ? `${result.skipped} track${result.skipped !== 1 ? "s" : ""} already in library`
+              : "No audio files found";
+        finishProgress(msg);
+        setHasLibrary(true);
+        await fetchBrowserData();
+        setDataLoaded(true);
+      } catch (e) {
+        failProgress(`Import failed: ${e}`);
+      } finally {
+        unlistenImport();
+        unlistenScan();
+      }
+    },
+    [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData],
+  );
+
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | null = null;
+
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (!active || !isActiveRef.current) return;
+        if (event.payload.type === "enter") {
+          setIsDragOver(true);
+        } else if (event.payload.type === "leave") {
+          setIsDragOver(false);
+        } else if (event.payload.type === "drop") {
+          setIsDragOver(false);
+          if (event.payload.paths.length > 0) {
+            handleDrop(event.payload.paths);
+          }
+        }
+      })
+      .then((fn) => {
+        if (active) unlisten = fn;
+        else fn();
+      });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [handleDrop]);
 
   // ── Sort handling ─────────────────────────────────────────────
 
@@ -216,15 +325,17 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
 
   if (hasLibrary === false) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="relative flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-bg-card border border-border flex items-center justify-center">
+          <div
+            className={`w-16 h-16 mx-auto mb-4 rounded-2xl border flex items-center justify-center transition-colors ${isDragOver ? "bg-accent/10 border-accent" : "bg-bg-card border-border"}`}
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth={1.5}
-              className="w-8 h-8 text-text-tertiary"
+              className={`w-8 h-8 transition-colors ${isDragOver ? "text-accent" : "text-text-tertiary"}`}
             >
               <path
                 strokeLinecap="round"
@@ -233,16 +344,24 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
               />
             </svg>
           </div>
-          <h2 className="text-sm font-medium text-text-primary mb-1">Add your music library</h2>
-          <p className="text-xs text-text-tertiary mb-4 max-w-[280px]">
-            Choose a folder containing your music to get started.
-          </p>
-          <button
-            onClick={handleAddFolder}
-            className="px-5 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+          <h2
+            className={`text-sm font-medium mb-1 transition-colors ${isDragOver ? "text-accent" : "text-text-primary"}`}
           >
-            Choose Folder
-          </button>
+            {isDragOver ? "Drop to import" : "Add your music library"}
+          </h2>
+          <p className="text-xs text-text-tertiary mb-4 max-w-[280px]">
+            {isDragOver
+              ? "Files will be organized by Artist and Album"
+              : "Choose a folder or drag files here to get started."}
+          </p>
+          {!isDragOver && (
+            <button
+              onClick={handleChooseLibrary}
+              className="px-5 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
+            >
+              Choose Folder
+            </button>
+          )}
         </div>
       </div>
     );
@@ -257,7 +376,16 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
   }
 
   return (
-    <div className="flex h-full">
+    <div className="relative flex h-full">
+      {isDragOver && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg-primary/80 backdrop-blur-sm border-2 border-dashed border-accent rounded-lg pointer-events-none">
+          <div className="text-center">
+            <div className="text-2xl text-accent mb-2">+</div>
+            <div className="text-xs font-medium text-accent">Drop to import</div>
+            <div className="text-[10px] text-text-tertiary mt-1">Files will be organized by Artist / Album</div>
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {/* Search bar */}
         <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
@@ -270,15 +398,6 @@ export const LibraryPlayer = ({ onRefreshRef }: { onRefreshRef?: React.MutableRe
           />
           <div className="flex-1" />
           <span className="text-[10px] text-text-tertiary tabular-nums">{tracks.length} tracks</span>
-          <button
-            onClick={handleAddFolder}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium text-text-secondary border border-border hover:text-text-primary hover:border-border-active transition-all"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Folder
-          </button>
         </div>
 
         {/* Column browser */}

@@ -94,7 +94,7 @@ const AppContent = () => {
       <main className="flex-1 min-h-0 relative">
         {/* Library stays mounted always — hidden via CSS to preserve state */}
         <div className={`h-full ${topTab === "library" ? "" : "hidden"}`}>
-          <LibraryPlayer onRefreshRef={libraryRefreshRef} />
+          <LibraryPlayer onRefreshRef={libraryRefreshRef} isActive={topTab === "library"} />
         </div>
         {topTab === "tools" && (
           <div className="flex gap-6 p-6 h-full">

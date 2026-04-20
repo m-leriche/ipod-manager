@@ -12,7 +12,7 @@ use crate::rockbox;
 use crate::sanitize;
 use crate::youtube;
 use std::process::Command;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
 pub async fn detect_ipod() -> Result<Option<DiskInfo>, String> {
@@ -334,13 +334,43 @@ pub async fn scan_metadata(
 pub async fn save_metadata(
     updates: Vec<metadata::MetadataUpdate>,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<metadata::MetadataSaveResult, String> {
     let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+    let app_clone = app.clone();
 
-    tauri::async_runtime::spawn_blocking(move || Ok(metadata::save_metadata(updates, app, flag)))
-        .await
-        .map_err(|e| format!("Task failed: {}", e))?
+    // Collect file paths before saving (to check for reorganization after)
+    let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        Ok::<_, String>(metadata::save_metadata(updates, app, flag))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    // Reorganize files in the managed library if metadata changed
+    let conn = conn_arc
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    if let Some(library_root) = library::get_library_location(&conn) {
+        let mut moved = 0usize;
+        for file_path in &file_paths {
+            if file_path.starts_with(&library_root) {
+                if let Ok(Some(_)) =
+                    library::reorganize_library_file(&conn, &library_root, file_path)
+                {
+                    moved += 1;
+                }
+            }
+        }
+        if moved > 0 {
+            let _ = app_clone.emit("library-files-reorganized", moved);
+        }
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -436,6 +466,74 @@ pub async fn read_rockbox_playdata(ipod_path: String) -> Result<rockbox::Rockbox
 }
 
 // ── Library commands ────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    Ok(library::get_library_location(&conn))
+}
+
+#[tauri::command]
+pub async fn set_library_location(
+    path: String,
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<(), String> {
+    let conn_arc = db.conn_arc();
+    let flag = cancel.new_flag();
+
+    {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::set_library_location(&conn, &path)?;
+    }
+
+    // Scan the new location
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::scan_folder(&conn, &path, &app, &flag)
+    })
+    .await
+    .map_err(|e| format!("Scan failed: {}", e))??;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn import_to_library(
+    paths: Vec<String>,
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<library::ImportResult, String> {
+    let conn_arc = db.conn_arc();
+    let flag = cancel.new_flag();
+
+    let library_root = {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_library_location(&conn).ok_or_else(|| {
+            "No library location configured. Set one in Settings first.".to_string()
+        })?
+    };
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::import_to_library(&library_root, &paths, &conn, &app, &flag)
+    })
+    .await
+    .map_err(|e| format!("Import failed: {}", e))?
+}
 
 #[tauri::command]
 pub async fn add_library_folder(

@@ -12,7 +12,7 @@ beforeEach(() => {
     if (cmd === "detect_ipod") return null;
     if (cmd === "get_profiles") return { profiles: [] };
     if (cmd === "get_browse_profiles") return { profiles: [] };
-    if (cmd === "get_library_folders") return [];
+    if (cmd === "get_library_location") return null;
     if (cmd === "get_library_browser_data") return { tracks: [], genres: [], artists: [], albums: [] };
     if (cmd === "get_library_tracks") return [];
     if (cmd === "get_library_artists") return [];

@@ -3,12 +3,6 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { SettingsModal } from "./SettingsModal";
-import type { LibraryFolder } from "../../../types/library";
-
-const mockFolders: LibraryFolder[] = [
-  { id: 1, path: "/Users/test/Music", added_at: 1700000000 },
-  { id: 2, path: "/Users/test/Downloads/audio", added_at: 1700001000 },
-];
 
 describe("SettingsModal", () => {
   const onClose = vi.fn();
@@ -16,7 +10,7 @@ describe("SettingsModal", () => {
 
   beforeEach(() => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_library_folders") return mockFolders;
+      if (cmd === "get_library_location") return "/Users/test/Music";
       return undefined;
     });
   });
@@ -26,23 +20,45 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
-  it("displays library folders", async () => {
+  it("displays current library location", async () => {
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
     await waitFor(() => {
       expect(screen.getByText("/Users/test/Music")).toBeInTheDocument();
-      expect(screen.getByText("/Users/test/Downloads/audio")).toBeInTheDocument();
     });
   });
 
-  it("shows empty state when no folders", async () => {
+  it("shows 'Not configured' when no location set", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_library_folders") return [];
+      if (cmd === "get_library_location") return null;
       return undefined;
     });
 
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
     await waitFor(() => {
-      expect(screen.getByText(/No folders added yet/)).toBeInTheDocument();
+      expect(screen.getByText("Not configured")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'Choose' button when no location, 'Change' when set", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_library_location") return null;
+      return undefined;
+    });
+
+    const { unmount } = render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    await waitFor(() => {
+      expect(screen.getByText("Choose")).toBeInTheDocument();
+    });
+    unmount();
+
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_library_location") return "/Users/test/Music";
+      return undefined;
+    });
+
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    await waitFor(() => {
+      expect(screen.getByText("Change")).toBeInTheDocument();
     });
   });
 
@@ -64,34 +80,19 @@ describe("SettingsModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("removes a folder and refreshes", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    await waitFor(() => {
-      expect(screen.getByText("/Users/test/Music")).toBeInTheDocument();
-    });
-
-    const removeButtons = screen.getAllByText("Remove");
-    fireEvent.click(removeButtons[0]);
-
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("remove_library_folder", { path: "/Users/test/Music" });
-      expect(onLibraryChanged).toHaveBeenCalled();
-    });
-  });
-
-  it("adds a folder via directory picker", async () => {
-    vi.mocked(open).mockResolvedValueOnce("/Users/test/NewFolder");
+  it("sets library location via directory picker", async () => {
+    vi.mocked(open).mockResolvedValueOnce("/Users/test/NewLibrary");
 
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
     await waitFor(() => {
-      expect(screen.getByText("Add Folder")).toBeInTheDocument();
+      expect(screen.getByText("Change")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Add Folder"));
+    fireEvent.click(screen.getByText("Change"));
 
     await waitFor(() => {
-      expect(open).toHaveBeenCalledWith({ directory: true, multiple: false });
-      expect(invoke).toHaveBeenCalledWith("add_library_folder", { path: "/Users/test/NewFolder" });
+      expect(open).toHaveBeenCalledWith({ directory: true, multiple: false, title: "Choose library location" });
+      expect(invoke).toHaveBeenCalledWith("set_library_location", { path: "/Users/test/NewLibrary" });
       expect(onLibraryChanged).toHaveBeenCalled();
     });
   });
@@ -101,14 +102,14 @@ describe("SettingsModal", () => {
 
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
     await waitFor(() => {
-      expect(screen.getByText("Add Folder")).toBeInTheDocument();
+      expect(screen.getByText("Change")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Add Folder"));
+    fireEvent.click(screen.getByText("Change"));
 
     await waitFor(() => {
       expect(open).toHaveBeenCalled();
     });
-    expect(invoke).not.toHaveBeenCalledWith("add_library_folder", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("set_library_location", expect.anything());
   });
 });

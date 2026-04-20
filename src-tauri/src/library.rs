@@ -155,6 +155,11 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             added_at INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist COLLATE NOCASE);
@@ -164,6 +169,44 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     .map_err(|e| format!("Failed to create tables: {}", e))?;
 
     Ok(conn)
+}
+
+// ── Settings ───────────────────────────────────────────────────
+
+fn get_setting(conn: &Connection, key: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .ok()
+}
+
+fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )
+    .map_err(|e| format!("Failed to save setting: {}", e))?;
+    Ok(())
+}
+
+pub fn get_library_location(conn: &Connection) -> Option<String> {
+    get_setting(conn, "library_location")
+}
+
+pub fn set_library_location(conn: &Connection, path: &str) -> Result<(), String> {
+    set_setting(conn, "library_location", path)?;
+
+    // The library location is the single source of truth — sync library_folders
+    conn.execute("DELETE FROM tracks", [])
+        .map_err(|e| format!("Failed to clear tracks: {}", e))?;
+    conn.execute("DELETE FROM library_folders", [])
+        .map_err(|e| format!("Failed to clear folders: {}", e))?;
+    add_folder(conn, path)?;
+
+    Ok(())
 }
 
 // ── Folder management ───────────────────────────────────────────
@@ -400,6 +443,241 @@ pub fn rescan_all_folders(
     );
 
     Ok(())
+}
+
+// ── Import to library ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportResult {
+    pub total_files: usize,
+    pub copied: usize,
+    pub skipped: usize,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportProgress {
+    pub total: usize,
+    pub completed: usize,
+    pub current_file: String,
+}
+
+pub fn sanitize_path_component(name: &str) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            _ => c,
+        })
+        .collect();
+    let trimmed = sanitized.trim().trim_end_matches('.').trim().to_string();
+    if trimmed.is_empty() {
+        return "Unknown".to_string();
+    }
+    if trimmed.len() > 255 {
+        trimmed[..255].to_string()
+    } else {
+        trimmed
+    }
+}
+
+fn compute_library_dest(library_root: &Path, track: &TrackData) -> PathBuf {
+    let artist_name = track
+        .album_artist
+        .as_deref()
+        .or(track.artist.as_deref())
+        .unwrap_or("Unknown Artist");
+    let album_name = track.album.as_deref().unwrap_or("Unknown Album");
+
+    library_root
+        .join(sanitize_path_component(artist_name))
+        .join(sanitize_path_component(album_name))
+        .join(&track.file_name)
+}
+
+pub fn import_to_library(
+    library_root: &str,
+    source_paths: &[String],
+    conn: &Connection,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<ImportResult, String> {
+    let root = Path::new(library_root);
+
+    // Collect all audio files from the source paths
+    let mut audio_files: Vec<PathBuf> = Vec::new();
+    for path_str in source_paths {
+        let path = Path::new(path_str);
+        if path.is_dir() {
+            collect_audio_files(path, &mut audio_files);
+        } else if path.is_file() && crate::audio_utils::is_audio(path) {
+            audio_files.push(path.to_path_buf());
+        }
+    }
+
+    let total = audio_files.len();
+    let mut copied = 0;
+    let mut skipped = 0;
+    let mut errors = Vec::new();
+
+    for (i, src_path) in audio_files.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Ok(ImportResult {
+                total_files: total,
+                copied,
+                skipped,
+                errors,
+            });
+        }
+
+        let file_name = src_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let _ = app.emit(
+            "import-progress",
+            ImportProgress {
+                total,
+                completed: i,
+                current_file: file_name.clone(),
+            },
+        );
+
+        // Read metadata to determine destination
+        let track_data = match read_track_for_library(src_path) {
+            Some(td) => td,
+            None => {
+                errors.push(format!("{}: Failed to read metadata", file_name));
+                continue;
+            }
+        };
+
+        let dest_path = compute_library_dest(root, &track_data);
+
+        // Skip if destination already exists
+        if dest_path.exists() {
+            skipped += 1;
+            continue;
+        }
+
+        // Create parent directories
+        if let Some(parent) = dest_path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                errors.push(format!("{}: Failed to create directory: {}", file_name, e));
+                continue;
+            }
+        }
+
+        // Copy the file
+        match fs::copy(src_path, &dest_path) {
+            Ok(_) => copied += 1,
+            Err(e) => {
+                errors.push(format!("{}: Copy failed: {}", file_name, e));
+            }
+        }
+    }
+
+    // Emit final progress
+    let _ = app.emit(
+        "import-progress",
+        ImportProgress {
+            total,
+            completed: total,
+            current_file: String::new(),
+        },
+    );
+
+    // Ensure library root is registered as a library folder and scan it
+    add_folder(conn, library_root)?;
+    scan_folder(conn, library_root, app, cancel_flag)?;
+
+    Ok(ImportResult {
+        total_files: total,
+        copied,
+        skipped,
+        errors,
+    })
+}
+
+// ── Reorganization on metadata change ──────────────────────────
+
+pub fn update_track_path(conn: &Connection, old_path: &str, new_path: &str) -> Result<(), String> {
+    let new_pb = Path::new(new_path);
+    let file_name = new_pb
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let folder_path = new_pb
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    conn.execute(
+        "UPDATE tracks SET file_path = ?1, file_name = ?2, folder_path = ?3 WHERE file_path = ?4",
+        params![new_path, file_name, folder_path, old_path],
+    )
+    .map_err(|e| format!("Failed to update track path: {}", e))?;
+    Ok(())
+}
+
+pub fn cleanup_empty_dirs(start: &Path, stop_at: &Path) {
+    let mut current = start.to_path_buf();
+    while current.starts_with(stop_at) && current != stop_at {
+        let is_empty = fs::read_dir(&current)
+            .map(|mut d| d.next().is_none())
+            .unwrap_or(false);
+        if !is_empty {
+            break;
+        }
+        let _ = fs::remove_dir(&current);
+        match current.parent() {
+            Some(parent) => current = parent.to_path_buf(),
+            None => break,
+        }
+    }
+}
+
+pub fn reorganize_library_file(
+    conn: &Connection,
+    library_root: &str,
+    file_path: &str,
+) -> Result<Option<String>, String> {
+    let src = Path::new(file_path);
+    if !src.exists() {
+        return Ok(None);
+    }
+
+    let track_data = match read_track_for_library(src) {
+        Some(td) => td,
+        None => return Ok(None),
+    };
+
+    let root = Path::new(library_root);
+    let dest = compute_library_dest(root, &track_data);
+
+    // No move needed if already in the right place
+    if dest == src {
+        return Ok(None);
+    }
+
+    // Create destination directory
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    // Move the file (same volume = instant rename)
+    fs::rename(src, &dest).map_err(|e| format!("Failed to move file: {}", e))?;
+
+    let new_path = dest.to_string_lossy().to_string();
+    update_track_path(conn, file_path, &new_path)?;
+
+    // Clean up empty directories
+    if let Some(old_parent) = src.parent() {
+        cleanup_empty_dirs(old_parent, root);
+    }
+
+    Ok(Some(new_path))
 }
 
 struct TrackData {

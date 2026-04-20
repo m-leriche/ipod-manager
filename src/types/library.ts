@@ -69,3 +69,16 @@ export interface LibraryScanProgress {
   completed: number;
   current_file: string;
 }
+
+export interface ImportProgress {
+  total: number;
+  completed: number;
+  current_file: string;
+}
+
+export interface ImportResult {
+  total_files: number;
+  copied: number;
+  skipped: number;
+  errors: string[];
+}

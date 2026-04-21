@@ -357,10 +357,10 @@ pub async fn save_metadata(
     if let Some(library_root) = library::get_library_location(&conn) {
         let mut updated = 0usize;
         for file_path in &file_paths {
-            if file_path.starts_with(&library_root) {
-                if library::reorganize_library_file(&conn, &library_root, file_path).is_ok() {
-                    updated += 1;
-                }
+            if file_path.starts_with(&library_root)
+                && library::reorganize_library_file(&conn, &library_root, file_path).is_ok()
+            {
+                updated += 1;
             }
         }
         if updated > 0 {

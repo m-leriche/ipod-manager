@@ -28,6 +28,7 @@ pub struct LibraryTrack {
     pub track_number: Option<u32>,
     pub track_total: Option<u32>,
     pub disc_number: Option<u32>,
+    pub disc_total: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
     pub duration_secs: f64,
@@ -137,6 +138,7 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             track_number INTEGER,
             track_total INTEGER,
             disc_number INTEGER,
+            disc_total INTEGER,
             year INTEGER,
             genre TEXT,
             duration_secs REAL NOT NULL DEFAULT 0,
@@ -167,6 +169,9 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);",
     )
     .map_err(|e| format!("Failed to create tables: {}", e))?;
+
+    // Migration: add disc_total column for existing databases
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN disc_total INTEGER");
 
     Ok(conn)
 }
@@ -602,25 +607,6 @@ pub fn import_to_library(
 
 // ── Reorganization on metadata change ──────────────────────────
 
-pub fn update_track_path(conn: &Connection, old_path: &str, new_path: &str) -> Result<(), String> {
-    let new_pb = Path::new(new_path);
-    let file_name = new_pb
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-    let folder_path = new_pb
-        .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    conn.execute(
-        "UPDATE tracks SET file_path = ?1, file_name = ?2, folder_path = ?3 WHERE file_path = ?4",
-        params![new_path, file_name, folder_path, old_path],
-    )
-    .map_err(|e| format!("Failed to update track path: {}", e))?;
-    Ok(())
-}
-
 pub fn cleanup_empty_dirs(start: &Path, stop_at: &Path) {
     let mut current = start.to_path_buf();
     while current.starts_with(stop_at) && current != stop_at {
@@ -648,7 +634,7 @@ pub fn reorganize_library_file(
         return Ok(None);
     }
 
-    let track_data = match read_track_for_library(src) {
+    let mut track_data = match read_track_for_library(src) {
         Some(td) => td,
         None => return Ok(None),
     };
@@ -656,8 +642,20 @@ pub fn reorganize_library_file(
     let root = Path::new(library_root);
     let dest = compute_library_dest(root, &track_data);
 
-    // No move needed if already in the right place
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let mtime = fs::metadata(src)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(now);
+
     if dest == src {
+        // No move needed — just update DB with fresh metadata from file
+        upsert_track(conn, &track_data, mtime, now)?;
         return Ok(None);
     }
 
@@ -669,8 +667,21 @@ pub fn reorganize_library_file(
     // Move the file (same volume = instant rename)
     fs::rename(src, &dest).map_err(|e| format!("Failed to move file: {}", e))?;
 
+    // Update track data to reflect new location
     let new_path = dest.to_string_lossy().to_string();
-    update_track_path(conn, file_path, &new_path)?;
+    track_data.file_path = new_path.clone();
+    track_data.file_name = dest
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    track_data.folder_path = dest
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    // Remove old DB row, insert new one with updated path and metadata
+    let _ = conn.execute("DELETE FROM tracks WHERE file_path = ?1", params![file_path]);
+    upsert_track(conn, &track_data, mtime, now)?;
 
     // Clean up empty directories
     if let Some(old_parent) = src.parent() {
@@ -693,6 +704,7 @@ struct TrackData {
     track_number: Option<u32>,
     track_total: Option<u32>,
     disc_number: Option<u32>,
+    disc_total: Option<u32>,
     year: Option<u32>,
     genre: Option<String>,
     duration_secs: f64,
@@ -748,6 +760,7 @@ fn read_track_for_library(path: &Path) -> Option<TrackData> {
         track_number,
         track_total,
         disc_number,
+        disc_total,
         year,
         genre,
     ) = if let Some(tag) = tag {
@@ -763,12 +776,13 @@ fn read_track_for_library(path: &Path) -> Option<TrackData> {
             tag.track(),
             tag.track_total(),
             tag.disk(),
+            tag.disk_total(),
             tag.year(),
             tag.genre().and_then(|s| trim_tag(&s)),
         )
     } else {
         (
-            None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None,
         )
     };
 
@@ -785,6 +799,7 @@ fn read_track_for_library(path: &Path) -> Option<TrackData> {
         track_number,
         track_total,
         disc_number,
+        disc_total,
         year,
         genre,
         duration_secs,
@@ -800,11 +815,11 @@ fn upsert_track(conn: &Connection, t: &TrackData, mtime: i64, now: i64) -> Resul
         "INSERT INTO tracks (
             file_path, file_name, folder_path, title, artist, album, album_artist,
             sort_artist, sort_album_artist, track_number, track_total, disc_number,
-            year, genre, duration_secs, sample_rate, bitrate_kbps, format,
+            disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
             file_size, modified_at, scanned_at, created_at
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-            ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
         )
         ON CONFLICT(file_path) DO UPDATE SET
             file_name=excluded.file_name, folder_path=excluded.folder_path,
@@ -812,10 +827,11 @@ fn upsert_track(conn: &Connection, t: &TrackData, mtime: i64, now: i64) -> Resul
             album_artist=excluded.album_artist, sort_artist=excluded.sort_artist,
             sort_album_artist=excluded.sort_album_artist, track_number=excluded.track_number,
             track_total=excluded.track_total, disc_number=excluded.disc_number,
-            year=excluded.year, genre=excluded.genre, duration_secs=excluded.duration_secs,
-            sample_rate=excluded.sample_rate, bitrate_kbps=excluded.bitrate_kbps,
-            format=excluded.format, file_size=excluded.file_size,
-            modified_at=excluded.modified_at, scanned_at=excluded.scanned_at",
+            disc_total=excluded.disc_total, year=excluded.year, genre=excluded.genre,
+            duration_secs=excluded.duration_secs, sample_rate=excluded.sample_rate,
+            bitrate_kbps=excluded.bitrate_kbps, format=excluded.format,
+            file_size=excluded.file_size, modified_at=excluded.modified_at,
+            scanned_at=excluded.scanned_at",
         params![
             t.file_path,
             t.file_name,
@@ -829,6 +845,7 @@ fn upsert_track(conn: &Connection, t: &TrackData, mtime: i64, now: i64) -> Resul
             t.track_number,
             t.track_total,
             t.disc_number,
+            t.disc_total,
             t.year,
             t.genre,
             t.duration_secs,
@@ -917,7 +934,8 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
     let sql = format!(
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
-                year, genre, duration_secs, sample_rate, bitrate_kbps, format, file_size
+                disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
+                file_size
          FROM tracks {} ORDER BY {}",
         where_clause, order_by
     );
@@ -945,13 +963,14 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
                 track_number: row.get(10)?,
                 track_total: row.get(11)?,
                 disc_number: row.get(12)?,
-                year: row.get(13)?,
-                genre: row.get(14)?,
-                duration_secs: row.get(15)?,
-                sample_rate: row.get(16)?,
-                bitrate_kbps: row.get(17)?,
-                format: row.get(18)?,
-                file_size: row.get::<_, i64>(19).map(|v| v as u64)?,
+                disc_total: row.get(13)?,
+                year: row.get(14)?,
+                genre: row.get(15)?,
+                duration_secs: row.get(16)?,
+                sample_rate: row.get(17)?,
+                bitrate_kbps: row.get(18)?,
+                format: row.get(19)?,
+                file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?;
@@ -1305,6 +1324,7 @@ mod tests {
             track_number: Some(1),
             track_total: None,
             disc_number: None,
+            disc_total: None,
             year: Some(year),
             genre: Some(genre.to_string()),
             duration_secs: 180.0,

@@ -12,9 +12,17 @@ interface AlbumArtworkProps {
   folderPath: string | null;
   size?: keyof typeof sizes;
   className?: string;
+  showMissingLabel?: boolean;
+  onRepair?: () => void;
 }
 
-export const AlbumArtwork = ({ folderPath, size = "md", className = "" }: AlbumArtworkProps) => {
+export const AlbumArtwork = ({
+  folderPath,
+  size = "md",
+  className = "",
+  showMissingLabel = false,
+  onRepair,
+}: AlbumArtworkProps) => {
   const [failed, setFailed] = useState(false);
 
   // Reset failed state when the folder changes so the new cover.jpg gets a chance to load
@@ -27,7 +35,7 @@ export const AlbumArtwork = ({ folderPath, size = "md", className = "" }: AlbumA
   return (
     <div className={`${sizes[size]} shrink-0 rounded-lg overflow-hidden ${className}`}>
       {showFallback ? (
-        <div className="w-full h-full bg-gradient-to-br from-bg-elevated to-bg-card flex items-center justify-center">
+        <div className="w-full h-full bg-gradient-to-br from-bg-elevated to-bg-card flex flex-col items-center justify-center gap-1">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -41,6 +49,22 @@ export const AlbumArtwork = ({ folderPath, size = "md", className = "" }: AlbumA
               d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
             />
           </svg>
+          {showMissingLabel && (
+            <>
+              <span className="text-[9px] text-text-tertiary font-medium">Missing Art</span>
+              {onRepair && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRepair();
+                  }}
+                  className="text-[9px] text-accent hover:text-accent-hover font-medium transition-colors"
+                >
+                  Repair
+                </button>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <img

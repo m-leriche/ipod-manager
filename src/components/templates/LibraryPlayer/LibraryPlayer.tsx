@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -46,7 +46,7 @@ export const LibraryPlayer = ({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedTrack, setSelectedTrack] = useState<LibraryTrack | null>(null);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<number>>(new Set());
 
   // All data from backend (pre-filtered by column selections)
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
@@ -59,6 +59,19 @@ export const LibraryPlayer = ({
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fetchIdRef = useRef(0);
+
+  // ── Derived selected tracks ───────────────────────────────────
+
+  const selectedTracks = useMemo(() => tracks.filter((t) => selectedTrackIds.has(t.id)), [tracks, selectedTrackIds]);
+
+  // Prune stale selections when tracks change
+  useEffect(() => {
+    const currentIds = new Set(tracks.map((t) => t.id));
+    setSelectedTrackIds((prev) => {
+      const pruned = new Set([...prev].filter((id) => currentIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [tracks]);
 
   // ── Debounce search input ─────────────────────────────────────
 
@@ -317,8 +330,12 @@ export const LibraryPlayer = ({
 
   // ── Track selection ───────────────────────────────────────────
 
-  const handleTrackSelect = useCallback((track: LibraryTrack) => {
-    setSelectedTrack(track);
+  const handleTrackSelect = useCallback((_track: LibraryTrack) => {
+    // Last-clicked track kept for playback context (not used for detail panel anymore)
+  }, []);
+
+  const handleSelectionChange = useCallback((ids: Set<number>) => {
+    setSelectedTrackIds(ids);
   }, []);
 
   // ── Render ────────────────────────────────────────────────────
@@ -421,10 +438,11 @@ export const LibraryPlayer = ({
           sortDirection={sortDirection}
           onSort={handleSort}
           onTrackSelect={handleTrackSelect}
+          onSelectionChange={handleSelectionChange}
         />
       </div>
 
-      {selectedTrack && <TrackDetailPanel track={selectedTrack} />}
+      {selectedTracks.length > 0 && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
     </div>
   );
 };

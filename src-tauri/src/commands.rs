@@ -350,23 +350,21 @@ pub async fn save_metadata(
     .await
     .map_err(|e| format!("Task failed: {}", e))??;
 
-    // Reorganize files in the managed library if metadata changed
+    // Re-scan metadata into DB and reorganize files in the managed library
     let conn = conn_arc
         .lock()
         .map_err(|e| format!("DB lock failed: {}", e))?;
     if let Some(library_root) = library::get_library_location(&conn) {
-        let mut moved = 0usize;
+        let mut updated = 0usize;
         for file_path in &file_paths {
             if file_path.starts_with(&library_root) {
-                if let Ok(Some(_)) =
-                    library::reorganize_library_file(&conn, &library_root, file_path)
-                {
-                    moved += 1;
+                if library::reorganize_library_file(&conn, &library_root, file_path).is_ok() {
+                    updated += 1;
                 }
             }
         }
-        if moved > 0 {
-            let _ = app_clone.emit("library-files-reorganized", moved);
+        if updated > 0 {
+            let _ = app_clone.emit("library-files-reorganized", updated);
         }
     }
 

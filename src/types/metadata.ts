@@ -23,6 +23,8 @@ export interface MetadataUpdate {
   sort_album_artist?: string;
   track?: number;
   track_total?: number;
+  disc_number?: number;
+  disc_total?: number;
   year?: number;
   genre?: string;
 }

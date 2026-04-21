@@ -37,6 +37,8 @@ pub struct MetadataUpdate {
     pub sort_album_artist: Option<String>,
     pub track: Option<u32>,
     pub track_total: Option<u32>,
+    pub disc_number: Option<u32>,
+    pub disc_total: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
 }
@@ -318,6 +320,12 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
     if let Some(v) = update.track_total {
         tag.set_total_tracks(v);
     }
+    if let Some(v) = update.disc_number {
+        tag.set_disc(v);
+    }
+    if let Some(v) = update.disc_total {
+        tag.set_total_discs(v);
+    }
     if let Some(ref v) = update.album_artist {
         tag.set_album_artist(v.as_str());
     }
@@ -369,6 +377,12 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
     }
     if let Some(v) = update.track_total {
         tag.set_track_total(v);
+    }
+    if let Some(v) = update.disc_number {
+        tag.set_disk(v);
+    }
+    if let Some(v) = update.disc_total {
+        tag.set_disk_total(v);
     }
     if let Some(ref v) = update.album_artist {
         tag.insert_text(ItemKey::AlbumArtist, v.to_string());

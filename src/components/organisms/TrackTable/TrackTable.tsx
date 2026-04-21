@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useMemo, useRef } from "react";
+import { memo, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
@@ -14,6 +14,7 @@ interface TrackTableProps {
   sortDirection: "asc" | "desc";
   onSort: (key: string) => void;
   onTrackSelect?: (track: LibraryTrack) => void;
+  onSelectionChange?: (selectedIds: Set<number>) => void;
   onNavigateToArtist?: (artist: string) => void;
   onNavigateToAlbum?: (album: string, artist: string) => void;
 }
@@ -86,6 +87,7 @@ export const TrackTable = memo(function TrackTable({
   sortDirection,
   onSort,
   onTrackSelect,
+  onSelectionChange,
   onNavigateToArtist,
   onNavigateToAlbum,
 }: TrackTableProps) {
@@ -98,6 +100,10 @@ export const TrackTable = memo(function TrackTable({
   // Ref for selected so handleClick doesn't depend on selected state
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+
+  useEffect(() => {
+    onSelectionChange?.(selected);
+  }, [selected, onSelectionChange]);
 
   const totalWidth = useMemo(() => widths.reduce((a, b) => a + b, 0), [widths]);
 

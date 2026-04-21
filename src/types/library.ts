@@ -12,6 +12,7 @@ export interface LibraryTrack {
   track_number: number | null;
   track_total: number | null;
   disc_number: number | null;
+  disc_total: number | null;
   year: number | null;
   genre: string | null;
   duration_secs: number;

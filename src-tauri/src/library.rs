@@ -680,7 +680,10 @@ pub fn reorganize_library_file(
         .unwrap_or_default();
 
     // Remove old DB row, insert new one with updated path and metadata
-    let _ = conn.execute("DELETE FROM tracks WHERE file_path = ?1", params![file_path]);
+    let _ = conn.execute(
+        "DELETE FROM tracks WHERE file_path = ?1",
+        params![file_path],
+    );
     upsert_track(conn, &track_data, mtime, now)?;
 
     // Clean up empty directories

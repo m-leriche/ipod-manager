@@ -1276,6 +1276,7 @@ mod tests {
                 track_number INTEGER,
                 track_total INTEGER,
                 disc_number INTEGER,
+                disc_total INTEGER,
                 year INTEGER,
                 genre TEXT,
                 duration_secs REAL NOT NULL DEFAULT 0,

@@ -1,3 +1,4 @@
+import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import type { EditableFields } from "./types";
 
 interface MetadataEditPanelProps {
@@ -6,9 +7,13 @@ interface MetadataEditPanelProps {
   selectedCount: number;
   dirtyCount: number;
   saving: boolean;
+  folderPath: string | null;
+  repairing: boolean;
+  artCacheBust: number;
   onFieldChange: (field: keyof EditableFields, value: string) => void;
   onSave: () => void;
   onRevert: () => void;
+  onRepairArt: () => void;
 }
 
 const Field = ({
@@ -42,11 +47,26 @@ export const MetadataEditPanel = ({
   selectedCount,
   dirtyCount,
   saving,
+  folderPath,
+  repairing,
+  artCacheBust,
   onFieldChange,
   onSave,
   onRevert,
+  onRepairArt,
 }: MetadataEditPanelProps) => (
   <div className="w-80 shrink-0 bg-bg-secondary border border-border rounded-2xl flex flex-col min-h-0">
+    {/* Album artwork */}
+    <div className="p-4 flex justify-center">
+      <AlbumArtwork
+        folderPath={folderPath}
+        size="lg"
+        showMissingLabel
+        onRepair={repairing ? undefined : onRepairArt}
+        cacheBust={artCacheBust}
+      />
+    </div>
+
     {/* Header */}
     <div className="px-4 py-3 border-b border-border shrink-0">
       <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">

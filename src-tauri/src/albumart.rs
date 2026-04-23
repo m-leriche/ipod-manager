@@ -70,16 +70,48 @@ fn is_audio(path: &Path) -> bool {
 }
 
 fn has_cover(dir: &Path) -> bool {
+    find_cover(dir).is_some()
+}
+
+/// Find the first existing cover art file in a directory, returning its full path.
+fn find_cover(dir: &Path) -> Option<std::path::PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else {
-        return false;
+        return None;
     };
-    let names: Vec<String> = entries
+    let files: Vec<(String, std::path::PathBuf)> = entries
         .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().to_lowercase())
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            (name, e.path())
+        })
         .collect();
-    COVER_NAMES
-        .iter()
-        .any(|c| names.contains(&(*c).to_string()))
+    for cover_name in COVER_NAMES {
+        if let Some((_, path)) = files.iter().find(|(name, _)| name == *cover_name) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+/// Ensure cover.jpg exists in the directory. If another cover variant exists
+/// (e.g. folder.jpg, album.jpg), convert it to cover.jpg.
+fn normalize_cover(dir: &Path) -> Result<bool, String> {
+    let cover_jpg = dir.join("cover.jpg");
+    if cover_jpg.exists() {
+        return Ok(true);
+    }
+
+    let Some(existing) = find_cover(dir) else {
+        return Ok(false);
+    };
+
+    // Load and re-save as cover.jpg (handles format conversion from png/bmp/jpeg)
+    let img = image::open(&existing)
+        .map_err(|e| format!("Failed to read {}: {}", existing.display(), e))?;
+    img.save(&cover_jpg)
+        .map_err(|e| format!("Failed to save cover.jpg: {}", e))?;
+
+    Ok(true)
 }
 
 /// Read artist, album, and embedded-art presence from the first parseable audio file.
@@ -322,9 +354,15 @@ pub fn fix_album_art(
             },
         );
 
-        if has_cover(dir) {
-            already_ok += 1;
-            continue;
+        // Ensure cover.jpg exists — if another variant (folder.jpg, album.jpg, etc.)
+        // exists, convert it to cover.jpg so the frontend can display it.
+        match normalize_cover(dir) {
+            Ok(true) => {
+                already_ok += 1;
+                continue;
+            }
+            Ok(false) => {}
+            Err(e) => log::warn!("Cover normalize failed for {}: {}", name, e),
         }
 
         // Try embedded extraction first (fast, no network needed)

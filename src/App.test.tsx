@@ -45,7 +45,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Tools" }));
     expect(screen.getByRole("button", { name: "File Explorer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "File Sync" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Album Art" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Metadata" })).toBeInTheDocument();
   });
 
   it("shows File Explorer content within Tools tab", async () => {

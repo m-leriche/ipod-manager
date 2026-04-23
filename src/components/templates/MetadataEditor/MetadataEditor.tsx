@@ -60,6 +60,8 @@ export const MetadataEditor = () => {
   // ── Editor state ──
   const [editedTracks, setEditedTracks] = useState<Record<string, EditableFields>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [repairingArt, setRepairingArt] = useState(false);
+  const [artCacheBust, setArtCacheBust] = useState(0);
 
   // ── Drag-and-drop state ──
   const [isDragOver, setIsDragOver] = useState(false);
@@ -319,6 +321,31 @@ export const MetadataEditor = () => {
       return next;
     });
   }, [selected]);
+
+  // Derive a common folder path from selected tracks for album art display
+  const selectedFolderPath = useMemo(() => {
+    if (selectedTracks.length === 0) return null;
+    const folders = [...new Set(selectedTracks.map((t) => t.file_path.replace(/\/[^/]+$/, "")))];
+    return folders.length === 1 ? folders[0] : null;
+  }, [selectedTracks]);
+
+  const handleRepairArt = useCallback(async () => {
+    const folders = [...new Set(selectedTracks.map((t) => t.file_path.replace(/\/[^/]+$/, "")))];
+    if (folders.length === 0) return;
+    setRepairingArt(true);
+
+    const unlisten = await listen("albumart-progress", () => {});
+
+    try {
+      await invoke("fix_album_art", { folders });
+      setArtCacheBust((n) => n + 1);
+    } catch (e) {
+      console.error("Failed to repair album art:", e);
+    } finally {
+      setRepairingArt(false);
+      unlisten();
+    }
+  }, [selectedTracks]);
 
   const handleSave = async () => {
     const updates = [];
@@ -787,9 +814,13 @@ export const MetadataEditor = () => {
                 selectedCount={selected.size}
                 dirtyCount={dirtyCount}
                 saving={phase === "saving"}
+                folderPath={selectedFolderPath}
+                repairing={repairingArt}
+                artCacheBust={artCacheBust}
                 onFieldChange={handleFieldChange}
                 onSave={handleSave}
                 onRevert={handleRevert}
+                onRepairArt={handleRepairArt}
               />
             )}
           </>

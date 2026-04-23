@@ -7,7 +7,6 @@ import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
-import { AlbumArtManager } from "./components/templates/AlbumArtManager/AlbumArtManager";
 import { YouTubeDownloader } from "./components/templates/YouTubeDownloader/YouTubeDownloader";
 import { VideoExtractor } from "./components/templates/VideoExtractor/VideoExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
@@ -19,7 +18,7 @@ import { SettingsModal } from "./components/templates/SettingsModal/SettingsModa
 import type { LibraryScanProgress } from "./types/library";
 
 type TopTab = "library" | "tools";
-type ToolTab = "browse" | "sync" | "albumart" | "metadata" | "quality" | "youtube" | "video" | "stats";
+type ToolTab = "browse" | "sync" | "metadata" | "quality" | "youtube" | "video" | "stats";
 
 const App = () => (
   <ProgressProvider>
@@ -107,9 +106,6 @@ const AppContent = () => {
                 <ToolTabButton active={toolTab === "sync"} onClick={() => setToolTab("sync")}>
                   File Sync
                 </ToolTabButton>
-                <ToolTabButton active={toolTab === "albumart"} onClick={() => setToolTab("albumart")}>
-                  Album Art
-                </ToolTabButton>
                 <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
                   Metadata
                 </ToolTabButton>
@@ -128,7 +124,6 @@ const AppContent = () => {
               </div>
               {toolTab === "browse" && <BrowseExplorer />}
               {toolTab === "sync" && <SyncManager />}
-              {toolTab === "albumart" && <AlbumArtManager />}
               {toolTab === "metadata" && <MetadataEditor />}
               {toolTab === "quality" && <QualityAnalyzer />}
               {toolTab === "youtube" && <YouTubeDownloader />}

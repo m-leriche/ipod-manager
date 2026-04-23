@@ -22,6 +22,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   const [mixed, setMixed] = useState(originalMixed);
   const [saving, setSaving] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [artCacheBust, setArtCacheBust] = useState(0);
 
   // Reset edited fields when selection changes
   useEffect(() => {
@@ -76,6 +77,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
 
     try {
       await invoke("fix_album_art", { folders });
+      setArtCacheBust((n) => n + 1);
       onSave?.();
     } catch (e) {
       console.error("Failed to repair album art:", e);
@@ -94,6 +96,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
           size="lg"
           showMissingLabel
           onRepair={repairing ? undefined : handleRepairArt}
+          cacheBust={artCacheBust}
         />
       </div>
 

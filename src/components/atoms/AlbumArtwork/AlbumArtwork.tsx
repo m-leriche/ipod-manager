@@ -14,6 +14,7 @@ interface AlbumArtworkProps {
   className?: string;
   showMissingLabel?: boolean;
   onRepair?: () => void;
+  cacheBust?: number;
 }
 
 export const AlbumArtwork = ({
@@ -22,13 +23,14 @@ export const AlbumArtwork = ({
   className = "",
   showMissingLabel = false,
   onRepair,
+  cacheBust,
 }: AlbumArtworkProps) => {
   const [failed, setFailed] = useState(false);
 
-  // Reset failed state when the folder changes so the new cover.jpg gets a chance to load
+  // Reset failed state when the folder changes or after a repair (cacheBust changes)
   useEffect(() => {
     setFailed(false);
-  }, [folderPath]);
+  }, [folderPath, cacheBust]);
 
   const showFallback = !folderPath || failed;
 
@@ -68,7 +70,7 @@ export const AlbumArtwork = ({
         </div>
       ) : (
         <img
-          src={convertFileSrc(folderPath + "/cover.jpg")}
+          src={convertFileSrc(folderPath + "/cover.jpg") + (cacheBust ? `?v=${cacheBust}` : "")}
           alt=""
           loading="lazy"
           className="w-full h-full object-cover"

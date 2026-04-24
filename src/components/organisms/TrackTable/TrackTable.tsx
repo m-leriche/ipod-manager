@@ -4,8 +4,10 @@ import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useColumnResize } from "./useColumnResize";
+import { useColumnOrder } from "./useColumnOrder";
 import { getAlbumTracks } from "./helpers";
-import { COLUMNS, COLUMN_DEFS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD } from "./constants";
+import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD, CELL_CLASSES } from "./constants";
+import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
 
 interface TrackTableProps {
@@ -38,7 +40,9 @@ export const TrackTable = memo(function TrackTable({
   const { state, playTrack, playNext, addToQueue } = usePlayback();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const { widths, onResizeStart } = useColumnResize(COLUMN_DEFS);
+  const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
+  const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
+  const { widths, onResizeStart } = useColumnResize(orderedDefs);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Ref for selected so handleClick doesn't depend on selected state
@@ -185,28 +189,34 @@ export const TrackTable = memo(function TrackTable({
     >
       <table className="table-fixed" style={{ width: totalWidth }}>
         <colgroup>
-          {widths.map((w, i) => (
-            <col key={COLUMNS[i].key} style={{ width: w }} />
+          {orderedColumns.map((col, i) => (
+            <col key={col.key} style={{ width: widths[i] }} />
           ))}
         </colgroup>
         <thead className="sticky top-0 z-10 bg-bg-primary">
           <tr className="border-b border-border">
-            {COLUMNS.map((col, i) => {
+            {orderedColumns.map((col, i) => {
               const isActive = col.sortKey === sortBy;
+              const isDragging = dragIndex === i;
+              const isDragOver = dragOverIndex === i && dragIndex !== i;
               return (
                 <th
                   key={col.key}
+                  ref={(el) => setHeaderRef(i, el)}
+                  onMouseDown={(e) => onReorderStart(i, e)}
                   onClick={() => onSort(col.sortKey)}
                   className={`relative px-3 py-2 text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-text-primary ${
                     isActive ? "text-text-primary" : "text-text-tertiary"
-                  } ${col.align === "right" ? "text-right" : "text-left"}`}
+                  } ${col.align === "right" ? "text-right" : "text-left"} ${
+                    isDragging ? "opacity-40" : ""
+                  } ${isDragOver ? "!border-l-2 !border-l-accent" : ""}`}
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
                     {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "▲" : "▼"}</span>}
                   </span>
                   {/* Resize handle — wide hit area, thin visible line */}
-                  {i < COLUMNS.length - 1 && (
+                  {i < orderedColumns.length - 1 && (
                     <div
                       onMouseDown={(e) => onResizeStart(i, e)}
                       className="absolute top-0 -right-[4px] w-[9px] h-full cursor-col-resize group/handle z-20"
@@ -222,16 +232,17 @@ export const TrackTable = memo(function TrackTable({
         <tbody>
           {paddingTop > 0 && (
             <tr>
-              <td style={{ height: paddingTop, padding: 0 }} colSpan={COLUMNS.length} />
+              <td style={{ height: paddingTop, padding: 0 }} colSpan={orderedColumns.length} />
             </tr>
           )}
           {virtualItems.map((virtualRow) => {
             const track = tracks[virtualRow.index];
             return (
-              <TrackRowResizable
+              <TrackRowDynamic
                 key={track.id}
                 track={track}
                 index={virtualRow.index}
+                columns={orderedColumns}
                 isCurrentTrack={currentTrackId === track.id}
                 isPlaying={currentTrackId === track.id && isActivePlaying}
                 isSelected={selected.has(track.id)}
@@ -243,7 +254,7 @@ export const TrackTable = memo(function TrackTable({
           })}
           {paddingBottom > 0 && (
             <tr>
-              <td style={{ height: paddingBottom, padding: 0 }} colSpan={COLUMNS.length} />
+              <td style={{ height: paddingBottom, padding: 0 }} colSpan={orderedColumns.length} />
             </tr>
           )}
         </tbody>
@@ -265,7 +276,6 @@ export const TrackTable = memo(function TrackTable({
   );
 });
 
-// Inline row that matches the 7-column layout
 const formatDuration = (secs: number): string => {
   if (!isFinite(secs) || secs < 0) return "—";
   const m = Math.floor(secs / 60);
@@ -279,9 +289,55 @@ const formatDateAdded = (epoch: number): string => {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 };
 
-const TrackRowResizable = memo(function TrackRowResizable({
+const getCellContent = (
+  key: string,
+  track: LibraryTrack,
+  index: number,
+  isCurrentTrack: boolean,
+  isPlaying: boolean,
+): React.ReactNode => {
+  switch (key) {
+    case "#":
+      return isCurrentTrack ? (
+        <div className="flex items-center justify-center gap-[2px] h-3">
+          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
+          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
+          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
+        </div>
+      ) : (
+        <span className="text-text-tertiary">{index + 1}</span>
+      );
+    case "title":
+      return (
+        <div className={`text-xs font-medium truncate ${isCurrentTrack ? "text-accent" : "text-text-primary"}`}>
+          {track.title || track.file_name}
+        </div>
+      );
+    case "artist":
+      return track.artist || "—";
+    case "album":
+      return track.album || "—";
+    case "genre":
+      return track.genre || "—";
+    case "track_number":
+      return track.track_number || "—";
+    case "year":
+      return track.year || "—";
+    case "duration":
+      return formatDuration(track.duration_secs);
+    case "date_added":
+      return formatDateAdded(track.created_at);
+    case "plays":
+      return track.play_count || "—";
+    default:
+      return "—";
+  }
+};
+
+const TrackRowDynamic = memo(function TrackRowDynamic({
   track,
   index,
+  columns,
   isCurrentTrack,
   isPlaying,
   isSelected,
@@ -291,6 +347,7 @@ const TrackRowResizable = memo(function TrackRowResizable({
 }: {
   track: LibraryTrack;
   index: number;
+  columns: TrackTableColumn[];
   isCurrentTrack: boolean;
   isPlaying: boolean;
   isSelected: boolean;
@@ -307,40 +364,11 @@ const TrackRowResizable = memo(function TrackRowResizable({
         isSelected ? "bg-accent/10" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
       }`}
     >
-      <td className="px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden">
-        {isCurrentTrack ? (
-          <div className="flex items-center justify-center gap-[2px] h-3">
-            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
-            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
-            <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
-          </div>
-        ) : (
-          <span className="text-text-tertiary">{index + 1}</span>
-        )}
-      </td>
-      <td className="px-3 py-[7px] overflow-hidden">
-        <div className={`text-xs font-medium truncate ${isCurrentTrack ? "text-accent" : "text-text-primary"}`}>
-          {track.title || track.file_name}
-        </div>
-      </td>
-      <td className="px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate">{track.artist || "—"}</td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.album || "—"}</td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.genre || "—"}</td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-        {track.track_number || "—"}
-      </td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-        {track.year || "—"}
-      </td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-        {formatDuration(track.duration_secs)}
-      </td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">
-        {formatDateAdded(track.created_at)}
-      </td>
-      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
-        {track.play_count || "—"}
-      </td>
+      {columns.map((col) => (
+        <td key={col.key} className={CELL_CLASSES[col.key]}>
+          {getCellContent(col.key, track, index, isCurrentTrack, isPlaying)}
+        </td>
+      ))}
     </tr>
   );
 });

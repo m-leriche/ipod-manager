@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 
 export interface ColumnDef {
   key: string;
@@ -8,41 +8,49 @@ export interface ColumnDef {
 
 const STORAGE_KEY = "crate-column-widths";
 
-const loadWidths = (columns: ColumnDef[]): number[] => {
+const loadWidthMap = (columns: ColumnDef[]): Record<string, number> => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return columns.map((c) => c.initialWidth);
+    if (!raw) {
+      const map: Record<string, number> = {};
+      columns.forEach((c) => {
+        map[c.key] = c.initialWidth;
+      });
+      return map;
+    }
     const saved = JSON.parse(raw) as Record<string, number>;
-    return columns.map((c) => saved[c.key] ?? c.initialWidth);
+    const map: Record<string, number> = {};
+    columns.forEach((c) => {
+      map[c.key] = saved[c.key] ?? c.initialWidth;
+    });
+    return map;
   } catch {
-    return columns.map((c) => c.initialWidth);
+    const map: Record<string, number> = {};
+    columns.forEach((c) => {
+      map[c.key] = c.initialWidth;
+    });
+    return map;
   }
 };
 
-const saveWidths = (columns: ColumnDef[], widths: number[]) => {
-  const map: Record<string, number> = {};
-  columns.forEach((c, i) => {
-    map[c.key] = widths[i];
-  });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-};
-
 export const useColumnResize = (columns: ColumnDef[]) => {
-  const [widths, setWidths] = useState<number[]>(() => loadWidths(columns));
+  const [widthMap, setWidthMap] = useState<Record<string, number>>(() => loadWidthMap(columns));
   const draggingRef = useRef(false);
   const didDragRef = useRef(false);
 
-  // Persist widths to localStorage when they change
   useEffect(() => {
-    saveWidths(columns, widths);
-  }, [columns, widths]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(widthMap));
+  }, [widthMap]);
+
+  const widths = useMemo(() => columns.map((c) => widthMap[c.key] ?? c.initialWidth), [columns, widthMap]);
 
   const onResizeStart = useCallback(
     (colIndex: number, e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      const col = columns[colIndex];
       const startX = e.clientX;
-      const startWidth = widths[colIndex];
+      const startWidth = widthMap[col.key] ?? col.initialWidth;
       draggingRef.current = true;
       didDragRef.current = false;
 
@@ -50,12 +58,8 @@ export const useColumnResize = (columns: ColumnDef[]) => {
         if (!draggingRef.current) return;
         didDragRef.current = true;
         const delta = ev.clientX - startX;
-        const newWidth = Math.max(columns[colIndex].minWidth, startWidth + delta);
-        setWidths((prev) => {
-          const next = [...prev];
-          next[colIndex] = newWidth;
-          return next;
-        });
+        const newWidth = Math.max(col.minWidth, startWidth + delta);
+        setWidthMap((prev) => ({ ...prev, [col.key]: newWidth }));
       };
 
       const onUp = () => {
@@ -77,7 +81,7 @@ export const useColumnResize = (columns: ColumnDef[]) => {
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [widths, columns],
+    [widthMap, columns],
   );
 
   return { widths, onResizeStart };

@@ -86,3 +86,16 @@ export const SORT_KEY_TO_TRACK_FIELD: Record<string, keyof LibraryTrack> = {
   album: "album",
   genre: "genre",
 };
+
+export const CELL_CLASSES: Record<string, string> = {
+  "#": "px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden",
+  title: "px-3 py-[7px] overflow-hidden",
+  artist: "px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate",
+  album: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
+  genre: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
+  track_number: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  year: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  duration: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  date_added: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
+  plays: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+};

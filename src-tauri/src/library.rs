@@ -36,6 +36,8 @@ pub struct LibraryTrack {
     pub bitrate_kbps: Option<u32>,
     pub format: String,
     pub file_size: u64,
+    pub created_at: i64,
+    pub play_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -148,7 +150,8 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             file_size INTEGER NOT NULL DEFAULT 0,
             modified_at INTEGER NOT NULL DEFAULT 0,
             scanned_at INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL DEFAULT 0
+            created_at INTEGER NOT NULL DEFAULT 0,
+            play_count INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS library_folders (
@@ -170,8 +173,10 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Failed to create tables: {}", e))?;
 
-    // Migration: add disc_total column for existing databases
+    // Migrations for existing databases
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN disc_total INTEGER");
+    let _ =
+        conn.execute_batch("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0");
 
     Ok(conn)
 }
@@ -929,6 +934,10 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         Some("genre") => format!(
             "COALESCE(genre, '') {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
+        Some("date_added") => format!("created_at {dir}"),
+        Some("play_count") => format!(
+            "play_count {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(track_number, 0)"
+        ),
         _ => format!(
             "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
@@ -938,7 +947,7 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
                 disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size
+                file_size, created_at, play_count
          FROM tracks {} ORDER BY {}",
         where_clause, order_by
     );
@@ -974,6 +983,8 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
                 bitrate_kbps: row.get(18)?,
                 format: row.get(19)?,
                 file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
+                created_at: row.get(21)?,
+                play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?;
@@ -1286,7 +1297,8 @@ mod tests {
                 file_size INTEGER NOT NULL DEFAULT 0,
                 modified_at INTEGER NOT NULL DEFAULT 0,
                 scanned_at INTEGER NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL DEFAULT 0
+                created_at INTEGER NOT NULL DEFAULT 0,
+                play_count INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS library_folders (
                 id INTEGER PRIMARY KEY,

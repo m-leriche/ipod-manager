@@ -10,6 +10,11 @@ import { MetadataEditPanel } from "./MetadataEditPanel";
 import { RepairAlbumCard } from "./RepairAlbumCard";
 import { RepairDetailPanel } from "./RepairDetailPanel";
 import { TagSanitizerModal } from "./TagSanitizerModal";
+import { QualityList } from "../QualityAnalyzer/QualityList";
+import { QualityDetailPanel } from "../QualityAnalyzer/QualityDetailPanel";
+import { AudioPreviewModal } from "../QualityAnalyzer/AudioPreviewModal";
+import { useAudioPlayback } from "../../molecules/MiniPlayer/useAudioPlayback";
+import { groupByVerdict, verdictColor } from "../QualityAnalyzer/helpers";
 import {
   groupTracks,
   buildUpdate,
@@ -29,6 +34,7 @@ import type {
   SanitizeProgress,
   SanitizeResult,
 } from "../../../types/metadata";
+import type { AudioFileInfo, QualityScanProgress, WaveformResult } from "../../../types/quality";
 import type {
   Phase,
   View,
@@ -39,6 +45,11 @@ import type {
   SanitizeModalOptions,
 } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
+
+interface QualityPreviewModal {
+  type: "spectrogram" | "waveform";
+  filePath: string;
+}
 
 export const MetadataEditor = () => {
   const {
@@ -76,6 +87,14 @@ export const MetadataEditor = () => {
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
 
+  // ── Quality state ──
+  const [qualityFiles, setQualityFiles] = useState<AudioFileInfo[]>([]);
+  const [selectedQualityFile, setSelectedQualityFile] = useState<string | null>(null);
+  const [spectrograms, setSpectrograms] = useState<Record<string, string>>({});
+  const [waveforms, setWaveforms] = useState<Record<string, WaveformResult>>({});
+  const [qualityPreviewModal, setQualityPreviewModal] = useState<QualityPreviewModal | null>(null);
+  const audio = useAudioPlayback(selectedQualityFile);
+
   // ── Event listeners ──
   useEffect(() => {
     let active = true;
@@ -112,6 +131,15 @@ export const MetadataEditor = () => {
     listen<RepairLookupProgress>("repair-lookup-progress", (e) => {
       if (active) {
         updateProgress(e.payload.completed_albums, e.payload.total_albums, e.payload.current_album);
+      }
+    }).then((fn) => {
+      if (active) unsubs.push(fn);
+      else fn();
+    });
+
+    listen<QualityScanProgress>("quality-scan-progress", (e) => {
+      if (active) {
+        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
       }
     }).then((fn) => {
       if (active) unsubs.push(fn);
@@ -573,6 +601,71 @@ export const MetadataEditor = () => {
     }
   };
 
+  // ── Quality logic ──
+
+  const startQualityScan = async () => {
+    const paths = lastScanPaths.current;
+    if (paths.length === 0) return;
+    const targetPath = paths[0];
+
+    setPhase("scanning");
+    setError(null);
+    setQualityFiles([]);
+    setSelectedQualityFile(null);
+    setSpectrograms({});
+    setWaveforms({});
+    startProgress("Analyzing audio quality...", cancel);
+    try {
+      const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
+      setQualityFiles(data);
+      setView("quality");
+      setPhase("scanned");
+      finishProgress(`Analyzed ${data.length} files`);
+    } catch (e) {
+      const msg = `${e}`;
+      if (msg.includes("Cancelled")) {
+        setPhase("scanned");
+        finishProgress("Quality scan cancelled");
+      } else {
+        setError(msg);
+        setPhase("scanned");
+        failProgress(msg);
+      }
+    }
+  };
+
+  const qualityGroups = useMemo(() => groupByVerdict(qualityFiles), [qualityFiles]);
+
+  const qualityCounts = useMemo(() => {
+    const c = { lossless: 0, lossy: 0, suspect: 0 };
+    for (const f of qualityFiles) {
+      if (f.verdict in c) c[f.verdict as keyof typeof c]++;
+    }
+    return c;
+  }, [qualityFiles]);
+
+  const selectedQualityData = useMemo(
+    () => qualityFiles.find((f) => f.file_path === selectedQualityFile) ?? null,
+    [qualityFiles, selectedQualityFile],
+  );
+
+  const handleSpectrogramLoaded = useCallback((filePath: string, base64: string) => {
+    setSpectrograms((prev) => ({ ...prev, [filePath]: base64 }));
+  }, []);
+
+  const handleWaveformLoaded = useCallback((filePath: string, result: WaveformResult) => {
+    setWaveforms((prev) => ({ ...prev, [filePath]: result }));
+  }, []);
+
+  const handleOpenQualityPreview = useCallback(
+    (type: "spectrogram" | "waveform") => {
+      if (selectedQualityFile) {
+        setQualityPreviewModal({ type, filePath: selectedQualityFile });
+      }
+    },
+    [selectedQualityFile],
+  );
+
   // ── Idle ──
 
   if (phase === "idle") {
@@ -648,7 +741,7 @@ export const MetadataEditor = () => {
         </button>
 
         {/* View toggle */}
-        {report && (
+        {(report || qualityFiles.length > 0) && (
           <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
             <button
               onClick={() => setView("edit")}
@@ -658,25 +751,49 @@ export const MetadataEditor = () => {
             >
               Edit
             </button>
-            <button
-              onClick={() => setView("repair")}
-              className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
-                view === "repair" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
-              }`}
-            >
-              Repair
-            </button>
+            {report && (
+              <button
+                onClick={() => setView("repair")}
+                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
+                  view === "repair" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                Repair
+              </button>
+            )}
+            {qualityFiles.length > 0 && (
+              <button
+                onClick={() => setView("quality")}
+                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
+                  view === "quality" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                Quality
+              </button>
+            )}
           </div>
         )}
 
-        {/* Repair button (when no report yet) */}
-        {!report && phase !== "saving" && (
-          <button
-            onClick={startRepair}
-            className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium shrink-0 hover:text-text-primary hover:border-border-active transition-all"
-          >
-            Repair with MusicBrainz
-          </button>
+        {/* Action buttons */}
+        {phase !== "saving" && view === "edit" && (
+          <div className="flex gap-1.5 shrink-0">
+            {!report && (
+              <button
+                onClick={startRepair}
+                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
+              >
+                Repair with MusicBrainz
+              </button>
+            )}
+            {qualityFiles.length === 0 && (
+              <button
+                onClick={startQualityScan}
+                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
+              >
+                Quality Scan
+              </button>
+            )}
+          </div>
         )}
 
         {/* Editor unsaved changes */}
@@ -731,6 +848,19 @@ export const MetadataEditor = () => {
           {report.total_issues.error_count === 0 &&
             report.total_issues.warning_count === 0 &&
             report.total_issues.info_count === 0 && <span className="text-success">All metadata looks good</span>}
+        </div>
+      )}
+
+      {/* Quality stats bar */}
+      {view === "quality" && qualityFiles.length > 0 && (
+        <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
+          {qualityCounts.lossless > 0 && (
+            <span className={verdictColor("lossless")}>{qualityCounts.lossless} lossless</span>
+          )}
+          {qualityCounts.lossy > 0 && <span className={verdictColor("lossy")}>{qualityCounts.lossy} lossy</span>}
+          {qualityCounts.suspect > 0 && (
+            <span className={verdictColor("suspect")}>{qualityCounts.suspect} suspect</span>
+          )}
         </div>
       )}
 
@@ -865,6 +995,27 @@ export const MetadataEditor = () => {
             )}
           </>
         )}
+
+        {view === "quality" && qualityFiles.length > 0 && (
+          <>
+            <QualityList
+              groups={qualityGroups}
+              selectedFile={selectedQualityFile}
+              onSelectFile={setSelectedQualityFile}
+            />
+            {selectedQualityData && (
+              <QualityDetailPanel
+                file={selectedQualityData}
+                spectrogramCache={spectrograms}
+                onSpectrogramLoaded={handleSpectrogramLoaded}
+                waveformCache={waveforms}
+                onWaveformLoaded={handleWaveformLoaded}
+                onOpenPreview={handleOpenQualityPreview}
+                audio={audio}
+              />
+            )}
+          </>
+        )}
       </div>
 
       {/* Drag-over overlay for re-dropping in scanned state */}
@@ -882,6 +1033,22 @@ export const MetadataEditor = () => {
           onClose={() => setSanitizerOpen(false)}
         />
       )}
+
+      {/* Quality preview modal */}
+      {qualityPreviewModal &&
+        (() => {
+          const modalFile = qualityFiles.find((f) => f.file_path === qualityPreviewModal.filePath) ?? null;
+          return modalFile ? (
+            <AudioPreviewModal
+              type={qualityPreviewModal.type}
+              file={modalFile}
+              spectrogramBase64={spectrograms[qualityPreviewModal.filePath]}
+              waveformResult={waveforms[qualityPreviewModal.filePath]}
+              audio={audio}
+              onClose={() => setQualityPreviewModal(null)}
+            />
+          ) : null;
+        })()}
     </>
   );
 };

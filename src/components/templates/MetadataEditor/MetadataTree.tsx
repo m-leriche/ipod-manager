@@ -25,7 +25,9 @@ export const MetadataTree = ({
   onSanitize,
 }: MetadataTreeProps) => {
   const [expandedArtists, setExpandedArtists] = useState<Set<string>>(() => new Set(groups.map((g) => g.artist)));
-  const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(new Set());
+  const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(
+    () => new Set(groups.flatMap((g) => g.albums.map((a) => `${g.artist}::${a.album}`))),
+  );
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const toggleArtist = (artist: string) => {

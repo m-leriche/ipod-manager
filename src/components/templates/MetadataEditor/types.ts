@@ -2,7 +2,7 @@ export type { TrackMetadata, MetadataUpdate, MetadataScanProgress, MetadataSaveR
 
 export type Phase = "idle" | "scanning" | "scanned" | "looking_up" | "saving";
 
-export type View = "edit" | "repair";
+export type View = "edit" | "repair" | "quality";
 
 export interface EditableFields {
   title: string;

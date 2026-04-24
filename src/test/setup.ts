@@ -66,6 +66,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 // Mock @tauri-apps/plugin-dialog
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+  confirm: vi.fn(() => Promise.resolve(true)),
+  message: vi.fn(() => Promise.resolve()),
 }));
 
 // Mock @tauri-apps/api/webview

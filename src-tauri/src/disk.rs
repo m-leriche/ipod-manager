@@ -1,8 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskInfo {
     pub identifier: String,
     pub size: String,
@@ -12,25 +12,91 @@ pub struct DiskInfo {
     pub free_space: Option<u64>,
     pub used_space: Option<u64>,
     pub total_space: Option<u64>,
+    /// Device media name from diskutil (e.g., "iPod Classic", "iPod Nano").
+    /// Only present when macOS recognizes the USB device as an iPod.
+    pub media_name: Option<String>,
 }
 
-/// Run `diskutil list` and parse to find an iPod-like FAT32 partition.
-/// Looks for external, physical disks with a DOS/FAT partition.
+/// Run `diskutil list` and find an iPod among external FAT32 partitions.
+///
+/// Collects ALL external FAT32 partitions, then picks the best candidate:
+/// 1. Mounted partitions with `iPod_Control/` or `.rockbox/` → confirmed iPod
+/// 2. Remaining FAT32 partitions → unverified candidates (fallback)
+///
+/// This handles arbitrary disk numbers (disk5, disk6, etc.) and volume names.
 pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
-    // First get the plist output for structured parsing
+    let candidates = find_all_fat32_partitions()?;
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+
+    // Priority 1: USB device recognized as iPod by macOS (works before mounting)
+    for info in &candidates {
+        if info
+            .media_name
+            .as_deref()
+            .is_some_and(|n| n.to_ascii_lowercase().contains("ipod"))
+        {
+            return Ok(Some(info.clone()));
+        }
+    }
+
+    // Priority 2: Mounted partition with iPod_Control/ or .rockbox/
+    for info in &candidates {
+        if let Some(ref mp) = info.mount_point {
+            if is_ipod_filesystem(mp) {
+                return Ok(Some(info.clone()));
+            }
+        }
+    }
+
+    // Priority 3: Fall back to first FAT32 partition
+    Ok(Some(candidates.into_iter().next().unwrap()))
+}
+
+/// Check if a mounted filesystem looks like an iPod (has iPod_Control/ or .rockbox/).
+fn is_ipod_filesystem(mount_point: &str) -> bool {
+    let root = Path::new(mount_point);
+
+    // Check for .rockbox directory
+    if root.join(".rockbox").is_dir() {
+        return true;
+    }
+
+    // Case-insensitive check for iPod_Control
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case("iPod_Control")
+                && entry.path().is_dir()
+            {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Collect all external FAT32 partitions from diskutil.
+fn find_all_fat32_partitions() -> Result<Vec<DiskInfo>, String> {
+    let mut results = Vec::new();
+
+    // Get plist output for structured parsing
     let output = Command::new("diskutil")
         .args(["list", "-plist", "external", "physical"])
         .output()
         .map_err(|e| format!("Failed to run diskutil: {}", e))?;
 
     if !output.status.success() {
-        // No external disks found is not an error, just means nothing connected
-        return Ok(None);
+        return Ok(results);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let plist_stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Also get human-readable output for easier size/name parsing
+    // Get human-readable output for size/name parsing
     let human_output = Command::new("diskutil")
         .args(["list", "external", "physical"])
         .output()
@@ -38,40 +104,66 @@ pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
 
     let human_stdout = String::from_utf8_lossy(&human_output.stdout);
 
-    // Look for FAT partitions in the human-readable output
-    // Lines look like: "2: DOS_FAT_32 IPOD 119.1 GB disk5s2"
-    // or: "2: Windows_FAT_32 IPOD 119.1 GB disk5s1"
+    // Track identifiers we've already added to avoid duplicates
+    let mut seen = std::collections::HashSet::new();
+
+    // Parse human-readable output for FAT32 lines
     for line in human_stdout.lines() {
         let line_trimmed = line.trim();
         if line_trimmed.contains("DOS_FAT_32") || line_trimmed.contains("Windows_FAT_32") {
             if let Some(info) = parse_fat_partition_line(line_trimmed) {
-                return Ok(Some(info));
+                seen.insert(info.identifier.clone());
+                results.push(info);
             }
         }
     }
 
-    // Also check plist for AllDisks entries and try diskutil info on each
-    // This handles cases where the human output format might differ
-    if stdout.contains("<string>disk") {
-        // Extract disk identifiers from plist
-        for line in stdout.lines() {
+    // Also check plist entries for partitions not caught by human output
+    if plist_stdout.contains("<string>disk") {
+        for line in plist_stdout.lines() {
             let line_trimmed = line.trim();
             if line_trimmed.starts_with("<string>disk") && line_trimmed.ends_with("</string>") {
                 let ident = line_trimmed
                     .strip_prefix("<string>")
                     .and_then(|s| s.strip_suffix("</string>"))
                     .unwrap_or("");
-                if ident.contains('s') && !ident.ends_with("s0") {
-                    // This is a partition (e.g., disk5s1), check if it's FAT
+                if ident.contains('s') && !ident.ends_with("s0") && !seen.contains(ident) {
                     if let Some(info) = check_partition_info(ident) {
-                        return Ok(Some(info));
+                        seen.insert(info.identifier.clone());
+                        results.push(info);
                     }
                 }
             }
         }
     }
 
-    Ok(None)
+    Ok(results)
+}
+
+/// Get the parent disk's media name via `diskutil info`.
+/// e.g., for "disk5s2" checks "disk5" — returns names like "iPod Classic", "iPod Nano".
+fn get_parent_media_name(identifier: &str) -> Option<String> {
+    // Strip partition suffix (e.g., "disk5s2" → "disk5")
+    let parent = identifier.split('s').next()?;
+
+    let output = Command::new("diskutil")
+        .args(["info", parent])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.starts_with("Device / Media Name:") {
+            let name = line.split(':').nth(1)?.trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Extract identifier, size, and name from a diskutil FAT partition line.
@@ -117,7 +209,7 @@ fn parse_partition_fields(line: &str) -> Option<(String, String, String)> {
 fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
     let (identifier, size, name) = parse_partition_fields(line)?;
 
-    // Check mount status
+    let media_name = get_parent_media_name(&identifier);
     let mount_point = get_mount_point(&identifier);
     let mounted = mount_point.is_some();
     let (total_space, used_space, free_space) = mount_point
@@ -134,6 +226,7 @@ fn parse_fat_partition_line(line: &str) -> Option<DiskInfo> {
         free_space,
         used_space,
         total_space,
+        media_name,
     })
 }
 
@@ -176,6 +269,7 @@ fn check_partition_info(identifier: &str) -> Option<DiskInfo> {
         }
     }
 
+    let media_name = get_parent_media_name(identifier);
     let mount_point = get_mount_point(identifier);
     let mounted = mount_point.is_some();
     let (total_space, used_space, free_space) = mount_point
@@ -192,6 +286,7 @@ fn check_partition_info(identifier: &str) -> Option<DiskInfo> {
         free_space,
         used_space,
         total_space,
+        media_name,
     })
 }
 

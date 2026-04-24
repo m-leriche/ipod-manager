@@ -7,6 +7,7 @@ export interface DiskInfo {
   free_space: number | null;
   used_space: number | null;
   total_space: number | null;
+  media_name: string | null;
 }
 
 export type Status = "detecting" | "not_found" | "found" | "mounted" | "mounting" | "unmounting";
@@ -18,5 +19,6 @@ export interface Message {
 
 export interface MountPanelProps {
   onMountChange?: (mounted: boolean) => void;
+  onDiskInfoChange?: (diskInfo: DiskInfo | null) => void;
   compact?: boolean;
 }

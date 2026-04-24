@@ -2,6 +2,7 @@ use crate::albumart;
 use crate::audioquality;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::ipod_info;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
 use crate::localvideo;
@@ -454,6 +455,18 @@ pub async fn scan_library_stats(
     tauri::async_runtime::spawn_blocking(move || libstats::scan_library_stats(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_ipod_info(
+    mount_point: String,
+    disk_info: DiskInfo,
+) -> Result<ipod_info::IpodInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ipod_info::read_ipod_info(&mount_point, &disk_info)
+    })
+    .await
+    .map_err(|e| format!("Read failed: {}", e))?
 }
 
 #[tauri::command]

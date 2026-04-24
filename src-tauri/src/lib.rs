@@ -4,6 +4,7 @@ mod audioquality;
 mod commands;
 mod disk;
 mod files;
+mod ipod_info;
 mod library;
 mod libstats;
 mod localvideo;
@@ -165,6 +166,7 @@ pub fn run() {
             commands::generate_spectrogram,
             commands::generate_waveform,
             commands::scan_library_stats,
+            commands::get_ipod_info,
             commands::read_rockbox_playdata,
             commands::get_library_location,
             commands::set_library_location,

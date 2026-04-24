@@ -5,7 +5,7 @@ import { StatusDot } from "./StatusDot";
 import type { DiskInfo, Status, Message, MountPanelProps } from "./types";
 import { fmtBytes } from "./helpers";
 
-export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) => {
+export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }: MountPanelProps) => {
   const [status, setStatus] = useState<Status>("detecting");
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
@@ -57,6 +57,10 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
   useEffect(() => {
     onMountChange?.(status === "mounted");
   }, [status, onMountChange]);
+
+  useEffect(() => {
+    onDiskInfoChange?.(diskInfo);
+  }, [diskInfo, onDiskInfoChange]);
 
   const handleMount = async () => {
     if (!diskInfo) return;
@@ -168,6 +172,7 @@ export const MountPanel = ({ onMountChange, compact = false }: MountPanelProps) 
         {diskInfo && (
           <>
             <Row label="Device" value={`/dev/${diskInfo.identifier}`} />
+            {diskInfo.media_name && <Row label="Type" value={diskInfo.media_name} />}
             <Row label="Size" value={diskInfo.size} />
             {diskInfo.name && <Row label="Name" value={diskInfo.name} />}
             {diskInfo.mount_point && <Row label="Mount" value={diskInfo.mount_point} />}

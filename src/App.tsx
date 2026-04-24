@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
 import { PlaybackProvider } from "./contexts/PlaybackContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
@@ -22,12 +24,14 @@ type TopTab = "library" | "tools";
 type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "stats";
 
 const App = () => (
-  <ProgressProvider>
-    <PlaybackProvider>
-      <AppContent />
-      <ProgressModal />
-    </PlaybackProvider>
-  </ProgressProvider>
+  <ThemeProvider>
+    <ProgressProvider>
+      <PlaybackProvider>
+        <AppContent />
+        <ProgressModal />
+      </PlaybackProvider>
+    </ProgressProvider>
+  </ThemeProvider>
 );
 
 const AppContent = () => {
@@ -78,6 +82,7 @@ const AppContent = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg-primary text-text-primary font-sans antialiased">
       <header className="px-8 py-4 border-b border-border flex items-center gap-6 shrink-0">
+        <RetroWindowDots />
         <h1 className="text-sm font-medium tracking-tight text-text-secondary">Crate</h1>
         <div className="flex gap-1">
           <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>

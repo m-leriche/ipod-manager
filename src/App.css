@@ -53,194 +53,411 @@
 }
 
 /* ══════════════════════════════════════════════════════
-   RETRO THEME — Deep 90s / Y2K visual overrides
-   Classic Mac OS + Windows 98 + Y2K web aesthetic
+   WINDOWS 95 THEME — Authentic Win95 desktop aesthetic
+   Silver gray chrome, navy title bars, 3D beveled controls
    ══════════════════════════════════════════════════════ */
 
-/* ─── Color variables ─── */
-html[data-theme="retro"] {
-  --color-bg-primary: #DFDCD7;
-  --color-bg-secondary: #D8D6D2;
-  --color-bg-card: #F5F4F2;
-  --color-bg-elevated: #E8E6E3;
-  --color-bg-hover: #D0CEC8;
+/* ─── Color variables (Win95 system colors) ─── */
+html[data-theme="win95"] {
+  --color-bg-primary: #C0C0C0;
+  --color-bg-secondary: #C0C0C0;
+  --color-bg-card: #FFFFFF;
+  --color-bg-elevated: #C0C0C0;
+  --color-bg-hover: #B0B0B0;
 
-  --color-text-primary: #1A1A1E;
-  --color-text-secondary: #4A4A50;
-  --color-text-tertiary: #7A7A80;
+  --color-text-primary: #000000;
+  --color-text-secondary: #404040;
+  --color-text-tertiary: #808080;
 
-  --color-accent: #5A9EC8;
-  --color-accent-hover: #72B0D4;
-  --color-success: #5CB85C;
-  --color-success-dim: #5CB85C22;
-  --color-warning: #E0A830;
-  --color-danger: #D04838;
+  --color-accent: #000080;
+  --color-accent-hover: #0000A0;
+  --color-success: #008000;
+  --color-success-dim: #00800022;
+  --color-warning: #808000;
+  --color-danger: #FF0000;
 
-  --color-border: #8A8A8E;
+  --color-border: #808080;
   --color-border-subtle: #C0C0C0;
-  --color-border-active: #6A6A70;
+  --color-border-active: #404040;
 
-  --font-sans: "Geneva", "Verdana", "Tahoma", system-ui, sans-serif;
+  --font-sans: "Tahoma", "MS Sans Serif", "Arial", system-ui, sans-serif;
 }
 
 /* ─── Tighter spacing ─── */
-html[data-theme="retro"] .p-5 { padding: 0.875rem; }
-html[data-theme="retro"] .p-6 { padding: 1rem; }
-html[data-theme="retro"] .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
-html[data-theme="retro"] .px-6 { padding-left: 1rem; padding-right: 1rem; }
-html[data-theme="retro"] .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
-html[data-theme="retro"] .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
-html[data-theme="retro"] .gap-6 { gap: 0.75rem; }
-html[data-theme="retro"] .gap-3 { gap: 0.5rem; }
-html[data-theme="retro"] .mb-5 { margin-bottom: 0.875rem; }
-html[data-theme="retro"] .mb-4 { margin-bottom: 0.75rem; }
+html[data-theme="win95"] .p-5 { padding: 0.875rem; }
+html[data-theme="win95"] .p-6 { padding: 1rem; }
+html[data-theme="win95"] .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+html[data-theme="win95"] .px-6 { padding-left: 1rem; padding-right: 1rem; }
+html[data-theme="win95"] .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+html[data-theme="win95"] .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+html[data-theme="win95"] .gap-6 { gap: 0.75rem; }
+html[data-theme="win95"] .gap-3 { gap: 0.5rem; }
+html[data-theme="win95"] .mb-5 { margin-bottom: 0.875rem; }
+html[data-theme="win95"] .mb-4 { margin-bottom: 0.75rem; }
 
 /* ─── Zebra-striped table rows ─── */
-html[data-theme="retro"] tbody tr:nth-child(even) {
-  background-color: rgba(0, 0, 0, 0.03);
+html[data-theme="win95"] tbody tr:nth-child(even) {
+  background-color: #F0F0F0;
 }
-html[data-theme="retro"] tbody tr:nth-child(odd) {
+html[data-theme="win95"] tbody tr:nth-child(odd) {
   background-color: transparent;
 }
 
-/* ─── Squarer corners everywhere ─── */
-html[data-theme="retro"] .rounded-2xl { border-radius: 4px; }
-html[data-theme="retro"] .rounded-xl { border-radius: 3px; }
-html[data-theme="retro"] .rounded-lg { border-radius: 2px; }
-html[data-theme="retro"] .rounded-md { border-radius: 2px; }
+/* ─── Square corners (Win95 had zero radius) ─── */
+html[data-theme="win95"] .rounded-2xl { border-radius: 0px; }
+html[data-theme="win95"] .rounded-xl { border-radius: 0px; }
+html[data-theme="win95"] .rounded-lg { border-radius: 0px; }
+html[data-theme="win95"] .rounded-md { border-radius: 0px; }
 
-/* ─── Thicker borders everywhere ─── */
-html[data-theme="retro"] .border { border-width: 2px; }
-html[data-theme="retro"] .border-b { border-bottom-width: 2px; }
-html[data-theme="retro"] .border-t { border-top-width: 2px; }
-html[data-theme="retro"] .border-r { border-right-width: 2px; }
+/* ─── 2px borders ─── */
+html[data-theme="win95"] .border { border-width: 2px; }
+html[data-theme="win95"] .border-b { border-bottom-width: 2px; }
+html[data-theme="win95"] .border-t { border-top-width: 2px; }
+html[data-theme="win95"] .border-r { border-right-width: 2px; }
 
-/* ─── Beveled raised panels (outset: light top-left, dark bottom-right) ─── */
-html[data-theme="retro"] .bg-bg-secondary.border {
-  border-width: 2px;
-  border-style: solid;
-  border-color: #F0F0EE #7A7A7E #7A7A7E #F0F0EE;
-  box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.4),
-    3px 3px 0 rgba(0, 0, 0, 0.12);
+/* ─── Raised panels: classic Win95 outset bevel ─── */
+html[data-theme="win95"] .bg-bg-secondary.border {
+  border: 2px solid;
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
 }
 
-/* ─── Sunken content areas (inset: dark top-left, light bottom-right) ─── */
-html[data-theme="retro"] div.bg-bg-card.border {
-  border-width: 2px;
-  border-style: solid;
-  border-color: #7A7A7E #F0F0EE #F0F0EE #7A7A7E;
-  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.08);
+/* ─── Sunken content areas: Win95 inset bevel ─── */
+html[data-theme="win95"] div.bg-bg-card.border {
+  border: 2px solid;
+  border-color: #808080 #DFDFDF #DFDFDF #808080;
+  box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #FFFFFF;
 }
 
 /* ─── Edge panels: sidebar + bottom bar ─── */
-html[data-theme="retro"] .border-t.bg-bg-secondary {
-  background: linear-gradient(180deg, #E0DEDA, #D4D2CE);
-  border-top-color: #F0F0EE;
+html[data-theme="win95"] .border-t.bg-bg-secondary {
+  background: #C0C0C0;
+  border-top: 2px solid;
+  border-top-color: #DFDFDF;
 }
-html[data-theme="retro"] .border-r.bg-bg-secondary {
-  background: linear-gradient(180deg, #E0DEDA, #D4D2CE);
-  border-right-color: #7A7A7E;
+html[data-theme="win95"] .border-r.bg-bg-secondary {
+  background: #C0C0C0;
+  border-right: 2px solid;
+  border-right-color: #808080;
 }
 
-/* ─── Title bar gradient (blue accent) ─── */
-html[data-theme="retro"] header,
-html[data-theme="retro"] .retro-titlebar {
-  background: linear-gradient(180deg, #6AAED0, #5098C0);
-  border-bottom: 2px solid #4080A8;
+/* ─── Title bar: solid navy blue (THE Win95 look) ─── */
+html[data-theme="win95"] header,
+html[data-theme="win95"] .retro-titlebar {
+  background: #000080;
+  border-bottom: 2px solid #404040;
   color: #FFFFFF;
 }
-html[data-theme="retro"] header h1,
-html[data-theme="retro"] header .text-text-secondary,
-html[data-theme="retro"] header .text-text-tertiary,
-html[data-theme="retro"] .retro-titlebar .text-text-primary,
-html[data-theme="retro"] .retro-titlebar .text-text-tertiary {
+html[data-theme="win95"] header h1,
+html[data-theme="win95"] header .text-text-secondary,
+html[data-theme="win95"] header .text-text-tertiary,
+html[data-theme="win95"] .retro-titlebar .text-text-primary,
+html[data-theme="win95"] .retro-titlebar .text-text-tertiary {
   color: #FFFFFF;
 }
 
-/* ─── Hard shadow on modals (replaces soft blur) ─── */
-html[data-theme="retro"] .shadow-xl {
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.3);
+/* ─── No drop shadow on modals (Win95 didn't have them) ─── */
+html[data-theme="win95"] .shadow-xl {
+  box-shadow: none;
 }
 
-/* ─── 3D raised primary buttons ─── */
-html[data-theme="retro"] button.bg-text-primary {
-  background: linear-gradient(180deg, #EAEAE8, #DADADC);
-  color: #1A1A1E;
+/* ─── 3D raised primary buttons (exact Win95 bevel) ─── */
+html[data-theme="win95"] button.bg-text-primary {
+  background: #C0C0C0;
+  color: #000000;
   border: 2px solid;
-  border-color: #F0F0EE #7A7A7E #7A7A7E #F0F0EE;
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.12);
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
   font-weight: 700;
   text-shadow: none;
 }
-html[data-theme="retro"] button.bg-text-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #F0F0EE, #E4E4E6);
+html[data-theme="win95"] button.bg-text-primary:hover:not(:disabled) {
+  background: #D0D0D0;
   opacity: 1;
 }
-html[data-theme="retro"] button.bg-text-primary:active:not(:disabled) {
-  background: linear-gradient(180deg, #D0D0D2, #C4C4C6);
-  border-color: #7A7A7E #F0F0EE #F0F0EE #7A7A7E;
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.15);
+html[data-theme="win95"] button.bg-text-primary:active:not(:disabled) {
+  background: #C0C0C0;
+  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  box-shadow: inset 1px 1px 0 #808080;
+  padding-top: 1px;
+  padding-left: 1px;
 }
 
 /* ─── 3D raised secondary buttons ─── */
-html[data-theme="retro"] button.bg-bg-card {
+html[data-theme="win95"] button.bg-bg-card {
   border: 2px solid;
-  border-color: #F0F0EE #7A7A7E #7A7A7E #F0F0EE;
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.08);
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
 }
-html[data-theme="retro"] button.bg-bg-card:active:not(:disabled) {
-  border-color: #7A7A7E #F0F0EE #F0F0EE #7A7A7E;
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.12);
+html[data-theme="win95"] button.bg-bg-card:active:not(:disabled) {
+  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  box-shadow: inset 1px 1px 0 #808080;
 }
 
 /* ─── Playback button: primary (play/pause circle) ─── */
-html[data-theme="retro"] button.rounded-full.bg-text-primary {
-  background: linear-gradient(180deg, #EAEAE8, #D4D4D6);
-  color: #1A1A1E;
+html[data-theme="win95"] button.rounded-full.bg-text-primary {
+  background: #C0C0C0;
+  color: #000000;
   border: 2px solid;
-  border-color: #F0F0EE #7A7A7E #7A7A7E #F0F0EE;
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.12);
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
 }
-html[data-theme="retro"] button.rounded-full.bg-text-primary:active {
-  border-color: #7A7A7E #F0F0EE #F0F0EE #7A7A7E;
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.12);
+html[data-theme="win95"] button.rounded-full.bg-text-primary:active {
+  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  box-shadow: inset 1px 1px 0 #808080;
 }
 
-/* ─── Sunken inputs ─── */
-html[data-theme="retro"] input {
+/* ─── Sunken inputs (Win95 inset field) ─── */
+html[data-theme="win95"] input {
   border: 2px solid;
-  border-color: #7A7A7E #F0F0EE #F0F0EE #7A7A7E;
-  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.08);
+  border-color: #808080 #DFDFDF #DFDFDF #808080;
+  box-shadow: inset 1px 1px 0 #404040;
+  background: #FFFFFF;
 }
 
-/* ─── Segmented progress bars ─── */
-html[data-theme="retro"] .overflow-hidden.rounded-full > .rounded-full {
+/* ─── Segmented progress bars (Win95 chunked style) ─── */
+html[data-theme="win95"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #000080;
   background-image: repeating-linear-gradient(
     90deg,
-    transparent,
-    transparent 6px,
-    rgba(0, 0, 0, 0.1) 6px,
-    rgba(0, 0, 0, 0.1) 8px
+    #000080,
+    #000080 8px,
+    #C0C0C0 8px,
+    #C0C0C0 10px
   );
 }
 
-/* ─── Sidebar active item: blue accent selection ─── */
-html[data-theme="retro"] .border-r.bg-bg-secondary button.bg-bg-card {
-  background: #5A9EC8;
+/* ─── Sidebar active item: navy selection ─── */
+html[data-theme="win95"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #000080;
   color: #FFFFFF;
-  border: 2px solid #4888B0;
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.2);
+  border: 2px solid #000080;
+  box-shadow: none;
 }
 
-/* ─── Disabled buttons: grayed out retro style ─── */
-html[data-theme="retro"] button:disabled {
-  filter: saturate(0.3);
+/* ─── Disabled buttons: embossed gray text ─── */
+html[data-theme="win95"] button:disabled {
+  color: #808080 !important;
+  text-shadow: 1px 1px 0 #FFFFFF;
 }
 
-/* ─── More visible divider rows ─── */
-html[data-theme="retro"] .border-border-subtle {
-  border-color: #C8C8C8;
+/* ─── More visible dividers ─── */
+html[data-theme="win95"] .border-border-subtle {
+  border-color: #A0A0A0;
+}
+
+/* ══════════════════════════════════════════════════════
+   CLASSIC THEME — Vintage Macintosh + iPod aesthetic
+   Platinum gray, high contrast, sharp black borders
+   ══════════════════════════════════════════════════════ */
+
+/* ─── Color variables ─── */
+html[data-theme="classic"] {
+  --color-bg-primary: #F2F0ED;
+  --color-bg-secondary: #D9D7D4;
+  --color-bg-card: #F2F0ED;
+  --color-bg-elevated: #E6E4E1;
+  --color-bg-hover: #C4C2BF;
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #333333;
+  --color-text-tertiary: #666666;
+
+  --color-accent: #2559A7;
+  --color-accent-hover: #3470C0;
+  --color-success: #1E7A1E;
+  --color-success-dim: #1E7A1E22;
+  --color-warning: #B8860B;
+  --color-danger: #CC0000;
+
+  --color-border: #000000;
+  --color-border-subtle: #999999;
+  --color-border-active: #000000;
+
+  --font-sans: "Geneva", "Charcoal", "Lucida Grande", "Helvetica Neue", system-ui, sans-serif;
+}
+
+/* ─── Tighter spacing ─── */
+html[data-theme="classic"] .p-5 { padding: 0.875rem; }
+html[data-theme="classic"] .p-6 { padding: 1rem; }
+html[data-theme="classic"] .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+html[data-theme="classic"] .px-6 { padding-left: 1rem; padding-right: 1rem; }
+html[data-theme="classic"] .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+html[data-theme="classic"] .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+html[data-theme="classic"] .gap-6 { gap: 0.75rem; }
+html[data-theme="classic"] .gap-3 { gap: 0.5rem; }
+html[data-theme="classic"] .mb-5 { margin-bottom: 0.875rem; }
+html[data-theme="classic"] .mb-4 { margin-bottom: 0.75rem; }
+
+/* ─── Zebra-striped table rows ─── */
+html[data-theme="classic"] tbody tr:nth-child(even) {
+  background-color: #E8E6E3;
+}
+html[data-theme="classic"] tbody tr:nth-child(odd) {
+  background-color: transparent;
+}
+
+/* ─── Square corners everywhere ─── */
+html[data-theme="classic"] .rounded-2xl { border-radius: 0px; }
+html[data-theme="classic"] .rounded-xl { border-radius: 0px; }
+html[data-theme="classic"] .rounded-lg { border-radius: 0px; }
+html[data-theme="classic"] .rounded-md { border-radius: 0px; }
+html[data-theme="classic"] .rounded-full:not(button) { border-radius: 0px; }
+
+/* ─── Crisp 1px black borders ─── */
+html[data-theme="classic"] .border { border-width: 1px; }
+html[data-theme="classic"] .border-b { border-bottom-width: 1px; }
+html[data-theme="classic"] .border-t { border-top-width: 1px; }
+html[data-theme="classic"] .border-r { border-right-width: 1px; }
+
+/* ─── Flat raised panels (no bevel, just shadow) ─── */
+html[data-theme="classic"] .bg-bg-secondary.border {
+  border: 1px solid #000000;
+  box-shadow: 1px 1px 0 #000000;
+}
+
+/* ─── Sunken content areas ─── */
+html[data-theme="classic"] div.bg-bg-card.border {
+  border: 1px solid #000000;
+  background: #F2F0ED;
+}
+
+/* ─── Edge panels: sidebar + bottom bar ─── */
+html[data-theme="classic"] .border-t.bg-bg-secondary {
+  background: #D9D7D4;
+  border-top: 1px solid #000000;
+}
+html[data-theme="classic"] .border-r.bg-bg-secondary {
+  background: #D9D7D4;
+  border-right: 1px solid #000000;
+}
+
+/* ─── Title bar — classic Mac horizontal pinstripes ─── */
+html[data-theme="classic"] header,
+html[data-theme="classic"] .retro-titlebar {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      #F2F0ED 0px,
+      #F2F0ED 1px,
+      #B8B6B3 1px,
+      #B8B6B3 2px
+    );
+  border-bottom: 1px solid #000000;
+  color: #000000;
+}
+html[data-theme="classic"] header h1,
+html[data-theme="classic"] header .text-text-secondary,
+html[data-theme="classic"] header .text-text-tertiary,
+html[data-theme="classic"] .retro-titlebar .text-text-primary,
+html[data-theme="classic"] .retro-titlebar .text-text-tertiary {
+  color: #000000;
+}
+
+/* ─── Hard shadow on modals ─── */
+html[data-theme="classic"] .shadow-xl {
+  box-shadow: 2px 2px 0 #000000;
+}
+
+/* ─── Flat outlined buttons ─── */
+html[data-theme="classic"] button.bg-text-primary {
+  background: #F2F0ED;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 1px 1px 0 #000000;
+  font-weight: 700;
+  text-shadow: none;
+}
+html[data-theme="classic"] button.bg-text-primary:hover:not(:disabled) {
+  background: #E6E4E1;
+  opacity: 1;
+}
+html[data-theme="classic"] button.bg-text-primary:active:not(:disabled) {
+  background: #000000;
+  color: #FFFFFF;
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+
+/* ─── Secondary buttons ─── */
+html[data-theme="classic"] button.bg-bg-card {
+  border: 1px solid #000000;
+  box-shadow: 1px 1px 0 #000000;
+}
+html[data-theme="classic"] button.bg-bg-card:active:not(:disabled) {
+  background: #000000;
+  color: #FFFFFF;
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+
+/* ─── Playback button: primary (play/pause circle) ─── */
+html[data-theme="classic"] button.rounded-full.bg-text-primary {
+  background: #F2F0ED;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 1px 1px 0 #000000;
+  border-radius: 50%;
+}
+html[data-theme="classic"] button.rounded-full.bg-text-primary:active {
+  background: #000000;
+  color: #FFFFFF;
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+
+/* ─── Sunken inputs ─── */
+html[data-theme="classic"] input {
+  border: 1px solid #000000;
+  background: #F2F0ED;
+  box-shadow: inset 1px 1px 0 #999999;
+}
+
+/* ─── Flat progress bars ─── */
+html[data-theme="classic"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #000000;
+}
+
+/* ─── Sidebar active item: inverted selection ─── */
+html[data-theme="classic"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  box-shadow: none;
+}
+
+/* ─── Disabled buttons ─── */
+html[data-theme="classic"] button:disabled {
+  opacity: 0.4;
+}
+
+/* ─── More visible dividers ─── */
+html[data-theme="classic"] .border-border-subtle {
+  border-color: #AAAAAA;
+}
+
+/* ─── Scrollbar: classic theme ─── */
+html[data-theme="classic"] ::-webkit-scrollbar {
+  width: 12px;
+}
+html[data-theme="classic"] ::-webkit-scrollbar-track {
+  background: #D9D7D4;
+  border-left: 1px solid #000000;
+}
+html[data-theme="classic"] ::-webkit-scrollbar-thumb {
+  background: #B8B6B3;
+  border: 1px solid #000000;
+}
+html[data-theme="classic"] ::-webkit-scrollbar-thumb:hover {
+  background: #A8A6A3;
+}
+html[data-theme="classic"] ::-webkit-scrollbar-button {
+  display: block;
+  height: 12px;
+  background: #D9D7D4;
+  border: 1px solid #000000;
 }
 
 /* ─── Scrollbar: dark theme ─── */
@@ -262,19 +479,26 @@ html:not([data-theme]) ::-webkit-scrollbar-thumb:hover {
   background: #ffffff25;
 }
 
-/* ─── Scrollbar: retro theme ─── */
-html[data-theme="retro"] ::-webkit-scrollbar {
-  width: 10px;
+/* ─── Scrollbar: Win95 theme ─── */
+html[data-theme="win95"] ::-webkit-scrollbar {
+  width: 16px;
 }
-html[data-theme="retro"] ::-webkit-scrollbar-track {
-  background: #D8D8D8;
-  border-left: 1px solid #B0B0B0;
+html[data-theme="win95"] ::-webkit-scrollbar-track {
+  background: #C0C0C0;
+  border-left: 1px solid #808080;
 }
-html[data-theme="retro"] ::-webkit-scrollbar-thumb {
-  background: #B8B8B8;
-  border: 1px solid #9A9A9A;
-  border-radius: 1px;
+html[data-theme="win95"] ::-webkit-scrollbar-thumb {
+  background: #C0C0C0;
+  border: 2px solid;
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
 }
-html[data-theme="retro"] ::-webkit-scrollbar-thumb:hover {
-  background: #A8A8A8;
+html[data-theme="win95"] ::-webkit-scrollbar-thumb:hover {
+  background: #D0D0D0;
+}
+html[data-theme="win95"] ::-webkit-scrollbar-button {
+  display: block;
+  height: 16px;
+  background: #C0C0C0;
+  border: 2px solid;
+  border-color: #DFDFDF #404040 #404040 #DFDFDF;
 }

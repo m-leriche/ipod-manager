@@ -11,7 +11,13 @@ import type { SettingsModalProps } from "./types";
 
 const THEMES: { id: ThemeName; label: string; description: string; preview: [string, string, string] }[] = [
   { id: "dark", label: "Dark", description: "Minimal dark theme", preview: ["#000000", "#111111", "#0066FF"] },
-  { id: "retro", label: "Retro", description: "90s / Y2K aesthetic", preview: ["#DFDCD7", "#5A9EC8", "#D8D6D2"] },
+  {
+    id: "win95",
+    label: "Windows 95",
+    description: "Classic Win95 desktop",
+    preview: ["#C0C0C0", "#000080", "#FFFFFF"],
+  },
+  { id: "classic", label: "Classic", description: "Vintage Mac + iPod", preview: ["#F2F0ED", "#D9D7D4", "#000000"] },
 ];
 
 export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps) => {

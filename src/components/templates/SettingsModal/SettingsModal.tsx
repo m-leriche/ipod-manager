@@ -3,13 +3,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useTheme } from "../../../contexts/ThemeContext";
+import type { ThemeName } from "../../../contexts/ThemeContext";
+import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
 import type { SettingsModalProps } from "./types";
+
+const THEMES: { id: ThemeName; label: string; description: string; preview: [string, string, string] }[] = [
+  { id: "dark", label: "Dark", description: "Minimal dark theme", preview: ["#000000", "#111111", "#0066FF"] },
+  { id: "retro", label: "Retro", description: "90s / Y2K aesthetic", preview: ["#DFDCD7", "#5A9EC8", "#D8D6D2"] },
+];
 
 export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps) => {
   const [libraryLocation, setLibraryLocation] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     invoke<string | null>("get_library_location")
@@ -52,8 +61,11 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
       <div className="absolute inset-0 bg-black/50" onClick={onClose} data-testid="settings-backdrop" />
       <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[520px] max-w-[95vw] max-h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h2 className="text-sm font-medium text-text-primary">Settings</h2>
+        <div className="retro-titlebar flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <RetroWindowDots />
+            <h2 className="text-sm font-medium text-text-primary">Settings</h2>
+          </div>
           <button
             onClick={onClose}
             className="text-text-tertiary hover:text-text-primary transition-colors text-lg leading-none"
@@ -100,6 +112,38 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Theme */}
+          <div className="mt-6">
+            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-1">
+              Theme
+            </span>
+            <p className="text-[10px] text-text-tertiary mb-3">Choose how Crate looks.</p>
+
+            <div className="flex gap-3">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 border rounded-xl transition-all ${
+                    theme === t.id ? "border-accent bg-bg-hover" : "border-border hover:border-border-active"
+                  }`}
+                >
+                  <div className="flex gap-1">
+                    {t.preview.map((color, i) => (
+                      <div
+                        key={i}
+                        className="w-5 h-5 rounded-md border border-black/10"
+                        style={{ background: color }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium text-text-primary">{t.label}</span>
+                  <span className="text-[10px] text-text-tertiary">{t.description}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

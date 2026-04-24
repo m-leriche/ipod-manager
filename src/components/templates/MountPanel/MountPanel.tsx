@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Spinner } from "../../atoms/Spinner/Spinner";
+import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import { StatusDot } from "./StatusDot";
 import type { DiskInfo, Status, Message, MountPanelProps } from "./types";
 import { fmtBytes } from "./helpers";
@@ -156,8 +157,11 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
     <div
       className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-5 w-[260px] shrink-0" : "p-6 w-full max-w-md"}`}
     >
-      <div className="flex items-center justify-between mb-5">
-        <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">Connection</span>
+      <div className="retro-titlebar flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <RetroWindowDots />
+          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">Connection</span>
+        </div>
         <button
           disabled={status === "mounting" || status === "unmounting"}
           onClick={detectIPod}

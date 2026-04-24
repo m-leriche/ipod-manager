@@ -52,6 +52,15 @@ vi.mock("../contexts/PlaybackContext", () => ({
   PlaybackProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock ThemeContext — provides a no-op implementation for all components
+vi.mock("../contexts/ThemeContext", () => ({
+  useTheme: () => ({
+    theme: "dark" as const,
+    setTheme: vi.fn(),
+  }),
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),

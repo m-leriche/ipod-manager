@@ -7,10 +7,8 @@ import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
-import { YouTubeDownloader } from "./components/templates/YouTubeDownloader/YouTubeDownloader";
-import { VideoExtractor } from "./components/templates/VideoExtractor/VideoExtractor";
+import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
-import { QualityAnalyzer } from "./components/templates/QualityAnalyzer/QualityAnalyzer";
 import { LibraryStats } from "./components/templates/LibraryStats/LibraryStats";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
@@ -18,7 +16,7 @@ import { SettingsModal } from "./components/templates/SettingsModal/SettingsModa
 import type { LibraryScanProgress } from "./types/library";
 
 type TopTab = "library" | "tools";
-type ToolTab = "browse" | "sync" | "metadata" | "quality" | "youtube" | "video" | "stats";
+type ToolTab = "browse" | "sync" | "metadata" | "audio" | "stats";
 
 const App = () => (
   <ProgressProvider>
@@ -109,14 +107,8 @@ const AppContent = () => {
                 <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
                   Metadata
                 </ToolTabButton>
-                <ToolTabButton active={toolTab === "quality"} onClick={() => setToolTab("quality")}>
-                  Quality
-                </ToolTabButton>
-                <ToolTabButton active={toolTab === "youtube"} onClick={() => setToolTab("youtube")}>
-                  YouTube to Audio
-                </ToolTabButton>
-                <ToolTabButton active={toolTab === "video"} onClick={() => setToolTab("video")}>
-                  Video to Audio
+                <ToolTabButton active={toolTab === "audio"} onClick={() => setToolTab("audio")}>
+                  Audio Extractor
                 </ToolTabButton>
                 <ToolTabButton active={toolTab === "stats"} onClick={() => setToolTab("stats")}>
                   Library Stats
@@ -125,9 +117,7 @@ const AppContent = () => {
               {toolTab === "browse" && <BrowseExplorer />}
               {toolTab === "sync" && <SyncManager />}
               {toolTab === "metadata" && <MetadataEditor />}
-              {toolTab === "quality" && <QualityAnalyzer />}
-              {toolTab === "youtube" && <YouTubeDownloader />}
-              {toolTab === "video" && <VideoExtractor />}
+              {toolTab === "audio" && <AudioExtractor />}
               {toolTab === "stats" && <LibraryStats />}
             </div>
           </div>

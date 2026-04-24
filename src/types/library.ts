@@ -20,6 +20,8 @@ export interface LibraryTrack {
   bitrate_kbps: number | null;
   format: string;
   file_size: number;
+  created_at: number;
+  play_count: number;
 }
 
 export interface LibraryFolder {

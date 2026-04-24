@@ -56,6 +56,13 @@ const COLUMNS: { key: string; label: string; sortKey: string; align: "left" | "r
     def: { key: "genre", minWidth: 60, initialWidth: 120 },
   },
   {
+    key: "track_number",
+    label: "Track",
+    sortKey: "track_number",
+    align: "right",
+    def: { key: "track_number", minWidth: 40, initialWidth: 50 },
+  },
+  {
     key: "year",
     label: "Year",
     sortKey: "year",
@@ -68,6 +75,20 @@ const COLUMNS: { key: string; label: string; sortKey: string; align: "left" | "r
     sortKey: "duration",
     align: "right",
     def: { key: "duration", minWidth: 45, initialWidth: 55 },
+  },
+  {
+    key: "date_added",
+    label: "Date Added",
+    sortKey: "date_added",
+    align: "left",
+    def: { key: "date_added", minWidth: 70, initialWidth: 90 },
+  },
+  {
+    key: "plays",
+    label: "Plays",
+    sortKey: "play_count",
+    align: "right",
+    def: { key: "plays", minWidth: 40, initialWidth: 50 },
   },
 ];
 
@@ -329,6 +350,12 @@ const formatDuration = (secs: number): string => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
+const formatDateAdded = (epoch: number): string => {
+  if (!epoch) return "—";
+  const d = new Date(epoch * 1000);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+
 const TrackRowResizable = memo(function TrackRowResizable({
   track,
   index,
@@ -377,10 +404,19 @@ const TrackRowResizable = memo(function TrackRowResizable({
       <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.album || "—"}</td>
       <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">{track.genre || "—"}</td>
       <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
+        {track.track_number || "—"}
+      </td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
         {track.year || "—"}
       </td>
       <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
         {formatDuration(track.duration_secs)}
+      </td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate">
+        {formatDateAdded(track.created_at)}
+      </td>
+      <td className="px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden">
+        {track.play_count || "—"}
       </td>
     </tr>
   );

@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { useLibraryImport } from "./useLibraryImport";
 import type {
   LibraryTrack,
   ArtistSummary,
@@ -15,9 +14,6 @@ import type {
   GenreSummary,
   BrowserData,
   LibraryFilter,
-  LibraryScanProgress,
-  ImportProgress,
-  ImportResult,
 } from "../../../types/library";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
@@ -33,8 +29,6 @@ export const LibraryPlayer = ({
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { playTrack } = usePlayback();
   const playAfterFetchRef = useRef(false);
-  const isActiveRef = useRef(isActive);
-  const [isDragOver, setIsDragOver] = useState(false);
 
   // Column browser filter state
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -82,11 +76,6 @@ export const LibraryPlayer = ({
   }, [search]);
 
   // ── Keep isActive ref in sync ──────────────────────────────────
-
-  useEffect(() => {
-    isActiveRef.current = isActive;
-    if (!isActive) setIsDragOver(false);
-  }, [isActive]);
 
   // ── Fetch all browser data from backend ───────────────────────
 
@@ -212,107 +201,18 @@ export const LibraryPlayer = ({
     fetchBrowserData();
   }, [fetchBrowserData]);
 
-  // ── Choose library location ────────────────────────────────────
+  // ── Import / drag-and-drop ─────────────────────────────────────
 
-  const handleChooseLibrary = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: false, title: "Choose library location" });
-    if (!selected) return;
-
-    startProgress("Scanning library...", () => invoke("cancel_sync"));
-
-    const unlisten = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
-      updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-    });
-
-    try {
-      await invoke("set_library_location", { path: selected });
-      finishProgress("Library scan complete");
-      setHasLibrary(true);
-      await fetchBrowserData();
-      setDataLoaded(true);
-    } catch (e) {
-      failProgress(`Scan failed: ${e}`);
-    } finally {
-      unlisten();
-    }
-  }, [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData]);
-
-  // ── Drag-and-drop import ───────────────────────────────────────
-
-  const handleDrop = useCallback(
-    async (paths: string[]) => {
-      let location = await invoke<string | null>("get_library_location");
-      if (!location) {
-        const selected = await open({
-          directory: true,
-          multiple: false,
-          title: "Choose library location",
-        });
-        if (!selected) return;
-        await invoke("set_library_location", { path: selected });
-        location = selected;
-      }
-
-      startProgress("Importing to library...", () => invoke("cancel_sync"));
-
-      const unlistenImport = await listen<ImportProgress>("import-progress", (e) => {
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      });
-
-      const unlistenScan = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      });
-
-      try {
-        const result = await invoke<ImportResult>("import_to_library", { paths });
-        const msg =
-          result.copied > 0
-            ? `Imported ${result.copied} track${result.copied !== 1 ? "s" : ""}${result.skipped > 0 ? `, ${result.skipped} skipped` : ""}`
-            : result.skipped > 0
-              ? `${result.skipped} track${result.skipped !== 1 ? "s" : ""} already in library`
-              : "No audio files found";
-        finishProgress(msg);
-        setHasLibrary(true);
-        await fetchBrowserData();
-        setDataLoaded(true);
-      } catch (e) {
-        failProgress(`Import failed: ${e}`);
-      } finally {
-        unlistenImport();
-        unlistenScan();
-      }
-    },
-    [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData],
+  const { isDragOver, handleChooseLibrary } = useLibraryImport(
+    isActive,
+    startProgress,
+    updateProgress,
+    finishProgress,
+    failProgress,
+    fetchBrowserData,
+    setHasLibrary,
+    setDataLoaded,
   );
-
-  useEffect(() => {
-    let active = true;
-    let unlisten: (() => void) | null = null;
-
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (!active || !isActiveRef.current) return;
-        if (event.payload.type === "enter") {
-          setIsDragOver(true);
-        } else if (event.payload.type === "leave") {
-          setIsDragOver(false);
-        } else if (event.payload.type === "drop") {
-          setIsDragOver(false);
-          if (event.payload.paths.length > 0) {
-            handleDrop(event.payload.paths);
-          }
-        }
-      })
-      .then((fn) => {
-        if (active) unlisten = fn;
-        else fn();
-      });
-
-    return () => {
-      active = false;
-      unlisten?.();
-    };
-  }, [handleDrop]);
 
   // ── Sort handling ─────────────────────────────────────────────
 

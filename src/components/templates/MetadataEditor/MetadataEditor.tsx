@@ -1,8 +1,7 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MetadataTree } from "./MetadataTree";
@@ -14,42 +13,15 @@ import { QualityList } from "../QualityAnalyzer/QualityList";
 import { QualityDetailPanel } from "../QualityAnalyzer/QualityDetailPanel";
 import { AudioPreviewModal } from "../QualityAnalyzer/AudioPreviewModal";
 import { useAudioPlayback } from "../../molecules/MiniPlayer/useAudioPlayback";
-import { groupByVerdict, verdictColor } from "../QualityAnalyzer/helpers";
-import {
-  groupTracks,
-  buildUpdate,
-  computeBatchFields,
-  computeMixedFlags,
-  trackToEditable,
-  sortAlbumsByIssues,
-  issuesToUpdates,
-  issueKey,
-  allIssueKeys,
-} from "./helpers";
-import type {
-  TrackMetadata,
-  MetadataScanProgress,
-  MetadataSaveProgress,
-  MetadataSaveResult,
-  SanitizeProgress,
-  SanitizeResult,
-} from "../../../types/metadata";
-import type { AudioFileInfo, QualityScanProgress, WaveformResult } from "../../../types/quality";
-import type {
-  Phase,
-  View,
-  EditableFields,
-  RepairReport,
-  RepairLookupProgress,
-  AlbumRepairReport,
-  SanitizeModalOptions,
-} from "./types";
+import { verdictColor } from "../QualityAnalyzer/helpers";
+import { useMetadataEvents } from "./useMetadataEvents";
+import { useDragDrop } from "./useDragDrop";
+import { useRepairActions } from "./useRepairActions";
+import { useQualityActions } from "./useQualityActions";
+import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
+import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeResult } from "../../../types/metadata";
+import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
-
-interface QualityPreviewModal {
-  type: "spectrogram" | "waveform";
-  filePath: string;
-}
 
 export const MetadataEditor = () => {
   const {
@@ -59,6 +31,7 @@ export const MetadataEditor = () => {
     finish: finishProgress,
     fail: failProgress,
   } = useProgress();
+
   // ── Shared state ──
   const [phase, setPhase] = useState<Phase>("idle");
   const [scanPath, setScanPath] = useState("");
@@ -73,118 +46,69 @@ export const MetadataEditor = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [repairingArt, setRepairingArt] = useState(false);
   const [artCacheBust, setArtCacheBust] = useState(0);
-
-  // ── Drag-and-drop state ──
-  const [isDragOver, setIsDragOver] = useState(false);
   const [sanitizerOpen, setSanitizerOpen] = useState(false);
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
   const lastScanPaths = useRef<string[]>([]);
 
-  // ── Repair state ──
-  const [report, setReport] = useState<RepairReport | null>(null);
-  const [acceptedFixes, setAcceptedFixes] = useState<Set<string>>(new Set());
-  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
-  const [switching, setSwitching] = useState(false);
+  // ── Cancel ──
+  const cancel = async () => {
+    try {
+      await invoke("cancel_sync");
+    } catch (_) {
+      /* ignore */
+    }
+  };
 
-  // ── Quality state ──
-  const [qualityFiles, setQualityFiles] = useState<AudioFileInfo[]>([]);
-  const [selectedQualityFile, setSelectedQualityFile] = useState<string | null>(null);
-  const [spectrograms, setSpectrograms] = useState<Record<string, string>>({});
-  const [waveforms, setWaveforms] = useState<Record<string, WaveformResult>>({});
-  const [qualityPreviewModal, setQualityPreviewModal] = useState<QualityPreviewModal | null>(null);
-  const audio = useAudioPlayback(selectedQualityFile);
+  // ── Refresh tracks ──
+  const refreshTracks = async () => {
+    const paths = lastScanPaths.current;
+    if (paths.length === 0) return;
+
+    setEditedTracks({});
+    setSaveResult(null);
+    setError(null);
+
+    try {
+      const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
+      setTracks(data);
+      setPhase("scanned");
+    } catch (e) {
+      setError(`Refresh failed: ${e}`);
+      setPhase("scanned");
+    }
+  };
 
   // ── Event listeners ──
-  useEffect(() => {
-    let active = true;
-    const unsubs: UnlistenFn[] = [];
+  useMetadataEvents(updateProgress, setSaveProgress);
 
-    listen<MetadataScanProgress>("metadata-scan-progress", (e) => {
-      if (active) {
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      }
-    }).then((fn) => {
-      if (active) unsubs.push(fn);
-      else fn();
-    });
+  // ── Repair actions ──
+  const repair = useRepairActions(
+    tracks,
+    setPhase,
+    setError,
+    setSaveResult,
+    setSaveProgress as (p: null) => void,
+    startProgress,
+    finishProgress,
+    failProgress,
+    cancel,
+    refreshTracks,
+  );
 
-    listen<MetadataSaveProgress>("metadata-save-progress", (e) => {
-      if (active) {
-        setSaveProgress(e.payload);
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      }
-    }).then((fn) => {
-      if (active) unsubs.push(fn);
-      else fn();
-    });
+  // ── Quality actions ──
+  const quality = useQualityActions(
+    lastScanPaths,
+    setPhase,
+    setError,
+    startProgress,
+    finishProgress,
+    failProgress,
+    cancel,
+    setView,
+  );
 
-    listen<SanitizeProgress>("sanitize-progress", (e) => {
-      if (active) {
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      }
-    }).then((fn) => {
-      if (active) unsubs.push(fn);
-      else fn();
-    });
+  const audio = useAudioPlayback(quality.selectedQualityFile);
 
-    listen<RepairLookupProgress>("repair-lookup-progress", (e) => {
-      if (active) {
-        updateProgress(e.payload.completed_albums, e.payload.total_albums, e.payload.current_album);
-      }
-    }).then((fn) => {
-      if (active) unsubs.push(fn);
-      else fn();
-    });
-
-    listen<QualityScanProgress>("quality-scan-progress", (e) => {
-      if (active) {
-        updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
-      }
-    }).then((fn) => {
-      if (active) unsubs.push(fn);
-      else fn();
-    });
-
-    return () => {
-      active = false;
-      unsubs.forEach((fn) => fn());
-    };
-  }, []);
-
-  // ── Drag-and-drop listener ──
-  useEffect(() => {
-    let active = true;
-    let unlisten: (() => void) | null = null;
-
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (!active) return;
-        if (event.payload.type === "enter") {
-          setIsDragOver(true);
-        } else if (event.payload.type === "leave") {
-          setIsDragOver(false);
-        } else if (event.payload.type === "drop") {
-          setIsDragOver(false);
-          const p = phaseRef.current;
-          if ((p === "idle" || p === "scanned") && event.payload.paths.length > 0) {
-            scanPaths(event.payload.paths);
-          }
-        }
-      })
-      .then((fn) => {
-        if (active) unlisten = fn;
-        else fn();
-      });
-
-    return () => {
-      active = false;
-      unlisten?.();
-    };
-  }, []);
-
-  // ── Shared actions ──
-
+  // ── Scan actions ──
   const scanPaths = async (paths: string[]) => {
     lastScanPaths.current = paths;
     setPhase("scanning");
@@ -193,9 +117,7 @@ export const MetadataEditor = () => {
     setTracks([]);
     setEditedTracks({});
     setSelected(new Set());
-    setReport(null);
-    setAcceptedFixes(new Set());
-    setSelectedAlbum(null);
+    repair.resetRepair();
     startProgress("Scanning metadata...", cancel);
     try {
       const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
@@ -239,9 +161,7 @@ export const MetadataEditor = () => {
     setTracks([]);
     setEditedTracks({});
     setSelected(new Set());
-    setReport(null);
-    setAcceptedFixes(new Set());
-    setSelectedAlbum(null);
+    repair.resetRepair();
     startProgress("Scanning metadata...", cancel);
     try {
       const data = await invoke<TrackMetadata[]>("scan_metadata", { path: targetPath });
@@ -262,34 +182,10 @@ export const MetadataEditor = () => {
     }
   };
 
-  const refreshTracks = async () => {
-    const paths = lastScanPaths.current;
-    if (paths.length === 0) return;
-
-    setEditedTracks({});
-    setSaveResult(null);
-    setError(null);
-
-    try {
-      const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
-      setTracks(data);
-      setPhase("scanned");
-    } catch (e) {
-      setError(`Refresh failed: ${e}`);
-      setPhase("scanned");
-    }
-  };
-
-  const cancel = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {
-      /* ignore */
-    }
-  };
+  // ── Drag-and-drop ──
+  const isDragOver = useDragDrop(phase, scanPaths);
 
   // ── Editor logic ──
-
   const groups = useMemo(() => groupTracks(tracks, editedTracks), [tracks, editedTracks]);
 
   const dirtyCount = useMemo(() => {
@@ -350,7 +246,6 @@ export const MetadataEditor = () => {
     });
   }, [selected]);
 
-  // Derive a common folder path from selected tracks for album art display
   const selectedFolderPath = useMemo(() => {
     if (selectedTracks.length === 0) return null;
     const folders = [...new Set(selectedTracks.map((t) => t.file_path.replace(/\/[^/]+$/, "")))];
@@ -361,9 +256,7 @@ export const MetadataEditor = () => {
     const folders = [...new Set(selectedTracks.map((t) => t.file_path.replace(/\/[^/]+$/, "")))];
     if (folders.length === 0) return;
     setRepairingArt(true);
-
     const unlisten = await listen("albumart-progress", () => {});
-
     try {
       await invoke("fix_album_art", { folders });
       setArtCacheBust((n) => n + 1);
@@ -426,144 +319,7 @@ export const MetadataEditor = () => {
     }
   };
 
-  // ── Repair logic ──
-
-  const startRepair = async () => {
-    if (tracks.length === 0) return;
-    setPhase("looking_up");
-    setError(null);
-    setReport(null);
-    setAcceptedFixes(new Set());
-    setSelectedAlbum(null);
-    startProgress("Looking up albums on MusicBrainz...", cancel);
-
-    try {
-      const data = await invoke<RepairReport>("repair_analyze", { tracks });
-      setReport(data);
-      const sorted = sortAlbumsByIssues(data.albums);
-      if (sorted.length > 0) setSelectedAlbum(sorted[0].folder_path);
-      setView("repair");
-      setPhase("scanned");
-      const totalIssues =
-        data.total_issues.error_count + data.total_issues.warning_count + data.total_issues.info_count;
-      finishProgress(`Found ${totalIssues} issues across ${data.albums.length} albums`);
-    } catch (e) {
-      const msg = `${e}`;
-      if (msg === "Cancelled") {
-        setPhase("scanned");
-        failProgress("Lookup cancelled");
-      } else {
-        setError(msg);
-        setPhase("scanned");
-        failProgress(msg);
-      }
-    }
-  };
-
-  const sortedAlbums = useMemo(() => (report ? sortAlbumsByIssues(report.albums) : []), [report]);
-
-  const selectedAlbumData = useMemo(
-    () => sortedAlbums.find((a) => a.folder_path === selectedAlbum) ?? null,
-    [sortedAlbums, selectedAlbum],
-  );
-
-  const totalAccepted = acceptedFixes.size;
-
-  const toggleFix = useCallback((key: string) => {
-    setAcceptedFixes((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  }, []);
-
-  const acceptAllForAlbum = useCallback((album: AlbumRepairReport) => {
-    setAcceptedFixes((prev) => {
-      const next = new Set(prev);
-      for (const tm of album.track_matches) {
-        for (const issue of tm.issues) {
-          if (issue.suggested_value) next.add(issueKey(issue));
-        }
-      }
-      return next;
-    });
-  }, []);
-
-  const clearAllForAlbum = useCallback((album: AlbumRepairReport) => {
-    setAcceptedFixes((prev) => {
-      const next = new Set(prev);
-      for (const tm of album.track_matches) {
-        for (const issue of tm.issues) {
-          next.delete(issueKey(issue));
-        }
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSwitchRelease = useCallback(
-    async (mbid: string) => {
-      if (!selectedAlbumData) return;
-      setSwitching(true);
-      try {
-        const localTracks = selectedAlbumData.track_matches.map((tm) => tm.local_track);
-        const updated = await invoke<AlbumRepairReport>("repair_compare_release", { tracks: localTracks, mbid });
-        setReport((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            albums: prev.albums.map((a) =>
-              a.folder_path === selectedAlbum ? { ...updated, alternative_releases: a.alternative_releases } : a,
-            ),
-          };
-        });
-        clearAllForAlbum(selectedAlbumData);
-      } catch (e) {
-        setError(`Failed to switch release: ${e}`);
-      } finally {
-        setSwitching(false);
-      }
-    },
-    [selectedAlbumData, selectedAlbum, clearAllForAlbum],
-  );
-
-  const handleApplyRepairs = async () => {
-    if (!report || totalAccepted === 0) return;
-    const updates = report.albums.flatMap((album) => issuesToUpdates(album, acceptedFixes));
-    if (updates.length === 0) return;
-
-    setPhase("saving");
-    setSaveProgress(null);
-    setSaveResult(null);
-    startProgress("Applying fixes...", cancel);
-    try {
-      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
-      setSaveResult(result);
-      setSaveProgress(null);
-      finishProgress(`Applied fixes to ${result.succeeded} of ${result.total} files`);
-      if (result.succeeded > 0) {
-        refreshTracks();
-      } else {
-        setPhase("scanned");
-      }
-    } catch (e) {
-      setError(`${e}`);
-      setPhase("scanned");
-      failProgress(`${e}`);
-    }
-  };
-
-  const handleAcceptAllRepairs = useCallback(() => {
-    if (!report) return;
-    setAcceptedFixes(allIssueKeys(report.albums));
-  }, [report]);
-
-  const handleClearAllRepairs = useCallback(() => {
-    setAcceptedFixes(new Set());
-  }, []);
-
   // ── Sanitize logic ──
-
   const handleSanitize = async (options: SanitizeModalOptions) => {
     setSanitizerOpen(false);
     const filePaths = [...selected];
@@ -601,77 +357,10 @@ export const MetadataEditor = () => {
     }
   };
 
-  // ── Quality logic ──
-
-  const startQualityScan = async () => {
-    const paths = lastScanPaths.current;
-    if (paths.length === 0) return;
-    const targetPath = paths[0];
-
-    setPhase("scanning");
-    setError(null);
-    setQualityFiles([]);
-    setSelectedQualityFile(null);
-    setSpectrograms({});
-    setWaveforms({});
-    startProgress("Analyzing audio quality...", cancel);
-    try {
-      const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
-      setQualityFiles(data);
-      setView("quality");
-      setPhase("scanned");
-      finishProgress(`Analyzed ${data.length} files`);
-    } catch (e) {
-      const msg = `${e}`;
-      if (msg.includes("Cancelled")) {
-        setPhase("scanned");
-        finishProgress("Quality scan cancelled");
-      } else {
-        setError(msg);
-        setPhase("scanned");
-        failProgress(msg);
-      }
-    }
-  };
-
-  const qualityGroups = useMemo(() => groupByVerdict(qualityFiles), [qualityFiles]);
-
-  const qualityCounts = useMemo(() => {
-    const c = { lossless: 0, lossy: 0, suspect: 0 };
-    for (const f of qualityFiles) {
-      if (f.verdict in c) c[f.verdict as keyof typeof c]++;
-    }
-    return c;
-  }, [qualityFiles]);
-
-  const selectedQualityData = useMemo(
-    () => qualityFiles.find((f) => f.file_path === selectedQualityFile) ?? null,
-    [qualityFiles, selectedQualityFile],
-  );
-
-  const handleSpectrogramLoaded = useCallback((filePath: string, base64: string) => {
-    setSpectrograms((prev) => ({ ...prev, [filePath]: base64 }));
-  }, []);
-
-  const handleWaveformLoaded = useCallback((filePath: string, result: WaveformResult) => {
-    setWaveforms((prev) => ({ ...prev, [filePath]: result }));
-  }, []);
-
-  const handleOpenQualityPreview = useCallback(
-    (type: "spectrogram" | "waveform") => {
-      if (selectedQualityFile) {
-        setQualityPreviewModal({ type, filePath: selectedQualityFile });
-      }
-    },
-    [selectedQualityFile],
-  );
-
   // ── Idle ──
-
   if (phase === "idle") {
     return (
       <>
-        {/* Folder picker bar */}
         <div className="flex items-center gap-2 bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
           <FolderPicker label="Folder" path={scanPath || null} onBrowse={browse} />
           <button
@@ -684,7 +373,6 @@ export const MetadataEditor = () => {
           {error && <span className="text-danger text-[11px] ml-2">{error}</span>}
         </div>
 
-        {/* Drop zone */}
         <div
           className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
             isDragOver ? "border-accent bg-accent/5" : "border-border hover:border-border-active"
@@ -704,20 +392,12 @@ export const MetadataEditor = () => {
     );
   }
 
-  // ── Scanning ──
-
-  if (phase === "scanning") {
-    return <div className="flex-1" />;
-  }
-
-  // ── Looking up (MusicBrainz) ──
-
-  if (phase === "looking_up") {
+  // ── Scanning / Looking up ──
+  if (phase === "scanning" || phase === "looking_up") {
     return <div className="flex-1" />;
   }
 
   // ── Scanned / Saving (main view) ──
-
   return (
     <>
       {/* Toolbar */}
@@ -740,8 +420,7 @@ export const MetadataEditor = () => {
           ↻ Rescan
         </button>
 
-        {/* View toggle */}
-        {(report || qualityFiles.length > 0) && (
+        {(repair.report || quality.qualityFiles.length > 0) && (
           <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
             <button
               onClick={() => setView("edit")}
@@ -751,7 +430,7 @@ export const MetadataEditor = () => {
             >
               Edit
             </button>
-            {report && (
+            {repair.report && (
               <button
                 onClick={() => setView("repair")}
                 className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
@@ -761,7 +440,7 @@ export const MetadataEditor = () => {
                 Repair
               </button>
             )}
-            {qualityFiles.length > 0 && (
+            {quality.qualityFiles.length > 0 && (
               <button
                 onClick={() => setView("quality")}
                 className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
@@ -774,20 +453,19 @@ export const MetadataEditor = () => {
           </div>
         )}
 
-        {/* Action buttons */}
         {phase !== "saving" && view === "edit" && (
           <div className="flex gap-1.5 shrink-0">
-            {!report && (
+            {!repair.report && (
               <button
-                onClick={startRepair}
+                onClick={repair.startRepair}
                 className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
               >
                 Repair with MusicBrainz
               </button>
             )}
-            {qualityFiles.length === 0 && (
+            {quality.qualityFiles.length === 0 && (
               <button
-                onClick={startQualityScan}
+                onClick={quality.startQualityScan}
                 className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
               >
                 Quality Scan
@@ -796,36 +474,37 @@ export const MetadataEditor = () => {
           </div>
         )}
 
-        {/* Editor unsaved changes */}
         {view === "edit" && dirtyCount > 0 && (
           <span className="text-[11px] font-medium text-accent shrink-0">
             {dirtyCount} unsaved {dirtyCount === 1 ? "change" : "changes"}
           </span>
         )}
 
-        {/* Repair actions */}
-        {view === "repair" && totalAccepted > 0 && (
+        {view === "repair" && repair.totalAccepted > 0 && (
           <>
             <button
-              onClick={handleClearAllRepairs}
+              onClick={repair.handleClearAllRepairs}
               className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
             >
               Clear All
             </button>
             <button
-              onClick={handleApplyRepairs}
+              onClick={repair.handleApplyRepairs}
               className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium shrink-0 hover:opacity-90 transition-all"
             >
-              Apply {totalAccepted} {totalAccepted === 1 ? "Fix" : "Fixes"}
+              Apply {repair.totalAccepted} {repair.totalAccepted === 1 ? "Fix" : "Fixes"}
             </button>
           </>
         )}
         {view === "repair" &&
-          totalAccepted === 0 &&
-          report &&
-          report.total_issues.error_count + report.total_issues.warning_count + report.total_issues.info_count > 0 && (
+          repair.totalAccepted === 0 &&
+          repair.report &&
+          repair.report.total_issues.error_count +
+            repair.report.total_issues.warning_count +
+            repair.report.total_issues.info_count >
+            0 && (
             <button
-              onClick={handleAcceptAllRepairs}
+              onClick={repair.handleAcceptAllRepairs}
               className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
             >
               Accept All Fixes
@@ -833,38 +512,39 @@ export const MetadataEditor = () => {
           )}
       </div>
 
-      {/* Issue summary bar (repair view only) */}
-      {view === "repair" && report && (
+      {view === "repair" && repair.report && (
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] bg-bg-secondary border border-border shrink-0">
-          {report.total_issues.error_count > 0 && (
-            <span className="text-danger">{report.total_issues.error_count} errors</span>
+          {repair.report.total_issues.error_count > 0 && (
+            <span className="text-danger">{repair.report.total_issues.error_count} errors</span>
           )}
-          {report.total_issues.warning_count > 0 && (
-            <span className="text-warning">{report.total_issues.warning_count} warnings</span>
+          {repair.report.total_issues.warning_count > 0 && (
+            <span className="text-warning">{repair.report.total_issues.warning_count} warnings</span>
           )}
-          {report.total_issues.info_count > 0 && (
-            <span className="text-accent">{report.total_issues.info_count} info</span>
+          {repair.report.total_issues.info_count > 0 && (
+            <span className="text-accent">{repair.report.total_issues.info_count} info</span>
           )}
-          {report.total_issues.error_count === 0 &&
-            report.total_issues.warning_count === 0 &&
-            report.total_issues.info_count === 0 && <span className="text-success">All metadata looks good</span>}
+          {repair.report.total_issues.error_count === 0 &&
+            repair.report.total_issues.warning_count === 0 &&
+            repair.report.total_issues.info_count === 0 && (
+              <span className="text-success">All metadata looks good</span>
+            )}
         </div>
       )}
 
-      {/* Quality stats bar */}
-      {view === "quality" && qualityFiles.length > 0 && (
+      {view === "quality" && quality.qualityFiles.length > 0 && (
         <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
-          {qualityCounts.lossless > 0 && (
-            <span className={verdictColor("lossless")}>{qualityCounts.lossless} lossless</span>
+          {quality.qualityCounts.lossless > 0 && (
+            <span className={verdictColor("lossless")}>{quality.qualityCounts.lossless} lossless</span>
           )}
-          {qualityCounts.lossy > 0 && <span className={verdictColor("lossy")}>{qualityCounts.lossy} lossy</span>}
-          {qualityCounts.suspect > 0 && (
-            <span className={verdictColor("suspect")}>{qualityCounts.suspect} suspect</span>
+          {quality.qualityCounts.lossy > 0 && (
+            <span className={verdictColor("lossy")}>{quality.qualityCounts.lossy} lossy</span>
+          )}
+          {quality.qualityCounts.suspect > 0 && (
+            <span className={verdictColor("suspect")}>{quality.qualityCounts.suspect} suspect</span>
           )}
         </div>
       )}
 
-      {/* Save result toast */}
       {saveResult && (
         <div
           className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed shrink-0 ${
@@ -889,7 +569,6 @@ export const MetadataEditor = () => {
         </div>
       )}
 
-      {/* Save progress */}
       {phase === "saving" && !progressState.active && (
         <div className="px-4 py-3 bg-bg-secondary border border-border rounded-2xl shrink-0">
           <div className="flex items-center justify-between mb-2">
@@ -956,37 +635,35 @@ export const MetadataEditor = () => {
           </>
         )}
 
-        {view === "repair" && report && (
+        {view === "repair" && repair.report && (
           <>
-            {/* Album list */}
             <div className="w-72 shrink-0 bg-bg-secondary border border-border rounded-2xl flex flex-col min-h-0">
               <div className="px-4 py-3 border-b border-border shrink-0">
                 <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest">
-                  Albums ({sortedAlbums.length})
+                  Albums ({repair.sortedAlbums.length})
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto p-1.5">
-                {sortedAlbums.map((album) => (
+                {repair.sortedAlbums.map((album) => (
                   <RepairAlbumCard
                     key={album.folder_path}
                     album={album}
-                    selected={selectedAlbum === album.folder_path}
-                    onClick={() => setSelectedAlbum(album.folder_path)}
+                    selected={repair.selectedAlbum === album.folder_path}
+                    onClick={() => repair.setSelectedAlbum(album.folder_path)}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Detail panel */}
-            {selectedAlbumData ? (
+            {repair.selectedAlbumData ? (
               <RepairDetailPanel
-                album={selectedAlbumData}
-                acceptedFixes={acceptedFixes}
-                onToggleFix={toggleFix}
-                onAcceptAll={() => acceptAllForAlbum(selectedAlbumData)}
-                onClearAll={() => clearAllForAlbum(selectedAlbumData)}
-                onSwitchRelease={handleSwitchRelease}
-                switching={switching}
+                album={repair.selectedAlbumData}
+                acceptedFixes={repair.acceptedFixes}
+                onToggleFix={repair.toggleFix}
+                onAcceptAll={() => repair.acceptAllForAlbum(repair.selectedAlbumData!)}
+                onClearAll={() => repair.clearAllForAlbum(repair.selectedAlbumData!)}
+                onSwitchRelease={repair.handleSwitchRelease}
+                switching={repair.switching}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center bg-bg-secondary border border-border rounded-2xl">
@@ -996,21 +673,21 @@ export const MetadataEditor = () => {
           </>
         )}
 
-        {view === "quality" && qualityFiles.length > 0 && (
+        {view === "quality" && quality.qualityFiles.length > 0 && (
           <>
             <QualityList
-              groups={qualityGroups}
-              selectedFile={selectedQualityFile}
-              onSelectFile={setSelectedQualityFile}
+              groups={quality.qualityGroups}
+              selectedFile={quality.selectedQualityFile}
+              onSelectFile={quality.setSelectedQualityFile}
             />
-            {selectedQualityData && (
+            {quality.selectedQualityData && (
               <QualityDetailPanel
-                file={selectedQualityData}
-                spectrogramCache={spectrograms}
-                onSpectrogramLoaded={handleSpectrogramLoaded}
-                waveformCache={waveforms}
-                onWaveformLoaded={handleWaveformLoaded}
-                onOpenPreview={handleOpenQualityPreview}
+                file={quality.selectedQualityData}
+                spectrogramCache={quality.spectrograms}
+                onSpectrogramLoaded={quality.handleSpectrogramLoaded}
+                waveformCache={quality.waveforms}
+                onWaveformLoaded={quality.handleWaveformLoaded}
+                onOpenPreview={quality.handleOpenQualityPreview}
                 audio={audio}
               />
             )}
@@ -1018,14 +695,12 @@ export const MetadataEditor = () => {
         )}
       </div>
 
-      {/* Drag-over overlay for re-dropping in scanned state */}
       {isDragOver && phase === "scanned" && (
         <div className="absolute inset-0 bg-accent/5 border-2 border-dashed border-accent rounded-2xl flex items-center justify-center pointer-events-none z-40">
           <span className="text-accent text-xs font-medium">Drop to rescan</span>
         </div>
       )}
 
-      {/* Tag Sanitizer modal */}
       {sanitizerOpen && (
         <TagSanitizerModal
           selectedCount={selected.size}
@@ -1034,18 +709,18 @@ export const MetadataEditor = () => {
         />
       )}
 
-      {/* Quality preview modal */}
-      {qualityPreviewModal &&
+      {quality.qualityPreviewModal &&
         (() => {
-          const modalFile = qualityFiles.find((f) => f.file_path === qualityPreviewModal.filePath) ?? null;
+          const modalFile =
+            quality.qualityFiles.find((f) => f.file_path === quality.qualityPreviewModal!.filePath) ?? null;
           return modalFile ? (
             <AudioPreviewModal
-              type={qualityPreviewModal.type}
+              type={quality.qualityPreviewModal.type}
               file={modalFile}
-              spectrogramBase64={spectrograms[qualityPreviewModal.filePath]}
-              waveformResult={waveforms[qualityPreviewModal.filePath]}
+              spectrogramBase64={quality.spectrograms[quality.qualityPreviewModal.filePath]}
+              waveformResult={quality.waveforms[quality.qualityPreviewModal.filePath]}
               audio={audio}
-              onClose={() => setQualityPreviewModal(null)}
+              onClose={() => quality.setQualityPreviewModal(null)}
             />
           ) : null;
         })()}

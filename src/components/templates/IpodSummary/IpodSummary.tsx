@@ -6,15 +6,23 @@ import { fmtBytes } from "./helpers";
 import type { IpodInfo } from "../../../types/ipod";
 import type { SummaryStatus, IpodSummaryProps } from "./types";
 
-export const IpodSummary = ({ diskInfo, isMounted }: IpodSummaryProps) => {
-  const [status, setStatus] = useState<SummaryStatus>("no_ipod");
-  const [info, setInfo] = useState<IpodInfo | null>(null);
+export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: IpodSummaryProps) => {
+  const [status, setStatus] = useState<SummaryStatus>(cachedInfo ? "loaded" : "no_ipod");
+  const [info, setInfo] = useState<IpodInfo | null>(cachedInfo);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isMounted || !diskInfo?.mount_point) {
       setStatus("no_ipod");
       setInfo(null);
+      onInfoLoaded(null);
+      return;
+    }
+
+    // Already have info for this mount point — no re-fetch needed
+    if (cachedInfo && cachedInfo.mount_point === diskInfo.mount_point) {
+      setInfo(cachedInfo);
+      setStatus("loaded");
       return;
     }
 
@@ -27,6 +35,7 @@ export const IpodSummary = ({ diskInfo, isMounted }: IpodSummaryProps) => {
           diskInfo,
         });
         setInfo(result);
+        onInfoLoaded(result);
         setStatus("loaded");
       } catch (e) {
         setError(`${e}`);

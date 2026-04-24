@@ -16,6 +16,7 @@ import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBa
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
 import type { LibraryScanProgress } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
+import type { IpodInfo } from "./types/ipod";
 
 type TopTab = "library" | "tools";
 type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "stats";
@@ -35,6 +36,7 @@ const AppContent = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ipodMounted, setIpodMounted] = useState(false);
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
+  const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);
   const prevMountedRef = useRef(false);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const libraryRefreshRef = useRef<(() => void) | null>(null);
@@ -130,7 +132,14 @@ const AppContent = () => {
                   Library Stats
                 </ToolTabButton>
               </div>
-              {toolTab === "ipod" && <IpodSummary diskInfo={diskInfo} isMounted={ipodMounted} />}
+              {toolTab === "ipod" && (
+                <IpodSummary
+                  diskInfo={diskInfo}
+                  isMounted={ipodMounted}
+                  cachedInfo={ipodInfo}
+                  onInfoLoaded={setIpodInfo}
+                />
+              )}
               {toolTab === "browse" && <BrowseExplorer />}
               {toolTab === "sync" && <SyncManager />}
               {toolTab === "metadata" && <MetadataEditor />}

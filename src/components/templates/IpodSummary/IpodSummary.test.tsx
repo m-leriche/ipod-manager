@@ -36,25 +36,28 @@ const mockIpodInfo: IpodInfo = {
   rockbox_track_count: 3500,
 };
 
+const onInfoLoaded = vi.fn();
+
 describe("IpodSummary", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    onInfoLoaded.mockReset();
   });
 
   it("shows empty state when iPod is not mounted", () => {
-    render(<IpodSummary diskInfo={null} isMounted={false} />);
+    render(<IpodSummary diskInfo={null} isMounted={false} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
     expect(screen.getByText("Connect and mount your iPod to see device info")).toBeInTheDocument();
   });
 
   it("shows loading state while fetching info", () => {
     vi.mocked(invoke).mockReturnValue(new Promise(() => {})); // never resolves
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
     expect(screen.getByText("Reading device info...")).toBeInTheDocument();
   });
 
   it("displays device info after loading", async () => {
     vi.mocked(invoke).mockResolvedValue(mockIpodInfo);
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("IPOD")).toBeInTheDocument();
@@ -64,11 +67,12 @@ describe("IpodSummary", () => {
     expect(screen.getByText("YM634ABC123")).toBeInTheDocument();
     expect(screen.getByText("1.3.0")).toBeInTheDocument();
     expect(screen.getByText("FAT32")).toBeInTheDocument();
+    expect(onInfoLoaded).toHaveBeenCalledWith(mockIpodInfo);
   });
 
   it("displays Rockbox info when available", async () => {
     vi.mocked(invoke).mockResolvedValue(mockIpodInfo);
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("Rockbox")).toBeInTheDocument();
@@ -79,8 +83,9 @@ describe("IpodSummary", () => {
   });
 
   it("hides Rockbox section when not installed", async () => {
-    vi.mocked(invoke).mockResolvedValue({ ...mockIpodInfo, has_rockbox: false });
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    const noRockbox = { ...mockIpodInfo, has_rockbox: false };
+    vi.mocked(invoke).mockResolvedValue(noRockbox);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("IPOD")).toBeInTheDocument();
@@ -91,7 +96,7 @@ describe("IpodSummary", () => {
 
   it("shows error state on failure", async () => {
     vi.mocked(invoke).mockRejectedValue("Device read error");
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("Device read error")).toBeInTheDocument();
@@ -100,7 +105,7 @@ describe("IpodSummary", () => {
 
   it("shows storage bar with correct labels", async () => {
     vi.mocked(invoke).mockResolvedValue(mockIpodInfo);
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("Storage")).toBeInTheDocument();
@@ -123,7 +128,7 @@ describe("IpodSummary", () => {
       rockbox_track_count: null,
     };
     vi.mocked(invoke).mockResolvedValue(minimalInfo);
-    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} />);
+    render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
       expect(screen.getByText("IPOD")).toBeInTheDocument();
@@ -132,5 +137,17 @@ describe("IpodSummary", () => {
     expect(screen.queryByText("Serial")).not.toBeInTheDocument();
     expect(screen.queryByText("Firmware")).not.toBeInTheDocument();
     expect(screen.queryByText("Rockbox")).not.toBeInTheDocument();
+  });
+
+  it("uses cached info without re-fetching", () => {
+    render(
+      <IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={mockIpodInfo} onInfoLoaded={onInfoLoaded} />,
+    );
+
+    // Should render immediately from cache
+    expect(screen.getByText("IPOD")).toBeInTheDocument();
+    expect(screen.getByText("YM634ABC123")).toBeInTheDocument();
+    // Should NOT have called invoke
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 
 export const RetroWindowDots = () => {
   const { theme } = useTheme();
-  if (theme !== "retro") return null;
+  if (theme !== "win95" && theme !== "classic") return null;
 
   return (
     <div className="flex items-center gap-[6px] shrink-0" aria-hidden>

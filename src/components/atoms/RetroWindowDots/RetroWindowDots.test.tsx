@@ -22,8 +22,8 @@ describe("RetroWindowDots", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("renders three dots in retro theme", () => {
-    mockTheme = "retro";
+  it("renders three dots in win95 theme", () => {
+    mockTheme = "win95";
     const { container } = render(<RetroWindowDots />);
     const dots = container.querySelectorAll(".rounded-full");
     expect(dots).toHaveLength(3);

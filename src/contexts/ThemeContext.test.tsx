@@ -9,8 +9,9 @@ const ThemeDisplay = () => {
   return (
     <div>
       <span data-testid="theme">{theme}</span>
-      <button onClick={() => setTheme("retro")}>Set Retro</button>
+      <button onClick={() => setTheme("win95")}>Set Win95</button>
       <button onClick={() => setTheme("dark")}>Set Dark</button>
+      <button onClick={() => setTheme("classic")}>Set Classic</button>
     </div>
   );
 };
@@ -37,9 +38,9 @@ describe("ThemeContext", () => {
         <ThemeDisplay />
       </ThemeProvider>,
     );
-    act(() => screen.getByText("Set Retro").click());
-    expect(screen.getByTestId("theme").textContent).toBe("retro");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("retro");
+    act(() => screen.getByText("Set Win95").click());
+    expect(screen.getByTestId("theme").textContent).toBe("win95");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("win95");
   });
 
   it("persists theme to localStorage", () => {
@@ -48,18 +49,40 @@ describe("ThemeContext", () => {
         <ThemeDisplay />
       </ThemeProvider>,
     );
-    act(() => screen.getByText("Set Retro").click());
-    expect(localStorage.getItem("crate-theme")).toBe("retro");
+    act(() => screen.getByText("Set Win95").click());
+    expect(localStorage.getItem("crate-theme")).toBe("win95");
   });
 
   it("restores theme from localStorage", () => {
-    localStorage.setItem("crate-theme", "retro");
+    localStorage.setItem("crate-theme", "win95");
     render(
       <ThemeProvider>
         <ThemeDisplay />
       </ThemeProvider>,
     );
-    expect(screen.getByTestId("theme").textContent).toBe("retro");
+    expect(screen.getByTestId("theme").textContent).toBe("win95");
+  });
+
+  it("switches to classic theme", () => {
+    render(
+      <ThemeProvider>
+        <ThemeDisplay />
+      </ThemeProvider>,
+    );
+    act(() => screen.getByText("Set Classic").click());
+    expect(screen.getByTestId("theme").textContent).toBe("classic");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("classic");
+    expect(localStorage.getItem("crate-theme")).toBe("classic");
+  });
+
+  it("restores classic theme from localStorage", () => {
+    localStorage.setItem("crate-theme", "classic");
+    render(
+      <ThemeProvider>
+        <ThemeDisplay />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("theme").textContent).toBe("classic");
   });
 
   it("falls back to dark when localStorage has invalid value", () => {

@@ -344,21 +344,26 @@ const getCellContent = (
   index: number,
   isCurrentTrack: boolean,
   isPlaying: boolean,
+  isSelected: boolean,
 ): React.ReactNode => {
   switch (key) {
-    case "#":
+    case "#": {
+      const barColor = isSelected ? "bg-white" : "bg-accent";
       return isCurrentTrack ? (
         <div className="flex items-center justify-center gap-[2px] h-3">
-          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
-          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
-          <span className={`w-[3px] bg-accent rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
+          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
+          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
+          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
         </div>
       ) : (
-        <span className="text-text-tertiary">{index + 1}</span>
+        <span className={isSelected ? "" : "text-text-tertiary"}>{index + 1}</span>
       );
+    }
     case "title":
       return (
-        <div className={`text-xs font-medium truncate ${isCurrentTrack ? "text-accent" : "text-text-primary"}`}>
+        <div
+          className={`text-xs font-medium truncate ${isSelected ? "" : isCurrentTrack ? "text-accent" : "text-text-primary"}`}
+        >
           {track.title || track.file_name}
         </div>
       );
@@ -410,12 +415,12 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
       className={`group cursor-default select-none transition-colors ${
-        isSelected ? "bg-accent/10" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
+        isSelected ? "" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
       }`}
     >
       {columns.map((col) => (
-        <td key={col.key} className={CELL_CLASSES[col.key]}>
-          {getCellContent(col.key, track, index, isCurrentTrack, isPlaying)}
+        <td key={col.key} className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""}`}>
+          {getCellContent(col.key, track, index, isCurrentTrack, isPlaying, isSelected)}
         </td>
       ))}
     </tr>

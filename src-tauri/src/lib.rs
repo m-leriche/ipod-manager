@@ -170,6 +170,7 @@ pub fn run() {
             commands::set_library_location,
             commands::import_to_library,
             commands::add_library_folder,
+            commands::delete_library_tracks,
             commands::remove_library_folder,
             commands::get_library_folders,
             commands::refresh_library,

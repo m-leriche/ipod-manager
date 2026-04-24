@@ -10,13 +10,15 @@ import { SyncManager } from "./components/templates/SyncManager/SyncManager";
 import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
 import { LibraryStats } from "./components/templates/LibraryStats/LibraryStats";
+import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
 import type { LibraryScanProgress } from "./types/library";
+import type { DiskInfo } from "./components/templates/MountPanel/types";
 
 type TopTab = "library" | "tools";
-type ToolTab = "browse" | "sync" | "metadata" | "audio" | "stats";
+type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "stats";
 
 const App = () => (
   <ProgressProvider>
@@ -31,8 +33,19 @@ const AppContent = () => {
   const [topTab, setTopTab] = useState<TopTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("browse");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ipodMounted, setIpodMounted] = useState(false);
+  const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
+  const prevMountedRef = useRef(false);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const libraryRefreshRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (ipodMounted && !prevMountedRef.current) {
+      setTopTab("tools");
+      setToolTab("ipod");
+    }
+    prevMountedRef.current = ipodMounted;
+  }, [ipodMounted]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -95,9 +108,12 @@ const AppContent = () => {
         </div>
         {topTab === "tools" && (
           <div className="flex gap-6 p-6 h-full">
-            <MountPanel compact />
+            <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
             <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
               <div className="flex gap-1.5 shrink-0">
+                <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
+                  iPod
+                </ToolTabButton>
                 <ToolTabButton active={toolTab === "browse"} onClick={() => setToolTab("browse")}>
                   File Explorer
                 </ToolTabButton>
@@ -114,6 +130,7 @@ const AppContent = () => {
                   Library Stats
                 </ToolTabButton>
               </div>
+              {toolTab === "ipod" && <IpodSummary diskInfo={diskInfo} isMounted={ipodMounted} />}
               {toolTab === "browse" && <BrowseExplorer />}
               {toolTab === "sync" && <SyncManager />}
               {toolTab === "metadata" && <MetadataEditor />}

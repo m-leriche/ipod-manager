@@ -24,6 +24,7 @@ const DISK_INFO = {
   free_space: 50_000_000_000,
   used_space: 69_100_000_000,
   total_space: 119_100_000_000,
+  media_name: "iPod Classic",
 };
 
 describe("MountPanel", () => {
@@ -113,6 +114,32 @@ describe("MountPanel", () => {
     render(<MountPanel />);
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("detect_ipod");
+    });
+  });
+
+  it("calls onDiskInfoChange with disk info when iPod is detected", async () => {
+    const onDiskInfoChange = vi.fn();
+    mockInvoke.mockResolvedValue(DISK_INFO);
+    render(<MountPanel onDiskInfoChange={onDiskInfoChange} />);
+    await waitFor(() => {
+      expect(onDiskInfoChange).toHaveBeenCalledWith(DISK_INFO);
+    });
+  });
+
+  it("calls onDiskInfoChange with null when iPod is not found", async () => {
+    const onDiskInfoChange = vi.fn();
+    mockInvoke.mockResolvedValue(null);
+    render(<MountPanel onDiskInfoChange={onDiskInfoChange} />);
+    await waitFor(() => {
+      expect(onDiskInfoChange).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("shows media name as Type when available", async () => {
+    mockInvoke.mockResolvedValue(DISK_INFO);
+    render(<MountPanel />);
+    await waitFor(() => {
+      expect(screen.getByText("iPod Classic")).toBeInTheDocument();
     });
   });
 });

@@ -29,6 +29,26 @@ pub fn sanitize_path_component(name: &str) -> String {
     }
 }
 
+fn compute_library_filename(track: &TrackData) -> String {
+    let ext = Path::new(&track.file_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("flac");
+
+    let title = match track.title.as_deref() {
+        Some(t) if !t.is_empty() => t,
+        _ => return track.file_name.clone(),
+    };
+    let track_num = match track.track_number {
+        Some(n) if n > 0 => n,
+        _ => return track.file_name.clone(),
+    };
+
+    let disc = track.disc_number.unwrap_or(1);
+    let sanitized_title = sanitize_path_component(title);
+    format!("{:02}-{:02} {}.{}", disc, track_num, sanitized_title, ext)
+}
+
 pub(super) fn compute_library_dest(library_root: &Path, track: &TrackData) -> PathBuf {
     let artist_name = track
         .album_artist
@@ -40,7 +60,7 @@ pub(super) fn compute_library_dest(library_root: &Path, track: &TrackData) -> Pa
     library_root
         .join(sanitize_path_component(artist_name))
         .join(sanitize_path_component(album_name))
-        .join(&track.file_name)
+        .join(compute_library_filename(track))
 }
 
 pub fn import_to_library(

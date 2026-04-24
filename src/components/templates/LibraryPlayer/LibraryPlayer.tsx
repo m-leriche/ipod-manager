@@ -339,6 +339,7 @@ export const LibraryPlayer = ({
           onSort={handleSort}
           onTrackSelect={handleTrackSelect}
           onSelectionChange={handleSelectionChange}
+          onTracksDeleted={fetchBrowserData}
         />
       </div>
 

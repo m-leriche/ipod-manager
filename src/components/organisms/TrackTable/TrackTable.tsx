@@ -1,6 +1,8 @@
 import { memo, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useColumnResize } from "./useColumnResize";
@@ -19,6 +21,7 @@ interface TrackTableProps {
   onSelectionChange?: (selectedIds: Set<number>) => void;
   onNavigateToArtist?: (artist: string) => void;
   onNavigateToAlbum?: (album: string, artist: string) => void;
+  onTracksDeleted?: () => void;
 }
 
 interface ContextMenuState {
@@ -36,10 +39,12 @@ export const TrackTable = memo(function TrackTable({
   onSelectionChange,
   onNavigateToArtist,
   onNavigateToAlbum,
+  onTracksDeleted,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -117,10 +122,29 @@ export const TrackTable = memo(function TrackTable({
     [playTrack, tracks],
   );
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, track });
-  }, []);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, track: LibraryTrack) => {
+      e.preventDefault();
+      // If right-clicked track isn't in current selection, select only it
+      if (!selectedRef.current.has(track.id)) {
+        setSelected(new Set([track.id]));
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY, track });
+    },
+    [],
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirm) return;
+    try {
+      await invoke("delete_library_tracks", { trackIds: deleteConfirm });
+      setSelected(new Set());
+      onTracksDeleted?.();
+    } catch (e) {
+      console.error("Failed to delete tracks:", e);
+    }
+    setDeleteConfirm(null);
+  }, [deleteConfirm, onTracksDeleted]);
 
   const contextMenuItems = contextMenu
     ? [
@@ -170,6 +194,20 @@ export const TrackTable = memo(function TrackTable({
               },
             ]
           : []),
+        { type: "separator" as const },
+        {
+          label: selected.size > 1 && selected.has(contextMenu.track.id)
+            ? `Delete ${selected.size} Tracks from Library`
+            : "Delete from Library",
+          onClick: () => {
+            const ids =
+              selected.size > 1 && selected.has(contextMenu.track.id)
+                ? [...selected]
+                : [contextMenu.track.id];
+            setDeleteConfirm(ids);
+            setContextMenu(null);
+          },
+        },
       ]
     : [];
 
@@ -270,6 +308,21 @@ export const TrackTable = memo(function TrackTable({
           y={contextMenu.y}
           items={contextMenuItems}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete from Library"
+          message={
+            deleteConfirm.length === 1
+              ? "Are you sure you want to delete this track? The file will be permanently removed."
+              : `Are you sure you want to delete ${deleteConfirm.length} tracks? The files will be permanently removed.`
+          }
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteConfirm(null)}
         />
       )}
     </div>

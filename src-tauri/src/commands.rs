@@ -565,6 +565,20 @@ pub async fn add_library_folder(
 }
 
 #[tauri::command]
+pub async fn delete_library_tracks(
+    track_ids: Vec<i64>,
+    db: State<'_, LibraryDb>,
+) -> Result<usize, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    let library_root = library::get_library_location(&conn)
+        .ok_or("No library location set".to_string())?;
+    library::delete_tracks(&conn, &library_root, &track_ids)
+}
+
+#[tauri::command]
 pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
     let conn = db
         .conn

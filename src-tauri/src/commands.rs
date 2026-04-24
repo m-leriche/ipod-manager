@@ -573,8 +573,8 @@ pub async fn delete_library_tracks(
         .conn
         .lock()
         .map_err(|e| format!("DB lock failed: {}", e))?;
-    let library_root = library::get_library_location(&conn)
-        .ok_or("No library location set".to_string())?;
+    let library_root =
+        library::get_library_location(&conn).ok_or("No library location set".to_string())?;
     library::delete_tracks(&conn, &library_root, &track_ids)
 }
 

@@ -25,8 +25,7 @@ pub fn delete_tracks(
 
         let path = Path::new(&file_path);
         if path.exists() {
-            fs::remove_file(path)
-                .map_err(|e| format!("Failed to delete {}: {}", file_path, e))?;
+            fs::remove_file(path).map_err(|e| format!("Failed to delete {}: {}", file_path, e))?;
         }
 
         conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])

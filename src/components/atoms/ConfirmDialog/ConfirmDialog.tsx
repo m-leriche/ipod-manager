@@ -47,9 +47,7 @@ export const ConfirmDialog = ({
           <button
             onClick={onConfirm}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-              danger
-                ? "bg-danger text-white hover:opacity-90"
-                : "bg-text-primary text-bg-primary hover:opacity-90"
+              danger ? "bg-danger text-white hover:opacity-90" : "bg-text-primary text-bg-primary hover:opacity-90"
             }`}
           >
             {confirmLabel}

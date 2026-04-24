@@ -122,17 +122,14 @@ export const TrackTable = memo(function TrackTable({
     [playTrack, tracks],
   );
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, track: LibraryTrack) => {
-      e.preventDefault();
-      // If right-clicked track isn't in current selection, select only it
-      if (!selectedRef.current.has(track.id)) {
-        setSelected(new Set([track.id]));
-      }
-      setContextMenu({ x: e.clientX, y: e.clientY, track });
-    },
-    [],
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {
+    e.preventDefault();
+    // If right-clicked track isn't in current selection, select only it
+    if (!selectedRef.current.has(track.id)) {
+      setSelected(new Set([track.id]));
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, track });
+  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -196,14 +193,13 @@ export const TrackTable = memo(function TrackTable({
           : []),
         { type: "separator" as const },
         {
-          label: selected.size > 1 && selected.has(contextMenu.track.id)
-            ? `Delete ${selected.size} Tracks from Library`
-            : "Delete from Library",
+          label:
+            selected.size > 1 && selected.has(contextMenu.track.id)
+              ? `Delete ${selected.size} Tracks from Library`
+              : "Delete from Library",
           onClick: () => {
             const ids =
-              selected.size > 1 && selected.has(contextMenu.track.id)
-                ? [...selected]
-                : [contextMenu.track.id];
+              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
             setDeleteConfirm(ids);
             setContextMenu(null);
           },

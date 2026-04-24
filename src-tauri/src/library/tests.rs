@@ -1,5 +1,7 @@
 use crate::library::*;
-use crate::library::{delete::delete_tracks, import::compute_library_dest, scan::upsert_track, types::TrackData};
+use crate::library::{
+    delete::delete_tracks, import::compute_library_dest, scan::upsert_track, types::TrackData,
+};
 use rusqlite::Connection;
 use std::path::Path;
 
@@ -47,8 +49,12 @@ fn test_db() -> Connection {
 
 fn make_track_data(overrides: TrackDataOverrides) -> TrackData {
     TrackData {
-        file_path: overrides.file_path.unwrap_or_else(|| "/m/song.mp3".to_string()),
-        file_name: overrides.file_name.unwrap_or_else(|| "song.mp3".to_string()),
+        file_path: overrides
+            .file_path
+            .unwrap_or_else(|| "/m/song.mp3".to_string()),
+        file_name: overrides
+            .file_name
+            .unwrap_or_else(|| "song.mp3".to_string()),
         folder_path: overrides.folder_path.unwrap_or_else(|| "/m".to_string()),
         title: overrides.title.unwrap_or(Some("Song".to_string())),
         artist: overrides.artist.unwrap_or(Some("Artist".to_string())),
@@ -334,7 +340,10 @@ fn library_dest_pads_single_digit_disc_and_track() {
         ..Default::default()
     });
     let dest = compute_library_dest(Path::new("/lib"), &track);
-    assert_eq!(dest.file_name().unwrap().to_str().unwrap(), "01-01 Intro.mp3");
+    assert_eq!(
+        dest.file_name().unwrap().to_str().unwrap(),
+        "01-01 Intro.mp3"
+    );
 }
 
 #[test]
@@ -347,7 +356,10 @@ fn library_dest_defaults_disc_to_01_when_missing() {
         ..Default::default()
     });
     let dest = compute_library_dest(Path::new("/lib"), &track);
-    assert_eq!(dest.file_name().unwrap().to_str().unwrap(), "01-05 Track.flac");
+    assert_eq!(
+        dest.file_name().unwrap().to_str().unwrap(),
+        "01-05 Track.flac"
+    );
 }
 
 #[test]
@@ -384,7 +396,10 @@ fn library_dest_sanitizes_title_special_chars() {
         ..Default::default()
     });
     let dest = compute_library_dest(Path::new("/lib"), &track);
-    assert_eq!(dest.file_name().unwrap().to_str().unwrap(), "01-03 What_Is_This_.flac");
+    assert_eq!(
+        dest.file_name().unwrap().to_str().unwrap(),
+        "01-03 What_Is_This_.flac"
+    );
 }
 
 #[test]
@@ -399,7 +414,12 @@ fn library_dest_preserves_file_extension() {
         });
         let dest = compute_library_dest(Path::new("/lib"), &track);
         let name = dest.file_name().unwrap().to_str().unwrap();
-        assert!(name.ends_with(ext), "Expected extension .{}, got {}", ext, name);
+        assert!(
+            name.ends_with(ext),
+            "Expected extension .{}, got {}",
+            ext,
+            name
+        );
     }
 }
 
@@ -441,9 +461,15 @@ fn delete_tracks_removes_files_and_db_records() {
     let tracks = get_tracks(
         &conn,
         &LibraryFilter {
-            artist: None, album: None, genre: None, search: None, sort_by: None, sort_direction: None,
+            artist: None,
+            album: None,
+            genre: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
         },
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(tracks.len(), 1);
     let id = tracks[0].id;
 
@@ -456,9 +482,15 @@ fn delete_tracks_removes_files_and_db_records() {
     let remaining = get_tracks(
         &conn,
         &LibraryFilter {
-            artist: None, album: None, genre: None, search: None, sort_by: None, sort_direction: None,
+            artist: None,
+            album: None,
+            genre: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
         },
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(remaining.len(), 0);
 }
 
@@ -487,9 +519,16 @@ fn delete_tracks_removes_album_folder_with_cover_art() {
     let id = get_tracks(
         &conn,
         &LibraryFilter {
-            artist: None, album: None, genre: None, search: None, sort_by: None, sort_direction: None,
+            artist: None,
+            album: None,
+            genre: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
         },
-    ).unwrap()[0].id;
+    )
+    .unwrap()[0]
+        .id;
 
     delete_tracks(&conn, root.to_str().unwrap(), &[id]).unwrap();
 
@@ -513,15 +552,37 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
     std::fs::write(album_dir.join("cover.jpg"), b"fake image").unwrap();
 
     let conn = test_db();
-    insert_test_track(&conn, file1.to_str().unwrap(), "Song1", "Artist", "Album", "Rock", 2020);
-    insert_test_track(&conn, file2.to_str().unwrap(), "Song2", "Artist", "Album", "Rock", 2020);
+    insert_test_track(
+        &conn,
+        file1.to_str().unwrap(),
+        "Song1",
+        "Artist",
+        "Album",
+        "Rock",
+        2020,
+    );
+    insert_test_track(
+        &conn,
+        file2.to_str().unwrap(),
+        "Song2",
+        "Artist",
+        "Album",
+        "Rock",
+        2020,
+    );
 
     let tracks = get_tracks(
         &conn,
         &LibraryFilter {
-            artist: None, album: None, genre: None, search: None, sort_by: None, sort_direction: None,
+            artist: None,
+            album: None,
+            genre: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
         },
-    ).unwrap();
+    )
+    .unwrap();
     let id = tracks[0].id;
 
     delete_tracks(&conn, root.to_str().unwrap(), &[id]).unwrap();
@@ -533,8 +594,14 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
     let remaining = get_tracks(
         &conn,
         &LibraryFilter {
-            artist: None, album: None, genre: None, search: None, sort_by: None, sort_direction: None,
+            artist: None,
+            album: None,
+            genre: None,
+            search: None,
+            sort_by: None,
+            sort_direction: None,
         },
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(remaining.len(), 1);
 }

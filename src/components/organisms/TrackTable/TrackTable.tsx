@@ -5,6 +5,7 @@ import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
+import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
 import { useColumnOrder } from "./useColumnOrder";
 import { getAlbumTracks } from "./helpers";
@@ -73,14 +74,61 @@ export const TrackTable = memo(function TrackTable({
     [tracks, searchField],
   );
 
+  // ── Keyboard navigation ──────────────────────────────────────
+
+  const lastClickedIndexRef = useRef(0);
+
+  const handleKeyboardNavigate = useCallback(
+    (index: number, mode: "single" | "range") => {
+      const track = tracks[index];
+      if (!track) return;
+      if (mode === "single") {
+        setSelected(new Set([track.id]));
+        lastClickedIndexRef.current = index;
+      } else {
+        const anchor = lastClickedIndexRef.current;
+        const [start, end] = [Math.min(anchor, index), Math.max(anchor, index)];
+        const rangeIds = new Set(tracks.slice(start, end + 1).map((t) => t.id));
+        setSelected(rangeIds);
+      }
+      onTrackSelect?.(track);
+    },
+    [tracks, onTrackSelect],
+  );
+
+  const handleKeyboardActivate = useCallback(
+    (index: number) => {
+      const track = tracks[index];
+      if (track) playTrack(track, getAlbumTracks(track, tracks));
+    },
+    [tracks, playTrack],
+  );
+
+  const handleKeyboardDeselect = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
+  const { onKeyDown: handleNavKeyDown, focusedIndexRef } = useKeyboardNavigation({
+    count: tracks.length,
+    onNavigate: handleKeyboardNavigate,
+    onActivate: handleKeyboardActivate,
+    onDeselect: handleKeyboardDeselect,
+    virtualizer,
+    selectedIndex: lastClickedIndexRef.current,
+  });
+
+  // ── Type-to-select ───────────────────────────────────────────
+
   const handleTypeToSelectMatch = useCallback(
     (index: number) => {
       const track = tracks[index];
       setSelected(new Set([track.id]));
+      lastClickedIndexRef.current = index;
+      focusedIndexRef.current = index;
       onTrackSelect?.(track);
       virtualizer.scrollToIndex(index, { align: "center" });
     },
-    [tracks, onTrackSelect, virtualizer],
+    [tracks, onTrackSelect, virtualizer, focusedIndexRef],
   );
 
   const { onKeyDown: handleTypeToSelectKeyDown } = useTypeToSelect({
@@ -88,10 +136,19 @@ export const TrackTable = memo(function TrackTable({
     onMatch: handleTypeToSelectMatch,
   });
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      handleNavKeyDown(e);
+      handleTypeToSelectKeyDown(e);
+    },
+    [handleNavKeyDown, handleTypeToSelectKeyDown],
+  );
+
   // Stable callbacks — accept track as parameter, no inline closures per row
   const handleClick = useCallback(
     (e: React.MouseEvent, track: LibraryTrack) => {
       const sel = selectedRef.current;
+      const clickedIndex = tracks.findIndex((t) => t.id === track.id);
       if (e.metaKey || e.ctrlKey) {
         setSelected((prev) => {
           const next = new Set(prev);
@@ -101,18 +158,22 @@ export const TrackTable = memo(function TrackTable({
         });
       } else if (e.shiftKey && sel.size > 0) {
         const trackIds = tracks.map((t) => t.id);
-        const lastSelected = [...sel].pop()!;
-        const lastIdx = trackIds.indexOf(lastSelected);
-        const currentIdx = trackIds.indexOf(track.id);
+        const lastIdx = lastClickedIndexRef.current;
+        const currentIdx = clickedIndex;
         const [start, end] = [Math.min(lastIdx, currentIdx), Math.max(lastIdx, currentIdx)];
         const range = new Set(trackIds.slice(start, end + 1));
         setSelected((prev) => new Set([...prev, ...range]));
       } else {
         setSelected(new Set([track.id]));
       }
+      // Sync keyboard nav position
+      if (clickedIndex >= 0) {
+        lastClickedIndexRef.current = clickedIndex;
+        focusedIndexRef.current = clickedIndex;
+      }
       onTrackSelect?.(track);
     },
-    [tracks, onTrackSelect],
+    [tracks, onTrackSelect, focusedIndexRef],
   );
 
   const handleDoubleClick = useCallback(
@@ -215,12 +276,7 @@ export const TrackTable = memo(function TrackTable({
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 min-h-0 overflow-auto outline-none"
-      tabIndex={0}
-      onKeyDown={handleTypeToSelectKeyDown}
-    >
+    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto outline-none" tabIndex={0} onKeyDown={handleKeyDown}>
       <table className="table-fixed" style={{ width: totalWidth }}>
         <colgroup>
           {orderedColumns.map((col, i) => (

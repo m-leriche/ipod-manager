@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
+import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useLibraryImport } from "./useLibraryImport";
@@ -16,6 +17,9 @@ import type {
   LibraryFilter,
 } from "../../../types/library";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
+
+const COLUMN_BROWSER_KEY = "crate-show-column-browser";
+const INFO_PANEL_KEY = "crate-show-info-panel";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -50,6 +54,12 @@ export const LibraryPlayer = ({
 
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Panel visibility (persisted)
+  const [showColumnBrowser, setShowColumnBrowser] = useState(
+    () => localStorage.getItem(COLUMN_BROWSER_KEY) !== "false",
+  );
+  const [showInfoPanel, setShowInfoPanel] = useState(() => localStorage.getItem(INFO_PANEL_KEY) !== "false");
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fetchIdRef = useRef(0);
@@ -238,6 +248,20 @@ export const LibraryPlayer = ({
     setSelectedTrackIds(ids);
   }, []);
 
+  const toggleColumnBrowser = useCallback(() => {
+    setShowColumnBrowser((prev) => {
+      localStorage.setItem(COLUMN_BROWSER_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+
+  const toggleInfoPanel = useCallback(() => {
+    setShowInfoPanel((prev) => {
+      localStorage.setItem(INFO_PANEL_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────
 
   if (hasLibrary === false) {
@@ -317,19 +341,21 @@ export const LibraryPlayer = ({
           <span className="text-[10px] text-text-tertiary tabular-nums">{tracks.length} tracks</span>
         </div>
 
-        {/* Column browser */}
-        <ColumnBrowser
-          genres={genreList}
-          artists={artistList}
-          albums={albumList}
-          selectedGenre={selectedGenre}
-          selectedArtist={selectedArtist}
-          selectedAlbum={selectedAlbum}
-          onSelectGenre={handleSelectGenre}
-          onSelectArtist={handleSelectArtist}
-          onSelectAlbum={handleSelectAlbum}
-          onPlay={handlePlayColumn}
-        />
+        {/* Column browser (toggleable) */}
+        {showColumnBrowser && (
+          <ColumnBrowser
+            genres={genreList}
+            artists={artistList}
+            albums={albumList}
+            selectedGenre={selectedGenre}
+            selectedArtist={selectedArtist}
+            selectedAlbum={selectedAlbum}
+            onSelectGenre={handleSelectGenre}
+            onSelectArtist={handleSelectArtist}
+            onSelectAlbum={handleSelectAlbum}
+            onPlay={handlePlayColumn}
+          />
+        )}
 
         {/* Track table */}
         <TrackTable
@@ -341,9 +367,18 @@ export const LibraryPlayer = ({
           onSelectionChange={handleSelectionChange}
           onTracksDeleted={fetchBrowserData}
         />
+
+        {/* Status bar */}
+        <LibraryStatusBar
+          selectedTracks={selectedTracks}
+          showColumnBrowser={showColumnBrowser}
+          showInfoPanel={showInfoPanel}
+          onToggleColumnBrowser={toggleColumnBrowser}
+          onToggleInfoPanel={toggleInfoPanel}
+        />
       </div>
 
-      {selectedTracks.length > 0 && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
+      {showInfoPanel && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
     </div>
   );
 };

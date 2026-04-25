@@ -7,8 +7,10 @@ interface LibraryStatusBarProps {
   selectedTracks: LibraryTrack[];
   showColumnBrowser: boolean;
   showInfoPanel: boolean;
+  showStatsPanel: boolean;
   onToggleColumnBrowser: () => void;
   onToggleInfoPanel: () => void;
+  onToggleStatsPanel: () => void;
 }
 
 const formatSize = (bytes: number): string => {
@@ -36,8 +38,10 @@ export const LibraryStatusBar = ({
   selectedTracks,
   showColumnBrowser,
   showInfoPanel,
+  showStatsPanel,
   onToggleColumnBrowser,
   onToggleInfoPanel,
+  onToggleStatsPanel,
 }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
 
@@ -118,6 +122,22 @@ export const LibraryStatusBar = ({
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
               <circle cx="12" cy="12" r="9" />
               <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
+            </svg>
+          </button>
+
+          {/* Stats panel toggle */}
+          <button
+            onClick={onToggleStatsPanel}
+            className={`p-0.5 rounded transition-colors ${
+              showStatsPanel
+                ? "text-accent bg-accent/10"
+                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
+            }`}
+            title={showStatsPanel ? "Hide library stats" : "Show library stats"}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-6 4 3 5-7" />
             </svg>
           </button>
         </div>

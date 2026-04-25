@@ -15,9 +15,9 @@ const FORMAT_COLORS: Record<string, string> = {
 };
 
 const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div className="bg-bg-secondary border border-border rounded-2xl px-4 py-3">
-    <p className="text-[10px] text-text-tertiary uppercase tracking-widest mb-1">{label}</p>
-    <p className="text-lg font-bold text-text-primary">{value}</p>
+  <div className="bg-bg-secondary border border-border rounded-xl px-3 py-2">
+    <p className="text-[9px] text-text-tertiary uppercase tracking-widest mb-0.5">{label}</p>
+    <p className="text-sm font-bold text-text-primary">{value}</p>
   </div>
 );
 
@@ -31,9 +31,9 @@ export const StatsOverview = ({
   const maxFormatCount = Math.max(...stats.format_breakdown.map((f) => f.count), 1);
 
   return (
-    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+    <div className="flex-1 overflow-y-auto space-y-3 p-3">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <StatCard label="Total Tracks" value={formatNumber(stats.total_tracks)} />
         <StatCard label="Total Size" value={formatBytes(stats.total_size)} />
         <StatCard label="Total Duration" value={formatDuration(stats.total_duration_secs)} />
@@ -146,8 +146,8 @@ export const StatsOverview = ({
 };
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-4">
-    <h3 className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest mb-3">{title}</h3>
+  <div className="bg-bg-secondary border border-border rounded-xl px-3 py-3">
+    <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-2">{title}</h3>
     {children}
   </div>
 );

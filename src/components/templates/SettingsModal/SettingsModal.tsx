@@ -18,6 +18,11 @@ const THEMES: { id: ThemeName; label: string; description: string; preview: [str
     preview: ["#C0C0C0", "#000080", "#FFFFFF"],
   },
   { id: "classic", label: "Classic", description: "Vintage Mac + iPod", preview: ["#F2F0ED", "#D9D7D4", "#000000"] },
+  { id: "winamp", label: "Winamp", description: "Classic media player", preview: ["#232323", "#2A2A2A", "#00FF00"] },
+  { id: "gameboy", label: "Game Boy", description: "Handheld LCD", preview: ["#C0BAA7", "#9AA86A", "#3B3073"] },
+  { id: "aqua", label: "Aqua", description: "Mac OS X era", preview: ["#E8E8E8", "#C8C8C8", "#3498DB"] },
+  { id: "msdos", label: "MS-DOS", description: "Command prompt", preview: ["#000000", "#000000", "#AAAAAA"] },
+  { id: "terminal", label: "Terminal", description: "Amber phosphor CRT", preview: ["#080500", "#060300", "#FFB830"] },
 ];
 
 export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps) => {
@@ -127,12 +132,12 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
             </span>
             <p className="text-[10px] text-text-tertiary mb-3">Choose how Crate looks.</p>
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {THEMES.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
-                  className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 border rounded-xl transition-all ${
+                  className={`flex flex-col items-center gap-1.5 px-3 py-2.5 border rounded-xl transition-all ${
                     theme === t.id ? "border-accent bg-bg-hover" : "border-border hover:border-border-active"
                   }`}
                 >
@@ -140,13 +145,13 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
                     {t.preview.map((color, i) => (
                       <div
                         key={i}
-                        className="w-5 h-5 rounded-md border border-black/10"
+                        className="w-4 h-4 rounded-sm border border-black/10"
                         style={{ background: color }}
                       />
                     ))}
                   </div>
-                  <span className="text-xs font-medium text-text-primary">{t.label}</span>
-                  <span className="text-[10px] text-text-tertiary">{t.description}</span>
+                  <span className="text-[11px] font-medium text-text-primary">{t.label}</span>
+                  <span className="text-[9px] text-text-tertiary">{t.description}</span>
                 </button>
               ))}
             </div>

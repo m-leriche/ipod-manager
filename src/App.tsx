@@ -12,7 +12,6 @@ import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExpl
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
 import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
-import { LibraryStats } from "./components/templates/LibraryStats/LibraryStats";
 import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
@@ -22,7 +21,7 @@ import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 
 type TopTab = "library" | "tools";
-type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "stats";
+type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio";
 
 const App = () => (
   <ThemeProvider>
@@ -136,9 +135,6 @@ const AppContent = () => {
                 <ToolTabButton active={toolTab === "audio"} onClick={() => setToolTab("audio")}>
                   Audio Extractor
                 </ToolTabButton>
-                <ToolTabButton active={toolTab === "stats"} onClick={() => setToolTab("stats")}>
-                  Library Stats
-                </ToolTabButton>
               </div>
               {toolTab === "ipod" && (
                 <IpodSummary
@@ -152,7 +148,6 @@ const AppContent = () => {
               {toolTab === "sync" && <SyncManager />}
               {toolTab === "metadata" && <MetadataEditor />}
               {toolTab === "audio" && <AudioExtractor />}
-              {toolTab === "stats" && <LibraryStats />}
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
+import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
@@ -20,6 +21,7 @@ import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
 const COLUMN_BROWSER_KEY = "crate-show-column-browser";
 const INFO_PANEL_KEY = "crate-show-info-panel";
+const STATS_PANEL_KEY = "crate-show-stats-panel";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -60,6 +62,8 @@ export const LibraryPlayer = ({
     () => localStorage.getItem(COLUMN_BROWSER_KEY) !== "false",
   );
   const [showInfoPanel, setShowInfoPanel] = useState(() => localStorage.getItem(INFO_PANEL_KEY) !== "false");
+  const [showStatsPanel, setShowStatsPanel] = useState(() => localStorage.getItem(STATS_PANEL_KEY) === "true");
+  const [libraryPath, setLibraryPath] = useState<string | null>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fetchIdRef = useRef(0);
@@ -128,6 +132,10 @@ export const LibraryPlayer = ({
   const checkLibrary = useCallback(async () => {
     // Load cached data first for instant render
     const cached = await getCachedLibrary();
+    // Always fetch library path for stats panel
+    invoke<string | null>("get_library_location")
+      .then((loc) => setLibraryPath(loc))
+      .catch(() => {});
     if (cached) {
       setHasLibrary(cached.hasLibrary);
       if (cached.hasLibrary) {
@@ -144,6 +152,7 @@ export const LibraryPlayer = ({
     // No cache (first launch) — fetch from backend
     try {
       const location = await invoke<string | null>("get_library_location");
+      setLibraryPath(location);
       const hasLocation = !!location;
       setHasLibrary(hasLocation);
       if (hasLocation) {
@@ -262,6 +271,13 @@ export const LibraryPlayer = ({
     });
   }, []);
 
+  const toggleStatsPanel = useCallback(() => {
+    setShowStatsPanel((prev) => {
+      localStorage.setItem(STATS_PANEL_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────
 
   if (hasLibrary === false) {
@@ -373,12 +389,19 @@ export const LibraryPlayer = ({
           selectedTracks={selectedTracks}
           showColumnBrowser={showColumnBrowser}
           showInfoPanel={showInfoPanel}
+          showStatsPanel={showStatsPanel}
           onToggleColumnBrowser={toggleColumnBrowser}
           onToggleInfoPanel={toggleInfoPanel}
+          onToggleStatsPanel={toggleStatsPanel}
         />
       </div>
 
       {showInfoPanel && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
+      {showStatsPanel && (
+        <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
+          <LibraryStats libraryPath={libraryPath} />
+        </div>
+      )}
     </div>
   );
 };

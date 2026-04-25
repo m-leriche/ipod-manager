@@ -312,7 +312,16 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
         tag.set_genre(v.as_str());
     }
     if let Some(v) = update.year {
-        tag.set_year(v as i32);
+        // Use set_date_recorded (TDRC) instead of set_year (TYER) so that
+        // lofty can read the year back — lofty only checks the TDRC frame.
+        tag.set_date_recorded(id3::Timestamp {
+            year: v as i32,
+            month: None,
+            day: None,
+            hour: None,
+            minute: None,
+            second: None,
+        });
     }
     if let Some(v) = update.track {
         tag.set_track(v);

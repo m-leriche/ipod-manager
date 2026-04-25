@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
 import { LibraryStats } from "./LibraryStats";
 import {
   formatBytes,
@@ -17,7 +16,6 @@ import {
 import type { LibraryStats as LibraryStatsData, RockboxTrack, FileDetail } from "../../../types/libstats";
 
 const mockInvoke = vi.mocked(invoke);
-const mockOpen = vi.mocked(open);
 
 const MOCK_STATS: LibraryStatsData = {
   total_tracks: 1500,
@@ -110,31 +108,18 @@ const MOCK_TRACKS: RockboxTrack[] = [
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockOpen.mockReset();
 });
 
 describe("LibraryStats", () => {
-  it("shows idle state with choose folder button", () => {
-    render(<LibraryStats />);
-    expect(screen.getByText("Choose Folder")).toBeInTheDocument();
-    expect(screen.getByText(/scan a music library/i)).toBeInTheDocument();
+  it("shows message when no library path is set", () => {
+    render(<LibraryStats libraryPath={null} />);
+    expect(screen.getByText(/set a library location/i)).toBeInTheDocument();
   });
 
-  it("switches to rockbox mode", async () => {
-    const user = userEvent.setup();
-    render(<LibraryStats />);
-
-    await user.click(screen.getByText("iPod Play Data"));
-    expect(screen.getByText("Detect iPod")).toBeInTheDocument();
-  });
-
-  it("triggers scan after folder selection", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music/library");
+  it("auto-scans when libraryPath is provided", async () => {
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("scan_library_stats", { path: "/music/library" });
@@ -142,12 +127,9 @@ describe("LibraryStats", () => {
   });
 
   it("displays stats after successful scan", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music/library");
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
       expect(screen.getByText("1,500")).toBeInTheDocument();
@@ -158,64 +140,32 @@ describe("LibraryStats", () => {
     expect(screen.getByText("Rock")).toBeInTheDocument();
   });
 
-  it("shows error on scan failure", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/bad/path");
+  it("shows error on scan failure with retry", async () => {
     mockInvoke.mockRejectedValue("Path does not exist");
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/bad/path" />);
 
     await waitFor(() => {
       expect(screen.getByText("Path does not exist")).toBeInTheDocument();
     });
+    expect(screen.getByText("Retry")).toBeInTheDocument();
   });
 
-  it("loads rockbox play data on detect", async () => {
+  it("retries scan on retry button click", async () => {
     const user = userEvent.setup();
-    mockInvoke.mockResolvedValue({
-      total_tracks: 2,
-      tracks: MOCK_TRACKS,
-      max_serial: 100,
-      rating_distribution: [{ rating: 8, count: 1 }],
-    });
+    mockInvoke.mockRejectedValueOnce("Path does not exist").mockResolvedValueOnce(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("iPod Play Data"));
-    await user.click(screen.getByText("Detect iPod"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("read_rockbox_playdata", {
-        ipodPath: "/Volumes/IPOD",
-      });
+      expect(screen.getByText("Retry")).toBeInTheDocument();
     });
+
+    await user.click(screen.getByText("Retry"));
 
     await waitFor(() => {
-      expect(screen.getByText("Song A")).toBeInTheDocument();
+      expect(screen.getByText("1,500")).toBeInTheDocument();
     });
-  });
-
-  it("shows rockbox error when database not found", async () => {
-    const user = userEvent.setup();
-    mockInvoke.mockRejectedValue("Rockbox database not found");
-
-    render(<LibraryStats />);
-    await user.click(screen.getByText("iPod Play Data"));
-    await user.click(screen.getByText("Detect iPod"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Rockbox database not found")).toBeInTheDocument();
-    });
-  });
-
-  it("does not scan when folder picker is cancelled", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue(null);
-
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
-
-    expect(mockInvoke).not.toHaveBeenCalled();
   });
 });
 
@@ -267,7 +217,7 @@ describe("helpers", () => {
 
     it("least_recent sorts by lastplayed_rank descending", () => {
       const sorted = sortPlayData(MOCK_TRACKS, "least_recent");
-      expect(sorted).toHaveLength(1); // only played tracks
+      expect(sorted).toHaveLength(1);
       expect(sorted[0].title).toBe("Song A");
     });
   });
@@ -324,11 +274,9 @@ describe("helpers", () => {
 describe("stats drill-down", () => {
   it("opens detail modal when format bar is clicked", async () => {
     const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music/library");
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
       expect(screen.getByText("FLAC")).toBeInTheDocument();
@@ -345,11 +293,9 @@ describe("stats drill-down", () => {
 
   it("opens detail modal when genre tag is clicked", async () => {
     const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music/library");
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
       expect(screen.getByText("Rock")).toBeInTheDocument();
@@ -364,11 +310,9 @@ describe("stats drill-down", () => {
 
   it("closes detail modal on backdrop click", async () => {
     const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/music/library");
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
-    render(<LibraryStats />);
-    await user.click(screen.getByText("Choose Folder"));
+    render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
       expect(screen.getByText("FLAC")).toBeInTheDocument();

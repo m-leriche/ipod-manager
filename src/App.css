@@ -13,12 +13,12 @@
   --color-text-secondary: #888888;
   --color-text-tertiary: #555555;
 
-  --color-accent: #0066FF;
-  --color-accent-hover: #3388FF;
-  --color-success: #00C853;
-  --color-success-dim: #00C85322;
-  --color-warning: #FF9500;
-  --color-danger: #FF3B30;
+  --color-accent: #0066ff;
+  --color-accent-hover: #3388ff;
+  --color-success: #00c853;
+  --color-success-dim: #00c85322;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
 
   --color-border: #ffffff0d;
   --color-border-subtle: #ffffff08;
@@ -28,18 +28,31 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Equalizer animation for now-playing indicator */
 @keyframes equalizer {
-  0%, 100% { height: 3px; }
-  50% { height: 12px; }
+  0%,
+  100% {
+    height: 3px;
+  }
+  50% {
+    height: 12px;
+  }
 }
 
 .animate-equalizer-1 {
@@ -59,84 +72,128 @@
 
 /* ─── Color variables (Win95 system colors) ─── */
 html[data-theme="win95"] {
-  --color-bg-primary: #C0C0C0;
-  --color-bg-secondary: #C0C0C0;
-  --color-bg-card: #FFFFFF;
-  --color-bg-elevated: #C0C0C0;
-  --color-bg-hover: #B0B0B0;
+  --color-bg-primary: #c0c0c0;
+  --color-bg-secondary: #c0c0c0;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #c0c0c0;
+  --color-bg-hover: #b0b0b0;
 
   --color-text-primary: #000000;
   --color-text-secondary: #404040;
   --color-text-tertiary: #808080;
 
   --color-accent: #000080;
-  --color-accent-hover: #0000A0;
+  --color-accent-hover: #0000a0;
   --color-success: #008000;
   --color-success-dim: #00800022;
   --color-warning: #808000;
-  --color-danger: #FF0000;
+  --color-danger: #ff0000;
 
   --color-border: #808080;
-  --color-border-subtle: #C0C0C0;
+  --color-border-subtle: #c0c0c0;
   --color-border-active: #404040;
 
   --font-sans: "Tahoma", "MS Sans Serif", "Arial", system-ui, sans-serif;
 }
 
 /* ─── Tighter spacing ─── */
-html[data-theme="win95"] .p-5 { padding: 0.875rem; }
-html[data-theme="win95"] .p-6 { padding: 1rem; }
-html[data-theme="win95"] .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
-html[data-theme="win95"] .px-6 { padding-left: 1rem; padding-right: 1rem; }
-html[data-theme="win95"] .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
-html[data-theme="win95"] .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
-html[data-theme="win95"] .gap-6 { gap: 0.75rem; }
-html[data-theme="win95"] .gap-3 { gap: 0.5rem; }
-html[data-theme="win95"] .mb-5 { margin-bottom: 0.875rem; }
-html[data-theme="win95"] .mb-4 { margin-bottom: 0.75rem; }
+html[data-theme="win95"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="win95"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="win95"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="win95"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="win95"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="win95"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="win95"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="win95"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="win95"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="win95"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
 
 /* ─── Zebra-striped table rows ─── */
 html[data-theme="win95"] tbody tr:nth-child(even) {
-  background-color: #F0F0F0;
+  background-color: #f0f0f0;
 }
 html[data-theme="win95"] tbody tr:nth-child(odd) {
   background-color: transparent;
 }
 
 /* ─── Square corners (Win95 had zero radius) ─── */
-html[data-theme="win95"] .rounded-2xl { border-radius: 0px; }
-html[data-theme="win95"] .rounded-xl { border-radius: 0px; }
-html[data-theme="win95"] .rounded-lg { border-radius: 0px; }
-html[data-theme="win95"] .rounded-md { border-radius: 0px; }
+html[data-theme="win95"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="win95"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="win95"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="win95"] .rounded-md {
+  border-radius: 0px;
+}
 
 /* ─── 2px borders ─── */
-html[data-theme="win95"] .border { border-width: 2px; }
-html[data-theme="win95"] .border-b { border-bottom-width: 2px; }
-html[data-theme="win95"] .border-t { border-top-width: 2px; }
-html[data-theme="win95"] .border-r { border-right-width: 2px; }
+html[data-theme="win95"] .border {
+  border-width: 2px;
+}
+html[data-theme="win95"] .border-b {
+  border-bottom-width: 2px;
+}
+html[data-theme="win95"] .border-t {
+  border-top-width: 2px;
+}
+html[data-theme="win95"] .border-r {
+  border-right-width: 2px;
+}
 
 /* ─── Raised panels: classic Win95 outset bevel ─── */
 html[data-theme="win95"] .bg-bg-secondary.border {
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
-  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #808080;
 }
 
 /* ─── Sunken content areas: Win95 inset bevel ─── */
 html[data-theme="win95"] div.bg-bg-card.border {
   border: 2px solid;
-  border-color: #808080 #DFDFDF #DFDFDF #808080;
-  box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #FFFFFF;
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  box-shadow:
+    inset 1px 1px 0 #404040,
+    inset -1px -1px 0 #ffffff;
 }
 
 /* ─── Edge panels: sidebar + bottom bar ─── */
 html[data-theme="win95"] .border-t.bg-bg-secondary {
-  background: #C0C0C0;
+  background: #c0c0c0;
   border-top: 2px solid;
-  border-top-color: #DFDFDF;
+  border-top-color: #dfdfdf;
 }
 html[data-theme="win95"] .border-r.bg-bg-secondary {
-  background: #C0C0C0;
+  background: #c0c0c0;
   border-right: 2px solid;
   border-right-color: #808080;
 }
@@ -146,14 +203,14 @@ html[data-theme="win95"] header,
 html[data-theme="win95"] .retro-titlebar {
   background: #000080;
   border-bottom: 2px solid #404040;
-  color: #FFFFFF;
+  color: #ffffff;
 }
 html[data-theme="win95"] header h1,
 html[data-theme="win95"] header .text-text-secondary,
 html[data-theme="win95"] header .text-text-tertiary,
 html[data-theme="win95"] .retro-titlebar .text-text-primary,
 html[data-theme="win95"] .retro-titlebar .text-text-tertiary {
-  color: #FFFFFF;
+  color: #ffffff;
 }
 
 /* ─── No drop shadow on modals (Win95 didn't have them) ─── */
@@ -163,21 +220,23 @@ html[data-theme="win95"] .shadow-xl {
 
 /* ─── 3D raised primary buttons (exact Win95 bevel) ─── */
 html[data-theme="win95"] button.bg-text-primary {
-  background: #C0C0C0;
+  background: #c0c0c0;
   color: #000000;
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
-  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #808080;
   font-weight: 700;
   text-shadow: none;
 }
 html[data-theme="win95"] button.bg-text-primary:hover:not(:disabled) {
-  background: #D0D0D0;
+  background: #d0d0d0;
   opacity: 1;
 }
 html[data-theme="win95"] button.bg-text-primary:active:not(:disabled) {
-  background: #C0C0C0;
-  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  background: #c0c0c0;
+  border-color: #404040 #dfdfdf #dfdfdf #404040;
   box-shadow: inset 1px 1px 0 #808080;
   padding-top: 1px;
   padding-left: 1px;
@@ -186,52 +245,50 @@ html[data-theme="win95"] button.bg-text-primary:active:not(:disabled) {
 /* ─── 3D raised secondary buttons ─── */
 html[data-theme="win95"] button.bg-bg-card {
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
-  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #808080;
 }
 html[data-theme="win95"] button.bg-bg-card:active:not(:disabled) {
-  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  border-color: #404040 #dfdfdf #dfdfdf #404040;
   box-shadow: inset 1px 1px 0 #808080;
 }
 
 /* ─── Playback button: primary (play/pause circle) ─── */
 html[data-theme="win95"] button.rounded-full.bg-text-primary {
-  background: #C0C0C0;
+  background: #c0c0c0;
   color: #000000;
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
-  box-shadow: inset 1px 1px 0 #FFFFFF, inset -1px -1px 0 #808080;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #808080;
 }
 html[data-theme="win95"] button.rounded-full.bg-text-primary:active {
-  border-color: #404040 #DFDFDF #DFDFDF #404040;
+  border-color: #404040 #dfdfdf #dfdfdf #404040;
   box-shadow: inset 1px 1px 0 #808080;
 }
 
 /* ─── Sunken inputs (Win95 inset field) ─── */
 html[data-theme="win95"] input {
   border: 2px solid;
-  border-color: #808080 #DFDFDF #DFDFDF #808080;
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
   box-shadow: inset 1px 1px 0 #404040;
-  background: #FFFFFF;
+  background: #ffffff;
 }
 
 /* ─── Segmented progress bars (Win95 chunked style) ─── */
 html[data-theme="win95"] .overflow-hidden.rounded-full > .rounded-full {
   border-radius: 0px;
   background: #000080;
-  background-image: repeating-linear-gradient(
-    90deg,
-    #000080,
-    #000080 8px,
-    #C0C0C0 8px,
-    #C0C0C0 10px
-  );
+  background-image: repeating-linear-gradient(90deg, #000080, #000080 8px, #c0c0c0 8px, #c0c0c0 10px);
 }
 
 /* ─── Sidebar active item: navy selection ─── */
 html[data-theme="win95"] .border-r.bg-bg-secondary button.bg-bg-card {
   background: #000080;
-  color: #FFFFFF;
+  color: #ffffff;
   border: 2px solid #000080;
   box-shadow: none;
 }
@@ -239,12 +296,12 @@ html[data-theme="win95"] .border-r.bg-bg-secondary button.bg-bg-card {
 /* ─── Disabled buttons: embossed gray text ─── */
 html[data-theme="win95"] button:disabled {
   color: #808080 !important;
-  text-shadow: 1px 1px 0 #FFFFFF;
+  text-shadow: 1px 1px 0 #ffffff;
 }
 
 /* ─── More visible dividers ─── */
 html[data-theme="win95"] .border-border-subtle {
-  border-color: #A0A0A0;
+  border-color: #a0a0a0;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -254,22 +311,22 @@ html[data-theme="win95"] .border-border-subtle {
 
 /* ─── Color variables ─── */
 html[data-theme="classic"] {
-  --color-bg-primary: #F2F0ED;
-  --color-bg-secondary: #D9D7D4;
-  --color-bg-card: #F2F0ED;
-  --color-bg-elevated: #E6E4E1;
-  --color-bg-hover: #C4C2BF;
+  --color-bg-primary: #f2f0ed;
+  --color-bg-secondary: #d9d7d4;
+  --color-bg-card: #f2f0ed;
+  --color-bg-elevated: #e6e4e1;
+  --color-bg-hover: #c4c2bf;
 
   --color-text-primary: #000000;
   --color-text-secondary: #333333;
   --color-text-tertiary: #666666;
 
-  --color-accent: #2559A7;
-  --color-accent-hover: #3470C0;
-  --color-success: #1E7A1E;
-  --color-success-dim: #1E7A1E22;
-  --color-warning: #B8860B;
-  --color-danger: #CC0000;
+  --color-accent: #2559a7;
+  --color-accent-hover: #3470c0;
+  --color-success: #1e7a1e;
+  --color-success-dim: #1e7a1e22;
+  --color-warning: #b8860b;
+  --color-danger: #cc0000;
 
   --color-border: #000000;
   --color-border-subtle: #999999;
@@ -279,37 +336,79 @@ html[data-theme="classic"] {
 }
 
 /* ─── Tighter spacing ─── */
-html[data-theme="classic"] .p-5 { padding: 0.875rem; }
-html[data-theme="classic"] .p-6 { padding: 1rem; }
-html[data-theme="classic"] .px-5 { padding-left: 0.875rem; padding-right: 0.875rem; }
-html[data-theme="classic"] .px-6 { padding-left: 1rem; padding-right: 1rem; }
-html[data-theme="classic"] .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
-html[data-theme="classic"] .py-4 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
-html[data-theme="classic"] .gap-6 { gap: 0.75rem; }
-html[data-theme="classic"] .gap-3 { gap: 0.5rem; }
-html[data-theme="classic"] .mb-5 { margin-bottom: 0.875rem; }
-html[data-theme="classic"] .mb-4 { margin-bottom: 0.75rem; }
+html[data-theme="classic"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="classic"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="classic"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="classic"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="classic"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="classic"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="classic"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="classic"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="classic"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="classic"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
 
 /* ─── Zebra-striped table rows ─── */
 html[data-theme="classic"] tbody tr:nth-child(even) {
-  background-color: #E8E6E3;
+  background-color: #e8e6e3;
 }
 html[data-theme="classic"] tbody tr:nth-child(odd) {
   background-color: transparent;
 }
 
 /* ─── Square corners everywhere ─── */
-html[data-theme="classic"] .rounded-2xl { border-radius: 0px; }
-html[data-theme="classic"] .rounded-xl { border-radius: 0px; }
-html[data-theme="classic"] .rounded-lg { border-radius: 0px; }
-html[data-theme="classic"] .rounded-md { border-radius: 0px; }
-html[data-theme="classic"] .rounded-full:not(button) { border-radius: 0px; }
+html[data-theme="classic"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="classic"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="classic"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="classic"] .rounded-md {
+  border-radius: 0px;
+}
+html[data-theme="classic"] .rounded-full:not(button) {
+  border-radius: 0px;
+}
 
 /* ─── Crisp 1px black borders ─── */
-html[data-theme="classic"] .border { border-width: 1px; }
-html[data-theme="classic"] .border-b { border-bottom-width: 1px; }
-html[data-theme="classic"] .border-t { border-top-width: 1px; }
-html[data-theme="classic"] .border-r { border-right-width: 1px; }
+html[data-theme="classic"] .border {
+  border-width: 1px;
+}
+html[data-theme="classic"] .border-b {
+  border-bottom-width: 1px;
+}
+html[data-theme="classic"] .border-t {
+  border-top-width: 1px;
+}
+html[data-theme="classic"] .border-r {
+  border-right-width: 1px;
+}
 
 /* ─── Flat raised panels (no bevel, just shadow) ─── */
 html[data-theme="classic"] .bg-bg-secondary.border {
@@ -320,30 +419,23 @@ html[data-theme="classic"] .bg-bg-secondary.border {
 /* ─── Sunken content areas ─── */
 html[data-theme="classic"] div.bg-bg-card.border {
   border: 1px solid #000000;
-  background: #F2F0ED;
+  background: #f2f0ed;
 }
 
 /* ─── Edge panels: sidebar + bottom bar ─── */
 html[data-theme="classic"] .border-t.bg-bg-secondary {
-  background: #D9D7D4;
+  background: #d9d7d4;
   border-top: 1px solid #000000;
 }
 html[data-theme="classic"] .border-r.bg-bg-secondary {
-  background: #D9D7D4;
+  background: #d9d7d4;
   border-right: 1px solid #000000;
 }
 
 /* ─── Title bar — classic Mac horizontal pinstripes ─── */
 html[data-theme="classic"] header,
 html[data-theme="classic"] .retro-titlebar {
-  background:
-    repeating-linear-gradient(
-      180deg,
-      #F2F0ED 0px,
-      #F2F0ED 1px,
-      #B8B6B3 1px,
-      #B8B6B3 2px
-    );
+  background: repeating-linear-gradient(180deg, #f2f0ed 0px, #f2f0ed 1px, #b8b6b3 1px, #b8b6b3 2px);
   border-bottom: 1px solid #000000;
   color: #000000;
 }
@@ -362,7 +454,7 @@ html[data-theme="classic"] .shadow-xl {
 
 /* ─── Flat outlined buttons ─── */
 html[data-theme="classic"] button.bg-text-primary {
-  background: #F2F0ED;
+  background: #f2f0ed;
   color: #000000;
   border: 1px solid #000000;
   box-shadow: 1px 1px 0 #000000;
@@ -370,12 +462,12 @@ html[data-theme="classic"] button.bg-text-primary {
   text-shadow: none;
 }
 html[data-theme="classic"] button.bg-text-primary:hover:not(:disabled) {
-  background: #E6E4E1;
+  background: #e6e4e1;
   opacity: 1;
 }
 html[data-theme="classic"] button.bg-text-primary:active:not(:disabled) {
   background: #000000;
-  color: #FFFFFF;
+  color: #ffffff;
   box-shadow: none;
   transform: translate(1px, 1px);
 }
@@ -387,14 +479,14 @@ html[data-theme="classic"] button.bg-bg-card {
 }
 html[data-theme="classic"] button.bg-bg-card:active:not(:disabled) {
   background: #000000;
-  color: #FFFFFF;
+  color: #ffffff;
   box-shadow: none;
   transform: translate(1px, 1px);
 }
 
 /* ─── Playback button: primary (play/pause circle) ─── */
 html[data-theme="classic"] button.rounded-full.bg-text-primary {
-  background: #F2F0ED;
+  background: #f2f0ed;
   color: #000000;
   border: 1px solid #000000;
   box-shadow: 1px 1px 0 #000000;
@@ -402,7 +494,7 @@ html[data-theme="classic"] button.rounded-full.bg-text-primary {
 }
 html[data-theme="classic"] button.rounded-full.bg-text-primary:active {
   background: #000000;
-  color: #FFFFFF;
+  color: #ffffff;
   box-shadow: none;
   transform: translate(1px, 1px);
 }
@@ -410,7 +502,7 @@ html[data-theme="classic"] button.rounded-full.bg-text-primary:active {
 /* ─── Sunken inputs ─── */
 html[data-theme="classic"] input {
   border: 1px solid #000000;
-  background: #F2F0ED;
+  background: #f2f0ed;
   box-shadow: inset 1px 1px 0 #999999;
 }
 
@@ -423,7 +515,7 @@ html[data-theme="classic"] .overflow-hidden.rounded-full > .rounded-full {
 /* ─── Sidebar active item: inverted selection ─── */
 html[data-theme="classic"] .border-r.bg-bg-secondary button.bg-bg-card {
   background: #000000;
-  color: #FFFFFF;
+  color: #ffffff;
   border: 1px solid #000000;
   box-shadow: none;
 }
@@ -435,7 +527,1991 @@ html[data-theme="classic"] button:disabled {
 
 /* ─── More visible dividers ─── */
 html[data-theme="classic"] .border-border-subtle {
-  border-color: #AAAAAA;
+  border-color: #aaaaaa;
+}
+
+/* ══════════════════════════════════════════════════════
+   WINAMP THEME — Classic Winamp 2.x media player
+   Dark metallic chrome, neon green text, ridged surfaces,
+   sunken LCD displays, olive EQ knobs, tight dense UI
+   ══════════════════════════════════════════════════════ */
+
+/* ─── Color variables ─── */
+html[data-theme="winamp"] {
+  --color-bg-primary: #292b2f;
+  --color-bg-secondary: #35383e;
+  --color-bg-card: #0a0e12;
+  --color-bg-elevated: #3a3d44;
+  --color-bg-hover: #40444b;
+
+  --color-text-primary: #00ff00;
+  --color-text-secondary: #72b836;
+  --color-text-tertiary: #4a7a28;
+
+  --color-accent: #00ff00;
+  --color-accent-hover: #33ff33;
+  --color-success: #00ff00;
+  --color-success-dim: #00ff0018;
+  --color-warning: #cccc00;
+  --color-danger: #ff3333;
+
+  --color-border: #1a1c1f;
+  --color-border-subtle: #3a3d44;
+  --color-border-active: #00ff0066;
+
+  --font-sans: "Consolas", "Monaco", "Lucida Console", "Courier New", monospace;
+}
+
+/* ─── Tighter spacing (Winamp was very dense) ─── */
+html[data-theme="winamp"] .p-5 {
+  padding: 0.75rem;
+}
+html[data-theme="winamp"] .p-6 {
+  padding: 0.875rem;
+}
+html[data-theme="winamp"] .px-5 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+html[data-theme="winamp"] .px-6 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="winamp"] .px-8 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="winamp"] .py-4 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+html[data-theme="winamp"] .gap-6 {
+  gap: 0.625rem;
+}
+html[data-theme="winamp"] .gap-3 {
+  gap: 0.375rem;
+}
+html[data-theme="winamp"] .mb-5 {
+  margin-bottom: 0.625rem;
+}
+html[data-theme="winamp"] .mb-4 {
+  margin-bottom: 0.5rem;
+}
+
+/* ─── Zero radius everywhere ─── */
+html[data-theme="winamp"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="winamp"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="winamp"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="winamp"] .rounded-md {
+  border-radius: 0px;
+}
+html[data-theme="winamp"] .rounded-full:not(button):not([class*="animate-equalizer"]) {
+  border-radius: 0px;
+}
+
+/* ─── 1px borders ─── */
+html[data-theme="winamp"] .border {
+  border-width: 1px;
+}
+html[data-theme="winamp"] .border-b {
+  border-bottom-width: 1px;
+}
+html[data-theme="winamp"] .border-t {
+  border-top-width: 1px;
+}
+html[data-theme="winamp"] .border-r {
+  border-right-width: 1px;
+}
+
+/* ─── Ridged metallic texture on main surface ─── */
+html[data-theme="winamp"] .bg-bg-primary {
+  background: repeating-linear-gradient(180deg, #292b2f 0px, #2d2f33 1px, #242628 2px);
+}
+
+/* ─── Raised panels: ridged chrome bevel ─── */
+html[data-theme="winamp"] .bg-bg-secondary.border {
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  box-shadow:
+    inset 1px 1px 0 #44474d,
+    inset -1px -1px 0 #111315;
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px);
+}
+
+/* ─── Sunken content areas: LCD-like black inset ─── */
+html[data-theme="winamp"] div.bg-bg-card.border {
+  border: 2px solid;
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 2px 2px 4px #000000;
+  background: #0a0e12;
+}
+
+/* ─── Edge panels: sidebar ─── */
+html[data-theme="winamp"] .border-r.bg-bg-secondary {
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px);
+  border-right: 1px solid #1a1c1f;
+}
+
+/* ─── Edge panels: bottom now-playing bar ─── */
+html[data-theme="winamp"] .border-t.bg-bg-secondary {
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px);
+  border-top: 1px solid #4e5158;
+  box-shadow: inset 0 1px 0 #44474d;
+}
+
+/* ─── Title bar: Winamp metallic header with embossed ridges ─── */
+html[data-theme="winamp"] header,
+html[data-theme="winamp"] .retro-titlebar {
+  background: repeating-linear-gradient(180deg, #3e4148 0px, #35383e 1px, #2e3136 2px, #35383e 3px);
+  border-bottom: 1px solid #111315;
+  box-shadow: inset 0 1px 0 #4e5158;
+  color: #00ff00;
+}
+html[data-theme="winamp"] header h1 {
+  color: #00ff00;
+  text-shadow: 0 0 6px #00ff0044;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+html[data-theme="winamp"] header .text-text-secondary,
+html[data-theme="winamp"] header .text-text-tertiary,
+html[data-theme="winamp"] .retro-titlebar .text-text-primary,
+html[data-theme="winamp"] .retro-titlebar .text-text-tertiary {
+  color: #72b836;
+}
+
+/* ─── No drop shadows (Winamp had no floating elements) ─── */
+html[data-theme="winamp"] .shadow-xl {
+  box-shadow: none;
+}
+html[data-theme="winamp"] .shadow-2xl {
+  box-shadow: none;
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+}
+
+/* ─── Tab buttons: tiny embossed chrome ─── */
+html[data-theme="winamp"] button.bg-bg-card.text-text-primary {
+  background: linear-gradient(180deg, #44474d 0%, #35383e 50%, #2e3136 100%);
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  color: #00ff00;
+  text-shadow: 0 0 4px #00ff0033;
+}
+
+/* ─── Primary action buttons ─── */
+html[data-theme="winamp"] button.bg-text-primary {
+  background: linear-gradient(180deg, #44474d 0%, #35383e 50%, #2e3136 100%);
+  color: #00ff00;
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  box-shadow: inset 1px 1px 0 #4e5158;
+  font-weight: 700;
+  text-shadow: 0 0 6px #00ff0044;
+}
+html[data-theme="winamp"] button.bg-text-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4e5158 0%, #3e4148 50%, #35383e 100%);
+  color: #33ff33;
+  opacity: 1;
+}
+html[data-theme="winamp"] button.bg-text-primary:active:not(:disabled) {
+  background: #1a1c1f;
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 1px 1px 2px #000000;
+}
+
+/* ─── Secondary buttons ─── */
+html[data-theme="winamp"] button.bg-bg-card {
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  box-shadow: inset 1px 1px 0 #44474d;
+  background: linear-gradient(180deg, #3a3d44 0%, #2e3136 100%);
+}
+html[data-theme="winamp"] button.bg-bg-card:hover:not(:disabled) {
+  background: linear-gradient(180deg, #44474d 0%, #35383e 100%);
+}
+html[data-theme="winamp"] button.bg-bg-card:active:not(:disabled) {
+  background: #1a1c1f;
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 1px 1px 2px #000000;
+}
+
+/* ─── Playback button: play/pause circle ─── */
+html[data-theme="winamp"] button.rounded-full.bg-text-primary {
+  background: linear-gradient(180deg, #44474d 0%, #2e3136 100%);
+  color: #00ff00;
+  border: 2px solid;
+  border-color: #4e5158 #111315 #111315 #4e5158;
+  box-shadow:
+    inset 1px 1px 0 #55585f,
+    0 0 8px #00ff0022;
+}
+html[data-theme="winamp"] button.rounded-full.bg-text-primary:hover {
+  box-shadow:
+    inset 1px 1px 0 #55585f,
+    0 0 12px #00ff0044;
+}
+html[data-theme="winamp"] button.rounded-full.bg-text-primary:active {
+  background: linear-gradient(180deg, #2e3136 0%, #1a1c1f 100%);
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 1px 1px 2px #000000;
+}
+
+/* ─── Secondary playback buttons: subtle green glow on hover ─── */
+html[data-theme="winamp"] button.rounded-full.text-text-secondary:hover {
+  color: #00ff00;
+  text-shadow: 0 0 4px #00ff0044;
+}
+
+/* ─── Sunken inputs: LCD-style ─── */
+html[data-theme="winamp"] input {
+  border: 2px solid;
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 2px 2px 4px #000000;
+  background: #0a0e12;
+  color: #00ff00;
+  caret-color: #00ff00;
+}
+html[data-theme="winamp"] input::placeholder {
+  color: #2a4a1a;
+}
+html[data-theme="winamp"] input:focus {
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow:
+    inset 2px 2px 4px #000000,
+    0 0 4px #00ff0022;
+}
+
+/* ─── Track table: Winamp playlist style ─── */
+html[data-theme="winamp"] thead {
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px) !important;
+}
+html[data-theme="winamp"] thead th {
+  color: #72b836 !important;
+  text-shadow: 0 0 3px #00ff0022;
+  border-bottom-color: #1a1c1f !important;
+}
+html[data-theme="winamp"] tbody {
+  background: #0a0e12;
+}
+html[data-theme="winamp"] tbody tr:nth-child(even) {
+  background-color: #0e1216;
+}
+html[data-theme="winamp"] tbody tr:nth-child(odd) {
+  background-color: #0a0e12;
+}
+html[data-theme="winamp"] tbody tr:hover {
+  background-color: #142014 !important;
+}
+html[data-theme="winamp"] tbody td {
+  color: #00cc00;
+  border-bottom: none;
+}
+
+/* ─── Selected track row: Winamp highlight bar ─── */
+html[data-theme="winamp"] tbody td.\!bg-accent {
+  background: #004400 !important;
+  color: #00ff00 !important;
+  text-shadow: 0 0 4px #00ff0044;
+}
+html[data-theme="winamp"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="winamp"] tbody td.\!bg-accent .text-xs,
+html[data-theme="winamp"] tbody td.\!bg-accent .text-text-tertiary,
+html[data-theme="winamp"] tbody td.\!bg-accent .text-text-secondary {
+  color: #00ff00 !important;
+}
+
+/* ─── Currently playing track ─── */
+html[data-theme="winamp"] .text-accent {
+  color: #00ff00 !important;
+  text-shadow: 0 0 4px #00ff0044;
+}
+
+/* ─── Equalizer bars: green glow ─── */
+html[data-theme="winamp"] .bg-accent {
+  background-color: #00ff00;
+  box-shadow: 0 0 3px #00ff0066;
+}
+
+/* ─── Column browser: Winamp section style ─── */
+html[data-theme="winamp"] .border-b.border-border.bg-bg-secondary {
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px);
+  border-bottom-color: #1a1c1f;
+  box-shadow: inset 0 1px 0 #4e5158;
+}
+html[data-theme="winamp"] .border-b.border-border.bg-bg-secondary span {
+  color: #72b836;
+  text-shadow: 0 0 3px #00ff0022;
+  letter-spacing: 0.15em;
+}
+
+/* ─── Column browser items ─── */
+html[data-theme="winamp"] .bg-accent.text-white {
+  background: #004400 !important;
+  color: #00ff00 !important;
+  text-shadow: 0 0 4px #00ff0044;
+}
+
+/* ─── Seek bar: flat track with bright green fill ─── */
+html[data-theme="winamp"] .bg-text-primary.rounded-full {
+  background: #00cc00 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 3px #00ff0033;
+}
+/* Seek bar thumb */
+html[data-theme="winamp"] .bg-text-primary.rounded-full.w-3 {
+  background: #00ff00 !important;
+  border-radius: 0 !important;
+  width: 8px !important;
+  height: 10px !important;
+  box-shadow: 0 0 4px #00ff0066;
+  border: 1px solid #00aa00;
+}
+/* Seek bar track background */
+html[data-theme="winamp"] .bg-bg-card.rounded-full {
+  background: #111315 !important;
+  border-radius: 0 !important;
+  border: 1px solid #0a0e12;
+  box-shadow: inset 1px 1px 2px #000000;
+}
+
+/* ─── Green segmented progress bars ─── */
+html[data-theme="winamp"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #00cc00;
+  background-image: repeating-linear-gradient(90deg, #00cc00, #00cc00 4px, #0a0e12 4px, #0a0e12 6px);
+  box-shadow: 0 0 4px #00ff0033;
+}
+
+/* ─── Sidebar: playlist panel styling ─── */
+html[data-theme="winamp"] .border-r.bg-bg-secondary button {
+  color: #72b836;
+}
+html[data-theme="winamp"] .border-r.bg-bg-secondary button:hover {
+  background: #1a2a1a;
+  color: #00ff00;
+}
+
+/* ─── Sidebar active item: green glow highlight ─── */
+html[data-theme="winamp"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #0a2a0a;
+  color: #00ff00;
+  border: 1px solid #00ff0044;
+  box-shadow: inset 0 0 6px #00ff0011;
+  text-shadow: 0 0 4px #00ff0033;
+}
+
+/* ─── Sidebar section headers ─── */
+html[data-theme="winamp"] .border-r.bg-bg-secondary .text-\[9px\].uppercase {
+  color: #4a7a28;
+  letter-spacing: 0.15em;
+}
+
+/* ─── Sidebar search input ─── */
+html[data-theme="winamp"] .border-r.bg-bg-secondary input {
+  background: #0a0e12;
+  border: 2px solid;
+  border-color: #111315 #4e5158 #4e5158 #111315;
+  box-shadow: inset 2px 2px 4px #000000;
+  color: #00ff00;
+}
+
+/* ─── Disabled buttons ─── */
+html[data-theme="winamp"] button:disabled {
+  color: #35383e !important;
+  text-shadow: none;
+  opacity: 0.6;
+}
+
+/* ─── Dividers ─── */
+html[data-theme="winamp"] .border-border-subtle {
+  border-color: #2e3136;
+}
+
+/* ─── Context menu: dark panel ─── */
+html[data-theme="winamp"] .bg-bg-card.border.shadow-lg {
+  background: #111315;
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.6);
+}
+html[data-theme="winamp"] .bg-bg-card.border.shadow-lg button:hover {
+  background: #004400 !important;
+  color: #00ff00 !important;
+}
+
+/* ─── Modals: dark chrome frame ─── */
+html[data-theme="winamp"] .bg-bg-secondary.border.rounded-2xl {
+  background: repeating-linear-gradient(180deg, #35383e 0px, #393c42 1px, #31343a 2px);
+  border: 2px solid;
+  border-color: #4e5158 #111315 #111315 #4e5158;
+}
+
+/* ─── EQ panel: olive/green fader styling ─── */
+html[data-theme="winamp"] .bg-accent\/20 {
+  background: #00ff0020 !important;
+  border-color: #00ff0044 !important;
+}
+
+/* ─── EQ slider thumb: olive knob ─── */
+html[data-theme="winamp"] .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #8b9a40 !important;
+  border: 1px solid #6b7a30;
+  box-shadow: inset 1px 1px 0 #a8b850;
+}
+html[data-theme="winamp"] .group:hover .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #a8b850 !important;
+}
+html[data-theme="winamp"] .scale-125.bg-accent {
+  background: #ccdd44 !important;
+  border: 1px solid #a8b850;
+}
+
+/* ─── EQ slider track: dark grooved channel ─── */
+html[data-theme="winamp"] .bg-bg-card.rounded-full {
+  background: #111315 !important;
+}
+
+/* ─── Now-playing info text glow ─── */
+html[data-theme="winamp"] .text-text-primary.truncate {
+  text-shadow: 0 0 3px #00ff0022;
+}
+
+/* ─── Time display: LCD green ─── */
+html[data-theme="winamp"] .tabular-nums.text-text-tertiary {
+  color: #4a7a28;
+}
+
+/* ─── Add Folder button in sidebar ─── */
+html[data-theme="winamp"] .border-t.border-border button.border {
+  background: linear-gradient(180deg, #3a3d44 0%, #2e3136 100%);
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+  color: #72b836;
+}
+html[data-theme="winamp"] .border-t.border-border button.border:hover {
+  color: #00ff00;
+  text-shadow: 0 0 4px #00ff0033;
+}
+
+/* ─── Scrollbar: Winamp style thin dark ─── */
+html[data-theme="winamp"] ::-webkit-scrollbar {
+  width: 10px;
+}
+html[data-theme="winamp"] ::-webkit-scrollbar-track {
+  background: #111315;
+  border-left: 1px solid #1a1c1f;
+}
+html[data-theme="winamp"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #44474d 0%, #2e3136 100%);
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+}
+html[data-theme="winamp"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4e5158 0%, #35383e 100%);
+}
+html[data-theme="winamp"] ::-webkit-scrollbar-button {
+  display: block;
+  height: 10px;
+  background: linear-gradient(180deg, #3a3d44 0%, #2e3136 100%);
+  border: 1px solid;
+  border-color: #4e5158 #1a1c1f #1a1c1f #4e5158;
+}
+
+/* ══════════════════════════════════════════════════════
+   GAME BOY THEME — Original DMG-01 handheld
+   Gray plastic body with recessed olive-green LCD screen.
+   Content areas = LCD, chrome = gray plastic hardware.
+   ══════════════════════════════════════════════════════ */
+
+html[data-theme="gameboy"] {
+  /* Hardware gray for outer chrome, LCD green for content */
+  --color-bg-primary: #c0baa7;
+  --color-bg-secondary: #b4ae9b;
+  --color-bg-card: #8b956d;
+  --color-bg-elevated: #a8a291;
+  --color-bg-hover: #a09a87;
+
+  --color-text-primary: #1a3320;
+  --color-text-secondary: #2d5a35;
+  --color-text-tertiary: #5a7a50;
+
+  --color-accent: #2d5a35;
+  --color-accent-hover: #1a3320;
+  --color-success: #2d5a35;
+  --color-success-dim: #2d5a3522;
+  --color-warning: #5a7a50;
+  --color-danger: #1a3320;
+
+  --color-border: #8a846e;
+  --color-border-subtle: #9e9882;
+  --color-border-active: #1a3320;
+
+  --font-sans: "Courier New", "Courier", monospace;
+}
+
+/* ─── Tighter spacing ─── */
+html[data-theme="gameboy"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="gameboy"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="gameboy"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="gameboy"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="gameboy"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="gameboy"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="gameboy"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="gameboy"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="gameboy"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="gameboy"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
+
+/* ─── Zero radius ─── */
+html[data-theme="gameboy"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="gameboy"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="gameboy"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="gameboy"] .rounded-md {
+  border-radius: 0px;
+}
+
+/* ─── 2px borders (chunky pixel feel) ─── */
+html[data-theme="gameboy"] .border {
+  border-width: 2px;
+}
+html[data-theme="gameboy"] .border-b {
+  border-bottom-width: 2px;
+}
+html[data-theme="gameboy"] .border-t {
+  border-top-width: 2px;
+}
+html[data-theme="gameboy"] .border-r {
+  border-right-width: 2px;
+}
+
+/* ─── Main background: gray plastic body ─── */
+html[data-theme="gameboy"] .bg-bg-primary {
+  background: #c0baa7;
+}
+
+/* ─── Raised panels: gray plastic chrome ─── */
+html[data-theme="gameboy"] .bg-bg-secondary.border {
+  border: 2px solid;
+  border-color: #d2ccba #8a846e #8a846e #d2ccba;
+  box-shadow:
+    inset 1px 1px 0 #d8d2c0,
+    inset -1px -1px 0 #7e7862;
+  background: #b4ae9b;
+}
+
+/* ─── LCD screen areas: green with visible pixel grid ─── */
+html[data-theme="gameboy"] div.bg-bg-card.border {
+  border: 3px solid;
+  border-color: #5a5440 #c0baa7 #c0baa7 #5a5440;
+  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.25);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px), #9aa86a;
+  background-size: 3px 3px;
+}
+
+/* ─── Track table: THE green LCD screen ─── */
+html[data-theme="gameboy"] thead {
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px), #8b956d !important;
+  background-size: 3px 3px !important;
+}
+html[data-theme="gameboy"] thead th {
+  color: #1a3320 !important;
+  font-weight: 800 !important;
+  border-bottom-color: #6a7450 !important;
+}
+html[data-theme="gameboy"] tbody {
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px), #9aa86a;
+  background-size: 3px 3px;
+}
+html[data-theme="gameboy"] tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+html[data-theme="gameboy"] tbody tr:nth-child(odd) {
+  background-color: transparent;
+}
+html[data-theme="gameboy"] tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+html[data-theme="gameboy"] tbody td {
+  color: #1a3320;
+}
+
+/* ─── Edge panels: gray plastic hardware ─── */
+html[data-theme="gameboy"] .border-t.bg-bg-secondary {
+  background: #b4ae9b;
+  border-top: 2px solid;
+  border-top-color: #d2ccba;
+}
+html[data-theme="gameboy"] .border-r.bg-bg-secondary {
+  background: #b4ae9b;
+  border-right: 2px solid;
+  border-right-color: #8a846e;
+}
+
+/* ─── Title bar: dark indigo strip like the real DMG label ─── */
+html[data-theme="gameboy"] header,
+html[data-theme="gameboy"] .retro-titlebar {
+  background: linear-gradient(180deg, #3b3073 0%, #2d2460 100%);
+  border-bottom: 3px solid #1a1540;
+  color: #d0d0e0;
+}
+html[data-theme="gameboy"] header h1 {
+  color: #d0d0e0;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  font-weight: 900;
+  font-style: italic;
+}
+html[data-theme="gameboy"] header .text-text-secondary,
+html[data-theme="gameboy"] header .text-text-tertiary {
+  color: #a0a0c0;
+}
+
+/* ─── No shadows ─── */
+html[data-theme="gameboy"] .shadow-xl {
+  box-shadow: none;
+}
+html[data-theme="gameboy"] .shadow-2xl {
+  box-shadow: none;
+}
+
+/* ─── Buttons: raised gray plastic with pixel shadow ─── */
+html[data-theme="gameboy"] button.bg-text-primary {
+  background: linear-gradient(180deg, #a8a291 0%, #908a78 100%);
+  color: #1a3320;
+  border: 2px solid;
+  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
+  box-shadow: 2px 2px 0 #5a5440;
+  font-weight: 800;
+  text-shadow: none;
+}
+html[data-theme="gameboy"] button.bg-text-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #b4ae9b 0%, #9e9882 100%);
+  opacity: 1;
+}
+html[data-theme="gameboy"] button.bg-text-primary:active:not(:disabled) {
+  background: #8a846e;
+  border-color: #6e6a58 #c0baa7 #c0baa7 #6e6a58;
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+/* ─── Secondary buttons: gray plastic ─── */
+html[data-theme="gameboy"] button.bg-bg-card {
+  border: 2px solid;
+  border-color: #c0baa7 #8a846e #8a846e #c0baa7;
+  box-shadow: 2px 2px 0 #6e6a58;
+  background: #b4ae9b;
+}
+html[data-theme="gameboy"] button.bg-bg-card:active:not(:disabled) {
+  border-color: #8a846e #c0baa7 #c0baa7 #8a846e;
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+/* ─── Play button: round plastic A/B button feel ─── */
+html[data-theme="gameboy"] button.rounded-full.bg-text-primary {
+  background: linear-gradient(180deg, #8b2050 0%, #6a1840 100%);
+  color: #d0b0c0;
+  border: 2px solid;
+  border-color: #a83060 #4a1030 #4a1030 #a83060;
+  box-shadow: 2px 2px 0 #3a0820;
+}
+html[data-theme="gameboy"] button.rounded-full.bg-text-primary:active {
+  background: #5a1438;
+  border-color: #4a1030 #a83060 #a83060 #4a1030;
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+
+/* ─── Inputs: sunken LCD input ─── */
+html[data-theme="gameboy"] input {
+  border: 2px solid;
+  border-color: #5a5440 #c0baa7 #c0baa7 #5a5440;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2);
+  background: #9aa86a;
+  color: #1a3320;
+}
+
+/* ─── Selected row: inverted LCD ─── */
+html[data-theme="gameboy"] tbody td.\!bg-accent {
+  background: #2d5a35 !important;
+  color: #9aa86a !important;
+}
+html[data-theme="gameboy"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="gameboy"] tbody td.\!bg-accent .text-xs {
+  color: #9aa86a !important;
+}
+
+/* ─── Column browser: LCD screen ─── */
+html[data-theme="gameboy"] .bg-accent.text-white {
+  background: #2d5a35 !important;
+  color: #9aa86a !important;
+}
+
+/* ─── Column browser header: gray plastic bar ─── */
+html[data-theme="gameboy"] .border-b.border-border.bg-bg-secondary {
+  background: #b4ae9b;
+  border-bottom-color: #8a846e;
+}
+
+/* ─── Progress bars: chunky pixel blocks ─── */
+html[data-theme="gameboy"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #2d5a35;
+  background-image: repeating-linear-gradient(90deg, #2d5a35, #2d5a35 6px, #9aa86a 6px, #9aa86a 8px);
+}
+
+/* ─── Seek bar ─── */
+html[data-theme="gameboy"] .bg-text-primary.rounded-full {
+  background: #1a3320 !important;
+  border-radius: 0 !important;
+}
+html[data-theme="gameboy"] .bg-bg-card.rounded-full {
+  background: #8b956d !important;
+  border-radius: 0 !important;
+  border: 1px solid #6a7450;
+}
+
+/* ─── Sidebar active: inverted selection ─── */
+html[data-theme="gameboy"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #3b3073;
+  color: #d0d0e0;
+  border: 2px solid #1a1540;
+  box-shadow: none;
+}
+
+/* ─── Disabled ─── */
+html[data-theme="gameboy"] button:disabled {
+  opacity: 0.35;
+}
+
+/* ─── Dividers ─── */
+html[data-theme="gameboy"] .border-border-subtle {
+  border-color: #9e9882;
+}
+
+/* ─── Modals: gray plastic ─── */
+html[data-theme="gameboy"] .bg-bg-secondary.border.rounded-2xl {
+  background: #b4ae9b;
+  border: 3px solid;
+  border-color: #d2ccba #6e6a58 #6e6a58 #d2ccba;
+}
+
+/* ─── Scrollbar ─── */
+html[data-theme="gameboy"] ::-webkit-scrollbar {
+  width: 12px;
+}
+html[data-theme="gameboy"] ::-webkit-scrollbar-track {
+  background: #b4ae9b;
+  border-left: 2px solid #8a846e;
+}
+html[data-theme="gameboy"] ::-webkit-scrollbar-thumb {
+  background: #9e9882;
+  border: 2px solid;
+  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
+}
+html[data-theme="gameboy"] ::-webkit-scrollbar-thumb:hover {
+  background: #8a846e;
+}
+html[data-theme="gameboy"] ::-webkit-scrollbar-button {
+  display: block;
+  height: 12px;
+  background: #b4ae9b;
+  border: 2px solid;
+  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
+}
+
+/* ══════════════════════════════════════════════════════
+   AQUA THEME — Mac OS X 10.0–10.4 Tiger era
+   Translucent blue gel buttons, pinstripes, brushed metal,
+   candy-colored UI with soft shadows and lickable controls
+   ══════════════════════════════════════════════════════ */
+
+html[data-theme="aqua"] {
+  --color-bg-primary: #e8e8e8;
+  --color-bg-secondary: #d6d6d6;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #e0e0e0;
+  --color-bg-hover: #d0dff4;
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #333333;
+  --color-text-tertiary: #666666;
+
+  --color-accent: #3d80df;
+  --color-accent-hover: #5090e8;
+  --color-success: #4bb748;
+  --color-success-dim: #4bb74822;
+  --color-warning: #e8a317;
+  --color-danger: #e3342f;
+
+  --color-border: #888888;
+  --color-border-subtle: #b8b8b8;
+  --color-border-active: #3d80df;
+
+  --font-sans: "Lucida Grande", "Helvetica Neue", "Geneva", system-ui, sans-serif;
+}
+
+/* ─── Tighter spacing ─── */
+html[data-theme="aqua"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="aqua"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="aqua"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="aqua"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="aqua"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="aqua"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="aqua"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="aqua"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="aqua"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="aqua"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
+
+/* ─── Aqua kept rounded corners ─── */
+html[data-theme="aqua"] .rounded-2xl {
+  border-radius: 12px;
+}
+html[data-theme="aqua"] .rounded-xl {
+  border-radius: 10px;
+}
+
+/* ─── Pinstripe background ─── */
+html[data-theme="aqua"] .bg-bg-primary {
+  background: repeating-linear-gradient(180deg, #e8e8e8 0px, #e8e8e8 1px, #e0e0e0 1px, #e0e0e0 2px);
+}
+
+/* ─── Zebra table rows: light blue alternating (THE Mac OS X look) ─── */
+html[data-theme="aqua"] tbody tr:nth-child(even) {
+  background-color: #d5e5f6;
+}
+html[data-theme="aqua"] tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+/* ─── Raised panels: brushed metal texture ─── */
+html[data-theme="aqua"] .bg-bg-secondary.border {
+  border: 1px solid #888888;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0px,
+      rgba(255, 255, 255, 0.06) 1px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    linear-gradient(180deg, #e0e0e0 0%, #c8c8c8 40%, #d0d0d0 60%, #dcdcdc 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* ─── Content areas ─── */
+html[data-theme="aqua"] div.bg-bg-card.border {
+  border: 1px solid #888888;
+  background: #ffffff;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Edge panels: brushed metal ─── */
+html[data-theme="aqua"] .border-t.bg-bg-secondary {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0px,
+      rgba(255, 255, 255, 0.04) 1px,
+      rgba(0, 0, 0, 0.02) 2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    linear-gradient(180deg, #e0e0e0 0%, #cccccc 100%);
+  border-top: 1px solid #a0a0a0;
+}
+html[data-theme="aqua"] .border-r.bg-bg-secondary {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0px,
+      rgba(255, 255, 255, 0.04) 1px,
+      rgba(0, 0, 0, 0.02) 2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    linear-gradient(180deg, #e0e0e0 0%, #cccccc 100%);
+  border-right: 1px solid #a0a0a0;
+}
+
+/* ─── Title bar: THE brushed metal window bar ─── */
+html[data-theme="aqua"] header,
+html[data-theme="aqua"] .retro-titlebar {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0px,
+      rgba(255, 255, 255, 0.08) 1px,
+      rgba(0, 0, 0, 0.04) 2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    linear-gradient(180deg, #eeeeee 0%, #e0e0e0 20%, #c0c0c0 48%, #b8b8b8 50%, #c8c8c8 52%, #d8d8d8 80%, #e8e8e8 100%);
+  border-bottom: 1px solid #888888;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #000000;
+}
+html[data-theme="aqua"] header h1 {
+  color: #222222;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+html[data-theme="aqua"] header .text-text-secondary,
+html[data-theme="aqua"] header .text-text-tertiary {
+  color: #444444;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ─── Big glossy drop shadows ─── */
+html[data-theme="aqua"] .shadow-xl {
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.3),
+    0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* ─── Gel buttons: saturated, shiny, "lickable" ─── */
+html[data-theme="aqua"] button.bg-text-primary {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0.1) 45%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.05) 100%
+    ),
+    linear-gradient(180deg, #5dade2 0%, #2e86c1 50%, #3498db 100%);
+  color: #ffffff;
+  border: 1px solid #1a5276;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+html[data-theme="aqua"] button.bg-text-primary:hover:not(:disabled) {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.7) 0%,
+      rgba(255, 255, 255, 0.15) 45%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.08) 100%
+    ),
+    linear-gradient(180deg, #6fc0f0 0%, #3a9ad5 50%, #4aaae5 100%);
+  opacity: 1;
+}
+html[data-theme="aqua"] button.bg-text-primary:active:not(:disabled) {
+  background: linear-gradient(180deg, #1a5276 0%, #2471a3 50%, #1b6ba3 100%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Secondary buttons: white capsule with gloss ─── */
+html[data-theme="aqua"] button.bg-bg-card {
+  border: 1px solid #888888;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.8) 0%,
+      rgba(255, 255, 255, 0.2) 45%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.1) 100%
+    ),
+    linear-gradient(180deg, #f8f8f8 0%, #e0e0e0 50%, #eeeeee 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+html[data-theme="aqua"] button.bg-bg-card:active:not(:disabled) {
+  background: linear-gradient(180deg, #c8c8c8 0%, #b8b8b8 50%, #c8c8c8 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Play button: big blue gel ─── */
+html[data-theme="aqua"] button.rounded-full.bg-text-primary {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.1) 45%, transparent 50%),
+    linear-gradient(180deg, #5dade2 0%, #2e86c1 50%, #3498db 100%);
+  color: #ffffff;
+  border: 1px solid #1a5276;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+html[data-theme="aqua"] button.rounded-full.bg-text-primary:active {
+  background: linear-gradient(180deg, #1a5276 0%, #2471a3 50%, #1b6ba3 100%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Inputs: rounded field with blue glow focus ─── */
+html[data-theme="aqua"] input {
+  border: 1px solid #888888;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #000000;
+}
+html[data-theme="aqua"] input:focus {
+  border-color: #3d80df;
+  box-shadow:
+    0 0 0 3px rgba(61, 128, 223, 0.35),
+    inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Selected row: blue gel gradient (not flat color) ─── */
+html[data-theme="aqua"] tbody td.\!bg-accent {
+  background: linear-gradient(180deg, #5dade2 0%, #2e86c1 100%) !important;
+  color: #ffffff !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+html[data-theme="aqua"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="aqua"] tbody td.\!bg-accent .text-xs {
+  color: #ffffff !important;
+}
+
+/* ─── Column browser selected ─── */
+html[data-theme="aqua"] .bg-accent.text-white {
+  background: linear-gradient(180deg, #5dade2 0%, #2e86c1 100%) !important;
+  color: #ffffff !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Progress bars: candy striped blue ─── */
+html[data-theme="aqua"] .overflow-hidden.rounded-full > .rounded-full {
+  background: repeating-linear-gradient(-45deg, #5dade2, #5dade2 6px, #3498db 6px, #3498db 12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* ─── Seek bar ─── */
+html[data-theme="aqua"] .bg-text-primary.rounded-full {
+  background: #3d80df !important;
+}
+html[data-theme="aqua"] .bg-text-primary.rounded-full.w-3 {
+  background: linear-gradient(180deg, #ffffff 0%, #e0e0e0 100%) !important;
+  border: 1px solid #888888;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+html[data-theme="aqua"] .bg-bg-card.rounded-full {
+  background: #c8c8c8 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Sidebar active: blue gel highlight ─── */
+html[data-theme="aqua"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: linear-gradient(180deg, #5dade2 0%, #2e86c1 100%);
+  color: #ffffff;
+  border: 1px solid #1a5276;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Column browser header ─── */
+html[data-theme="aqua"] .border-b.border-border.bg-bg-secondary {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      rgba(0, 0, 0, 0.02) 2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    linear-gradient(180deg, #e0e0e0 0%, #c8c8c8 100%);
+  border-bottom: 1px solid #a0a0a0;
+}
+
+/* ─── Disabled ─── */
+html[data-theme="aqua"] button:disabled {
+  opacity: 0.4;
+}
+
+/* ─── Dividers ─── */
+html[data-theme="aqua"] .border-border-subtle {
+  border-color: #b8b8b8;
+}
+
+/* ─── Modals ─── */
+html[data-theme="aqua"] .bg-bg-secondary.border.rounded-2xl {
+  background: linear-gradient(180deg, #e8e8e8 0%, #d8d8d8 100%);
+  border: 1px solid #888888;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Scrollbar: Aqua capsule ─── */
+html[data-theme="aqua"] ::-webkit-scrollbar {
+  width: 11px;
+}
+html[data-theme="aqua"] ::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border: 1px solid #d0d0d0;
+}
+html[data-theme="aqua"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #c8c8c8 0%, #a8a8a8 50%, #c8c8c8 100%);
+  border: 1px solid #888888;
+  border-radius: 5px;
+}
+html[data-theme="aqua"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #b0b0b0 0%, #909090 50%, #b0b0b0 100%);
+}
+
+/* ══════════════════════════════════════════════════════
+   MS-DOS THEME — C:\> command prompt
+   Pure black, light gray text, white for emphasis.
+   Text on void like a real DOS terminal. CRT scanlines.
+   ══════════════════════════════════════════════════════ */
+
+html[data-theme="msdos"] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #000000;
+  --color-bg-card: #000000;
+  --color-bg-elevated: #0a0a0a;
+  --color-bg-hover: #1a1a1a;
+
+  --color-text-primary: #aaaaaa;
+  --color-text-secondary: #888888;
+  --color-text-tertiary: #555555;
+
+  --color-accent: #ffffff;
+  --color-accent-hover: #ffffff;
+  --color-success: #aaaaaa;
+  --color-success-dim: #aaaaaa22;
+  --color-warning: #aaaaaa;
+  --color-danger: #ffffff;
+
+  --color-border: #333333;
+  --color-border-subtle: #1a1a1a;
+  --color-border-active: #aaaaaa;
+
+  --font-sans: "Consolas", "Courier New", "Courier", monospace;
+}
+
+/* ─── Spacing ─── */
+html[data-theme="msdos"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="msdos"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="msdos"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="msdos"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="msdos"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="msdos"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="msdos"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="msdos"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="msdos"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="msdos"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
+
+/* ─── Zero radius ─── */
+html[data-theme="msdos"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="msdos"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="msdos"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="msdos"] .rounded-md {
+  border-radius: 0px;
+}
+
+/* ─── 1px borders ─── */
+html[data-theme="msdos"] .border {
+  border-width: 1px;
+}
+html[data-theme="msdos"] .border-b {
+  border-bottom-width: 1px;
+}
+html[data-theme="msdos"] .border-t {
+  border-top-width: 1px;
+}
+html[data-theme="msdos"] .border-r {
+  border-right-width: 1px;
+}
+
+/* ─── CRT scanlines on pure black ─── */
+html[data-theme="msdos"] .bg-bg-primary {
+  background:
+    repeating-linear-gradient(180deg, transparent 0px, rgba(170, 170, 170, 0.02) 1px, transparent 3px), #000000;
+}
+
+/* ─── Panels: nearly invisible, text on void ─── */
+html[data-theme="msdos"] .bg-bg-secondary.border {
+  border: 1px solid #33333300;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ─── Content areas: black ─── */
+html[data-theme="msdos"] div.bg-bg-card.border {
+  border: 1px solid #33333340;
+  background: #000000;
+  box-shadow: none;
+}
+
+/* ─── Edge panels: black ─── */
+html[data-theme="msdos"] .border-t.bg-bg-secondary {
+  background: #000000;
+  border-top: 1px solid #33333340;
+}
+html[data-theme="msdos"] .border-r.bg-bg-secondary {
+  background: #000000;
+  border-right: 1px solid #33333340;
+}
+
+/* ─── Title bar: just text on black ─── */
+html[data-theme="msdos"] header,
+html[data-theme="msdos"] .retro-titlebar {
+  background: #000000;
+  border-bottom: 1px solid #33333340;
+  color: #aaaaaa;
+}
+html[data-theme="msdos"] header h1 {
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+}
+html[data-theme="msdos"] header .text-text-secondary,
+html[data-theme="msdos"] header .text-text-tertiary,
+html[data-theme="msdos"] .retro-titlebar .text-text-primary,
+html[data-theme="msdos"] .retro-titlebar .text-text-tertiary {
+  color: #888888;
+}
+
+/* ─── No shadows ─── */
+html[data-theme="msdos"] .shadow-xl {
+  box-shadow: none;
+}
+html[data-theme="msdos"] .shadow-2xl {
+  box-shadow: none;
+}
+
+/* ─── Buttons: reverse-video (white on gray) ─── */
+html[data-theme="msdos"] button.bg-text-primary {
+  background: #aaaaaa;
+  color: #000000;
+  border: none;
+  box-shadow: none;
+  font-weight: 700;
+  text-shadow: none;
+}
+html[data-theme="msdos"] button.bg-text-primary:hover:not(:disabled) {
+  background: #ffffff;
+  color: #000000;
+  opacity: 1;
+}
+html[data-theme="msdos"] button.bg-text-primary:active:not(:disabled) {
+  background: #555555;
+  color: #000000;
+}
+
+/* ─── Secondary buttons: gray border ─── */
+html[data-theme="msdos"] button.bg-bg-card {
+  border: 1px solid #555555;
+  background: transparent;
+  color: #aaaaaa;
+}
+html[data-theme="msdos"] button.bg-bg-card:hover:not(:disabled) {
+  border-color: #aaaaaa;
+  color: #ffffff;
+}
+html[data-theme="msdos"] button.bg-bg-card:active:not(:disabled) {
+  background: #aaaaaa;
+  color: #000000;
+}
+
+/* ─── Play button: reverse-video block ─── */
+html[data-theme="msdos"] button.rounded-full.bg-text-primary {
+  background: #aaaaaa;
+  color: #000000;
+  border: none;
+}
+html[data-theme="msdos"] button.rounded-full.bg-text-primary:hover {
+  background: #ffffff;
+}
+html[data-theme="msdos"] button.rounded-full.bg-text-primary:active {
+  background: #555555;
+}
+
+/* ─── Secondary playback ─── */
+html[data-theme="msdos"] button.rounded-full.text-text-secondary {
+  color: #555555;
+}
+html[data-theme="msdos"] button.rounded-full.text-text-secondary:hover {
+  color: #aaaaaa;
+}
+
+/* ─── Inputs: black, gray border ─── */
+html[data-theme="msdos"] input {
+  border: 1px solid #555555;
+  background: #000000;
+  color: #aaaaaa;
+  box-shadow: none;
+}
+html[data-theme="msdos"] input::placeholder {
+  color: #333333;
+}
+html[data-theme="msdos"] input:focus {
+  border-color: #aaaaaa;
+}
+
+/* ─── Track table: file listing on black ─── */
+html[data-theme="msdos"] thead {
+  background: transparent !important;
+}
+html[data-theme="msdos"] thead th {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-bottom-color: #33333340 !important;
+}
+html[data-theme="msdos"] tbody {
+  background: #000000;
+}
+html[data-theme="msdos"] tbody tr:nth-child(even) {
+  background-color: transparent;
+}
+html[data-theme="msdos"] tbody tr:nth-child(odd) {
+  background-color: transparent;
+}
+html[data-theme="msdos"] tbody td {
+  color: #aaaaaa;
+}
+html[data-theme="msdos"] tbody tr:hover {
+  background-color: #1a1a1a !important;
+}
+
+/* ─── Selected row: reverse-video white bar ─── */
+html[data-theme="msdos"] tbody td.\!bg-accent {
+  background: #aaaaaa !important;
+  color: #000000 !important;
+}
+html[data-theme="msdos"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="msdos"] tbody td.\!bg-accent .text-xs,
+html[data-theme="msdos"] tbody td.\!bg-accent .text-text-tertiary,
+html[data-theme="msdos"] tbody td.\!bg-accent .text-text-secondary {
+  color: #000000 !important;
+}
+
+/* ─── Currently playing: bright white ─── */
+html[data-theme="msdos"] .text-accent {
+  color: #ffffff !important;
+}
+
+/* ─── Column browser selected: reverse-video ─── */
+html[data-theme="msdos"] .bg-accent.text-white {
+  background: #aaaaaa !important;
+  color: #000000 !important;
+}
+
+/* ─── Column browser header ─── */
+html[data-theme="msdos"] .border-b.border-border.bg-bg-secondary {
+  background: transparent;
+  border-bottom-color: #33333340;
+}
+html[data-theme="msdos"] .border-b.border-border.bg-bg-secondary span {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* ─── Progress bars: block chars █ ─── */
+html[data-theme="msdos"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #aaaaaa;
+  background-image: repeating-linear-gradient(90deg, #aaaaaa, #aaaaaa 3px, #000000 3px, #000000 4px);
+}
+
+/* ─── Seek bar ─── */
+html[data-theme="msdos"] .bg-text-primary.rounded-full {
+  background: #aaaaaa !important;
+  border-radius: 0 !important;
+}
+html[data-theme="msdos"] .bg-bg-card.rounded-full {
+  background: #1a1a1a !important;
+  border-radius: 0 !important;
+  border: none;
+}
+
+/* ─── Sidebar active: reverse-video ─── */
+html[data-theme="msdos"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #aaaaaa;
+  color: #000000;
+  border: none;
+  box-shadow: none;
+}
+
+/* ─── Sidebar items ─── */
+html[data-theme="msdos"] .border-r.bg-bg-secondary button {
+  color: #888888;
+}
+html[data-theme="msdos"] .border-r.bg-bg-secondary button:hover {
+  color: #aaaaaa;
+  background: #1a1a1a;
+}
+
+/* ─── Disabled ─── */
+html[data-theme="msdos"] button:disabled {
+  color: #333333 !important;
+}
+
+/* ─── Dividers: barely visible ─── */
+html[data-theme="msdos"] .border-border-subtle {
+  border-color: #1a1a1a;
+}
+
+/* ─── Modals ─── */
+html[data-theme="msdos"] .bg-bg-secondary.border.rounded-2xl {
+  background: #000000;
+  border: 1px solid #555555;
+}
+
+/* ─── Context menu ─── */
+html[data-theme="msdos"] .bg-bg-card.border.shadow-lg {
+  background: #000000;
+  border: 1px solid #555555;
+  box-shadow: none;
+}
+html[data-theme="msdos"] .bg-bg-card.border.shadow-lg button {
+  color: #aaaaaa;
+}
+html[data-theme="msdos"] .bg-bg-card.border.shadow-lg button:hover {
+  background: #aaaaaa !important;
+  color: #000000 !important;
+}
+
+/* ─── EQ accents ─── */
+html[data-theme="msdos"] .bg-accent {
+  background-color: #aaaaaa;
+}
+
+/* ─── CRT vignette ─── */
+html[data-theme="msdos"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* ─── Scrollbar: near-invisible ─── */
+html[data-theme="msdos"] ::-webkit-scrollbar {
+  width: 6px;
+}
+html[data-theme="msdos"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+html[data-theme="msdos"] ::-webkit-scrollbar-thumb {
+  background: #33333380;
+  border-radius: 3px;
+}
+html[data-theme="msdos"] ::-webkit-scrollbar-thumb:hover {
+  background: #55555580;
+}
+
+/* ══════════════════════════════════════════════════════
+   TERMINAL THEME — Amber phosphor CRT monitor
+   Text floating on void. Borders nearly invisible.
+   Dramatic amber glow, visible scanlines, CRT vignette.
+   ══════════════════════════════════════════════════════ */
+
+html[data-theme="terminal"] {
+  --color-bg-primary: #080500;
+  --color-bg-secondary: #080500;
+  --color-bg-card: #060300;
+  --color-bg-elevated: #0c0800;
+  --color-bg-hover: #1a1000;
+
+  --color-text-primary: #ffb830;
+  --color-text-secondary: #cc9020;
+  --color-text-tertiary: #664810;
+
+  --color-accent: #ffb830;
+  --color-accent-hover: #ffd060;
+  --color-success: #ffb830;
+  --color-success-dim: #ffb83018;
+  --color-warning: #ff8800;
+  --color-danger: #ff4400;
+
+  --color-border: #1a1000;
+  --color-border-subtle: #100a00;
+  --color-border-active: #ffb83044;
+
+  --font-sans: "Consolas", "Monaco", "Lucida Console", "Courier New", monospace;
+}
+
+/* ─── Spacing ─── */
+html[data-theme="terminal"] .p-5 {
+  padding: 0.875rem;
+}
+html[data-theme="terminal"] .p-6 {
+  padding: 1rem;
+}
+html[data-theme="terminal"] .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+html[data-theme="terminal"] .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+html[data-theme="terminal"] .px-8 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+html[data-theme="terminal"] .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+html[data-theme="terminal"] .gap-6 {
+  gap: 0.75rem;
+}
+html[data-theme="terminal"] .gap-3 {
+  gap: 0.5rem;
+}
+html[data-theme="terminal"] .mb-5 {
+  margin-bottom: 0.875rem;
+}
+html[data-theme="terminal"] .mb-4 {
+  margin-bottom: 0.75rem;
+}
+
+/* ─── Zero radius ─── */
+html[data-theme="terminal"] .rounded-2xl {
+  border-radius: 0px;
+}
+html[data-theme="terminal"] .rounded-xl {
+  border-radius: 0px;
+}
+html[data-theme="terminal"] .rounded-lg {
+  border-radius: 0px;
+}
+html[data-theme="terminal"] .rounded-md {
+  border-radius: 0px;
+}
+
+/* ─── Near-invisible borders (terminal = no chrome) ─── */
+html[data-theme="terminal"] .border {
+  border-width: 1px;
+}
+html[data-theme="terminal"] .border-b {
+  border-bottom-width: 1px;
+}
+html[data-theme="terminal"] .border-t {
+  border-top-width: 1px;
+}
+html[data-theme="terminal"] .border-r {
+  border-right-width: 1px;
+}
+
+/* ─── CRT scanlines + vignette on background ─── */
+html[data-theme="terminal"] .bg-bg-primary {
+  background:
+    repeating-linear-gradient(180deg, transparent 0px, rgba(255, 184, 48, 0.03) 1px, transparent 3px),
+    radial-gradient(ellipse at center, #0a0700 0%, #030200 100%);
+}
+
+/* ─── Panels: nearly invisible — just void ─── */
+html[data-theme="terminal"] .bg-bg-secondary.border {
+  border: 1px solid #1a100005;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ─── Content areas: slightly visible container ─── */
+html[data-theme="terminal"] div.bg-bg-card.border {
+  border: 1px solid #ffb83010;
+  background: rgba(6, 3, 0, 0.5);
+  box-shadow: none;
+}
+
+/* ─── Edge panels: fade into void ─── */
+html[data-theme="terminal"] .border-t.bg-bg-secondary {
+  background: #080500;
+  border-top: 1px solid #ffb83015;
+}
+html[data-theme="terminal"] .border-r.bg-bg-secondary {
+  background: #080500;
+  border-right: 1px solid #ffb83010;
+}
+
+/* ─── Title bar: amber text on void ─── */
+html[data-theme="terminal"] header,
+html[data-theme="terminal"] .retro-titlebar {
+  background: #080500;
+  border-bottom: 1px solid #ffb83015;
+  color: #ffb830;
+}
+html[data-theme="terminal"] header h1 {
+  color: #ffb830;
+  text-shadow:
+    0 0 10px #ffb83066,
+    0 0 30px #ffb83022,
+    0 0 3px #ffb83088;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+html[data-theme="terminal"] header .text-text-secondary,
+html[data-theme="terminal"] header .text-text-tertiary,
+html[data-theme="terminal"] .retro-titlebar .text-text-primary,
+html[data-theme="terminal"] .retro-titlebar .text-text-tertiary {
+  color: #cc9020;
+  text-shadow: 0 0 6px #ffb83033;
+}
+
+/* ─── No shadows ─── */
+html[data-theme="terminal"] .shadow-xl {
+  box-shadow: none;
+}
+html[data-theme="terminal"] .shadow-2xl {
+  box-shadow: none;
+}
+
+/* ─── Buttons: glowing amber outline on void ─── */
+html[data-theme="terminal"] button.bg-text-primary {
+  background: transparent;
+  color: #ffb830;
+  border: 1px solid #ffb83066;
+  box-shadow:
+    0 0 6px #ffb83022,
+    inset 0 0 6px #ffb83008;
+  font-weight: 700;
+  text-shadow: 0 0 6px #ffb83044;
+}
+html[data-theme="terminal"] button.bg-text-primary:hover:not(:disabled) {
+  background: #ffb83010;
+  color: #ffd060;
+  border-color: #ffb830aa;
+  box-shadow:
+    0 0 12px #ffb83033,
+    inset 0 0 10px #ffb83010;
+  opacity: 1;
+}
+html[data-theme="terminal"] button.bg-text-primary:active:not(:disabled) {
+  background: #ffb830;
+  color: #080500;
+  text-shadow: none;
+  box-shadow: 0 0 20px #ffb83066;
+}
+
+/* ─── Secondary buttons: ghost ─── */
+html[data-theme="terminal"] button.bg-bg-card {
+  border: 1px solid #ffb83015;
+  background: transparent;
+}
+html[data-theme="terminal"] button.bg-bg-card:hover:not(:disabled) {
+  border-color: #ffb83044;
+  background: #ffb83008;
+  color: #ffb830;
+}
+html[data-theme="terminal"] button.bg-bg-card:active:not(:disabled) {
+  background: #ffb83020;
+}
+
+/* ─── Play button: glowing amber ring ─── */
+html[data-theme="terminal"] button.rounded-full.bg-text-primary {
+  background: transparent;
+  color: #ffb830;
+  border: 1px solid #ffb830aa;
+  box-shadow:
+    0 0 12px #ffb83044,
+    inset 0 0 12px #ffb83015;
+}
+html[data-theme="terminal"] button.rounded-full.bg-text-primary:hover {
+  box-shadow:
+    0 0 20px #ffb83066,
+    inset 0 0 16px #ffb83022;
+}
+html[data-theme="terminal"] button.rounded-full.bg-text-primary:active {
+  background: #ffb830;
+  color: #080500;
+  box-shadow: 0 0 30px #ffb83088;
+}
+
+/* ─── Secondary playback: amber glow on hover ─── */
+html[data-theme="terminal"] button.rounded-full.text-text-secondary:hover {
+  color: #ffb830;
+  text-shadow: 0 0 8px #ffb83055;
+}
+
+/* ─── Inputs: near-invisible field ─── */
+html[data-theme="terminal"] input {
+  border: 1px solid #ffb83020;
+  background: #060300;
+  color: #ffb830;
+  caret-color: #ffb830;
+  box-shadow: none;
+  text-shadow: 0 0 2px #ffb83033;
+}
+html[data-theme="terminal"] input::placeholder {
+  color: #402800;
+}
+html[data-theme="terminal"] input:focus {
+  border-color: #ffb83055;
+  box-shadow: 0 0 8px #ffb83015;
+}
+
+/* ─── Track table: text listing floating on void ─── */
+html[data-theme="terminal"] thead {
+  background: transparent !important;
+}
+html[data-theme="terminal"] thead th {
+  color: #ffb830 !important;
+  text-shadow: 0 0 6px #ffb83033;
+  border-bottom-color: #ffb83015 !important;
+  font-weight: 700 !important;
+}
+html[data-theme="terminal"] tbody {
+  background: transparent;
+}
+html[data-theme="terminal"] tbody tr:nth-child(even) {
+  background-color: rgba(255, 184, 48, 0.02);
+}
+html[data-theme="terminal"] tbody tr:nth-child(odd) {
+  background-color: transparent;
+}
+html[data-theme="terminal"] tbody tr:hover {
+  background-color: rgba(255, 184, 48, 0.06) !important;
+}
+html[data-theme="terminal"] tbody td {
+  color: #cc9020;
+  text-shadow: 0 0 2px #ffb83015;
+}
+
+/* ─── Selected row: bright amber glow bar ─── */
+html[data-theme="terminal"] tbody td.\!bg-accent {
+  background: rgba(255, 184, 48, 0.15) !important;
+  color: #ffb830 !important;
+  text-shadow: 0 0 8px #ffb83055;
+}
+html[data-theme="terminal"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="terminal"] tbody td.\!bg-accent .text-xs,
+html[data-theme="terminal"] tbody td.\!bg-accent .text-text-tertiary,
+html[data-theme="terminal"] tbody td.\!bg-accent .text-text-secondary {
+  color: #ffb830 !important;
+}
+
+/* ─── Currently playing track: bright glow ─── */
+html[data-theme="terminal"] .text-accent {
+  color: #ffb830 !important;
+  text-shadow:
+    0 0 10px #ffb83055,
+    0 0 3px #ffb83077;
+}
+
+/* ─── Column browser selected ─── */
+html[data-theme="terminal"] .bg-accent.text-white {
+  background: rgba(255, 184, 48, 0.15) !important;
+  color: #ffb830 !important;
+  text-shadow: 0 0 8px #ffb83055;
+}
+
+/* ─── Column browser headers: barely there ─── */
+html[data-theme="terminal"] .border-b.border-border.bg-bg-secondary {
+  background: transparent;
+  border-bottom-color: #ffb83015;
+}
+html[data-theme="terminal"] .border-b.border-border.bg-bg-secondary span {
+  color: #ffb830;
+  text-shadow: 0 0 6px #ffb83033;
+}
+
+/* ─── Progress bars: solid amber glow ─── */
+html[data-theme="terminal"] .overflow-hidden.rounded-full > .rounded-full {
+  border-radius: 0px;
+  background: #cc9020;
+  box-shadow: 0 0 8px #ffb83033;
+}
+
+/* ─── Seek bar ─── */
+html[data-theme="terminal"] .bg-text-primary.rounded-full {
+  background: #ffb830 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 6px #ffb83044;
+}
+html[data-theme="terminal"] .bg-text-primary.rounded-full.w-3 {
+  background: #ffb830 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 10px #ffb83066;
+}
+html[data-theme="terminal"] .bg-bg-card.rounded-full {
+  background: #1a1000 !important;
+  border-radius: 0 !important;
+  border: none;
+}
+
+/* ─── Sidebar items: dim text, glow on hover ─── */
+html[data-theme="terminal"] .border-r.bg-bg-secondary button {
+  color: #cc9020;
+}
+html[data-theme="terminal"] .border-r.bg-bg-secondary button:hover {
+  color: #ffb830;
+  text-shadow: 0 0 6px #ffb83033;
+}
+
+/* ─── Sidebar active: glowing text ─── */
+html[data-theme="terminal"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: rgba(255, 184, 48, 0.08);
+  color: #ffb830;
+  border: 1px solid #ffb83030;
+  box-shadow: none;
+  text-shadow: 0 0 8px #ffb83044;
+}
+
+/* ─── Disabled ─── */
+html[data-theme="terminal"] button:disabled {
+  color: #302000 !important;
+  text-shadow: none;
+  opacity: 0.4;
+}
+
+/* ─── Dividers: nearly invisible ─── */
+html[data-theme="terminal"] .border-border-subtle {
+  border-color: #100a00;
+}
+
+/* ─── Context menu ─── */
+html[data-theme="terminal"] .bg-bg-card.border.shadow-lg {
+  background: #060300;
+  border: 1px solid #ffb83020;
+  box-shadow: 0 0 20px rgba(255, 184, 48, 0.06);
+}
+html[data-theme="terminal"] .bg-bg-card.border.shadow-lg button:hover {
+  background: rgba(255, 184, 48, 0.12) !important;
+  color: #ffb830 !important;
+  text-shadow: 0 0 6px #ffb83044;
+}
+
+/* ─── Modals ─── */
+html[data-theme="terminal"] .bg-bg-secondary.border.rounded-2xl {
+  background: #080500;
+  border: 1px solid #ffb83020;
+}
+
+/* ─── EQ slider: amber knobs ─── */
+html[data-theme="terminal"] .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #cc9020 !important;
+  box-shadow: 0 0 4px #ffb83033;
+}
+html[data-theme="terminal"] .group:hover .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #ffb830 !important;
+  box-shadow: 0 0 8px #ffb83055;
+}
+
+/* ─── Amber glow on accent elements ─── */
+html[data-theme="terminal"] .bg-accent {
+  background-color: #ffb830;
+  box-shadow: 0 0 6px #ffb83066;
+}
+
+/* ─── Now-playing text glow ─── */
+html[data-theme="terminal"] .text-text-primary.truncate {
+  text-shadow: 0 0 6px #ffb83033;
+}
+
+/* ─── CRT vignette overlay ─── */
+html[data-theme="terminal"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* ─── Scrollbar: barely visible ─── */
+html[data-theme="terminal"] ::-webkit-scrollbar {
+  width: 6px;
+}
+html[data-theme="terminal"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+html[data-theme="terminal"] ::-webkit-scrollbar-thumb {
+  background: #ffb83020;
+  border-radius: 3px;
+}
+html[data-theme="terminal"] ::-webkit-scrollbar-thumb:hover {
+  background: #ffb83040;
 }
 
 /* ─── Scrollbar: classic theme ─── */
@@ -443,20 +2519,20 @@ html[data-theme="classic"] ::-webkit-scrollbar {
   width: 12px;
 }
 html[data-theme="classic"] ::-webkit-scrollbar-track {
-  background: #D9D7D4;
+  background: #d9d7d4;
   border-left: 1px solid #000000;
 }
 html[data-theme="classic"] ::-webkit-scrollbar-thumb {
-  background: #B8B6B3;
+  background: #b8b6b3;
   border: 1px solid #000000;
 }
 html[data-theme="classic"] ::-webkit-scrollbar-thumb:hover {
-  background: #A8A6A3;
+  background: #a8a6a3;
 }
 html[data-theme="classic"] ::-webkit-scrollbar-button {
   display: block;
   height: 12px;
-  background: #D9D7D4;
+  background: #d9d7d4;
   border: 1px solid #000000;
 }
 
@@ -484,21 +2560,21 @@ html[data-theme="win95"] ::-webkit-scrollbar {
   width: 16px;
 }
 html[data-theme="win95"] ::-webkit-scrollbar-track {
-  background: #C0C0C0;
+  background: #c0c0c0;
   border-left: 1px solid #808080;
 }
 html[data-theme="win95"] ::-webkit-scrollbar-thumb {
-  background: #C0C0C0;
+  background: #c0c0c0;
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
 }
 html[data-theme="win95"] ::-webkit-scrollbar-thumb:hover {
-  background: #D0D0D0;
+  background: #d0d0d0;
 }
 html[data-theme="win95"] ::-webkit-scrollbar-button {
   display: block;
   height: 16px;
-  background: #C0C0C0;
+  background: #c0c0c0;
   border: 2px solid;
-  border-color: #DFDFDF #404040 #404040 #DFDFDF;
+  border-color: #dfdfdf #404040 #404040 #dfdfdf;
 }

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
 import { PlaybackProvider } from "./contexts/PlaybackContext";
+import { EqualizerProvider } from "./contexts/EqualizerContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
@@ -26,10 +27,12 @@ type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "stats";
 const App = () => (
   <ThemeProvider>
     <ProgressProvider>
-      <PlaybackProvider>
-        <AppContent />
-        <ProgressModal />
-      </PlaybackProvider>
+      <EqualizerProvider>
+        <PlaybackProvider>
+          <AppContent />
+          <ProgressModal />
+        </PlaybackProvider>
+      </EqualizerProvider>
     </ProgressProvider>
   </ThemeProvider>
 );

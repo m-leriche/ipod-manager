@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../types/library";
+import { useEqualizer } from "./EqualizerContext";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ const PlaybackTimeContext = createContext<PlaybackTimeState>(initialTime);
 export const PlaybackProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<PlaybackState>(initial);
   const [time, setTime] = useState<PlaybackTimeState>(initialTime);
+  const { connectAudioElement } = useEqualizer();
 
   // Dual audio elements for near-gapless playback
   const audioARef = useRef<HTMLAudioElement | null>(null);
@@ -111,12 +113,18 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     return activeRef.current === "A" ? audioBRef.current : audioARef.current;
   }, []);
 
-  // Initialize audio elements
+  // Stable ref for connectAudioElement to avoid re-triggering the init effect
+  const connectAudioRef = useRef(connectAudioElement);
+  connectAudioRef.current = connectAudioElement;
+
+  // Initialize audio elements and connect to EQ chain
   useEffect(() => {
     audioARef.current = new Audio();
     audioBRef.current = new Audio();
     audioARef.current.volume = state.volume;
     audioBRef.current.volume = state.volume;
+    connectAudioRef.current(audioARef.current);
+    connectAudioRef.current(audioBRef.current);
 
     return () => {
       audioARef.current?.pause();

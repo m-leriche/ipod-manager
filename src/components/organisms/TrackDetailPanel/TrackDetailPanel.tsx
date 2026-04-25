@@ -13,6 +13,8 @@ interface TrackDetailPanelProps {
 }
 
 export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
+  if (tracks.length === 0) return <EmptyDetailPanel />;
+
   const isSingle = tracks.length === 1;
   const track = tracks[0];
 
@@ -235,6 +237,55 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
     </div>
   );
 });
+
+// ── Empty state ───────────────────────────────────────────────
+
+const EMPTY_FIELDS = ["Title", "Artist", "Album", "Album Artist", "Genre", "Year"];
+
+const EMPTY_PAIRED = [
+  ["Track No.", "Total Tracks"],
+  ["Disc No.", "Total Discs"],
+];
+
+const EmptyDetailPanel = () => (
+  <div className="w-[220px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto">
+    {/* Album art placeholder */}
+    <div className="p-4 flex justify-center">
+      <div className="w-[188px] h-[188px] rounded-lg bg-bg-card border border-border flex items-center justify-center">
+        <span className="text-text-tertiary/30 text-sm font-medium">Album Art</span>
+      </div>
+    </div>
+
+    {/* Empty metadata fields */}
+    <div className="px-4 pb-3 space-y-1.5">
+      {EMPTY_FIELDS.map((label) => (
+        <div key={label}>
+          <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest block mb-0.5">
+            {label}
+          </span>
+          <div className="px-1.5 py-0.5 text-[10px] text-text-tertiary/30 min-h-[20px]">&mdash;</div>
+        </div>
+      ))}
+      {EMPTY_PAIRED.map(([left, right]) => (
+        <div key={left} className="flex gap-1.5 items-end">
+          <div className="flex-1 min-w-0">
+            <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest block mb-0.5">
+              {left}
+            </span>
+            <div className="px-1.5 py-0.5 text-[10px] text-text-tertiary/30 min-h-[20px]">&mdash;</div>
+          </div>
+          <span className="text-[9px] text-text-tertiary pb-[3px]">of</span>
+          <div className="flex-1 min-w-0">
+            <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest block mb-0.5">
+              {right}
+            </span>
+            <div className="px-1.5 py-0.5 text-[10px] text-text-tertiary/30 min-h-[20px]">&mdash;</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 // ── Inline editable field ──────────────────────────────────────
 

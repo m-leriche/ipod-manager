@@ -52,6 +52,34 @@ vi.mock("../contexts/PlaybackContext", () => ({
   PlaybackProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock EqualizerContext
+vi.mock("../contexts/EqualizerContext", () => ({
+  useEqualizer: () => ({
+    state: {
+      enabled: false,
+      bandMode: "10",
+      gains10: new Array(10).fill(0),
+      gains31: new Array(31).fill(0),
+      preamp: 0,
+      activePreset: null,
+      parametricBands: null,
+    },
+    isOpen: false,
+    setIsOpen: vi.fn(),
+    setEnabled: vi.fn(),
+    setBandMode: vi.fn(),
+    setGain: vi.fn(),
+    setPreamp: vi.fn(),
+    resetGains: vi.fn(),
+    connectAudioElement: vi.fn(),
+    customPresets: [],
+    selectPreset: vi.fn(),
+    savePreset: vi.fn(),
+    deletePreset: vi.fn(),
+  }),
+  EqualizerProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({

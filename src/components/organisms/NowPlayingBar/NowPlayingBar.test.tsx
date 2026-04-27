@@ -27,6 +27,7 @@ const track: LibraryTrack = {
   file_size: 10000,
   created_at: 1704067200,
   play_count: 0,
+  flagged: false,
 };
 
 // Controllable mock state

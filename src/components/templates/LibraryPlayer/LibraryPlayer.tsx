@@ -22,6 +22,7 @@ import { getCachedLibrary, setCachedLibrary } from "./helpers";
 const COLUMN_BROWSER_KEY = "crate-show-column-browser";
 const INFO_PANEL_KEY = "crate-show-info-panel";
 const STATS_PANEL_KEY = "crate-show-stats-panel";
+const FLAGGED_FILTER_KEY = "crate-flagged-filter";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export const LibraryPlayer = ({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [flaggedOnly, setFlaggedOnly] = useState(() => localStorage.getItem(FLAGGED_FILTER_KEY) === "true");
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<number>>(new Set());
 
   // All data from backend (pre-filtered by column selections)
@@ -103,6 +105,7 @@ export const LibraryPlayer = ({
         ...(selectedArtist ? { artist: selectedArtist } : {}),
         ...(selectedAlbum ? { album: selectedAlbum } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(flaggedOnly ? { flagged_only: true } : {}),
       };
       const data = await invoke<BrowserData>("get_library_browser_data", { filter });
       if (id !== fetchIdRef.current) return;
@@ -125,7 +128,7 @@ export const LibraryPlayer = ({
       setArtistList([]);
       setAlbumList([]);
     }
-  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch, playTrack]);
+  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch, flaggedOnly, playTrack]);
 
   // ── Initial load ──────────────────────────────────────────────
 
@@ -176,6 +179,26 @@ export const LibraryPlayer = ({
       if (onRefreshRef) onRefreshRef.current = null;
     };
   }, [onRefreshRef, fetchBrowserData]);
+
+  const toggleFlaggedOnly = useCallback(() => {
+    setFlaggedOnly((prev) => {
+      const next = !prev;
+      localStorage.setItem(FLAGGED_FILTER_KEY, String(next));
+      return next;
+    });
+  }, []);
+
+  const handleFlagTracks = useCallback(
+    async (trackIds: number[], flagged: boolean) => {
+      try {
+        await invoke("flag_tracks", { trackIds, flagged });
+        await fetchBrowserData();
+      } catch (e) {
+        console.error("Failed to flag tracks:", e);
+      }
+    },
+    [fetchBrowserData],
+  );
 
   // ── Re-fetch when any filter/sort changes ─────────────────────
 
@@ -353,6 +376,23 @@ export const LibraryPlayer = ({
             placeholder="Search..."
             className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
           />
+          <button
+            onClick={toggleFlaggedOnly}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              flaggedOnly ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill={flaggedOnly ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={2}
+              className="w-3 h-3"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V3h16l-6 9 6 9H4" />
+            </svg>
+            To Sync
+          </button>
           <div className="flex-1" />
           <span className="text-[10px] text-text-tertiary tabular-nums">{tracks.length} tracks</span>
         </div>
@@ -382,6 +422,7 @@ export const LibraryPlayer = ({
           onTrackSelect={handleTrackSelect}
           onSelectionChange={handleSelectionChange}
           onTracksDeleted={fetchBrowserData}
+          onFlagTracks={handleFlagTracks}
         />
 
         {/* Status bar */}

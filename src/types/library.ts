@@ -22,6 +22,7 @@ export interface LibraryTrack {
   file_size: number;
   created_at: number;
   play_count: number;
+  flagged: boolean;
 }
 
 export interface LibraryFolder {
@@ -63,6 +64,7 @@ export interface LibraryFilter {
   search?: string;
   sort_by?: string;
   sort_direction?: "asc" | "desc";
+  flagged_only?: boolean;
 }
 
 export type LibraryViewType = "tracks" | "artists" | "albums" | "genres";

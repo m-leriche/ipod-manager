@@ -221,7 +221,8 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
 
       setCustomPresets((prevPresets) => {
         const exists = prevPresets.findIndex((p) => p.name === trimmed);
-        const next = exists >= 0 ? prevPresets.map((p, i) => (i === exists ? newPreset : p)) : [...prevPresets, newPreset];
+        const next =
+          exists >= 0 ? prevPresets.map((p, i) => (i === exists ? newPreset : p)) : [...prevPresets, newPreset];
         persistPresets(next);
         return next;
       });

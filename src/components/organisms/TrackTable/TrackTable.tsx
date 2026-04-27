@@ -52,8 +52,10 @@ export const TrackTable = memo(function TrackTable({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
-  const [rowDragFrom, setRowDragFrom] = useState<number | null>(null);
-  const [rowDragOver, setRowDragOver] = useState<number | null>(null);
+  const [reorderDragOver, setReorderDragOver] = useState<number | null>(null);
+  const reorderFromRef = useRef<number | null>(null);
+  const reorderStartYRef = useRef(0);
+  const reorderActiveRef = useRef(false);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -205,35 +207,64 @@ export const TrackTable = memo(function TrackTable({
 
   const isPlaylistView = activePlaylistId != null;
 
-  const handleRowDragStart = useCallback((e: React.DragEvent, index: number) => {
-    e.dataTransfer.setData("text/plain", String(index));
-    e.dataTransfer.effectAllowed = "move";
-    setRowDragFrom(index);
-  }, []);
+  const handleReorderMouseDown = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      if (!isPlaylistView || e.button !== 0) return;
+      reorderFromRef.current = index;
+      reorderStartYRef.current = e.clientY;
+      reorderActiveRef.current = false;
 
-  const handleRowDragOver = useCallback((e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setRowDragOver(index);
-  }, []);
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!reorderActiveRef.current && Math.abs(ev.clientY - reorderStartYRef.current) > 5) {
+          reorderActiveRef.current = true;
+        }
+        if (!reorderActiveRef.current || !scrollRef.current) return;
 
-  const handleRowDrop = useCallback(
-    (e: React.DragEvent, toIndex: number) => {
-      e.preventDefault();
-      const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
-      if (!isNaN(fromIndex) && fromIndex !== toIndex && activePlaylistId != null) {
-        moveTrack(activePlaylistId, fromIndex, toIndex);
-      }
-      setRowDragFrom(null);
-      setRowDragOver(null);
+        // Find which row the mouse is over
+        const rows = scrollRef.current.querySelectorAll("tbody tr[data-index]");
+        let targetIndex: number | null = null;
+        for (const row of rows) {
+          const rect = row.getBoundingClientRect();
+          if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
+            targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
+            break;
+          }
+        }
+        setReorderDragOver(targetIndex);
+      };
+
+      const handleMouseUp = (ev: MouseEvent) => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+
+        if (reorderActiveRef.current && reorderFromRef.current !== null && activePlaylistId != null) {
+          // Find drop target from final mouse position
+          const rows = scrollRef.current?.querySelectorAll("tbody tr[data-index]");
+          let targetIndex: number | null = null;
+          if (rows) {
+            for (const row of rows) {
+              const rect = row.getBoundingClientRect();
+              if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
+                targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
+                break;
+              }
+            }
+          }
+          if (targetIndex !== null && targetIndex !== reorderFromRef.current) {
+            moveTrack(activePlaylistId, reorderFromRef.current, targetIndex);
+          }
+        }
+
+        reorderFromRef.current = null;
+        reorderActiveRef.current = false;
+        setReorderDragOver(null);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
     },
-    [activePlaylistId, moveTrack],
+    [isPlaylistView, activePlaylistId, moveTrack],
   );
-
-  const handleRowDragEnd = useCallback(() => {
-    setRowDragFrom(null);
-    setRowDragOver(null);
-  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -435,15 +466,11 @@ export const TrackTable = memo(function TrackTable({
                 isCurrentTrack={currentTrackId === track.id}
                 isPlaying={currentTrackId === track.id && isActivePlaying}
                 isSelected={selected.has(track.id)}
-                isDragOver={rowDragOver === virtualRow.index && rowDragFrom !== virtualRow.index}
-                draggable={isPlaylistView}
+                isDragOver={reorderDragOver === virtualRow.index}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenu={handleContextMenu}
-                onDragStart={isPlaylistView ? handleRowDragStart : undefined}
-                onDragOver={isPlaylistView ? handleRowDragOver : undefined}
-                onDrop={isPlaylistView ? handleRowDrop : undefined}
-                onDragEnd={isPlaylistView ? handleRowDragEnd : undefined}
+                onMouseDown={isPlaylistView ? handleReorderMouseDown : undefined}
               />
             );
           })}
@@ -567,14 +594,10 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isPlaying,
   isSelected,
   isDragOver,
-  draggable,
   onClick,
   onDoubleClick,
   onContextMenu,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
+  onMouseDown,
 }: {
   track: LibraryTrack;
   index: number;
@@ -583,28 +606,21 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isPlaying: boolean;
   isSelected: boolean;
   isDragOver?: boolean;
-  draggable?: boolean;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
-  onDragStart?: (e: React.DragEvent, index: number) => void;
-  onDragOver?: (e: React.DragEvent, index: number) => void;
-  onDrop?: (e: React.DragEvent, index: number) => void;
-  onDragEnd?: () => void;
+  onMouseDown?: (e: React.MouseEvent, index: number) => void;
 }) {
   return (
     <tr
-      draggable={draggable}
+      data-index={index}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
-      onDragStart={onDragStart ? (e) => onDragStart(e, index) : undefined}
-      onDragOver={onDragOver ? (e) => onDragOver(e, index) : undefined}
-      onDrop={onDrop ? (e) => onDrop(e, index) : undefined}
-      onDragEnd={onDragEnd}
+      onMouseDown={onMouseDown ? (e) => onMouseDown(e, index) : undefined}
       className={`group cursor-default select-none transition-colors ${
         isSelected ? "" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
-      } ${isDragOver ? "!border-t-2 !border-t-accent" : ""}`}
+      }`}
     >
       {columns.map((col) => (
         <td

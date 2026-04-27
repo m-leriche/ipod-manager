@@ -152,7 +152,8 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 
 ### Library Player
 - [ ] **Fix playcount tags** — Playcount tags not displaying properly in the library view.
-- [ ] **Playlist support** — Create, edit, reorder, persist to database. Needs `playlists` + `playlist_tracks` tables, CRUD commands, and sidebar/tab UI.
+- [x] **Playlist support** — Create, edit, reorder, persist to SQLite. Sidebar UI, context menu integration, full CRUD.
+- [ ] **Rockbox playlist export** — Export playlists as M3U8 files to a mounted iPod for Rockbox playback. Map local library paths to iPod paths (strip library prefix, prepend iPod music root), write to `/Playlists/` on the device. Path mapping can be inferred from sync profiles or user-selected.
 - [ ] **Virtual scrolling** — Large track tables (10k+ rows) need virtualization. `@tanstack/react-virtual` is installed but not yet wired in.
 - [ ] **Queue persistence** — Queue is in-memory only, lost on restart. Save to SQLite or localStorage.
 - [ ] **Column browser keyboard nav** — Arrow keys to move selection, Enter to confirm.

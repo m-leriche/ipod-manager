@@ -184,9 +184,10 @@ export const TrackTable = memo(function TrackTable({
 
   const handleDoubleClick = useCallback(
     (track: LibraryTrack) => {
-      playTrack(track, getAlbumTracks(track, tracks));
+      const contextTracks = activePlaylistId != null ? tracks : getAlbumTracks(track, tracks);
+      playTrack(track, contextTracks);
     },
-    [playTrack, tracks],
+    [playTrack, tracks, activePlaylistId],
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { BandMode, EqualizerState, EqPreset } from "../components/organisms/EqualizerPanel/types";
 import {
@@ -114,10 +114,6 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
   const [isOpen, setIsOpen] = useState(false);
   const [customPresets, setCustomPresets] = useState<EqPreset[]>(loadCustomPresets);
 
-  // Ref that always points to latest state (used inside callbacks)
-  const stateRef = useRef(state);
-  stateRef.current = state;
-
   // ── Persist + send EQ config to Rust engine on every state change ──
 
   useEffect(() => {
@@ -195,10 +191,12 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
       const preset = BUILT_IN_PRESETS.find((p) => p.name === name) || customPresets.find((p) => p.name === name);
       if (!preset) return;
 
+      const mode = preset.bandMode ?? "10";
       setState((prev) => ({
         ...prev,
-        bandMode: "10" as BandMode,
-        gains10: [...preset.gains],
+        bandMode: mode,
+        gains10: mode === "10" ? [...preset.gains] : prev.gains10,
+        gains31: mode === "31" ? [...preset.gains] : prev.gains31,
         preamp: preset.preamp,
         activePreset: name,
         parametricBands: null,
@@ -211,21 +209,26 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    const gains = stateRef.current.bandMode === "10" ? [...stateRef.current.gains10] : [...stateRef.current.gains31];
-    const newPreset: EqPreset = {
-      name: trimmed,
-      gains,
-      preamp: stateRef.current.preamp,
-    };
+    // Read gains from setState updater to guarantee current state (stateRef can be stale in React 19 concurrent mode)
+    setState((prev) => {
+      const gains = prev.bandMode === "10" ? [...prev.gains10] : [...prev.gains31];
+      const newPreset: EqPreset = {
+        name: trimmed,
+        gains,
+        preamp: prev.preamp,
+        bandMode: prev.bandMode,
+      };
 
-    setCustomPresets((prev) => {
-      const exists = prev.findIndex((p) => p.name === trimmed);
-      const next = exists >= 0 ? prev.map((p, i) => (i === exists ? newPreset : p)) : [...prev, newPreset];
-      persistPresets(next);
-      return next;
+      setCustomPresets((prevPresets) => {
+        const exists = prevPresets.findIndex((p) => p.name === trimmed);
+        const next =
+          exists >= 0 ? prevPresets.map((p, i) => (i === exists ? newPreset : p)) : [...prevPresets, newPreset];
+        persistPresets(next);
+        return next;
+      });
+
+      return { ...prev, activePreset: trimmed };
     });
-
-    setState((prev) => ({ ...prev, activePreset: trimmed }));
   }, []);
 
   const deletePreset = useCallback((name: string) => {

@@ -15,6 +15,7 @@ export interface EqPreset {
   name: string;
   gains: number[];
   preamp: number;
+  bandMode?: BandMode;
   builtIn?: boolean;
 }
 

@@ -206,8 +206,9 @@ export const TrackTable = memo(function TrackTable({
   const isPlaylistView = activePlaylistId != null;
 
   const handleRowDragStart = useCallback((e: React.DragEvent, index: number) => {
-    setRowDragFrom(index);
+    e.dataTransfer.setData("text/plain", String(index));
     e.dataTransfer.effectAllowed = "move";
+    setRowDragFrom(index);
   }, []);
 
   const handleRowDragOver = useCallback((e: React.DragEvent, index: number) => {
@@ -219,13 +220,14 @@ export const TrackTable = memo(function TrackTable({
   const handleRowDrop = useCallback(
     (e: React.DragEvent, toIndex: number) => {
       e.preventDefault();
-      if (rowDragFrom !== null && rowDragFrom !== toIndex && activePlaylistId != null) {
-        moveTrack(activePlaylistId, rowDragFrom, toIndex);
+      const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+      if (!isNaN(fromIndex) && fromIndex !== toIndex && activePlaylistId != null) {
+        moveTrack(activePlaylistId, fromIndex, toIndex);
       }
       setRowDragFrom(null);
       setRowDragOver(null);
     },
-    [rowDragFrom, activePlaylistId, moveTrack],
+    [activePlaylistId, moveTrack],
   );
 
   const handleRowDragEnd = useCallback(() => {

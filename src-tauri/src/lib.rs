@@ -14,6 +14,7 @@ mod musicbrainz;
 mod profiles;
 mod rockbox;
 mod sanitize;
+mod streaming;
 mod youtube;
 
 use files::SyncCancel;
@@ -44,6 +45,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .register_uri_scheme_protocol("stream", |ctx, request| {
+            streaming::handle_request(ctx, request)
+        })
         .manage(SyncCancel::new())
         .setup(|app| {
             // Initialize library database

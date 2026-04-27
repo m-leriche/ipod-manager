@@ -96,6 +96,7 @@ dependencies = [
  "image",
  "lofty",
  "log",
+ "percent-encoding",
  "rayon",
  "rusqlite",
  "serde",

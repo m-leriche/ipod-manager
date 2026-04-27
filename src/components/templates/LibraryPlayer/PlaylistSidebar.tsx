@@ -14,6 +14,7 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (creating || editingId !== null) inputRef.current?.focus();
@@ -22,7 +23,11 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
   // Close context menu on outside click
   useEffect(() => {
     if (!contextMenu) return;
-    const handle = () => setContextMenu(null);
+    const handle = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
     const timer = setTimeout(() => window.addEventListener("mousedown", handle), 0);
     return () => {
       clearTimeout(timer);
@@ -194,6 +199,7 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
       {/* Context menu */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="fixed z-50 min-w-[140px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >

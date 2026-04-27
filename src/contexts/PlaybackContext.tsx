@@ -55,6 +55,8 @@ const loadVolume = (): number => {
   return 0.8;
 };
 
+const streamUrl = (filePath: string): string => convertFileSrc(filePath, "stream");
+
 const initial: PlaybackState = {
   currentTrack: null,
   isPlaying: false,
@@ -93,6 +95,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   const audioBRef = useRef<HTMLAudioElement | null>(null);
   const activeRef = useRef<"A" | "B">("A");
   const rafRef = useRef<number>(0);
+  const isSeekingRef = useRef(false);
   const shuffleOrderRef = useRef<number[]>([]);
   const shufflePositionRef = useRef<number>(0);
 
@@ -145,7 +148,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
 
     const tick = () => {
       const audio = getActiveAudio();
-      if (audio) {
+      if (audio && !isSeekingRef.current) {
         const audioDur = isFinite(audio.duration) ? audio.duration : 0;
         setTime((prev) => {
           // Extend duration if audio element or playback position exceeds it
@@ -192,7 +195,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
 
     const idle = getIdleAudio();
     if (idle) {
-      idle.src = convertFileSrc(nextTrack.file_path);
+      idle.src = streamUrl(nextTrack.file_path);
       idle.load();
     }
   }, [getNextIndex, getIdleAudio]);
@@ -203,7 +206,8 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       .then((dur) => {
         // Only apply if still playing the same track
         if (dur > 0 && stateRef.current.currentTrack?.file_path === filePath) {
-          setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, dur) }));
+          // ffprobe is authoritative — use its value directly
+          setTime((prev) => ({ ...prev, duration: dur }));
         }
       })
       .catch(() => {}); // Fallback to metadata/audio.duration if ffprobe unavailable
@@ -230,7 +234,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       }));
       setTime({ currentTime: 0, duration: track.duration_secs });
 
-      audio.src = convertFileSrc(track.file_path);
+      audio.src = streamUrl(track.file_path);
       audio.play().catch(() => {});
 
       // Probe real duration in background — updates display when ready
@@ -413,13 +417,20 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       const dur = timeRef.current.duration;
       if (dur <= 0) return;
       const t = Math.min(fraction * dur, dur);
+      // Pause rAF updates so they don't overwrite our seek position
+      isSeekingRef.current = true;
       audio.currentTime = t;
       // Show requested position immediately for responsiveness
       setTime((prev) => ({ ...prev, currentTime: t }));
       // Correct to the actual position once the browser finishes seeking
-      audio.addEventListener("seeked", () => setTime((prev) => ({ ...prev, currentTime: audio.currentTime })), {
-        once: true,
-      });
+      audio.addEventListener(
+        "seeked",
+        () => {
+          setTime((prev) => ({ ...prev, currentTime: audio.currentTime }));
+          isSeekingRef.current = false;
+        },
+        { once: true },
+      );
     },
     [getActiveAudio],
   );

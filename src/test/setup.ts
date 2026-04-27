@@ -92,7 +92,7 @@ vi.mock("../contexts/ThemeContext", () => ({
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
-  convertFileSrc: vi.fn((path: string) => `http://asset.localhost/${encodeURIComponent(path)}`),
+  convertFileSrc: vi.fn((path: string, protocol = "asset") => `http://${protocol}.localhost/${encodeURIComponent(path)}`),
 }));
 
 // Mock @tauri-apps/api/event

@@ -24,7 +24,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
 
     if (!filePath) return;
 
-    const audio = new Audio(convertFileSrc(filePath));
+    const audio = new Audio(convertFileSrc(filePath, "stream"));
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration);

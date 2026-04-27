@@ -101,8 +101,9 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   const timeRef = useRef(time);
   timeRef.current = time;
 
-  // Ref for the track-ended handler
+  // Refs for event handlers (so listeners always call the latest version)
   const onTrackEndedRef = useRef<() => void>(() => {});
+  const onGaplessTransitionRef = useRef<() => void>(() => {});
 
   // ── Set initial volume on the Rust engine ────────────────────
   useEffect(() => {
@@ -135,6 +136,10 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
 
     listen("audio:track-ended", () => {
       onTrackEndedRef.current();
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen("audio:gapless-transition", () => {
+      onGaplessTransitionRef.current();
     }).then((unlisten) => unlisteners.push(unlisten));
 
     listen<string>("audio:error", (event) => {
@@ -245,8 +250,46 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
   }, [getNextIndex]);
 
-  // Keep the ref in sync so the event listener always calls latest handler
+  // ── Gapless transition handler (engine already playing next track) ──
+
+  const handleGaplessTransition = useCallback(() => {
+    const nextIdx = getNextIndex();
+    if (nextIdx === null) return;
+
+    const s = stateRef.current;
+    const nextTrack = s.queue[nextIdx];
+    if (!nextTrack) return;
+
+    if (s.shuffle) {
+      shufflePositionRef.current += 1;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      currentTrack: nextTrack,
+      queueIndex: nextIdx,
+    }));
+
+    setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+    lastPositionRef.current = 0;
+    lastPositionTimeRef.current = performance.now();
+    // Don't invoke audio_play — the engine already transitioned seamlessly
+  }, [getNextIndex]);
+
+  // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;
+  onGaplessTransitionRef.current = handleGaplessTransition;
+
+  // ── Preload next track for gapless playback ──────────────────
+
+  useEffect(() => {
+    if (!state.isPlaying || state.queue.length === 0 || state.repeat === "one") return;
+
+    const nextIdx = getNextIndex();
+    if (nextIdx !== null && state.queue[nextIdx]) {
+      invoke("audio_preload_next", { path: state.queue[nextIdx].file_path }).catch(() => {});
+    }
+  }, [state.queueIndex, state.queue, state.shuffle, state.repeat, state.isPlaying, getNextIndex]);
 
   // ── Public API ────────────────────────────────────────────────
 

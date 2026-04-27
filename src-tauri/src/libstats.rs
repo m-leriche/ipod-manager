@@ -299,6 +299,163 @@ pub fn scan_library_stats(
     })
 }
 
+// ── DB-backed stats (instant, no file I/O) ────────────────────
+
+pub fn get_library_stats(
+    conn: &rusqlite::Connection,
+    library_path: &str,
+) -> Result<LibraryStats, String> {
+    let track_count: usize = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    if track_count == 0 {
+        return Err("No tracks in library".to_string());
+    }
+
+    // Aggregate totals
+    let (total_size, total_duration_secs, avg_bitrate): (i64, f64, f64) = conn
+        .query_row(
+            "SELECT COALESCE(SUM(file_size),0), COALESCE(SUM(duration_secs),0), COALESCE(AVG(bitrate_kbps),0) FROM tracks",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    let artist_count: usize = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT artist) FROM tracks WHERE artist IS NOT NULL AND artist != ''",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    let album_count: usize = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT album) FROM tracks WHERE album IS NOT NULL AND album != ''",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    // Format breakdown
+    let mut stmt = conn
+        .prepare("SELECT format, COUNT(*), SUM(file_size) FROM tracks GROUP BY format ORDER BY COUNT(*) DESC")
+        .map_err(|e| format!("DB error: {}", e))?;
+    let format_breakdown: Vec<FormatEntry> = stmt
+        .query_map([], |r| {
+            let format: String = r.get(0)?;
+            let count: usize = r.get(1)?;
+            let size: i64 = r.get(2)?;
+            Ok((format, count, size))
+        })
+        .map_err(|e| format!("DB error: {}", e))?
+        .filter_map(|r| r.ok())
+        .map(|(format, count, size)| FormatEntry {
+            format: format.to_uppercase(),
+            count,
+            size: size as u64,
+            percentage: (count as f64 / track_count as f64) * 100.0,
+        })
+        .collect();
+
+    // Genre distribution
+    let mut stmt = conn
+        .prepare("SELECT genre, COUNT(*) FROM tracks WHERE genre IS NOT NULL AND genre != '' GROUP BY genre ORDER BY COUNT(*) DESC")
+        .map_err(|e| format!("DB error: {}", e))?;
+    let genre_distribution: Vec<DistributionEntry> = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, usize>(1)?)))
+        .map_err(|e| format!("DB error: {}", e))?
+        .filter_map(|r| r.ok())
+        .map(|(label, count)| DistributionEntry { label, count })
+        .collect();
+
+    // Sample rate distribution
+    let mut stmt = conn
+        .prepare("SELECT sample_rate, COUNT(*) FROM tracks WHERE sample_rate IS NOT NULL GROUP BY sample_rate ORDER BY COUNT(*) DESC")
+        .map_err(|e| format!("DB error: {}", e))?;
+    let sample_rate_distribution: Vec<DistributionEntry> = stmt
+        .query_map([], |r| Ok((r.get::<_, u32>(0)?, r.get::<_, usize>(1)?)))
+        .map_err(|e| format!("DB error: {}", e))?
+        .filter_map(|r| r.ok())
+        .map(|(rate, count)| DistributionEntry {
+            label: format_sample_rate(rate),
+            count,
+        })
+        .collect();
+
+    // Year distribution
+    let mut stmt = conn
+        .prepare("SELECT year, COUNT(*) FROM tracks WHERE year IS NOT NULL AND year > 0 GROUP BY year ORDER BY year ASC")
+        .map_err(|e| format!("DB error: {}", e))?;
+    let year_distribution: Vec<YearEntry> = stmt
+        .query_map([], |r| Ok((r.get::<_, u32>(0)?, r.get::<_, usize>(1)?)))
+        .map_err(|e| format!("DB error: {}", e))?
+        .filter_map(|r| r.ok())
+        .map(|(year, count)| YearEntry { year, count })
+        .collect();
+
+    let oldest_year = year_distribution.first().map(|e| e.year);
+    let newest_year = year_distribution.last().map(|e| e.year);
+
+    // File details — strip library path prefix for relative paths
+    let prefix = if library_path.ends_with('/') {
+        library_path.to_string()
+    } else {
+        format!("{}/", library_path)
+    };
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT file_path, title, artist, album, genre, year, sample_rate, bitrate_kbps, duration_secs, file_size, format FROM tracks ORDER BY file_path",
+        )
+        .map_err(|e| format!("DB error: {}", e))?;
+    let file_details: Vec<FileDetail> = stmt
+        .query_map([], |r| {
+            let file_path: String = r.get(0)?;
+            let sample_rate: Option<u32> = r.get(6)?;
+            Ok(FileDetail {
+                relative_path: file_path
+                    .strip_prefix(&prefix)
+                    .unwrap_or(&file_path)
+                    .to_string(),
+                title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                artist: r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                album: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                genre: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                year: r.get(5)?,
+                sample_rate,
+                sample_rate_display: sample_rate.map(format_sample_rate).unwrap_or_default(),
+                bitrate_kbps: r.get(7)?,
+                duration_secs: r.get(8)?,
+                size: r.get::<_, i64>(9)? as u64,
+                format: r
+                    .get::<_, Option<String>>(10)?
+                    .unwrap_or_default()
+                    .to_uppercase(),
+            })
+        })
+        .map_err(|e| format!("DB error: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(LibraryStats {
+        total_tracks: track_count,
+        total_size: total_size as u64,
+        total_duration_secs,
+        average_bitrate_kbps: avg_bitrate as u32,
+        artist_count,
+        album_count,
+        format_breakdown,
+        genre_distribution,
+        sample_rate_distribution,
+        year_distribution,
+        oldest_year,
+        newest_year,
+        file_details,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

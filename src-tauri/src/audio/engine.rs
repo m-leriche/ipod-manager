@@ -10,6 +10,7 @@ use ringbuf::HeapRb;
 use tauri::{AppHandle, Emitter, Runtime};
 
 use super::decoder::AudioDecoder;
+use super::equalizer::Equalizer;
 use super::resampler::Resampler;
 use super::types::{AudioCommand, PlayState};
 
@@ -110,9 +111,12 @@ pub fn run<R: Runtime>(
     let mut decoder: Option<AudioDecoder> = None;
     let mut ring_producer: Option<ringbuf::HeapProd<f32>> = None;
     let mut resampler: Option<Resampler> = None;
+    let mut equalizer = Equalizer::new(output_rate, output_channels);
     let mut source_channels: u16 = 2;
     // Leftover samples from a partially-pushed decode packet
     let mut leftover: Vec<f32> = Vec::new();
+    // Preloaded next track for gapless playback
+    let mut preloaded: Option<(AudioDecoder, Option<Resampler>, u16)> = None;
 
     // Position event timer
     let mut last_position_event = std::time::Instant::now();
@@ -129,7 +133,9 @@ pub fn run<R: Runtime>(
                     ring_producer = None;
                     decoder = None;
                     resampler = None;
+                    preloaded = None;
                     leftover.clear();
+                    equalizer.reset();
                     shared.out_samples.store(0, Ordering::Relaxed);
                     shared.set_position(0.0);
 
@@ -221,6 +227,7 @@ pub fn run<R: Runtime>(
                     ring_producer = None;
                     decoder = None;
                     resampler = None;
+                    preloaded = None;
                     leftover.clear();
                     shared.out_samples.store(0, Ordering::Relaxed);
                     shared.set_position(0.0);
@@ -235,6 +242,7 @@ pub fn run<R: Runtime>(
                             if let Some(ref mut rs) = resampler {
                                 rs.reset();
                             }
+                            equalizer.reset();
 
                             // Clear ring buffer by dropping and recreating
                             if current_stream.is_some() {
@@ -279,12 +287,21 @@ pub fn run<R: Runtime>(
                     shared.set_volume(volume.clamp(0.0, 1.0));
                 }
 
-                AudioCommand::PreloadNext { path: _ } => {
-                    // Phase 3: preload next track for gapless
-                }
+                AudioCommand::PreloadNext { path } => match AudioDecoder::open(&path) {
+                    Ok(dec) => {
+                        let src_ch = dec.channels;
+                        let rs = Resampler::new(dec.sample_rate, output_rate, output_channels);
+                        let rs_opt = if rs.is_active() { Some(rs) } else { None };
+                        preloaded = Some((dec, rs_opt, src_ch));
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to preload next track: {}", e);
+                        preloaded = None;
+                    }
+                },
 
-                AudioCommand::SetEq { config: _ } => {
-                    // Phase 2: EQ processing
+                AudioCommand::SetEq { config } => {
+                    equalizer.update_config(&config);
                 }
 
                 AudioCommand::Shutdown => {
@@ -298,6 +315,8 @@ pub fn run<R: Runtime>(
         }
 
         // Decode and fill ring buffer if playing
+        let mut gapless_transition = false;
+
         if shared.get_state() == PlayState::Playing {
             if let (Some(ref mut dec), Some(ref mut prod)) = (&mut decoder, &mut ring_producer) {
                 // First, push any leftover samples from previous iteration
@@ -320,11 +339,13 @@ pub fn run<R: Runtime>(
                                 let adapted =
                                     adapt_channels(samples, source_channels, output_channels);
                                 // Resample if source and output rates differ
-                                let out_samples = if let Some(ref mut rs) = resampler {
+                                let mut out_samples = if let Some(ref mut rs) = resampler {
                                     rs.process(&adapted)
                                 } else {
                                     adapted
                                 };
+                                // Apply EQ
+                                equalizer.process(&mut out_samples, output_channels);
                                 let mut pushed = 0;
                                 for &s in &out_samples {
                                     if prod.try_push(s).is_err() {
@@ -337,10 +358,14 @@ pub fn run<R: Runtime>(
                                 filled += pushed;
                             }
                             Ok(None) => {
-                                // EOF — track ended
-                                shared.set_state(PlayState::Stopped);
-                                let _ = app_handle.emit("audio:track-ended", ());
-                                decoder = None;
+                                // EOF — check for gapless transition
+                                if preloaded.is_some() {
+                                    gapless_transition = true;
+                                } else {
+                                    shared.set_state(PlayState::Stopped);
+                                    let _ = app_handle.emit("audio:track-ended", ());
+                                    decoder = None;
+                                }
                                 break;
                             }
                             Err(e) => {
@@ -356,6 +381,22 @@ pub fn run<R: Runtime>(
 
                 // Update position from output sample counter (tracks what's actually been played)
                 shared.update_position_from_output();
+            }
+
+            // Handle gapless transition outside the borrow scope
+            if gapless_transition {
+                if let Some((next_dec, next_rs, next_src_ch)) = preloaded.take() {
+                    let dur = next_dec.duration_secs;
+                    decoder = Some(next_dec);
+                    resampler = next_rs;
+                    source_channels = next_src_ch;
+                    equalizer.reset();
+                    leftover.clear();
+                    shared.out_samples.store(0, Ordering::Relaxed);
+                    shared.set_position(0.0);
+                    shared.set_duration(dur);
+                    let _ = app_handle.emit("audio:gapless-transition", dur);
+                }
             }
 
             // Emit position events at ~20Hz

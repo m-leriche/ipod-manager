@@ -175,6 +175,7 @@ pub fn run() {
             commands::generate_spectrogram,
             commands::generate_waveform,
             commands::scan_library_stats,
+            commands::get_library_stats,
             commands::get_ipod_info,
             commands::read_rockbox_playdata,
             commands::get_library_location,

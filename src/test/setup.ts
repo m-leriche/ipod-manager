@@ -69,6 +69,7 @@ vi.mock("../contexts/EqualizerContext", () => ({
     setEnabled: vi.fn(),
     setBandMode: vi.fn(),
     setGain: vi.fn(),
+    setParametricBandGain: vi.fn(),
     setPreamp: vi.fn(),
     resetGains: vi.fn(),
     customPresets: [],

@@ -117,7 +117,7 @@ npm test
 
 ## Library Player TODOs
 
-- [ ] Refine playback engine — gapless transitions, handle unsupported formats gracefully, persist queue across restarts
+- [ ] Refine playback engine — handle unsupported formats gracefully, persist queue across restarts
 - [ ] Improve library loading — show skeleton/shimmer while scanning, background incremental re-scan on app launch
 - [ ] Virtual scrolling for large track tables (10k+ rows)
 - [ ] Scroll position preservation when switching between column browser selections
@@ -130,7 +130,8 @@ npm test
 - [ ] Remember column widths, sort preferences, and column browser selections in localStorage
 - [ ] Right-click context menus in column browser (play all by artist, etc.)
 - [ ] Status bar with total library stats (tracks, duration, size)
-- [ ] Restore EQ — implement biquad filters in Rust (audio/equalizer.rs), wire into audio engine, remove dead Web Audio API code from EqualizerContext
+- [x] Restore EQ — biquad filters in Rust (audio/equalizer.rs), wired into audio engine, Web Audio API code removed from EqualizerContext
+- [x] Gapless playback — engine preloads next track decoder, seamless transition on EOF
 - [ ] Fix album art repair — MusicBrainz lookup and embedded art extraction have reliability issues, needs investigation and hardening
 
 ## Code Style

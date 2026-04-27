@@ -29,7 +29,6 @@ vi.mock("../../../contexts/EqualizerContext", () => ({
     setGain: mockSetGain,
     setPreamp: mockSetPreamp,
     resetGains: mockResetGains,
-    connectAudioElement: vi.fn(),
     customPresets: [],
     selectPreset: vi.fn(),
     savePreset: vi.fn(),

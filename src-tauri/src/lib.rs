@@ -1,4 +1,5 @@
 mod albumart;
+mod audio;
 mod audio_utils;
 mod audioquality;
 mod commands;
@@ -61,6 +62,10 @@ pub fn run() {
             let conn = library::init_db(&db_path).expect("Failed to initialize library database");
 
             app.manage(LibraryDb::new(conn));
+
+            // Spawn native audio engine
+            let audio_engine = audio::AudioEngine::spawn(app.handle().clone());
+            app.manage(audio_engine);
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -188,6 +193,15 @@ pub fn run() {
             commands::get_library_genres,
             commands::search_library,
             commands::show_in_finder,
+            commands::audio_play,
+            commands::audio_pause,
+            commands::audio_resume,
+            commands::audio_stop,
+            commands::audio_seek,
+            commands::audio_set_volume,
+            commands::audio_preload_next,
+            commands::audio_get_status,
+            commands::audio_set_eq,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

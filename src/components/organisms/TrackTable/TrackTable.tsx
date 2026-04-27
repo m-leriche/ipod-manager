@@ -233,17 +233,23 @@ export const TrackTable = memo(function TrackTable({
             setContextMenu(null);
           },
         },
-        { type: "separator" as const },
-        ...playlists.map((p) => ({
-          label: `Add to "${p.name}"`,
-          onClick: () => {
-            const ids =
-              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-            addToPlaylist(p.id, ids);
-            setContextMenu(null);
-          },
-        })),
-        ...(playlists.length > 0 ? [{ type: "separator" as const }] : []),
+        ...(playlists.length > 0
+          ? [
+              {
+                type: "submenu" as const,
+                label: "Add to Playlist",
+                children: playlists.map((p) => ({
+                  label: p.name,
+                  onClick: () => {
+                    const ids =
+                      selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+                    addToPlaylist(p.id, ids);
+                    setContextMenu(null);
+                  },
+                })),
+              },
+            ]
+          : []),
         ...(activePlaylistId != null
           ? [
               {

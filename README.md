@@ -4,6 +4,7 @@ A native macOS desktop app for music library management. Built with Tauri 2 (Rus
 
 ## Features
 
+- **Library player** — Full music library browser with column browser (Genre/Artist/Album), sortable track table, search, and native audio playback. Gapless playback, 10/31-band parametric EQ, preamp, and custom presets. Supports MP3, FLAC, WAV, AAC, Ogg Vorbis, Opus, and AIFF.
 - **File Explorer** — Browse any folder on your system. Navigate in and out of directories, view file sizes and dates, and delete files/folders via right-click.
 - **Folder comparison & sync** — Pick any two folders and recursively compare them. Color-coded tree view shows new, modified, extra, and matching files. Mirror sync, selective copy, or delete with real-time progress. Profiles save source/target paths and exclusion filters.
 - **Album art manager** — Scans music folders for albums missing cover art. Extracts embedded art from audio tags first, then searches MusicBrainz Cover Art Archive as a fallback. Saves `cover.jpg` per album folder.
@@ -86,9 +87,11 @@ src/
     ├── molecules/                       # Composed atoms with simple logic
     ├── organisms/                       # Domain-aware components
     └── templates/                       # Full page/tab-level containers
+        ├── LibraryPlayer/
         ├── AlbumArtManager/
         ├── BrowseExplorer/
         ├── ComparisonView/
+        ├── IpodSummary/
         ├── MetadataEditor/
         ├── MountPanel/
         ├── QualityAnalyzer/
@@ -107,6 +110,8 @@ src-tauri/src/
 ├── metarepair.rs                        # MusicBrainz-powered metadata validation and repair
 ├── musicbrainz.rs                       # Shared MusicBrainz API client (search, release details, cover art)
 ├── audioquality.rs                      # Quality analysis, transcode detection, spectrograms
+├── library/                             # SQLite library database (tracks, folders, search, browser data)
+├── audio/                               # Native playback engine (symphonia + cpal, EQ, gapless, resampler)
 ├── libstats.rs                          # Library statistics aggregation via lofty
 ├── rockbox.rs                           # Rockbox TagCache binary database parser
 ├── localvideo.rs                        # Local video audio extraction via ffmpeg
@@ -126,7 +131,7 @@ Each component has its own folder with co-located test, types, and helper files.
 | Testing    | Vitest, React Testing Library, cargo test |
 | Formatting | Prettier, rustfmt                 |
 | CI         | GitHub Actions                    |
-| Audio      | lofty (metadata), ffmpeg/ffprobe (quality, extraction) |
+| Audio      | symphonia (decoding), cpal (playback), lofty (metadata), ffmpeg/ffprobe (quality, extraction) |
 | YouTube    | yt-dlp + ffmpeg (external CLI)    |
 | Network    | ureq (MusicBrainz API)            |
 | Images     | image (decode/resize/encode)      |
@@ -145,11 +150,19 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 
 ## TODO
 
+### Library Player
+- [ ] **Fix playcount tags** — Playcount tags not displaying properly in the library view.
+- [ ] **Playlist support** — Create, edit, reorder, persist to database. Needs `playlists` + `playlist_tracks` tables, CRUD commands, and sidebar/tab UI.
+- [ ] **Virtual scrolling** — Large track tables (10k+ rows) need virtualization. `@tanstack/react-virtual` is installed but not yet wired in.
+- [ ] **Queue persistence** — Queue is in-memory only, lost on restart. Save to SQLite or localStorage.
+- [ ] **Column browser keyboard nav** — Arrow keys to move selection, Enter to confirm.
+- [ ] **Resizable column browser** — Drag the divider between browser and track table.
+- [ ] **Right-click context menus in column browser** — "Play all by artist", "Add to queue", etc.
+- [ ] **Scroll position preservation** — Maintain scroll position when switching between column browser selections.
+
 ### Library Management
-- [ ] **iTunes-style library player** — Full library browser with artist/album/track views, smart filtering, queue management, and gapless playback. The central hub for browsing and playing a music collection without leaving the app.
 - [ ] **Folder structure normalization** — Scan a library and flag/fix naming inconsistencies. Target convention like `Artist/Album/01 Track.flac`. Preview renames as a diff before applying.
 - [ ] **Duplicate detection** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison, pick which to keep.
-- [ ] **Playlist manager** — Read/write M3U/PLS playlists. Create from folder structure, convert between formats, validate referenced files exist. Useful for Rockbox.
 - [ ] **Format conversion** — Batch transcode between formats (FLAC → MP3/AAC) during sync or on demand. Keeps master library lossless while fitting more on the iPod.
 
 ### Audio Analysis & Visualization

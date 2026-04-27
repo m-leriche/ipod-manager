@@ -130,6 +130,7 @@ npm test
 - [ ] Remember column widths, sort preferences, and column browser selections in localStorage
 - [ ] Right-click context menus in column browser (play all by artist, etc.)
 - [ ] Status bar with total library stats (tracks, duration, size)
+- [ ] Restore EQ — implement biquad filters in Rust (audio/equalizer.rs), wire into audio engine, remove dead Web Audio API code from EqualizerContext
 - [ ] Fix album art repair — MusicBrainz lookup and embedded art extraction have reliability issues, needs investigation and hardening
 
 ## Code Style

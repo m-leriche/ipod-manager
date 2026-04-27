@@ -20,7 +20,6 @@ interface EqualizerContextValue {
   setGain: (bandIndex: number, gain: number) => void;
   setPreamp: (preamp: number) => void;
   resetGains: () => void;
-  connectAudioElement: (audio: HTMLAudioElement) => void;
   customPresets: EqPreset[];
   selectPreset: (name: string | null) => void;
   savePreset: (name: string) => void;
@@ -96,7 +95,16 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
   const [isOpen, setIsOpen] = useState(false);
   const [customPresets, setCustomPresets] = useState<EqPreset[]>(loadCustomPresets);
 
-  // Web Audio API refs — survive re-renders
+  // TODO: EQ is currently non-functional. Audio playback moved from browser <audio> elements
+  // to a native Rust engine (symphonia + cpal), so the Web Audio API chain below no longer
+  // receives any audio signal. To restore EQ:
+  // 1. Implement biquad filters in Rust (src-tauri/src/audio/equalizer.rs) using Audio EQ Cookbook formulas
+  // 2. Apply filters to PCM samples in the audio engine between decode and ring buffer
+  // 3. Add invoke("audio_set_eq", { config }) call here whenever EQ state changes
+  // 4. Remove all Web Audio API code below (AudioContext, BiquadFilterNode, GainNode, etc.)
+  // The UI and preset management still work — only the audio processing path is disconnected.
+
+  // Web Audio API refs — currently unused, will be removed when Rust EQ is implemented
   const ctxRef = useRef<AudioContext | null>(null);
   const preampRef = useRef<GainNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
@@ -180,45 +188,6 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
       src.connect(preamp);
     });
   }, []);
-
-  // ── Generic chain builder based on current state ──────────────
-
-  const rebuildChain = useCallback(
-    (ctx: AudioContext, s: EqualizerState) => {
-      if (s.parametricBands) {
-        buildParametricChain(ctx, s.parametricBands, s.preamp);
-      } else {
-        buildGraphicChain(ctx, s.bandMode);
-      }
-    },
-    [buildGraphicChain, buildParametricChain],
-  );
-
-  // ── Connect an HTMLAudioElement to the EQ chain ───────────────
-
-  const connectAudioElement = useCallback(
-    (audio: HTMLAudioElement) => {
-      if (sourcesRef.current.has(audio)) return;
-
-      if (!ctxRef.current) {
-        ctxRef.current = new AudioContext();
-        rebuildChain(ctxRef.current, stateRef.current);
-      }
-
-      const ctx = ctxRef.current;
-      if (ctx.state === "suspended") ctx.resume();
-
-      const source = ctx.createMediaElementSource(audio);
-      sourcesRef.current.set(audio, source);
-
-      if (preampRef.current) {
-        source.connect(preampRef.current);
-      } else {
-        source.connect(ctx.destination);
-      }
-    },
-    [rebuildChain],
-  );
 
   // ── Persist on every state change ─────────────────────────────
 
@@ -422,7 +391,6 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
       setGain,
       setPreamp,
       resetGains,
-      connectAudioElement,
       customPresets,
       selectPreset,
       savePreset,
@@ -436,7 +404,6 @@ export const EqualizerProvider = ({ children }: { children: React.ReactNode }) =
       setGain,
       setPreamp,
       resetGains,
-      connectAudioElement,
       customPresets,
       selectPreset,
       savePreset,

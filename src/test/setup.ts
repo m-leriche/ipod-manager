@@ -71,7 +71,6 @@ vi.mock("../contexts/EqualizerContext", () => ({
     setGain: vi.fn(),
     setPreamp: vi.fn(),
     resetGains: vi.fn(),
-    connectAudioElement: vi.fn(),
     customPresets: [],
     selectPreset: vi.fn(),
     savePreset: vi.fn(),
@@ -91,7 +90,7 @@ vi.mock("../contexts/ThemeContext", () => ({
 
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn(() => Promise.resolve()),
   convertFileSrc: vi.fn(
     (path: string, protocol = "asset") => `http://${protocol}.localhost/${encodeURIComponent(path)}`,
   ),

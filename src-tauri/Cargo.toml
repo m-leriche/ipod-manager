@@ -36,6 +36,10 @@ strsim = "0.11"
 rayon = "1.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 percent-encoding = "2"
+symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "ogg", "vorbis", "isomp4", "aiff"] }
+cpal = "0.15"
+ringbuf = "0.4"
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 tempfile = "3"

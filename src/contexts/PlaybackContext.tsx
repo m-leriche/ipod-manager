@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { LibraryTrack } from "../types/library";
-import { useEqualizer } from "./EqualizerContext";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -55,8 +55,6 @@ const loadVolume = (): number => {
   return 0.8;
 };
 
-const streamUrl = (filePath: string): string => convertFileSrc(filePath, "stream");
-
 const initial: PlaybackState = {
   currentTrack: null,
   isPlaying: false,
@@ -88,58 +86,69 @@ const PlaybackTimeContext = createContext<PlaybackTimeState>(initialTime);
 export const PlaybackProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<PlaybackState>(initial);
   const [time, setTime] = useState<PlaybackTimeState>(initialTime);
-  const { connectAudioElement } = useEqualizer();
 
-  // Dual audio elements for near-gapless playback
-  const audioARef = useRef<HTMLAudioElement | null>(null);
-  const audioBRef = useRef<HTMLAudioElement | null>(null);
-  const activeRef = useRef<"A" | "B">("A");
   const rafRef = useRef<number>(0);
-  const isSeekingRef = useRef(false);
   const shuffleOrderRef = useRef<number[]>([]);
   const shufflePositionRef = useRef<number>(0);
 
-  // Refs that track latest state for use in audio callbacks
+  // Position interpolation: store last known position + wall-clock time
+  const lastPositionRef = useRef(0);
+  const lastPositionTimeRef = useRef(0);
+
+  // Refs that track latest state for use in callbacks
   const stateRef = useRef(state);
   stateRef.current = state;
   const timeRef = useRef(time);
   timeRef.current = time;
 
-  // Ref for the track-ended handler so both audio elements can use it
+  // Ref for the track-ended handler
   const onTrackEndedRef = useRef<() => void>(() => {});
 
-  const getActiveAudio = useCallback((): HTMLAudioElement | null => {
-    return activeRef.current === "A" ? audioARef.current : audioBRef.current;
-  }, []);
-
-  const getIdleAudio = useCallback((): HTMLAudioElement | null => {
-    return activeRef.current === "A" ? audioBRef.current : audioARef.current;
-  }, []);
-
-  // Stable ref for connectAudioElement to avoid re-triggering the init effect
-  const connectAudioRef = useRef(connectAudioElement);
-  connectAudioRef.current = connectAudioElement;
-
-  // Initialize audio elements and connect to EQ chain
+  // ── Set initial volume on the Rust engine ────────────────────
   useEffect(() => {
-    audioARef.current = new Audio();
-    audioBRef.current = new Audio();
-    audioARef.current.volume = state.volume;
-    audioBRef.current.volume = state.volume;
-    connectAudioRef.current(audioARef.current);
-    connectAudioRef.current(audioBRef.current);
-
-    return () => {
-      audioARef.current?.pause();
-      audioBRef.current?.pause();
-      if (audioARef.current) audioARef.current.src = "";
-      if (audioBRef.current) audioBRef.current.src = "";
-      cancelAnimationFrame(rafRef.current);
-    };
+    invoke("audio_set_volume", { volume: state.volume }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // rAF loop — syncs currentTime; extends duration if audio element reports longer
+  // ── Listen for Rust audio engine events ──────────────────────
+
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+
+    listen<{ position: number; duration: number }>("audio:position", (event) => {
+      const { position, duration } = event.payload;
+      lastPositionRef.current = position;
+      lastPositionTimeRef.current = performance.now();
+      // Update duration if the engine reports a different value
+      setTime((prev) => {
+        const newDur = duration > 0 ? duration : prev.duration;
+        return { currentTime: position, duration: newDur };
+      });
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen<number>("audio:duration-ready", (event) => {
+      const dur = event.payload;
+      if (dur > 0) {
+        setTime((prev) => ({ ...prev, duration: dur }));
+      }
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen("audio:track-ended", () => {
+      onTrackEndedRef.current();
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen<string>("audio:error", (event) => {
+      console.warn("Audio error:", event.payload);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    return () => {
+      unlisteners.forEach((fn) => fn());
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  // ── rAF loop for smooth position interpolation ───────────────
+
   useEffect(() => {
     if (!state.isPlaying) {
       cancelAnimationFrame(rafRef.current);
@@ -147,24 +156,21 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     }
 
     const tick = () => {
-      const audio = getActiveAudio();
-      if (audio && !isSeekingRef.current) {
-        const audioDur = isFinite(audio.duration) ? audio.duration : 0;
-        setTime((prev) => {
-          // Extend duration if audio element or playback position exceeds it
-          const newDur = Math.max(prev.duration, audioDur, audio.currentTime);
-          if (prev.currentTime === audio.currentTime && prev.duration === newDur) return prev;
-          return { currentTime: audio.currentTime, duration: newDur };
-        });
-      }
+      const elapsed = (performance.now() - lastPositionTimeRef.current) / 1000;
+      const interpolated = lastPositionRef.current + elapsed;
+      setTime((prev) => {
+        if (Math.abs(prev.currentTime - interpolated) < 0.01) return prev;
+        return { ...prev, currentTime: interpolated };
+      });
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(rafRef.current);
-  }, [state.isPlaying, getActiveAudio]);
+  }, [state.isPlaying]);
 
-  // Get the next queue index considering shuffle/repeat
+  // ── Get the next queue index considering shuffle/repeat ──────
+
   const getNextIndex = useCallback((): number | null => {
     const s = stateRef.current;
     if (s.queue.length === 0) return null;
@@ -184,67 +190,23 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     return s.repeat === "all" ? 0 : null;
   }, []);
 
-  // Preload the next track on the idle audio element
-  const preloadNext = useCallback(() => {
-    const nextIdx = getNextIndex();
-    if (nextIdx === null) return;
+  // ── Play a track via the native audio engine ─────────────────
 
-    const s = stateRef.current;
-    const nextTrack = s.queue[nextIdx];
-    if (!nextTrack) return;
+  const playFile = useCallback((track: LibraryTrack) => {
+    setState((prev) => ({
+      ...prev,
+      currentTrack: track,
+      isPlaying: true,
+    }));
+    setTime({ currentTime: 0, duration: track.duration_secs });
+    lastPositionRef.current = 0;
+    lastPositionTimeRef.current = performance.now();
 
-    const idle = getIdleAudio();
-    if (idle) {
-      idle.src = streamUrl(nextTrack.file_path);
-      idle.load();
-    }
-  }, [getNextIndex, getIdleAudio]);
-
-  // Get accurate duration via ffprobe and update time state
-  const probeDuration = useCallback((filePath: string) => {
-    invoke<number>("get_accurate_duration", { path: filePath })
-      .then((dur) => {
-        // Only apply if still playing the same track
-        if (dur > 0 && stateRef.current.currentTrack?.file_path === filePath) {
-          // ffprobe is authoritative — use its value directly
-          setTime((prev) => ({ ...prev, duration: dur }));
-        }
-      })
-      .catch(() => {}); // Fallback to metadata/audio.duration if ffprobe unavailable
+    invoke("audio_play", { path: track.file_path, seekSecs: null }).catch(() => {});
   }, []);
 
-  // Play a specific file path on the active audio element
-  const playFile = useCallback(
-    (track: LibraryTrack) => {
-      const audio = getActiveAudio();
-      if (!audio) return;
+  // ── Track-ended handler ──────────────────────────────────────
 
-      // Set handlers BEFORE loading so we never miss loadedmetadata
-      audio.onloadedmetadata = () => {
-        const audioDur = isFinite(audio.duration) ? audio.duration : 0;
-        setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, audioDur) }));
-        preloadNext();
-      };
-      audio.onended = () => onTrackEndedRef.current();
-
-      setState((prev) => ({
-        ...prev,
-        currentTrack: track,
-        isPlaying: true,
-      }));
-      setTime({ currentTime: 0, duration: track.duration_secs });
-
-      audio.src = streamUrl(track.file_path);
-      audio.play().catch(() => {});
-
-      // Probe real duration in background — updates display when ready
-      probeDuration(track.file_path);
-    },
-    [getActiveAudio, preloadNext, probeDuration],
-  );
-
-  // Track-ended handler — uses refs so it always has latest state.
-  // Defined as a useCallback and kept in sync via onTrackEndedRef.
   const handleTrackEnded = useCallback(() => {
     const nextIdx = getNextIndex();
     if (nextIdx === null) {
@@ -258,52 +220,32 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     if (!nextTrack) return;
 
     if (s.repeat === "one") {
-      const audio = getActiveAudio();
-      if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-      }
+      invoke("audio_seek", { positionSecs: 0 }).catch(() => {});
+      invoke("audio_resume").catch(() => {});
+      lastPositionRef.current = 0;
+      lastPositionTimeRef.current = performance.now();
+      setTime((prev) => ({ ...prev, currentTime: 0 }));
       return;
     }
 
-    // Try gapless swap to preloaded idle audio
-    const idle = getIdleAudio();
-    if (idle && idle.src) {
-      activeRef.current = activeRef.current === "A" ? "B" : "A";
-
-      // Set handlers on new active audio before playing
-      idle.onended = () => onTrackEndedRef.current();
-      idle.onloadedmetadata = () => {
-        const audioDur = isFinite(idle.duration) ? idle.duration : 0;
-        setTime((prev) => ({ ...prev, duration: Math.max(prev.duration, audioDur) }));
-        preloadNext();
-      };
-
-      idle.play().catch(() => {});
-
-      if (s.shuffle) {
-        shufflePositionRef.current += 1;
-      }
-
-      setState((prev) => ({
-        ...prev,
-        currentTrack: nextTrack,
-        queueIndex: nextIdx,
-      }));
-
-      setTime({ currentTime: 0, duration: nextTrack.duration_secs });
-      probeDuration(nextTrack.file_path);
-    } else {
-      // Fallback: no preloaded audio, play normally
-      if (s.shuffle) {
-        shufflePositionRef.current += 1;
-      }
-      setState((prev) => ({ ...prev, queueIndex: nextIdx }));
-      playFile(nextTrack);
+    if (s.shuffle) {
+      shufflePositionRef.current += 1;
     }
-  }, [getNextIndex, getActiveAudio, getIdleAudio, preloadNext, playFile, probeDuration]);
 
-  // Keep the ref in sync so audio onended always calls latest handler
+    setState((prev) => ({
+      ...prev,
+      currentTrack: nextTrack,
+      queueIndex: nextIdx,
+    }));
+
+    setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+    lastPositionRef.current = 0;
+    lastPositionTimeRef.current = performance.now();
+
+    invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
+  }, [getNextIndex]);
+
+  // Keep the ref in sync so the event listener always calls latest handler
   onTrackEndedRef.current = handleTrackEnded;
 
   // ── Public API ────────────────────────────────────────────────
@@ -338,30 +280,27 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   );
 
   const pause = useCallback(() => {
-    getActiveAudio()?.pause();
+    invoke("audio_pause").catch(() => {});
     setState((prev) => ({ ...prev, isPlaying: false }));
-  }, [getActiveAudio]);
+  }, []);
 
   const resume = useCallback(() => {
-    getActiveAudio()
-      ?.play()
-      .catch(() => {});
+    invoke("audio_resume").catch(() => {});
+    // Reset interpolation reference to current position
+    lastPositionRef.current = timeRef.current.currentTime;
+    lastPositionTimeRef.current = performance.now();
     setState((prev) => ({ ...prev, isPlaying: true }));
-  }, [getActiveAudio]);
+  }, []);
 
   const stop = useCallback(() => {
-    const audio = getActiveAudio();
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
+    invoke("audio_stop").catch(() => {});
     setState((prev) => ({
       ...prev,
       isPlaying: false,
       currentTrack: null,
     }));
     setTime({ currentTime: 0, duration: 0 });
-  }, [getActiveAudio]);
+  }, []);
 
   const next = useCallback(() => {
     const nextIdx = getNextIndex();
@@ -380,10 +319,11 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   }, [getNextIndex, playFile]);
 
   const previous = useCallback(() => {
-    const audio = getActiveAudio();
     // If more than 3 seconds in, restart current track
-    if (audio && audio.currentTime > 3) {
-      audio.currentTime = 0;
+    if (timeRef.current.currentTime > 3) {
+      invoke("audio_seek", { positionSecs: 0 }).catch(() => {});
+      lastPositionRef.current = 0;
+      lastPositionTimeRef.current = performance.now();
       setTime((prev) => ({ ...prev, currentTime: 0 }));
       return;
     }
@@ -408,37 +348,22 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
         playFile(prevTrack);
       }
     }
-  }, [getActiveAudio, playFile]);
+  }, [playFile]);
 
-  const seekTo = useCallback(
-    (fraction: number) => {
-      const audio = getActiveAudio();
-      if (!audio) return;
-      const dur = timeRef.current.duration;
-      if (dur <= 0) return;
-      const t = Math.min(fraction * dur, dur);
-      // Pause rAF updates so they don't overwrite our seek position
-      isSeekingRef.current = true;
-      audio.currentTime = t;
-      // Show requested position immediately for responsiveness
-      setTime((prev) => ({ ...prev, currentTime: t }));
-      // Correct to the actual position once the browser finishes seeking
-      audio.addEventListener(
-        "seeked",
-        () => {
-          setTime((prev) => ({ ...prev, currentTime: audio.currentTime }));
-          isSeekingRef.current = false;
-        },
-        { once: true },
-      );
-    },
-    [getActiveAudio],
-  );
+  const seekTo = useCallback((fraction: number) => {
+    const dur = timeRef.current.duration;
+    if (dur <= 0) return;
+    const t = Math.min(fraction * dur, dur);
+    // Show requested position immediately for responsiveness
+    lastPositionRef.current = t;
+    lastPositionTimeRef.current = performance.now();
+    setTime((prev) => ({ ...prev, currentTime: t }));
+    invoke("audio_seek", { positionSecs: t }).catch(() => {});
+  }, []);
 
   const setVolume = useCallback((volume: number) => {
     const clamped = Math.max(0, Math.min(1, volume));
-    if (audioARef.current) audioARef.current.volume = clamped;
-    if (audioBRef.current) audioBRef.current.volume = clamped;
+    invoke("audio_set_volume", { volume: clamped }).catch(() => {});
     localStorage.setItem(VOLUME_KEY, String(clamped));
     setState((prev) => ({ ...prev, volume: clamped }));
   }, []);

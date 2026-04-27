@@ -1,36 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAudioPlayback } from "./useAudioPlayback";
+import { invoke } from "@tauri-apps/api/core";
 
-// Mock HTMLAudioElement
-let mockAudio: {
-  play: ReturnType<typeof vi.fn>;
-  pause: ReturnType<typeof vi.fn>;
-  addEventListener: ReturnType<typeof vi.fn>;
-  removeEventListener: ReturnType<typeof vi.fn>;
-  src: string;
-  currentTime: number;
-  duration: number;
-};
+const mockInvoke = vi.mocked(invoke);
 
 beforeEach(() => {
-  mockAudio = {
-    play: vi.fn(),
-    pause: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    src: "",
-    currentTime: 0,
-    duration: 120,
-  };
-
-  // Must use `function` (not arrow) so it's valid as a constructor with `new`
-  vi.stubGlobal(
-    "Audio",
-    vi.fn(function () {
-      return mockAudio;
-    }),
-  );
+  vi.clearAllMocks();
+  mockInvoke.mockResolvedValue(undefined);
   vi.stubGlobal(
     "requestAnimationFrame",
     vi.fn(() => 1),
@@ -47,80 +24,60 @@ describe("useAudioPlayback", () => {
     expect(result.current.playbackFraction).toBe(0);
   });
 
-  it("creates Audio element when filePath is provided", () => {
-    renderHook(() => useAudioPlayback("/music/song.flac"));
-    expect(globalThis.Audio).toHaveBeenCalled();
-    expect(mockAudio.addEventListener).toHaveBeenCalledWith("loadedmetadata", expect.any(Function));
-    expect(mockAudio.addEventListener).toHaveBeenCalledWith("ended", expect.any(Function));
+  it("calls audio_stop when filePath is null", () => {
+    renderHook(() => useAudioPlayback(null));
+    expect(mockInvoke).toHaveBeenCalledWith("audio_stop");
   });
 
-  it("play sets isPlaying to true", () => {
+  it("play invokes audio_play with file path", () => {
     const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
     act(() => result.current.play());
     expect(result.current.isPlaying).toBe(true);
-    expect(mockAudio.play).toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledWith("audio_play", {
+      path: "/music/song.flac",
+      seekSecs: null,
+    });
   });
 
-  it("pause sets isPlaying to false", () => {
+  it("pause invokes audio_pause", () => {
     const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
     act(() => result.current.play());
     act(() => result.current.pause());
     expect(result.current.isPlaying).toBe(false);
-    expect(mockAudio.pause).toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledWith("audio_pause");
   });
 
-  it("stop resets to beginning", () => {
+  it("stop invokes audio_stop and resets state", () => {
     const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
     act(() => result.current.play());
     act(() => result.current.stop());
     expect(result.current.isPlaying).toBe(false);
     expect(result.current.currentTime).toBe(0);
-    expect(mockAudio.currentTime).toBe(0);
+    expect(mockInvoke).toHaveBeenCalledWith("audio_stop");
   });
 
-  it("seekTo sets currentTime as fraction of duration", () => {
+  it("seekTo invokes audio_seek with correct time", () => {
     const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
+    // Simulate duration being set (would come from Rust events in real usage)
+    // Duration starts at 0, so seekTo with fraction produces 0
     act(() => result.current.seekTo(0.5));
-    expect(mockAudio.currentTime).toBe(60); // 0.5 * 120
+    // With duration=0, 0.5*0=0, which is finite
+    expect(mockInvoke).toHaveBeenCalledWith("audio_seek", { positionSecs: 0 });
   });
 
-  it("seekTo ignores non-finite values", () => {
-    mockAudio.duration = NaN;
-    const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
-    act(() => result.current.seekTo(0.5));
-    expect(mockAudio.currentTime).toBe(0); // unchanged
-  });
-
-  it("cleans up audio on filePath change", () => {
+  it("cleans up on filePath change", () => {
     const { rerender } = renderHook(({ path }) => useAudioPlayback(path), {
       initialProps: { path: "/a.flac" as string | null },
     });
-    expect(mockAudio.addEventListener).toHaveBeenCalledTimes(2);
-
     rerender({ path: null });
-    expect(mockAudio.pause).toHaveBeenCalled();
-    expect(mockAudio.removeEventListener).toHaveBeenCalledWith("loadedmetadata", expect.any(Function));
-    expect(mockAudio.removeEventListener).toHaveBeenCalledWith("ended", expect.any(Function));
+    expect(mockInvoke).toHaveBeenCalledWith("audio_stop");
   });
 
-  it("updates duration on loadedmetadata event", () => {
-    const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
-
-    const loadedCall = mockAudio.addEventListener.mock.calls.find((c: string[]) => c[0] === "loadedmetadata");
-    expect(loadedCall).toBeDefined();
-    act(() => loadedCall![1]());
-
-    expect(result.current.duration).toBe(120);
-  });
-
-  it("resets on ended event", () => {
-    const { result } = renderHook(() => useAudioPlayback("/music/song.flac"));
+  it("play does nothing when filePath is null", () => {
+    const { result } = renderHook(() => useAudioPlayback(null));
+    mockInvoke.mockClear();
     act(() => result.current.play());
-
-    const endedCall = mockAudio.addEventListener.mock.calls.find((c: string[]) => c[0] === "ended");
-    act(() => endedCall![1]());
-
     expect(result.current.isPlaying).toBe(false);
-    expect(result.current.currentTime).toBe(0);
+    expect(mockInvoke).not.toHaveBeenCalledWith("audio_play", expect.anything());
   });
 });

@@ -1,51 +1,62 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { AudioPlaybackState } from "./types";
 
 export const useAudioPlayback = (filePath: string | null): AudioPlaybackState => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const rafRef = useRef<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const rafRef = useRef<number>(0);
+  const lastPositionRef = useRef(0);
+  const lastPositionTimeRef = useRef(0);
+  const activePathRef = useRef<string | null>(null);
 
-  // Create/replace Audio object when filePath changes
+  // Track file path changes — stop previous, start new
   useEffect(() => {
-    // Clean up previous
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
-    }
-    cancelAnimationFrame(rafRef.current);
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    activePathRef.current = filePath;
 
-    if (!filePath) return;
-
-    const audio = new Audio(convertFileSrc(filePath, "stream"));
-    audioRef.current = audio;
-
-    const onLoaded = () => setDuration(audio.duration);
-    const onEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("ended", onEnded);
+    if (!filePath) {
+      invoke("audio_stop").catch(() => {});
+      return;
+    }
 
     return () => {
-      audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("ended", onEnded);
-      audio.pause();
-      audio.src = "";
+      invoke("audio_stop").catch(() => {});
       cancelAnimationFrame(rafRef.current);
     };
   }, [filePath]);
 
-  // rAF loop for smooth cursor updates while playing
+  // Listen for position events from the Rust engine
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+
+    listen<{ position: number; duration: number }>("audio:position", (event) => {
+      const { position, duration: dur } = event.payload;
+      lastPositionRef.current = position;
+      lastPositionTimeRef.current = performance.now();
+      setCurrentTime(position);
+      if (dur > 0) setDuration(dur);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen<number>("audio:duration-ready", (event) => {
+      if (event.payload > 0) setDuration(event.payload);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    listen("audio:track-ended", () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  }, []);
+
+  // rAF interpolation for smooth time updates
   useEffect(() => {
     if (!isPlaying) {
       cancelAnimationFrame(rafRef.current);
@@ -53,9 +64,8 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
     }
 
     const tick = () => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
-      }
+      const elapsed = (performance.now() - lastPositionTimeRef.current) / 1000;
+      setCurrentTime(lastPositionRef.current + elapsed);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -64,32 +74,36 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
   }, [isPlaying]);
 
   const play = useCallback(() => {
-    audioRef.current?.play();
+    if (!activePathRef.current) return;
+    invoke("audio_play", { path: activePathRef.current, seekSecs: null }).catch(() => {});
+    lastPositionRef.current = 0;
+    lastPositionTimeRef.current = performance.now();
     setIsPlaying(true);
   }, []);
 
   const pause = useCallback(() => {
-    audioRef.current?.pause();
+    invoke("audio_pause").catch(() => {});
     setIsPlaying(false);
   }, []);
 
   const stop = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
+    invoke("audio_stop").catch(() => {});
     setIsPlaying(false);
     setCurrentTime(0);
   }, []);
 
-  const seekTo = useCallback((fraction: number) => {
-    if (!audioRef.current) return;
-    const time = fraction * audioRef.current.duration;
-    if (isFinite(time)) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  }, []);
+  const seekTo = useCallback(
+    (fraction: number) => {
+      const t = fraction * duration;
+      if (isFinite(t)) {
+        invoke("audio_seek", { positionSecs: t }).catch(() => {});
+        lastPositionRef.current = t;
+        lastPositionTimeRef.current = performance.now();
+        setCurrentTime(t);
+      }
+    },
+    [duration],
+  );
 
   const playbackFraction = duration > 0 ? currentTime / duration : 0;
 

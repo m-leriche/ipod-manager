@@ -35,7 +35,8 @@ fn test_db() -> Connection {
             modified_at INTEGER NOT NULL DEFAULT 0,
             scanned_at INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL DEFAULT 0,
-            play_count INTEGER NOT NULL DEFAULT 0
+            play_count INTEGER NOT NULL DEFAULT 0,
+            flagged INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS library_folders (
             id INTEGER PRIMARY KEY,
@@ -162,6 +163,7 @@ fn track_upsert_and_query() {
         search: None,
         sort_by: None,
         sort_direction: None,
+        flagged_only: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -181,6 +183,7 @@ fn filter_by_artist() {
         search: None,
         sort_by: None,
         sort_direction: None,
+        flagged_only: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -278,6 +281,7 @@ fn browser_data_filters_albums_by_artist() {
         search: None,
         sort_by: None,
         sort_direction: None,
+        flagged_only: None,
     };
     let data = get_browser_data(&conn, &filter).unwrap();
 
@@ -467,6 +471,7 @@ fn delete_tracks_removes_files_and_db_records() {
             search: None,
             sort_by: None,
             sort_direction: None,
+            flagged_only: None,
         },
     )
     .unwrap();
@@ -488,6 +493,7 @@ fn delete_tracks_removes_files_and_db_records() {
             search: None,
             sort_by: None,
             sort_direction: None,
+            flagged_only: None,
         },
     )
     .unwrap();
@@ -525,6 +531,7 @@ fn delete_tracks_removes_album_folder_with_cover_art() {
             search: None,
             sort_by: None,
             sort_direction: None,
+            flagged_only: None,
         },
     )
     .unwrap()[0]
@@ -580,6 +587,7 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             search: None,
             sort_by: None,
             sort_direction: None,
+            flagged_only: None,
         },
     )
     .unwrap();
@@ -600,8 +608,117 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             search: None,
             sort_by: None,
             sort_direction: None,
+            flagged_only: None,
         },
     )
     .unwrap();
     assert_eq!(remaining.len(), 1);
+}
+
+#[test]
+fn flag_tracks_and_filter() {
+    let conn = test_db();
+    insert_test_track(&conn, "/m/a.mp3", "A", "Artist1", "Album1", "Rock", 2020);
+    insert_test_track(&conn, "/m/b.mp3", "B", "Artist2", "Album2", "Pop", 2021);
+
+    let all_filter = LibraryFilter {
+        artist: None,
+        album: None,
+        genre: None,
+        search: None,
+        sort_by: None,
+        sort_direction: None,
+        flagged_only: None,
+    };
+
+    let tracks = get_tracks(&conn, &all_filter).unwrap();
+    let id_a = tracks
+        .iter()
+        .find(|t| t.title.as_deref() == Some("A"))
+        .unwrap()
+        .id;
+
+    // Flag one track
+    conn.execute(
+        "UPDATE tracks SET flagged = 1 WHERE id = ?1",
+        rusqlite::params![id_a],
+    )
+    .unwrap();
+
+    // Verify flagged field is read correctly
+    let all = get_tracks(&conn, &all_filter).unwrap();
+    assert!(all.iter().find(|t| t.id == id_a).unwrap().flagged);
+    assert!(!all.iter().find(|t| t.id != id_a).unwrap().flagged);
+
+    // Filter to flagged only
+    let flagged_filter = LibraryFilter {
+        artist: None,
+        album: None,
+        genre: None,
+        search: None,
+        sort_by: None,
+        sort_direction: None,
+        flagged_only: Some(true),
+    };
+    let flagged = get_tracks(&conn, &flagged_filter).unwrap();
+    assert_eq!(flagged.len(), 1);
+    assert_eq!(flagged[0].id, id_a);
+
+    // Browser data also respects flagged filter
+    let browser = get_browser_data(&conn, &flagged_filter).unwrap();
+    assert_eq!(browser.tracks.len(), 1);
+    assert_eq!(browser.artists.len(), 1);
+    assert_eq!(browser.artists[0].name, "Artist1");
+}
+
+#[test]
+fn migrate_cover_art_moves_cover_to_new_folder() {
+    use crate::library::reorganize::{cleanup_empty_dirs, migrate_cover_art};
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let old_dir = root.join("Artist").join("Old Album");
+    let new_dir = root.join("Artist").join("New Album");
+    std::fs::create_dir_all(&old_dir).unwrap();
+    std::fs::create_dir_all(&new_dir).unwrap();
+
+    // Create cover art in old folder
+    std::fs::write(old_dir.join("cover.jpg"), b"fake image").unwrap();
+
+    migrate_cover_art(&old_dir, &new_dir);
+
+    assert!(
+        new_dir.join("cover.jpg").exists(),
+        "cover.jpg should be in new folder"
+    );
+    assert!(
+        !old_dir.join("cover.jpg").exists(),
+        "cover.jpg should be removed from old folder"
+    );
+
+    // Old folder should now be empty and cleanable
+    cleanup_empty_dirs(&old_dir, root);
+    assert!(!old_dir.exists(), "old folder should be fully removed");
+}
+
+#[test]
+fn migrate_cover_art_skips_if_dest_already_has_cover() {
+    use crate::library::reorganize::migrate_cover_art;
+
+    let dir = tempfile::tempdir().unwrap();
+    let old_dir = dir.path().join("old");
+    let new_dir = dir.path().join("new");
+    std::fs::create_dir_all(&old_dir).unwrap();
+    std::fs::create_dir_all(&new_dir).unwrap();
+
+    std::fs::write(old_dir.join("cover.jpg"), b"old image").unwrap();
+    std::fs::write(new_dir.join("cover.jpg"), b"new image").unwrap();
+
+    migrate_cover_art(&old_dir, &new_dir);
+
+    // Destination cover should be unchanged
+    let content = std::fs::read(new_dir.join("cover.jpg")).unwrap();
+    assert_eq!(content, b"new image");
+    // Old cover should still exist (wasn't moved since dest has one)
+    assert!(old_dir.join("cover.jpg").exists());
 }

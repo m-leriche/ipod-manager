@@ -25,6 +25,7 @@ pub struct LibraryTrack {
     pub file_size: u64,
     pub created_at: i64,
     pub play_count: u32,
+    pub flagged: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -64,6 +65,7 @@ pub struct LibraryFilter {
     pub search: Option<String>,
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,
+    pub flagged_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -592,6 +592,35 @@ pub async fn delete_library_tracks(
 }
 
 #[tauri::command]
+pub async fn flag_tracks(
+    track_ids: Vec<i64>,
+    flagged: bool,
+    db: State<'_, LibraryDb>,
+) -> Result<usize, String> {
+    if track_ids.is_empty() {
+        return Ok(0);
+    }
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    let placeholders: Vec<String> = (0..track_ids.len())
+        .map(|i| format!("?{}", i + 2))
+        .collect();
+    let sql = format!(
+        "UPDATE tracks SET flagged = ?1 WHERE id IN ({})",
+        placeholders.join(", ")
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(flagged)];
+    for id in &track_ids {
+        params.push(Box::new(*id));
+    }
+    let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, refs.as_slice())
+        .map_err(|e| format!("Flag update failed: {}", e))
+}
+
+#[tauri::command]
 pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
     let conn = db
         .conn

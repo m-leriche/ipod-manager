@@ -23,6 +23,7 @@ interface TrackTableProps {
   onNavigateToArtist?: (artist: string) => void;
   onNavigateToAlbum?: (album: string, artist: string) => void;
   onTracksDeleted?: () => void;
+  onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
 }
 
 interface ContextMenuState {
@@ -41,6 +42,7 @@ export const TrackTable = memo(function TrackTable({
   onNavigateToArtist,
   onNavigateToAlbum,
   onTracksDeleted,
+  onFlagTracks,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -227,6 +229,29 @@ export const TrackTable = memo(function TrackTable({
             setContextMenu(null);
           },
         },
+        { type: "separator" as const },
+        {
+          label: (() => {
+            const ids =
+              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+            const relevant = tracks.filter((t) => ids.includes(t.id));
+            const allFlagged = relevant.every((t) => t.flagged);
+            if (selected.size > 1 && selected.has(contextMenu.track.id)) {
+              return allFlagged
+                ? `Remove ${selected.size} Tracks from Sync List`
+                : `Add ${selected.size} Tracks to Sync List`;
+            }
+            return allFlagged ? "Remove from Sync List" : "Add to Sync List";
+          })(),
+          onClick: () => {
+            const ids =
+              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+            const relevant = tracks.filter((t) => ids.includes(t.id));
+            const allFlagged = relevant.every((t) => t.flagged);
+            onFlagTracks?.(ids, !allFlagged);
+            setContextMenu(null);
+          },
+        },
         ...(contextMenu.track.artist && onNavigateToArtist
           ? [
               {
@@ -403,6 +428,16 @@ const getCellContent = (
   isSelected: boolean,
 ): React.ReactNode => {
   switch (key) {
+    case "flagged":
+      return track.flagged ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className={`w-3 h-3 mx-auto ${isSelected ? "text-white" : "text-accent"}`}
+        >
+          <path d="M4 24V1h16l-5 7.5L20 16H6v8z" />
+        </svg>
+      ) : null;
     case "#": {
       const barColor = isSelected ? "bg-white" : "bg-accent";
       return isCurrentTrack ? (

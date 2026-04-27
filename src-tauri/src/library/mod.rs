@@ -111,6 +111,7 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN disc_total INTEGER");
     let _ =
         conn.execute_batch("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0");
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0");
 
     Ok(conn)
 }

@@ -31,6 +31,9 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
             }
         }
     }
+    if filter.flagged_only == Some(true) {
+        conditions.push("flagged = 1");
+    }
 
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -68,6 +71,9 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         Some("play_count") => format!(
             "play_count {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(track_number, 0)"
         ),
+        Some("flagged") => format!(
+            "flagged {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+        ),
         _ => format!(
             "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
@@ -77,7 +83,7 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
                 disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size, created_at, play_count
+                file_size, created_at, play_count, flagged
          FROM tracks {} ORDER BY {}",
         where_clause, order_by
     );
@@ -115,6 +121,7 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
                 file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
                 created_at: row.get(21)?,
                 play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
+                flagged: row.get(23)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?;
@@ -235,6 +242,7 @@ pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<LibraryTrack>
         search: Some(query.to_string()),
         sort_by: None,
         sort_direction: None,
+        flagged_only: None,
     };
     get_tracks(conn, &filter)
 }
@@ -246,6 +254,7 @@ fn build_filter_conditions(
     artist: Option<&str>,
     album: Option<&str>,
     search: Option<&str>,
+    flagged_only: Option<bool>,
 ) -> (Vec<String>, Vec<Box<dyn rusqlite::types::ToSql>>) {
     let mut conditions = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -273,6 +282,9 @@ fn build_filter_conditions(
             }
         }
     }
+    if flagged_only == Some(true) {
+        conditions.push("flagged = 1".to_string());
+    }
 
     (conditions, params)
 }
@@ -290,12 +302,14 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
     let artist = filter.artist.as_deref();
     let album = filter.album.as_deref();
     let search = filter.search.as_deref();
+    let flagged_only = filter.flagged_only;
 
     let tracks = get_tracks(conn, filter)?;
 
     // Genres: filtered by artist + album (NOT genre) + search
     let genres = {
-        let (mut conds, params) = build_filter_conditions(None, artist, album, search);
+        let (mut conds, params) =
+            build_filter_conditions(None, artist, album, search, flagged_only);
         conds.insert(0, "genre IS NOT NULL AND genre != ''".to_string());
         let wc = where_clause(&conds);
         let sql = format!(
@@ -320,7 +334,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
 
     // Artists: filtered by genre + album (NOT artist) + search
     let artists = {
-        let (mut conds, params) = build_filter_conditions(genre, None, album, search);
+        let (mut conds, params) = build_filter_conditions(genre, None, album, search, flagged_only);
         conds.insert(
             0,
             "COALESCE(album_artist, artist) IS NOT NULL AND COALESCE(album_artist, artist) != ''"
@@ -350,7 +364,8 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
 
     // Albums: filtered by genre + artist (NOT album) + search
     let albums = {
-        let (mut conds, params) = build_filter_conditions(genre, artist, None, search);
+        let (mut conds, params) =
+            build_filter_conditions(genre, artist, None, search, flagged_only);
         conds.insert(0, "album IS NOT NULL AND album != ''".to_string());
         let wc = where_clause(&conds);
         let sql = format!(

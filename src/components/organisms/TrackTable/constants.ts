@@ -10,6 +10,13 @@ export interface TrackTableColumn {
 }
 
 export const COLUMNS: TrackTableColumn[] = [
+  {
+    key: "flagged",
+    label: "Sync",
+    sortKey: "flagged",
+    align: "left",
+    def: { key: "flagged", minWidth: 32, initialWidth: 36 },
+  },
   { key: "#", label: "#", sortKey: "track_number", align: "left", def: { key: "#", minWidth: 40, initialWidth: 40 } },
   {
     key: "title",
@@ -88,6 +95,7 @@ export const SORT_KEY_TO_TRACK_FIELD: Record<string, keyof LibraryTrack> = {
 };
 
 export const CELL_CLASSES: Record<string, string> = {
+  flagged: "px-1 py-[7px] text-center overflow-hidden",
   "#": "px-3 py-[7px] text-[11px] tabular-nums text-center overflow-hidden",
   title: "px-3 py-[7px] overflow-hidden",
   artist: "px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate",

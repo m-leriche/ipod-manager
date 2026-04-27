@@ -6,6 +6,37 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::import::compute_library_dest;
 use super::scan::{read_track_for_library, upsert_track};
 
+const COVER_NAMES: &[&str] = &[
+    "cover.jpg",
+    "cover.jpeg",
+    "cover.png",
+    "cover.bmp",
+    "folder.jpg",
+    "folder.jpeg",
+    "album.jpg",
+    "album.jpeg",
+    "front.jpg",
+    "front.jpeg",
+];
+
+/// Move cover art files from old album folder to new one.
+/// Only moves if the destination doesn't already have that file.
+pub(crate) fn migrate_cover_art(old_dir: &Path, new_dir: &Path) {
+    let entries = match fs::read_dir(old_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if COVER_NAMES.contains(&name.as_str()) {
+            let dest = new_dir.join(entry.file_name());
+            if !dest.exists() {
+                let _ = fs::rename(entry.path(), dest);
+            }
+        }
+    }
+}
+
 pub fn cleanup_empty_dirs(start: &Path, stop_at: &Path) {
     let mut current = start.to_path_buf();
     while current.starts_with(stop_at) && current != stop_at {
@@ -112,8 +143,17 @@ pub fn reorganize_library_file(
     )
     .map_err(|e| format!("Failed to update track: {}", e))?;
 
-    if let Some(old_parent) = src.parent() {
-        cleanup_empty_dirs(old_parent, root);
+    // Move cover art from old folder to new folder if they differ
+    let old_parent = src.parent();
+    let new_parent = dest.parent();
+    if let (Some(old_dir), Some(new_dir)) = (old_parent, new_parent) {
+        if old_dir != new_dir {
+            migrate_cover_art(old_dir, new_dir);
+        }
+    }
+
+    if let Some(old_dir) = old_parent {
+        cleanup_empty_dirs(old_dir, root);
     }
 
     Ok(Some(new_path))

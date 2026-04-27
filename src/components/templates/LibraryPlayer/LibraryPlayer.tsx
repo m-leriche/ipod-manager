@@ -5,9 +5,11 @@ import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
 import { LibraryStats } from "../LibraryStats/LibraryStats";
+import { PlaylistSidebar } from "./PlaylistSidebar";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useLibraryImport } from "./useLibraryImport";
 import type {
   LibraryTrack,
@@ -23,6 +25,7 @@ const COLUMN_BROWSER_KEY = "crate-show-column-browser";
 const INFO_PANEL_KEY = "crate-show-info-panel";
 const STATS_PANEL_KEY = "crate-show-stats-panel";
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
+const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -35,6 +38,7 @@ export const LibraryPlayer = ({
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { playTrack } = usePlayback();
+  const { activePlaylistId, activePlaylistTracks, setActivePlaylist } = usePlaylist();
   const playAfterFetchRef = useRef(false);
 
   // Column browser filter state
@@ -65,23 +69,36 @@ export const LibraryPlayer = ({
   );
   const [showInfoPanel, setShowInfoPanel] = useState(() => localStorage.getItem(INFO_PANEL_KEY) !== "false");
   const [showStatsPanel, setShowStatsPanel] = useState(() => localStorage.getItem(STATS_PANEL_KEY) === "true");
+  const [showPlaylistSidebar, setShowPlaylistSidebar] = useState(
+    () => localStorage.getItem(PLAYLIST_SIDEBAR_KEY) !== "false",
+  );
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fetchIdRef = useRef(0);
 
+  // ── Displayed tracks (library or playlist) ─────────────────────
+
+  const displayedTracks = useMemo(
+    () => (activePlaylistId !== null ? activePlaylistTracks : tracks),
+    [activePlaylistId, activePlaylistTracks, tracks],
+  );
+
   // ── Derived selected tracks ───────────────────────────────────
 
-  const selectedTracks = useMemo(() => tracks.filter((t) => selectedTrackIds.has(t.id)), [tracks, selectedTrackIds]);
+  const selectedTracks = useMemo(
+    () => displayedTracks.filter((t) => selectedTrackIds.has(t.id)),
+    [displayedTracks, selectedTrackIds],
+  );
 
-  // Prune stale selections when tracks change
+  // Prune stale selections when displayed tracks change
   useEffect(() => {
-    const currentIds = new Set(tracks.map((t) => t.id));
+    const currentIds = new Set(displayedTracks.map((t) => t.id));
     setSelectedTrackIds((prev) => {
       const pruned = new Set([...prev].filter((id) => currentIds.has(id)));
       return pruned.size === prev.size ? prev : pruned;
     });
-  }, [tracks]);
+  }, [displayedTracks]);
 
   // ── Debounce search input ─────────────────────────────────────
 
@@ -301,6 +318,13 @@ export const LibraryPlayer = ({
     });
   }, []);
 
+  const togglePlaylistSidebar = useCallback(() => {
+    setShowPlaylistSidebar((prev) => {
+      localStorage.setItem(PLAYLIST_SIDEBAR_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────
 
   if (hasLibrary === false) {
@@ -366,6 +390,9 @@ export const LibraryPlayer = ({
           </div>
         </div>
       )}
+      {showPlaylistSidebar && (
+        <PlaylistSidebar onPlaylistSelect={setActivePlaylist} activePlaylistId={activePlaylistId} />
+      )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {/* Search bar */}
         <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
@@ -394,11 +421,11 @@ export const LibraryPlayer = ({
             To Sync
           </button>
           <div className="flex-1" />
-          <span className="text-[10px] text-text-tertiary tabular-nums">{tracks.length} tracks</span>
+          <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
         </div>
 
-        {/* Column browser (toggleable) */}
-        {showColumnBrowser && (
+        {/* Column browser (toggleable, hidden when viewing playlist) */}
+        {showColumnBrowser && activePlaylistId === null && (
           <ColumnBrowser
             genres={genreList}
             artists={artistList}
@@ -415,7 +442,7 @@ export const LibraryPlayer = ({
 
         {/* Track table */}
         <TrackTable
-          tracks={tracks}
+          tracks={displayedTracks}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={handleSort}
@@ -423,6 +450,7 @@ export const LibraryPlayer = ({
           onSelectionChange={handleSelectionChange}
           onTracksDeleted={fetchBrowserData}
           onFlagTracks={handleFlagTracks}
+          activePlaylistId={activePlaylistId}
         />
 
         {/* Status bar */}
@@ -431,9 +459,11 @@ export const LibraryPlayer = ({
           showColumnBrowser={showColumnBrowser}
           showInfoPanel={showInfoPanel}
           showStatsPanel={showStatsPanel}
+          showPlaylistSidebar={showPlaylistSidebar}
           onToggleColumnBrowser={toggleColumnBrowser}
           onToggleInfoPanel={toggleInfoPanel}
           onToggleStatsPanel={toggleStatsPanel}
+          onTogglePlaylistSidebar={togglePlaylistSidebar}
         />
       </div>
 

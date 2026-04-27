@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
 import { PlaybackProvider } from "./contexts/PlaybackContext";
 import { EqualizerProvider } from "./contexts/EqualizerContext";
+import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
@@ -28,8 +29,10 @@ const App = () => (
     <ProgressProvider>
       <EqualizerProvider>
         <PlaybackProvider>
-          <AppContent />
-          <ProgressModal />
+          <PlaylistProvider>
+            <AppContent />
+            <ProgressModal />
+          </PlaylistProvider>
         </PlaybackProvider>
       </EqualizerProvider>
     </ProgressProvider>

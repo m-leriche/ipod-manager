@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
@@ -24,6 +25,7 @@ interface TrackTableProps {
   onNavigateToAlbum?: (album: string, artist: string) => void;
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
+  activePlaylistId?: number | null;
 }
 
 interface ContextMenuState {
@@ -43,8 +45,10 @@ export const TrackTable = memo(function TrackTable({
   onNavigateToAlbum,
   onTracksDeleted,
   onFlagTracks,
+  activePlaylistId,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
+  const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist } = usePlaylist();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
@@ -229,6 +233,33 @@ export const TrackTable = memo(function TrackTable({
             setContextMenu(null);
           },
         },
+        { type: "separator" as const },
+        ...playlists.map((p) => ({
+          label: `Add to "${p.name}"`,
+          onClick: () => {
+            const ids =
+              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+            addToPlaylist(p.id, ids);
+            setContextMenu(null);
+          },
+        })),
+        ...(playlists.length > 0 ? [{ type: "separator" as const }] : []),
+        ...(activePlaylistId != null
+          ? [
+              {
+                label:
+                  selected.size > 1 && selected.has(contextMenu.track.id)
+                    ? `Remove ${selected.size} from Playlist`
+                    : "Remove from Playlist",
+                onClick: () => {
+                  const ids =
+                    selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+                  removeFromPlaylist(activePlaylistId, ids);
+                  setContextMenu(null);
+                },
+              },
+            ]
+          : []),
         { type: "separator" as const },
         {
           label: (() => {

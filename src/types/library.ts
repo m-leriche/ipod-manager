@@ -67,6 +67,43 @@ export interface LibraryFilter {
   flagged_only?: boolean;
 }
 
+export interface Playlist {
+  id: number;
+  name: string;
+  track_count: number;
+  total_duration: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface PlaylistTrack {
+  position: number;
+  id: number;
+  file_path: string;
+  file_name: string;
+  folder_path: string;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  album_artist: string | null;
+  sort_artist: string | null;
+  sort_album_artist: string | null;
+  track_number: number | null;
+  track_total: number | null;
+  disc_number: number | null;
+  disc_total: number | null;
+  year: number | null;
+  genre: string | null;
+  duration_secs: number;
+  sample_rate: number | null;
+  bitrate_kbps: number | null;
+  format: string;
+  file_size: number;
+  created_at: number;
+  play_count: number;
+  flagged: boolean;
+}
+
 export type LibraryViewType = "tracks" | "artists" | "albums" | "genres";
 
 export interface LibraryScanProgress {

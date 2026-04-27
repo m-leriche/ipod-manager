@@ -80,6 +80,25 @@ vi.mock("../contexts/EqualizerContext", () => ({
   EqualizerProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock PlaylistContext
+vi.mock("../contexts/PlaylistContext", () => ({
+  usePlaylist: () => ({
+    playlists: [],
+    activePlaylistId: null,
+    activePlaylistTracks: [],
+    loading: false,
+    setActivePlaylist: vi.fn(),
+    refresh: vi.fn(),
+    createPlaylist: vi.fn(),
+    renamePlaylist: vi.fn(),
+    deletePlaylist: vi.fn(),
+    addTracks: vi.fn(),
+    removeTracks: vi.fn(),
+    moveTrack: vi.fn(),
+  }),
+  PlaylistProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({

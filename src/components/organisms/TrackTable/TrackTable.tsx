@@ -48,10 +48,12 @@ export const TrackTable = memo(function TrackTable({
   activePlaylistId,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
-  const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist } = usePlaylist();
+  const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist, moveTrack } = usePlaylist();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
+  const [rowDragFrom, setRowDragFrom] = useState<number | null>(null);
+  const [rowDragOver, setRowDragOver] = useState<number | null>(null);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -197,6 +199,38 @@ export const TrackTable = memo(function TrackTable({
       setSelected(new Set([track.id]));
     }
     setContextMenu({ x: e.clientX, y: e.clientY, track });
+  }, []);
+
+  // ── Playlist drag-to-reorder ──────────────────────────────────
+
+  const isPlaylistView = activePlaylistId != null;
+
+  const handleRowDragStart = useCallback((e: React.DragEvent, index: number) => {
+    setRowDragFrom(index);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleRowDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setRowDragOver(index);
+  }, []);
+
+  const handleRowDrop = useCallback(
+    (e: React.DragEvent, toIndex: number) => {
+      e.preventDefault();
+      if (rowDragFrom !== null && rowDragFrom !== toIndex && activePlaylistId != null) {
+        moveTrack(activePlaylistId, rowDragFrom, toIndex);
+      }
+      setRowDragFrom(null);
+      setRowDragOver(null);
+    },
+    [rowDragFrom, activePlaylistId, moveTrack],
+  );
+
+  const handleRowDragEnd = useCallback(() => {
+    setRowDragFrom(null);
+    setRowDragOver(null);
   }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -399,9 +433,15 @@ export const TrackTable = memo(function TrackTable({
                 isCurrentTrack={currentTrackId === track.id}
                 isPlaying={currentTrackId === track.id && isActivePlaying}
                 isSelected={selected.has(track.id)}
+                isDragOver={rowDragOver === virtualRow.index && rowDragFrom !== virtualRow.index}
+                draggable={isPlaylistView}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenu={handleContextMenu}
+                onDragStart={isPlaylistView ? handleRowDragStart : undefined}
+                onDragOver={isPlaylistView ? handleRowDragOver : undefined}
+                onDrop={isPlaylistView ? handleRowDrop : undefined}
+                onDragEnd={isPlaylistView ? handleRowDragEnd : undefined}
               />
             );
           })}
@@ -524,9 +564,15 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isCurrentTrack,
   isPlaying,
   isSelected,
+  isDragOver,
+  draggable,
   onClick,
   onDoubleClick,
   onContextMenu,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   track: LibraryTrack;
   index: number;
@@ -534,21 +580,35 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isCurrentTrack: boolean;
   isPlaying: boolean;
   isSelected: boolean;
+  isDragOver?: boolean;
+  draggable?: boolean;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
+  onDragStart?: (e: React.DragEvent, index: number) => void;
+  onDragOver?: (e: React.DragEvent, index: number) => void;
+  onDrop?: (e: React.DragEvent, index: number) => void;
+  onDragEnd?: () => void;
 }) {
   return (
     <tr
+      draggable={draggable}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
+      onDragStart={onDragStart ? (e) => onDragStart(e, index) : undefined}
+      onDragOver={onDragOver ? (e) => onDragOver(e, index) : undefined}
+      onDrop={onDrop ? (e) => onDrop(e, index) : undefined}
+      onDragEnd={onDragEnd}
       className={`group cursor-default select-none transition-colors ${
         isSelected ? "" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
-      }`}
+      } ${isDragOver ? "!border-t-2 !border-t-accent" : ""}`}
     >
       {columns.map((col) => (
-        <td key={col.key} className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""}`}>
+        <td
+          key={col.key}
+          className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""} ${isDragOver ? "border-t-2 border-t-accent" : ""}`}
+        >
           {getCellContent(col.key, track, index, isCurrentTrack, isPlaying, isSelected)}
         </td>
       ))}

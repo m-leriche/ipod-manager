@@ -203,6 +203,14 @@ pub fn run() {
             commands::audio_preload_next,
             commands::audio_get_status,
             commands::audio_set_eq,
+            commands::get_playlists,
+            commands::create_playlist,
+            commands::rename_playlist,
+            commands::delete_playlist,
+            commands::get_playlist_tracks,
+            commands::add_tracks_to_playlist,
+            commands::remove_tracks_from_playlist,
+            commands::move_playlist_track,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

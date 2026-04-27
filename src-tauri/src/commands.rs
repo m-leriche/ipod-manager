@@ -810,3 +810,100 @@ pub fn audio_set_eq(config: EqConfig, engine: State<'_, AudioEngine>) -> Result<
     engine.set_eq(config);
     Ok(())
 }
+
+// ── Playlists ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Playlist>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::get_playlists(&conn)
+}
+
+#[tauri::command]
+pub async fn create_playlist(
+    name: String,
+    db: State<'_, LibraryDb>,
+) -> Result<library::Playlist, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::create_playlist(&conn, &name)
+}
+
+#[tauri::command]
+pub async fn rename_playlist(
+    id: i64,
+    name: String,
+    db: State<'_, LibraryDb>,
+) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::rename_playlist(&conn, id, &name)
+}
+
+#[tauri::command]
+pub async fn delete_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::delete_playlist(&conn, id)
+}
+
+#[tauri::command]
+pub async fn get_playlist_tracks(
+    playlist_id: i64,
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::PlaylistTrack>, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::get_playlist_tracks(&conn, playlist_id)
+}
+
+#[tauri::command]
+pub async fn add_tracks_to_playlist(
+    playlist_id: i64,
+    track_ids: Vec<i64>,
+    db: State<'_, LibraryDb>,
+) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::add_tracks_to_playlist(&conn, playlist_id, &track_ids)
+}
+
+#[tauri::command]
+pub async fn remove_tracks_from_playlist(
+    playlist_id: i64,
+    track_ids: Vec<i64>,
+    db: State<'_, LibraryDb>,
+) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::remove_tracks_from_playlist(&conn, playlist_id, &track_ids)
+}
+
+#[tauri::command]
+pub async fn move_playlist_track(
+    playlist_id: i64,
+    from_position: u32,
+    to_position: u32,
+    db: State<'_, LibraryDb>,
+) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    library::playlists::move_playlist_track(&conn, playlist_id, from_position, to_position)
+}

@@ -1,6 +1,7 @@
 mod delete;
 mod folders;
 mod import;
+pub mod playlists;
 mod queries;
 mod reorganize;
 mod scan;
@@ -103,7 +104,26 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);",
+        CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
+
+        CREATE TABLE IF NOT EXISTS playlists (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS playlist_tracks (
+            id INTEGER PRIMARY KEY,
+            playlist_id INTEGER NOT NULL,
+            track_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+            UNIQUE(playlist_id, track_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id, position);",
     )
     .map_err(|e| format!("Failed to create tables: {}", e))?;
 

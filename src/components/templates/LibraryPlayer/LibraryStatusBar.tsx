@@ -8,9 +8,11 @@ interface LibraryStatusBarProps {
   showColumnBrowser: boolean;
   showInfoPanel: boolean;
   showStatsPanel: boolean;
+  showPlaylistSidebar: boolean;
   onToggleColumnBrowser: () => void;
   onToggleInfoPanel: () => void;
   onToggleStatsPanel: () => void;
+  onTogglePlaylistSidebar: () => void;
 }
 
 const formatSize = (bytes: number): string => {
@@ -39,9 +41,11 @@ export const LibraryStatusBar = ({
   showColumnBrowser,
   showInfoPanel,
   showStatsPanel,
+  showPlaylistSidebar,
   onToggleColumnBrowser,
   onToggleInfoPanel,
   onToggleStatsPanel,
+  onTogglePlaylistSidebar,
 }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
 
@@ -92,6 +96,21 @@ export const LibraryStatusBar = ({
 
         {/* Right — Panel toggles */}
         <div className="flex items-center gap-1">
+          {/* Playlist sidebar toggle */}
+          <button
+            onClick={onTogglePlaylistSidebar}
+            className={`p-0.5 rounded transition-colors ${
+              showPlaylistSidebar
+                ? "text-accent bg-accent/10"
+                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
+            }`}
+            title={showPlaylistSidebar ? "Hide playlists" : "Show playlists"}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
+            </svg>
+          </button>
+
           {/* Column browser toggle */}
           <button
             onClick={onToggleColumnBrowser}

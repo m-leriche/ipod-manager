@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
@@ -24,6 +25,7 @@ interface TrackTableProps {
   onNavigateToAlbum?: (album: string, artist: string) => void;
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
+  activePlaylistId?: number | null;
 }
 
 interface ContextMenuState {
@@ -43,11 +45,17 @@ export const TrackTable = memo(function TrackTable({
   onNavigateToAlbum,
   onTracksDeleted,
   onFlagTracks,
+  activePlaylistId,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
+  const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist, moveTrack } = usePlaylist();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
+  const [reorderDragOver, setReorderDragOver] = useState<number | null>(null);
+  const reorderFromRef = useRef<number | null>(null);
+  const reorderStartYRef = useRef(0);
+  const reorderActiveRef = useRef(false);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -180,9 +188,10 @@ export const TrackTable = memo(function TrackTable({
 
   const handleDoubleClick = useCallback(
     (track: LibraryTrack) => {
-      playTrack(track, getAlbumTracks(track, tracks));
+      const contextTracks = activePlaylistId != null ? tracks : getAlbumTracks(track, tracks);
+      playTrack(track, contextTracks);
     },
-    [playTrack, tracks],
+    [playTrack, tracks, activePlaylistId],
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {
@@ -193,6 +202,69 @@ export const TrackTable = memo(function TrackTable({
     }
     setContextMenu({ x: e.clientX, y: e.clientY, track });
   }, []);
+
+  // ── Playlist drag-to-reorder ──────────────────────────────────
+
+  const isPlaylistView = activePlaylistId != null;
+
+  const handleReorderMouseDown = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      if (!isPlaylistView || e.button !== 0) return;
+      reorderFromRef.current = index;
+      reorderStartYRef.current = e.clientY;
+      reorderActiveRef.current = false;
+
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!reorderActiveRef.current && Math.abs(ev.clientY - reorderStartYRef.current) > 5) {
+          reorderActiveRef.current = true;
+        }
+        if (!reorderActiveRef.current || !scrollRef.current) return;
+
+        // Find which row the mouse is over
+        const rows = scrollRef.current.querySelectorAll("tbody tr[data-index]");
+        let targetIndex: number | null = null;
+        for (const row of rows) {
+          const rect = row.getBoundingClientRect();
+          if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
+            targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
+            break;
+          }
+        }
+        setReorderDragOver(targetIndex);
+      };
+
+      const handleMouseUp = (ev: MouseEvent) => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+
+        if (reorderActiveRef.current && reorderFromRef.current !== null && activePlaylistId != null) {
+          // Find drop target from final mouse position
+          const rows = scrollRef.current?.querySelectorAll("tbody tr[data-index]");
+          let targetIndex: number | null = null;
+          if (rows) {
+            for (const row of rows) {
+              const rect = row.getBoundingClientRect();
+              if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
+                targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
+                break;
+              }
+            }
+          }
+          if (targetIndex !== null && targetIndex !== reorderFromRef.current) {
+            moveTrack(activePlaylistId, reorderFromRef.current, targetIndex);
+          }
+        }
+
+        reorderFromRef.current = null;
+        reorderActiveRef.current = false;
+        setReorderDragOver(null);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [isPlaylistView, activePlaylistId, moveTrack],
+  );
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -229,6 +301,39 @@ export const TrackTable = memo(function TrackTable({
             setContextMenu(null);
           },
         },
+        ...(playlists.length > 0
+          ? [
+              {
+                type: "submenu" as const,
+                label: "Add to Playlist",
+                children: playlists.map((p) => ({
+                  label: p.name,
+                  onClick: () => {
+                    const ids =
+                      selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+                    addToPlaylist(p.id, ids);
+                    setContextMenu(null);
+                  },
+                })),
+              },
+            ]
+          : []),
+        ...(activePlaylistId != null
+          ? [
+              {
+                label:
+                  selected.size > 1 && selected.has(contextMenu.track.id)
+                    ? `Remove ${selected.size} from Playlist`
+                    : "Remove from Playlist",
+                onClick: () => {
+                  const ids =
+                    selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+                  removeFromPlaylist(activePlaylistId, ids);
+                  setContextMenu(null);
+                },
+              },
+            ]
+          : []),
         { type: "separator" as const },
         {
           label: (() => {
@@ -361,9 +466,11 @@ export const TrackTable = memo(function TrackTable({
                 isCurrentTrack={currentTrackId === track.id}
                 isPlaying={currentTrackId === track.id && isActivePlaying}
                 isSelected={selected.has(track.id)}
+                isDragOver={reorderDragOver === virtualRow.index}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenu={handleContextMenu}
+                onMouseDown={isPlaylistView ? handleReorderMouseDown : undefined}
               />
             );
           })}
@@ -486,9 +593,11 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isCurrentTrack,
   isPlaying,
   isSelected,
+  isDragOver,
   onClick,
   onDoubleClick,
   onContextMenu,
+  onMouseDown,
 }: {
   track: LibraryTrack;
   index: number;
@@ -496,21 +605,28 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isCurrentTrack: boolean;
   isPlaying: boolean;
   isSelected: boolean;
+  isDragOver?: boolean;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
+  onMouseDown?: (e: React.MouseEvent, index: number) => void;
 }) {
   return (
     <tr
+      data-index={index}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
+      onMouseDown={onMouseDown ? (e) => onMouseDown(e, index) : undefined}
       className={`group cursor-default select-none transition-colors ${
         isSelected ? "" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
       }`}
     >
       {columns.map((col) => (
-        <td key={col.key} className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""}`}>
+        <td
+          key={col.key}
+          className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""} ${isDragOver ? "border-t-2 border-t-accent" : ""}`}
+        >
           {getCellContent(col.key, track, index, isCurrentTrack, isPlaying, isSelected)}
         </td>
       ))}

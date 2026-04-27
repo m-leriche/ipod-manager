@@ -98,6 +98,23 @@ pub struct ImportProgress {
     pub current_file: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Playlist {
+    pub id: i64,
+    pub name: String,
+    pub track_count: u32,
+    pub total_duration: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlaylistTrack {
+    pub position: u32,
+    #[serde(flatten)]
+    pub track: LibraryTrack,
+}
+
 pub(crate) struct TrackData {
     pub file_path: String,
     pub file_name: String,

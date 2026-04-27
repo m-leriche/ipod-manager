@@ -132,7 +132,8 @@ npm test
 - [ ] Status bar with total library stats (tracks, duration, size)
 - [x] Restore EQ — biquad filters in Rust (audio/equalizer.rs), wired into audio engine, Web Audio API code removed from EqualizerContext
 - [x] Gapless playback — engine preloads next track decoder, seamless transition on EOF
-- [ ] Fix album art repair — MusicBrainz lookup and embedded art extraction have reliability issues, needs investigation and hardening
+- [x] Fix album art repair — MusicBrainz lookup and embedded art extraction fixed
+- [ ] Fix playcount tags to display properly in the library
 
 ## Code Style
 

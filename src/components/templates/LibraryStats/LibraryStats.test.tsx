@@ -116,13 +116,13 @@ describe("LibraryStats", () => {
     expect(screen.getByText(/set a library location/i)).toBeInTheDocument();
   });
 
-  it("auto-scans when libraryPath is provided", async () => {
+  it("loads stats from DB when libraryPath is provided", async () => {
     mockInvoke.mockResolvedValue(MOCK_STATS);
 
     render(<LibraryStats libraryPath="/music/library" />);
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("scan_library_stats", { path: "/music/library" });
+      expect(mockInvoke).toHaveBeenCalledWith("get_library_stats");
     });
   });
 
@@ -153,7 +153,11 @@ describe("LibraryStats", () => {
 
   it("retries scan on retry button click", async () => {
     const user = userEvent.setup();
-    mockInvoke.mockRejectedValueOnce("Path does not exist").mockResolvedValueOnce(MOCK_STATS);
+    // DB load fails → file scan fails → user sees Retry → file scan succeeds
+    mockInvoke
+      .mockRejectedValueOnce("No tracks in library") // get_library_stats
+      .mockRejectedValueOnce("Path does not exist") // fallback scan_library_stats
+      .mockResolvedValueOnce(MOCK_STATS); // retry scan_library_stats
 
     render(<LibraryStats libraryPath="/music/library" />);
 

@@ -1,5 +1,6 @@
 pub mod decoder;
 pub mod engine;
+pub mod equalizer;
 pub mod resampler;
 pub mod types;
 

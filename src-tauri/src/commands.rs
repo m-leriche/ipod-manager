@@ -460,6 +460,14 @@ pub async fn scan_library_stats(
 }
 
 #[tauri::command]
+pub async fn get_library_stats(db: State<'_, LibraryDb>) -> Result<libstats::LibraryStats, String> {
+    let conn = db.conn_arc();
+    let conn = conn.lock().map_err(|e| format!("DB lock error: {}", e))?;
+    let location = library::get_library_location(&conn).unwrap_or_default();
+    libstats::get_library_stats(&conn, &location)
+}
+
+#[tauri::command]
 pub async fn get_ipod_info(
     mount_point: String,
     disk_info: DiskInfo,

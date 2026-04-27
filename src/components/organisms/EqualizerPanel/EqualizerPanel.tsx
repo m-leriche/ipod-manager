@@ -2,11 +2,11 @@ import { useRef, useEffect } from "react";
 import { useEqualizer } from "../../../contexts/EqualizerContext";
 import { BandSlider } from "./BandSlider";
 import { PresetDropdown } from "./PresetDropdown";
-import { ParametricBandList } from "./ParametricBandList";
 import { FREQUENCIES_10, FREQUENCIES_31, formatFrequency, GAIN_MIN, GAIN_MAX } from "./constants";
 
 export const EqualizerPanel = () => {
-  const { state, isOpen, setIsOpen, setEnabled, setBandMode, setGain, setPreamp, resetGains } = useEqualizer();
+  const { state, isOpen, setIsOpen, setEnabled, setBandMode, setGain, setParametricBandGain, setPreamp, resetGains } =
+    useEqualizer();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -104,28 +104,35 @@ export const EqualizerPanel = () => {
         </button>
       </div>
 
-      {/* Parametric band list */}
-      {isParametric && (
-        <ParametricBandList bands={state.parametricBands!} preamp={state.preamp} disabled={!state.enabled} />
-      )}
+      {/* EQ sliders — shared layout for both graphic and parametric modes */}
+      <div className={`px-4 pt-3 pb-4 flex ${!isParametric && narrow ? "gap-0" : "gap-2"}`}>
+        {/* dB scale */}
+        <div className="flex flex-col justify-between items-end pr-2 pt-4" style={{ height: 120 + 16 + 12 }}>
+          <span className="text-[8px] text-text-tertiary">+{GAIN_MAX}</span>
+          <span className="text-[8px] text-text-tertiary">0</span>
+          <span className="text-[8px] text-text-tertiary">{GAIN_MIN}</span>
+        </div>
 
-      {/* Graphic EQ sliders */}
-      {!isParametric && (
-        <div className={`px-4 pt-3 pb-4 flex ${narrow ? "gap-0" : "gap-2"}`}>
-          {/* dB scale */}
-          <div className="flex flex-col justify-between items-end pr-2 pt-4" style={{ height: 120 + 16 + 12 }}>
-            <span className="text-[8px] text-text-tertiary">+{GAIN_MAX}</span>
-            <span className="text-[8px] text-text-tertiary">0</span>
-            <span className="text-[8px] text-text-tertiary">{GAIN_MIN}</span>
-          </div>
+        {/* Preamp */}
+        <div className="border-r border-border pr-2 mr-1">
+          <BandSlider label="Pre" value={state.preamp} onChange={setPreamp} disabled={!state.enabled} />
+        </div>
 
-          {/* Preamp */}
-          <div className="border-r border-border pr-2 mr-1">
-            <BandSlider label="Pre" value={state.preamp} onChange={setPreamp} disabled={!state.enabled} />
-          </div>
+        {/* Parametric band sliders */}
+        {isParametric &&
+          state.parametricBands!.map((band, i) => (
+            <BandSlider
+              key={`param-${i}-${band.frequency}`}
+              label={formatFrequency(band.frequency)}
+              value={band.gain}
+              onChange={(v) => setParametricBandGain(i, v)}
+              disabled={!state.enabled}
+            />
+          ))}
 
-          {/* Band sliders */}
-          {frequencies.map((freq, i) => (
+        {/* Graphic band sliders */}
+        {!isParametric &&
+          frequencies.map((freq, i) => (
             <BandSlider
               key={`${state.bandMode}-${freq}`}
               label={formatFrequency(freq)}
@@ -135,8 +142,7 @@ export const EqualizerPanel = () => {
               narrow={narrow}
             />
           ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { useResizableWidth } from "./useResizableWidth";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
@@ -12,11 +13,15 @@ interface TrackDetailPanelProps {
   onSave?: () => void;
 }
 
-export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
-  if (tracks.length === 0) return <EmptyDetailPanel />;
+const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) => (
+  <div
+    onMouseDown={onMouseDown}
+    className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors z-10"
+  />
+);
 
-  const isSingle = tracks.length === 1;
-  const track = tracks[0];
+export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
+  const { width, onDragStart } = useResizableWidth();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -89,13 +94,22 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
     }
   }, [tracks, onSave]);
 
+  if (tracks.length === 0) return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
+
+  const isSingle = tracks.length === 1;
+  const track = tracks[0];
+
   return (
-    <div className="w-[220px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto">
+    <div
+      style={{ width }}
+      className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto"
+    >
+      <ResizeHandle onMouseDown={onDragStart} />
       {/* Album artwork */}
-      <div className="p-4 flex justify-center">
+      <div className="p-4">
         <AlbumArtwork
           folderPath={track.folder_path}
-          size="lg"
+          size="full"
           showMissingLabel
           onRepair={repairing ? undefined : handleRepairArt}
           cacheBust={artCacheBust}
@@ -247,11 +261,15 @@ const EMPTY_PAIRED = [
   ["Disc No.", "Total Discs"],
 ];
 
-const EmptyDetailPanel = () => (
-  <div className="w-[220px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto">
+const EmptyDetailPanel = ({ width, onDragStart }: { width: number; onDragStart: (e: React.MouseEvent) => void }) => (
+  <div
+    style={{ width }}
+    className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto"
+  >
+    <ResizeHandle onMouseDown={onDragStart} />
     {/* Album art placeholder */}
-    <div className="p-4 flex justify-center">
-      <div className="w-[188px] h-[188px] rounded-lg bg-bg-card border border-border flex items-center justify-center">
+    <div className="p-4">
+      <div className="w-full aspect-square rounded-lg bg-bg-card border border-border flex items-center justify-center">
         <span className="text-text-tertiary/30 text-sm font-medium">Album Art</span>
       </div>
     </div>

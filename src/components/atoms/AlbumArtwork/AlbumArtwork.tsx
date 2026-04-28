@@ -6,6 +6,7 @@ const sizes = {
   md: "w-12 h-12",
   lg: "w-40 h-40",
   xl: "w-[280px] h-[280px]",
+  full: "w-full aspect-square",
 } as const;
 
 interface AlbumArtworkProps {

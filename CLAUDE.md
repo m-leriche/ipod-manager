@@ -119,7 +119,7 @@ npm test
 
 - [ ] Refine playback engine — handle unsupported formats gracefully, persist queue across restarts
 - [ ] Improve library loading — show skeleton/shimmer while scanning, background incremental re-scan on app launch
-- [ ] Virtual scrolling for large track tables (10k+ rows)
+- [x] Virtual scrolling for large track tables (10k+ rows)
 - [ ] Scroll position preservation when switching between column browser selections
 - [ ] Lazy-load album artwork in column browser and grid views (batch load visible items)
 - [ ] Waveform preview in now-playing bar
@@ -133,7 +133,7 @@ npm test
 - [x] Restore EQ — biquad filters in Rust (audio/equalizer.rs), wired into audio engine, Web Audio API code removed from EqualizerContext
 - [x] Gapless playback — engine preloads next track decoder, seamless transition on EOF
 - [x] Fix album art repair — MusicBrainz lookup and embedded art extraction fixed
-- [ ] Fix playcount tags to display properly in the library
+- [x] Fix playcount tags to display properly in the library
 
 ## Code Style
 

@@ -105,6 +105,9 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   const onTrackEndedRef = useRef<() => void>(() => {});
   const onGaplessTransitionRef = useRef<() => void>(() => {});
 
+  // Dedupe guard: prevent double-incrementing the same track (e.g. from StrictMode double-mount)
+  const lastCountedRef = useRef<{ id: number; at: number }>({ id: -1, at: 0 });
+
   // ── Set initial volume on the Rust engine ────────────────────
   useEffect(() => {
     invoke("audio_set_volume", { volume: state.volume }).catch(() => {});
@@ -114,39 +117,59 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // ── Listen for Rust audio engine events ──────────────────────
 
   useEffect(() => {
+    let active = true;
     const unlisteners: Array<() => void> = [];
 
-    listen<{ position: number; duration: number }>("audio:position", (event) => {
-      const { position, duration } = event.payload;
-      lastPositionRef.current = position;
-      lastPositionTimeRef.current = performance.now();
-      // Update duration if the engine reports a different value
-      setTime((prev) => {
-        const newDur = duration > 0 ? duration : prev.duration;
-        return { currentTime: position, duration: newDur };
+    const register = (promise: Promise<() => void>) => {
+      promise.then((unlisten) => {
+        if (active) unlisteners.push(unlisten);
+        else unlisten();
       });
-    }).then((unlisten) => unlisteners.push(unlisten));
+    };
 
-    listen<number>("audio:duration-ready", (event) => {
-      const dur = event.payload;
-      if (dur > 0) {
-        setTime((prev) => ({ ...prev, duration: dur }));
-      }
-    }).then((unlisten) => unlisteners.push(unlisten));
+    register(
+      listen<{ position: number; duration: number }>("audio:position", (event) => {
+        if (!active) return;
+        const { position, duration } = event.payload;
+        lastPositionRef.current = position;
+        lastPositionTimeRef.current = performance.now();
+        setTime((prev) => {
+          const newDur = duration > 0 ? duration : prev.duration;
+          return { currentTime: position, duration: newDur };
+        });
+      }),
+    );
 
-    listen("audio:track-ended", () => {
-      onTrackEndedRef.current();
-    }).then((unlisten) => unlisteners.push(unlisten));
+    register(
+      listen<number>("audio:duration-ready", (event) => {
+        if (!active) return;
+        const dur = event.payload;
+        if (dur > 0) {
+          setTime((prev) => ({ ...prev, duration: dur }));
+        }
+      }),
+    );
 
-    listen("audio:gapless-transition", () => {
-      onGaplessTransitionRef.current();
-    }).then((unlisten) => unlisteners.push(unlisten));
+    register(
+      listen("audio:track-ended", () => {
+        if (active) onTrackEndedRef.current();
+      }),
+    );
 
-    listen<string>("audio:error", (event) => {
-      console.warn("Audio error:", event.payload);
-    }).then((unlisten) => unlisteners.push(unlisten));
+    register(
+      listen("audio:gapless-transition", () => {
+        if (active) onGaplessTransitionRef.current();
+      }),
+    );
+
+    register(
+      listen<string>("audio:error", (event) => {
+        if (active) console.warn("Audio error:", event.payload);
+      }),
+    );
 
     return () => {
+      active = false;
       unlisteners.forEach((fn) => fn());
       cancelAnimationFrame(rafRef.current);
     };
@@ -212,7 +235,20 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
 
   // ── Track-ended handler ──────────────────────────────────────
 
+  const recordPlay = useCallback((trackId: number) => {
+    const now = Date.now();
+    const last = lastCountedRef.current;
+    if (last.id === trackId && now - last.at < 3000) return;
+    lastCountedRef.current = { id: trackId, at: now };
+    invoke("increment_play_count", { trackId }).then(() => {
+      window.dispatchEvent(new CustomEvent("play-count-updated", { detail: { trackId } }));
+    });
+  }, []);
+
   const handleTrackEnded = useCallback(() => {
+    const s = stateRef.current;
+    if (s.currentTrack) recordPlay(s.currentTrack.id);
+
     const nextIdx = getNextIndex();
     if (nextIdx === null) {
       setState((prev) => ({ ...prev, isPlaying: false }));
@@ -220,7 +256,6 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       return;
     }
 
-    const s = stateRef.current;
     const nextTrack = s.queue[nextIdx];
     if (!nextTrack) return;
 
@@ -248,15 +283,17 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     lastPositionTimeRef.current = performance.now();
 
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
-  }, [getNextIndex]);
+  }, [getNextIndex, recordPlay]);
 
   // ── Gapless transition handler (engine already playing next track) ──
 
   const handleGaplessTransition = useCallback(() => {
+    const s = stateRef.current;
+    if (s.currentTrack) recordPlay(s.currentTrack.id);
+
     const nextIdx = getNextIndex();
     if (nextIdx === null) return;
 
-    const s = stateRef.current;
     const nextTrack = s.queue[nextIdx];
     if (!nextTrack) return;
 
@@ -274,7 +311,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
     // Don't invoke audio_play — the engine already transitioned seamlessly
-  }, [getNextIndex]);
+  }, [getNextIndex, recordPlay]);
 
   // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;

@@ -151,10 +151,10 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 ## TODO
 
 ### Library Player
-- [ ] **Fix playcount tags** — Playcount tags not displaying properly in the library view.
+- [x] **Fix playcount tags** — Playcount tags not displaying properly in the library view.
 - [x] **Playlist support** — Create, edit, reorder, persist to SQLite. Sidebar UI, context menu integration, full CRUD.
 - [ ] **Rockbox playlist export** — Export playlists as M3U8 files to a mounted iPod for Rockbox playback. Map local library paths to iPod paths (strip library prefix, prepend iPod music root), write to `/Playlists/` on the device. Path mapping can be inferred from sync profiles or user-selected.
-- [ ] **Virtual scrolling** — Large track tables (10k+ rows) need virtualization. `@tanstack/react-virtual` is installed but not yet wired in.
+- [x] **Virtual scrolling** — Large track tables (10k+ rows) need virtualization. `@tanstack/react-virtual` is installed and wired into TrackTable with 20-row overscan.
 - [ ] **Queue persistence** — Queue is in-memory only, lost on restart. Save to SQLite or localStorage.
 - [ ] **Column browser keyboard nav** — Arrow keys to move selection, Enter to confirm.
 - [ ] **Resizable column browser** — Drag the divider between browser and track table.

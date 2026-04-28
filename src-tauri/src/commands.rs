@@ -631,6 +631,20 @@ pub async fn flag_tracks(
 }
 
 #[tauri::command]
+pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    conn.execute(
+        "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?1",
+        rusqlite::params![track_id],
+    )
+    .map_err(|e| format!("Play count update failed: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
     let conn = db
         .conn

@@ -184,6 +184,7 @@ pub fn run() {
             commands::add_library_folder,
             commands::delete_library_tracks,
             commands::flag_tracks,
+            commands::increment_play_count,
             commands::remove_library_folder,
             commands::get_library_folders,
             commands::refresh_library,

@@ -74,6 +74,7 @@ fn make_track_data(overrides: TrackDataOverrides) -> TrackData {
         bitrate_kbps: Some(320),
         format: "MP3".to_string(),
         file_size: 5_000_000,
+        play_count: None,
     }
 }
 

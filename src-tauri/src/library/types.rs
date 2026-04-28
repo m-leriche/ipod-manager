@@ -136,4 +136,5 @@ pub(crate) struct TrackData {
     pub bitrate_kbps: Option<u32>,
     pub format: String,
     pub file_size: u64,
+    pub play_count: Option<u32>,
 }

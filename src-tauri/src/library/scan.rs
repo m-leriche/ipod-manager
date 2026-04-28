@@ -248,7 +248,21 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
         disc_total,
         year,
         genre,
+        play_count,
     ) = if let Some(tag) = tag {
+        // Try reading play count from common tag fields:
+        // - TXXX:FMPS_PLAYCOUNT (MediaMonkey, Clementine, etc.)
+        // - Vorbis comment FMPS_PLAYCOUNT / PLAY_COUNTER
+        // - ItemKey::Popularimeter (ID3v2 POPM frame)
+        let pc = tag
+            .get_string(&ItemKey::Unknown("FMPS_PLAYCOUNT".into()))
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .map(|v| v as u32)
+            .or_else(|| {
+                tag.get_string(&ItemKey::Popularimeter)
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+            });
+
         (
             tag.title().and_then(|s| trim_tag(&s)),
             tag.artist().and_then(|s| trim_tag(&s)),
@@ -264,10 +278,11 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
             tag.disk_total(),
             tag.year(),
             tag.genre().and_then(|s| trim_tag(&s)),
+            pc,
         )
     } else {
         (
-            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
     };
 
@@ -292,6 +307,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
         bitrate_kbps,
         format,
         file_size,
+        play_count,
     })
 }
 
@@ -301,15 +317,16 @@ pub(crate) fn upsert_track(
     mtime: i64,
     now: i64,
 ) -> Result<(), String> {
+    let tag_play_count = t.play_count.unwrap_or(0) as i64;
     conn.execute(
         "INSERT INTO tracks (
             file_path, file_name, folder_path, title, artist, album, album_artist,
             sort_artist, sort_album_artist, track_number, track_total, disc_number,
             disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-            file_size, modified_at, scanned_at, created_at
+            file_size, modified_at, scanned_at, created_at, play_count
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
+            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
         )
         ON CONFLICT(file_path) DO UPDATE SET
             file_name=excluded.file_name, folder_path=excluded.folder_path,
@@ -321,7 +338,8 @@ pub(crate) fn upsert_track(
             duration_secs=excluded.duration_secs, sample_rate=excluded.sample_rate,
             bitrate_kbps=excluded.bitrate_kbps, format=excluded.format,
             file_size=excluded.file_size, modified_at=excluded.modified_at,
-            scanned_at=excluded.scanned_at",
+            scanned_at=excluded.scanned_at,
+            play_count=MAX(play_count, excluded.play_count)",
         params![
             t.file_path,
             t.file_name,
@@ -346,6 +364,7 @@ pub(crate) fn upsert_track(
             mtime,
             now,
             now,
+            tag_play_count,
         ],
     )
     .map_err(|e| format!("Failed to upsert track: {}", e))?;

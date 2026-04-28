@@ -237,6 +237,17 @@ export const LibraryPlayer = ({
     };
   }, [fetchBrowserData]);
 
+  // ── Update play count in place when a track finishes ──────────
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackId } = (e as CustomEvent<{ trackId: number }>).detail;
+      setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, play_count: t.play_count + 1 } : t)));
+    };
+    window.addEventListener("play-count-updated", handler);
+    return () => window.removeEventListener("play-count-updated", handler);
+  }, []);
+
   // ── Column selection handlers ─────────────────────────────────
 
   const handleSelectGenre = useCallback((genre: string | null) => {

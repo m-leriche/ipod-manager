@@ -24,9 +24,9 @@ describe("useAudioPlayback", () => {
     expect(result.current.playbackFraction).toBe(0);
   });
 
-  it("calls audio_stop when filePath is null", () => {
+  it("does not call audio_stop when filePath is null and nothing was played", () => {
     renderHook(() => useAudioPlayback(null));
-    expect(mockInvoke).toHaveBeenCalledWith("audio_stop");
+    expect(mockInvoke).not.toHaveBeenCalledWith("audio_stop");
   });
 
   it("play invokes audio_play with file path", () => {
@@ -65,10 +65,19 @@ describe("useAudioPlayback", () => {
     expect(mockInvoke).toHaveBeenCalledWith("audio_seek", { positionSecs: 0 });
   });
 
-  it("cleans up on filePath change", () => {
-    const { rerender } = renderHook(({ path }) => useAudioPlayback(path), {
+  it("cleans up on filePath change only after play was called", () => {
+    const { result, rerender } = renderHook(({ path }) => useAudioPlayback(path), {
       initialProps: { path: "/a.flac" as string | null },
     });
+    // Without calling play, changing path should not stop
+    mockInvoke.mockClear();
+    rerender({ path: null });
+    expect(mockInvoke).not.toHaveBeenCalledWith("audio_stop");
+
+    // After calling play, changing path should stop
+    rerender({ path: "/b.flac" });
+    act(() => result.current.play());
+    mockInvoke.mockClear();
     rerender({ path: null });
     expect(mockInvoke).toHaveBeenCalledWith("audio_stop");
   });

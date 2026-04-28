@@ -11,6 +11,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
   const lastPositionRef = useRef(0);
   const lastPositionTimeRef = useRef(0);
   const activePathRef = useRef<string | null>(null);
+  const ownsPlaybackRef = useRef(false);
 
   // Track file path changes — stop previous, start new
   useEffect(() => {
@@ -20,12 +21,18 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
     activePathRef.current = filePath;
 
     if (!filePath) {
-      invoke("audio_stop").catch(() => {});
+      if (ownsPlaybackRef.current) {
+        invoke("audio_stop").catch(() => {});
+        ownsPlaybackRef.current = false;
+      }
       return;
     }
 
     return () => {
-      invoke("audio_stop").catch(() => {});
+      if (ownsPlaybackRef.current) {
+        invoke("audio_stop").catch(() => {});
+        ownsPlaybackRef.current = false;
+      }
       cancelAnimationFrame(rafRef.current);
     };
   }, [filePath]);
@@ -75,6 +82,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
 
   const play = useCallback(() => {
     if (!activePathRef.current) return;
+    ownsPlaybackRef.current = true;
     invoke("audio_play", { path: activePathRef.current, seekSecs: null }).catch(() => {});
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();

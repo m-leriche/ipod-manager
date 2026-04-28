@@ -218,6 +218,17 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     return s.repeat === "all" ? 0 : null;
   }, []);
 
+  // Advance shuffle position, re-shuffling when the cycle wraps around
+  const advanceShuffle = useCallback((nextQueueIndex: number) => {
+    const nextPos = shufflePositionRef.current + 1;
+    if (nextPos >= shuffleOrderRef.current.length) {
+      shuffleOrderRef.current = shuffleIndices(stateRef.current.queue.length, nextQueueIndex);
+      shufflePositionRef.current = 0;
+    } else {
+      shufflePositionRef.current = nextPos;
+    }
+  }, []);
+
   // ── Play a track via the native audio engine ─────────────────
 
   const playFile = useCallback((track: LibraryTrack) => {
@@ -260,16 +271,16 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     if (!nextTrack) return;
 
     if (s.repeat === "one") {
-      invoke("audio_seek", { positionSecs: 0 }).catch(() => {});
-      invoke("audio_resume").catch(() => {});
+      // Re-play from scratch — decoder is gone after EOF so seek+resume won't work
       lastPositionRef.current = 0;
       lastPositionTimeRef.current = performance.now();
-      setTime((prev) => ({ ...prev, currentTime: 0 }));
+      setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+      invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
       return;
     }
 
     if (s.shuffle) {
-      shufflePositionRef.current += 1;
+      advanceShuffle(nextIdx);
     }
 
     setState((prev) => ({
@@ -283,7 +294,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     lastPositionTimeRef.current = performance.now();
 
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
-  }, [getNextIndex, recordPlay]);
+  }, [getNextIndex, recordPlay, advanceShuffle]);
 
   // ── Gapless transition handler (engine already playing next track) ──
 
@@ -298,7 +309,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     if (!nextTrack) return;
 
     if (s.shuffle) {
-      shufflePositionRef.current += 1;
+      advanceShuffle(nextIdx);
     }
 
     setState((prev) => ({
@@ -311,7 +322,13 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
     // Don't invoke audio_play — the engine already transitioned seamlessly
-  }, [getNextIndex, recordPlay]);
+
+    // Re-preload for continuous seamless looping (preload effect won't re-fire
+    // since queueIndex didn't change)
+    if (s.repeat === "one") {
+      invoke("audio_preload_next", { path: nextTrack.file_path }).catch(() => {});
+    }
+  }, [getNextIndex, recordPlay, advanceShuffle]);
 
   // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;
@@ -320,7 +337,16 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // ── Preload next track for gapless playback ──────────────────
 
   useEffect(() => {
-    if (!state.isPlaying || state.queue.length === 0 || state.repeat === "one") return;
+    if (!state.isPlaying || state.queue.length === 0) return;
+
+    if (state.repeat === "one") {
+      // Preload same track for seamless repeat (also replaces any stale preload)
+      const currentTrack = state.queue[state.queueIndex];
+      if (currentTrack) {
+        invoke("audio_preload_next", { path: currentTrack.file_path }).catch(() => {});
+      }
+      return;
+    }
 
     const nextIdx = getNextIndex();
     if (nextIdx !== null && state.queue[nextIdx]) {
@@ -391,12 +417,12 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     if (!nextTrack) return;
 
     if (s.shuffle) {
-      shufflePositionRef.current += 1;
+      advanceShuffle(nextIdx);
     }
 
     setState((prev) => ({ ...prev, queueIndex: nextIdx }));
     playFile(nextTrack);
-  }, [getNextIndex, playFile]);
+  }, [getNextIndex, playFile, advanceShuffle]);
 
   const previous = useCallback(() => {
     // If more than 3 seconds in, restart current track

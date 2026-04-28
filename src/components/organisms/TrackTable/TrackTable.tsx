@@ -25,6 +25,7 @@ interface TrackTableProps {
   onNavigateToAlbum?: (album: string, artist: string) => void;
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
+  onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
 
@@ -45,6 +46,7 @@ export const TrackTable = memo(function TrackTable({
   onNavigateToAlbum,
   onTracksDeleted,
   onFlagTracks,
+  onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
@@ -357,6 +359,22 @@ export const TrackTable = memo(function TrackTable({
             setContextMenu(null);
           },
         },
+        ...(onRepairMetadata
+          ? [
+              {
+                label:
+                  selected.size > 1 && selected.has(contextMenu.track.id)
+                    ? `Repair Metadata for ${selected.size} Tracks`
+                    : "Repair Metadata",
+                onClick: () => {
+                  const ids =
+                    selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
+                  onRepairMetadata(tracks.filter((t) => ids.includes(t.id)));
+                  setContextMenu(null);
+                },
+              },
+            ]
+          : []),
         ...(contextMenu.track.artist && onNavigateToArtist
           ? [
               {

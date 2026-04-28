@@ -26,15 +26,19 @@ const INFO_PANEL_KEY = "crate-show-info-panel";
 const STATS_PANEL_KEY = "crate-show-stats-panel";
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
 const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
+const SORT_BY_KEY = "crate-sort-by";
+const SORT_DIR_KEY = "crate-sort-direction";
 
 // ── Component ───────────────────────────────────────────────────
 
 export const LibraryPlayer = ({
   onRefreshRef,
   isActive = true,
+  onRepairMetadata,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
+  onRepairMetadata?: (tracks: LibraryTrack[]) => void;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { playTrack } = usePlayback();
@@ -46,9 +50,11 @@ export const LibraryPlayer = ({
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
 
-  // Track table state
-  const [sortBy, setSortBy] = useState("artist");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  // Track table state (persisted)
+  const [sortBy, setSortBy] = useState(() => localStorage.getItem(SORT_BY_KEY) || "artist");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(
+    () => (localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc",
+  );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(() => localStorage.getItem(FLAGGED_FILTER_KEY) === "true");
@@ -263,6 +269,10 @@ export const LibraryPlayer = ({
     if (album) {
       setSortBy("track_number");
       setSortDirection("asc");
+    } else {
+      // Restore user's persisted sort preference
+      setSortBy(localStorage.getItem(SORT_BY_KEY) || "artist");
+      setSortDirection((localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc");
     }
   }, []);
 
@@ -289,10 +299,16 @@ export const LibraryPlayer = ({
   const handleSort = useCallback(
     (key: string) => {
       if (key === sortBy) {
-        setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+        setSortDirection((d) => {
+          const next = d === "asc" ? "desc" : "asc";
+          localStorage.setItem(SORT_DIR_KEY, next);
+          return next;
+        });
       } else {
         setSortBy(key);
         setSortDirection("asc");
+        localStorage.setItem(SORT_BY_KEY, key);
+        localStorage.setItem(SORT_DIR_KEY, "asc");
       }
     },
     [sortBy],
@@ -461,6 +477,7 @@ export const LibraryPlayer = ({
           onSelectionChange={handleSelectionChange}
           onTracksDeleted={fetchBrowserData}
           onFlagTracks={handleFlagTracks}
+          onRepairMetadata={onRepairMetadata}
           activePlaylistId={activePlaylistId}
         />
 

@@ -5,7 +5,8 @@ import { TransportControls } from "../../molecules/TransportControls/TransportCo
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 
 export const NowPlayingBar = () => {
-  const { state, pause, resume, next, previous, seekTo, setVolume, toggleShuffle, cycleRepeat } = usePlayback();
+  const { state, pause, resume, next, previous, seekTo, setVolume, toggleShuffle, cycleRepeat, clearPlaybackError } =
+    usePlayback();
   const { currentTime, duration } = usePlaybackTime();
 
   // Use a ref for time values in the keyboard handler to avoid re-registering 60x/sec
@@ -58,13 +59,33 @@ export const NowPlayingBar = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [state.currentTrack, handlePlayPause, previous, next, seekTo]);
 
+  // Auto-clear playback error after 5 seconds
+  useEffect(() => {
+    if (!state.playbackError) return;
+    const timer = setTimeout(() => clearPlaybackError(), 5000);
+    return () => clearTimeout(timer);
+  }, [state.playbackError, clearPlaybackError]);
+
   if (!state.currentTrack) return null;
 
   return (
     <div className="h-[72px] border-t border-border bg-bg-secondary px-6 flex items-center gap-4 shrink-0">
-      {/* Left — Now Playing Info */}
+      {/* Left — Now Playing Info or error */}
       <div className="w-[240px] shrink-0">
-        <NowPlayingInfo track={state.currentTrack} />
+        {state.playbackError ? (
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-red-400 shrink-0">
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-[11px] text-red-400 font-medium leading-tight">{state.playbackError}</span>
+          </div>
+        ) : (
+          <NowPlayingInfo track={state.currentTrack} />
+        )}
       </div>
 
       {/* Center — Transport Controls */}

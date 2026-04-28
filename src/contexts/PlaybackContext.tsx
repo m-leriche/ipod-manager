@@ -15,6 +15,8 @@ interface PlaybackState {
   queueIndex: number;
   shuffle: boolean;
   repeat: RepeatMode;
+  libraryAvailable: boolean;
+  playbackError: string | null;
 }
 
 interface PlaybackTimeState {
@@ -40,6 +42,7 @@ interface PlaybackContextValue {
   clearQueue: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  clearPlaybackError: () => void;
 }
 
 // ── Initial state ───────────────────────────────────────────────
@@ -63,6 +66,8 @@ const initial: PlaybackState = {
   queueIndex: -1,
   shuffle: false,
   repeat: "off",
+  libraryAvailable: true,
+  playbackError: null,
 };
 
 const initialTime: PlaybackTimeState = { currentTime: 0, duration: 0 };
@@ -114,6 +119,22 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Check library availability on mount + window focus ──────
+  const checkLibraryAvailable = useCallback(() => {
+    invoke<boolean>("check_library_available")
+      .then((available) => {
+        setState((prev) => (prev.libraryAvailable === available ? prev : { ...prev, libraryAvailable: available }));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    checkLibraryAvailable();
+    const onFocus = () => checkLibraryAvailable();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [checkLibraryAvailable]);
+
   // ── Listen for Rust audio engine events ──────────────────────
 
   useEffect(() => {
@@ -164,7 +185,12 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
 
     register(
       listen<string>("audio:error", (event) => {
-        if (active) console.warn("Audio error:", event.payload);
+        if (!active) return;
+        console.warn("Audio error:", event.payload);
+        const msg = event.payload.includes("Failed to open")
+          ? "File not available \u2014 drive may be disconnected"
+          : "Playback error";
+        setState((prev) => ({ ...prev, isPlaying: false, playbackError: msg }));
       }),
     );
 
@@ -232,10 +258,21 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // ── Play a track via the native audio engine ─────────────────
 
   const playFile = useCallback((track: LibraryTrack) => {
+    if (!stateRef.current.libraryAvailable) {
+      setState((prev) => ({
+        ...prev,
+        currentTrack: track,
+        isPlaying: false,
+        playbackError: "Library offline \u2014 connect your drive to play music",
+      }));
+      return;
+    }
+
     setState((prev) => ({
       ...prev,
       currentTrack: track,
       isPlaying: true,
+      playbackError: null,
     }));
     setTime({ currentTime: 0, duration: track.duration_secs });
     lastPositionRef.current = 0;
@@ -545,6 +582,10 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     });
   }, []);
 
+  const clearPlaybackError = useCallback(() => {
+    setState((prev) => (prev.playbackError ? { ...prev, playbackError: null } : prev));
+  }, []);
+
   // Memoize the main context value so time-only updates don't re-render consumers
   const playbackValue = useMemo<PlaybackContextValue>(
     () => ({
@@ -565,6 +606,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       clearQueue,
       toggleShuffle,
       cycleRepeat,
+      clearPlaybackError,
     }),
     [
       state,
@@ -584,6 +626,7 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       clearQueue,
       toggleShuffle,
       cycleRepeat,
+      clearPlaybackError,
     ],
   );
 

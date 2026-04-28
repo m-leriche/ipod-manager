@@ -41,7 +41,10 @@ export const LibraryPlayer = ({
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
-  const { playTrack } = usePlayback();
+  const {
+    playTrack,
+    state: { libraryAvailable },
+  } = usePlayback();
   const { activePlaylistId, activePlaylistTracks, setActivePlaylist } = usePlaylist();
   const playAfterFetchRef = useRef(false);
 
@@ -421,6 +424,22 @@ export const LibraryPlayer = ({
         <PlaylistSidebar onPlaylistSelect={setActivePlaylist} activePlaylistId={activePlaylistId} />
       )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        {/* Library offline banner */}
+        {!libraryAvailable && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border-b border-yellow-500/20 shrink-0">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-yellow-500 shrink-0">
+              <path
+                fillRule="evenodd"
+                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-[11px] text-yellow-500/90 font-medium">
+              Library offline — connect your drive to play music
+            </span>
+          </div>
+        )}
+
         {/* Search bar */}
         <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
           <input

@@ -490,6 +490,18 @@ pub async fn read_rockbox_playdata(ipod_path: String) -> Result<rockbox::Rockbox
 // ── Library commands ────────────────────────────────────────────
 
 #[tauri::command]
+pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+    match library::get_library_location(&conn) {
+        Some(loc) => Ok(std::path::Path::new(&loc).exists()),
+        None => Ok(false),
+    }
+}
+
+#[tauri::command]
 pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, String> {
     let conn = db
         .conn

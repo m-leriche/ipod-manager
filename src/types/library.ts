@@ -124,3 +124,10 @@ export interface ImportResult {
   skipped: number;
   errors: string[];
 }
+
+export interface PlaylistExportResult {
+  exported: number;
+  total_tracks: number;
+  skipped_tracks: number;
+  errors: string[];
+}

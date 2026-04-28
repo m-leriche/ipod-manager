@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
-import type { Playlist } from "../../../types/library";
+import type { Playlist, PlaylistExportResult } from "../../../types/library";
 
 interface PlaylistSidebarProps {
   onPlaylistSelect: (id: number | null) => void;
@@ -8,13 +8,15 @@ interface PlaylistSidebarProps {
 }
 
 export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: PlaylistSidebarProps) => {
-  const { playlists, createPlaylist, renamePlaylist, deletePlaylist } = usePlaylist();
+  const { playlists, createPlaylist, renamePlaylist, deletePlaylist, exportToIpod } = usePlaylist();
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [exportMsg, setExportMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (creating || editingId !== null) inputRef.current?.focus();
@@ -34,6 +36,13 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
       window.removeEventListener("mousedown", handle);
     };
   }, [contextMenu]);
+
+  // Auto-dismiss export message
+  useEffect(() => {
+    if (!exportMsg) return;
+    const timer = setTimeout(() => setExportMsg(null), 4000);
+    return () => clearTimeout(timer);
+  }, [exportMsg]);
 
   const handleCreate = useCallback(async () => {
     const name = inputValue.trim();
@@ -78,6 +87,24 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
     [deletePlaylist],
   );
 
+  const handleExport = useCallback(
+    async (playlistIds: number[]) => {
+      setContextMenu(null);
+      setExporting(true);
+      try {
+        const result = await exportToIpod(playlistIds);
+        setExportMsg(formatExportResult(result));
+      } catch (e) {
+        const msg = `${e}`;
+        if (msg.includes("cancelled")) return;
+        setExportMsg({ text: msg, type: "error" });
+      } finally {
+        setExporting(false);
+      }
+    },
+    [exportToIpod],
+  );
+
   const startCreate = useCallback(() => {
     setCreating(true);
     setInputValue("");
@@ -117,15 +144,33 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
     <div className="w-[200px] shrink-0 border-r border-border bg-bg-secondary flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">Playlists</span>
-        <button
-          onClick={startCreate}
-          className="text-text-tertiary hover:text-text-secondary transition-colors"
-          title="New Playlist"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {playlists.length > 0 && (
+            <button
+              onClick={() => handleExport([])}
+              disabled={exporting}
+              className="text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-30"
+              title="Export all playlists to iPod"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+                />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={startCreate}
+            className="text-text-tertiary hover:text-text-secondary transition-colors"
+            title="New Playlist"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -196,11 +241,22 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
         )}
       </div>
 
+      {/* Export status toast */}
+      {exportMsg && (
+        <div
+          className={`mx-2 mb-2 px-2.5 py-2 rounded-lg text-[10px] leading-relaxed ${
+            exportMsg.type === "success" ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+          }`}
+        >
+          {exportMsg.text}
+        </div>
+      )}
+
       {/* Context menu */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 min-w-[140px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
+          className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
@@ -208,6 +264,13 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
             className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
           >
             Rename
+          </button>
+          <button
+            onClick={() => handleExport([contextMenu.playlist.id])}
+            disabled={exporting}
+            className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-30"
+          >
+            Export to iPod
           </button>
           <div className="h-px bg-border my-1" />
           <button
@@ -220,4 +283,15 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
       )}
     </div>
   );
+};
+
+const formatExportResult = (result: PlaylistExportResult): { text: string; type: "success" | "error" } => {
+  if (result.exported === 0 && result.errors.length > 0) {
+    return { text: result.errors[0], type: "error" };
+  }
+  const parts = [`${result.exported} playlist${result.exported !== 1 ? "s" : ""} exported`];
+  if (result.skipped_tracks > 0) {
+    parts.push(`${result.skipped_tracks} track${result.skipped_tracks !== 1 ? "s" : ""} skipped`);
+  }
+  return { text: parts.join(", "), type: "success" };
 };

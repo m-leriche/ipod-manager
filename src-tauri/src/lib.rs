@@ -12,6 +12,7 @@ mod localvideo;
 mod metadata;
 mod metarepair;
 mod musicbrainz;
+mod playlist_export;
 mod profiles;
 mod rockbox;
 mod sanitize;
@@ -212,6 +213,7 @@ pub fn run() {
             commands::add_tracks_to_playlist,
             commands::remove_tracks_from_playlist,
             commands::move_playlist_track,
+            commands::export_playlists_to_ipod,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

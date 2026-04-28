@@ -10,6 +10,7 @@ use crate::libstats;
 use crate::localvideo;
 use crate::metadata;
 use crate::metarepair;
+use crate::playlist_export;
 use crate::profiles::{self, BrowseProfileStore, ProfileStore};
 use crate::rockbox;
 use crate::sanitize;
@@ -920,4 +921,45 @@ pub async fn move_playlist_track(
         .lock()
         .map_err(|e| format!("DB lock failed: {}", e))?;
     library::playlists::move_playlist_track(&conn, playlist_id, from_position, to_position)
+}
+
+#[tauri::command]
+pub async fn export_playlists_to_ipod(
+    playlist_ids: Vec<i64>,
+    output_dir: String,
+    music_subdir: Option<String>,
+    db: State<'_, LibraryDb>,
+) -> Result<playlist_export::PlaylistExportResult, String> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+
+    let library_root = library::get_library_location(&conn)
+        .ok_or_else(|| "No library location configured. Set one in Settings first.".to_string())?;
+
+    let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
+
+    let all_playlists = library::playlists::get_playlists(&conn)?;
+    let target: Vec<_> = if playlist_ids.is_empty() {
+        all_playlists
+    } else {
+        all_playlists
+            .into_iter()
+            .filter(|p| playlist_ids.contains(&p.id))
+            .collect()
+    };
+
+    let mut with_tracks = Vec::new();
+    for pl in target {
+        let tracks = library::playlists::get_playlist_tracks(&conn, pl.id)?;
+        with_tracks.push((pl, tracks));
+    }
+
+    Ok(playlist_export::export_playlists(
+        with_tracks,
+        &library_root,
+        &sub,
+        &output_dir,
+    ))
 }

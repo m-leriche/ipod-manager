@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { Playlist, PlaylistTrack, LibraryTrack } from "../types/library";
+import { open } from "@tauri-apps/plugin-dialog";
+import type { Playlist, PlaylistTrack, LibraryTrack, PlaylistExportResult } from "../types/library";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ interface PlaylistContextValue {
   addTracks: (playlistId: number, trackIds: number[]) => Promise<void>;
   removeTracks: (playlistId: number, trackIds: number[]) => Promise<void>;
   moveTrack: (playlistId: number, fromPosition: number, toPosition: number) => Promise<void>;
+  exportToIpod: (playlistIds: number[]) => Promise<PlaylistExportResult>;
 }
 
 // ── Context ─────────────────────────────────────────────────────
@@ -134,6 +136,16 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
     [activePlaylistId, fetchPlaylistTracks],
   );
 
+  const exportToIpod = useCallback(async (playlistIds: number[]): Promise<PlaylistExportResult> => {
+    const dir = await open({ directory: true, title: "Choose export folder" });
+    if (!dir) throw new Error("cancelled");
+
+    return invoke<PlaylistExportResult>("export_playlists_to_ipod", {
+      playlistIds,
+      outputDir: dir,
+    });
+  }, []);
+
   // ── Memoized value ──────────────────────────────────────────
 
   const value = useMemo<PlaylistContextValue>(
@@ -150,6 +162,7 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
       addTracks,
       removeTracks,
       moveTrack,
+      exportToIpod,
     }),
     [
       playlists,
@@ -164,6 +177,7 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
       addTracks,
       removeTracks,
       moveTrack,
+      exportToIpod,
     ],
   );
 

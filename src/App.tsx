@@ -17,7 +17,7 @@ import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
-import type { LibraryScanProgress } from "./types/library";
+import type { LibraryScanProgress, LibraryTrack } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 
@@ -49,6 +49,13 @@ const AppContent = () => {
   const prevMountedRef = useRef(false);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const libraryRefreshRef = useRef<(() => void) | null>(null);
+  const [metadataRepairPaths, setMetadataRepairPaths] = useState<string[] | null>(null);
+
+  const handleRepairMetadata = useCallback((tracks: LibraryTrack[]) => {
+    setMetadataRepairPaths(tracks.map((t) => t.file_path));
+    setTopTab("tools");
+    setToolTab("metadata");
+  }, []);
 
   useEffect(() => {
     if (ipodMounted && !prevMountedRef.current) {
@@ -116,7 +123,11 @@ const AppContent = () => {
       <main className="flex-1 min-h-0 relative">
         {/* Library stays mounted always — hidden via CSS to preserve state */}
         <div className={`h-full ${topTab === "library" ? "" : "hidden"}`}>
-          <LibraryPlayer onRefreshRef={libraryRefreshRef} isActive={topTab === "library"} />
+          <LibraryPlayer
+            onRefreshRef={libraryRefreshRef}
+            isActive={topTab === "library"}
+            onRepairMetadata={handleRepairMetadata}
+          />
         </div>
         {topTab === "tools" && (
           <div className="flex gap-6 p-6 h-full">
@@ -149,7 +160,12 @@ const AppContent = () => {
               )}
               {toolTab === "browse" && <BrowseExplorer />}
               {toolTab === "sync" && <SyncManager />}
-              {toolTab === "metadata" && <MetadataEditor />}
+              {toolTab === "metadata" && (
+                <MetadataEditor
+                  initialPaths={metadataRepairPaths}
+                  onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                />
+              )}
               {toolTab === "audio" && <AudioExtractor />}
             </div>
           </div>

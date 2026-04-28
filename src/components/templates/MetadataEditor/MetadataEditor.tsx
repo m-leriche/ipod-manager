@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -23,7 +23,13 @@ import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeR
 import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 
-export const MetadataEditor = () => {
+export const MetadataEditor = ({
+  initialPaths,
+  onInitialPathsConsumed,
+}: {
+  initialPaths?: string[] | null;
+  onInitialPathsConsumed?: () => void;
+} = {}) => {
   const {
     state: progressState,
     start: startProgress,
@@ -181,6 +187,15 @@ export const MetadataEditor = () => {
       }
     }
   };
+
+  // ── Auto-scan from external navigation (e.g. library right-click) ──
+  useEffect(() => {
+    if (initialPaths && initialPaths.length > 0) {
+      scanPaths(initialPaths);
+      onInitialPathsConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Drag-and-drop ──
   const isDragOver = useDragDrop(phase, scanPaths);

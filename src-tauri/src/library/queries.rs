@@ -174,7 +174,7 @@ pub fn get_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, String> {
     let mut results: Vec<_> = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))?;
-    results.sort_by(|a, b| sort_key(&a.name).cmp(&sort_key(&b.name)));
+    results.sort_by_key(|a| sort_key(&a.name));
     Ok(results)
 }
 
@@ -269,7 +269,7 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
     let mut results: Vec<_> = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))?;
-    results.sort_by(|a, b| sort_key(&a.name).cmp(&sort_key(&b.name)));
+    results.sort_by_key(|a| sort_key(&a.name));
     Ok(results)
 }
 
@@ -370,7 +370,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         let mut results: Vec<_> = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Row read failed: {}", e))?;
-        results.sort_by(|a, b| sort_key(&a.name).cmp(&sort_key(&b.name)));
+        results.sort_by_key(|a| sort_key(&a.name));
         results
     };
 
@@ -403,7 +403,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         let mut results: Vec<_> = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Row read failed: {}", e))?;
-        results.sort_by(|a, b| sort_key(&a.name).cmp(&sort_key(&b.name)));
+        results.sort_by_key(|a| sort_key(&a.name));
         results
     };
 
@@ -445,7 +445,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
             });
         } else {
             // No artist filter: sort by album name
-            results.sort_by(|a, b| sort_key(&a.name).cmp(&sort_key(&b.name)));
+            results.sort_by_key(|a| sort_key(&a.name));
         }
         results
     };

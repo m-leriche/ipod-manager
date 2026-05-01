@@ -109,6 +109,9 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // Refs for event handlers (so listeners always call the latest version)
   const onTrackEndedRef = useRef<() => void>(() => {});
   const onGaplessTransitionRef = useRef<() => void>(() => {});
+  const onMediaToggleRef = useRef<() => void>(() => {});
+  const onMediaNextRef = useRef<() => void>(() => {});
+  const onMediaPreviousRef = useRef<() => void>(() => {});
 
   // Dedupe guard: prevent double-incrementing the same track (e.g. from StrictMode double-mount)
   const lastCountedRef = useRef<{ id: number; at: number }>({ id: -1, at: 0 });
@@ -191,6 +194,33 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
           ? "File not available \u2014 drive may be disconnected"
           : "Playback error";
         setState((prev) => ({ ...prev, isPlaying: false, playbackError: msg }));
+      }),
+    );
+
+    // ── System media key events (play/pause button, etc.) ──────
+    register(
+      listen("mediakey:toggle", () => {
+        if (active) onMediaToggleRef.current();
+      }),
+    );
+    register(
+      listen("mediakey:play", () => {
+        if (active) onMediaToggleRef.current();
+      }),
+    );
+    register(
+      listen("mediakey:pause", () => {
+        if (active) onMediaToggleRef.current();
+      }),
+    );
+    register(
+      listen("mediakey:next", () => {
+        if (active) onMediaNextRef.current();
+      }),
+    );
+    register(
+      listen("mediakey:previous", () => {
+        if (active) onMediaPreviousRef.current();
       }),
     );
 
@@ -391,6 +421,25 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, [state.queueIndex, state.queue, state.shuffle, state.repeat, state.isPlaying, getNextIndex]);
 
+  // ── Update macOS Now Playing metadata when track changes ─────
+
+  useEffect(() => {
+    if (state.currentTrack) {
+      invoke("media_set_metadata", {
+        title: state.currentTrack.title ?? state.currentTrack.file_name,
+        artist: state.currentTrack.artist ?? null,
+        album: state.currentTrack.album ?? null,
+        durationSecs: state.currentTrack.duration_secs ?? null,
+      }).catch(() => {});
+    }
+  }, [state.currentTrack]);
+
+  // ── Update macOS Now Playing playback state ──────────────────
+
+  useEffect(() => {
+    invoke("media_set_playback", { isPlaying: state.isPlaying }).catch(() => {});
+  }, [state.isPlaying]);
+
   // ── Public API ────────────────────────────────────────────────
 
   const playTrack = useCallback(
@@ -492,6 +541,23 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
       }
     }
   }, [playFile]);
+
+  // Keep media key refs in sync (must be after next/previous are defined)
+  onMediaToggleRef.current = () => {
+    const s = stateRef.current;
+    if (!s.currentTrack) return;
+    if (s.isPlaying) {
+      invoke("audio_pause").catch(() => {});
+      setState((prev) => ({ ...prev, isPlaying: false }));
+    } else {
+      invoke("audio_resume").catch(() => {});
+      lastPositionRef.current = timeRef.current.currentTime;
+      lastPositionTimeRef.current = performance.now();
+      setState((prev) => ({ ...prev, isPlaying: true }));
+    }
+  };
+  onMediaNextRef.current = () => next();
+  onMediaPreviousRef.current = () => previous();
 
   const seekTo = useCallback((fraction: number) => {
     const dur = timeRef.current.duration;

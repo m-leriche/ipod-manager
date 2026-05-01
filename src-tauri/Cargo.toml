@@ -40,6 +40,7 @@ symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "ogg", "
 cpal = "0.15"
 ringbuf = "0.4"
 crossbeam-channel = "0.5"
+souvlaki = "0.7"
 
 [dev-dependencies]
 tempfile = "3"

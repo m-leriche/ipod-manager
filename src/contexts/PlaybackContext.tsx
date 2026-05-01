@@ -48,6 +48,7 @@ interface PlaybackContextValue {
 // ── Initial state ───────────────────────────────────────────────
 
 const VOLUME_KEY = "crate-playback-volume";
+const PLAYBACK_STATE_KEY = "crate-playback-state";
 
 const loadVolume = (): number => {
   const stored = localStorage.getItem(VOLUME_KEY);
@@ -58,19 +59,65 @@ const loadVolume = (): number => {
   return 0.8;
 };
 
+interface PersistedPlaybackState {
+  queue: LibraryTrack[];
+  queueIndex: number;
+  currentTrack: LibraryTrack | null;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  position: number;
+}
+
+const savePlaybackState = (state: PlaybackState, position: number) => {
+  if (!state.currentTrack || state.queue.length === 0) {
+    localStorage.removeItem(PLAYBACK_STATE_KEY);
+    return;
+  }
+  const persisted: PersistedPlaybackState = {
+    queue: state.queue,
+    queueIndex: state.queueIndex,
+    currentTrack: state.currentTrack,
+    shuffle: state.shuffle,
+    repeat: state.repeat,
+    position,
+  };
+  try {
+    localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(persisted));
+  } catch {
+    // localStorage full — silently skip
+  }
+};
+
+const loadPlaybackState = (): PersistedPlaybackState | null => {
+  try {
+    const stored = localStorage.getItem(PLAYBACK_STATE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as PersistedPlaybackState;
+    if (!parsed.currentTrack || !Array.isArray(parsed.queue) || parsed.queue.length === 0) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const restoredState = loadPlaybackState();
+
 const initial: PlaybackState = {
-  currentTrack: null,
+  currentTrack: restoredState?.currentTrack ?? null,
   isPlaying: false,
   volume: loadVolume(),
-  queue: [],
-  queueIndex: -1,
-  shuffle: false,
-  repeat: "off",
+  queue: restoredState?.queue ?? [],
+  queueIndex: restoredState?.queueIndex ?? -1,
+  shuffle: restoredState?.shuffle ?? false,
+  repeat: restoredState?.repeat ?? "off",
   libraryAvailable: true,
   playbackError: null,
 };
 
-const initialTime: PlaybackTimeState = { currentTime: 0, duration: 0 };
+const initialTime: PlaybackTimeState = {
+  currentTime: restoredState?.position ?? 0,
+  duration: restoredState?.currentTrack?.duration_secs ?? 0,
+};
 
 // ── Shuffle helpers ─────────────────────────────────────────────
 
@@ -116,11 +163,28 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   // Dedupe guard: prevent double-incrementing the same track (e.g. from StrictMode double-mount)
   const lastCountedRef = useRef<{ id: number; at: number }>({ id: -1, at: 0 });
 
+  // Restored position for resume-from-where-you-left-off
+  const restoredPositionRef = useRef(restoredState?.position ?? 0);
+
   // ── Set initial volume on the Rust engine ────────────────────
   useEffect(() => {
     invoke("audio_set_volume", { volume: state.volume }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Persist playback state to localStorage ──────────────────
+  useEffect(() => {
+    savePlaybackState(state, timeRef.current.currentTime);
+  }, [state.currentTrack, state.queue, state.queueIndex, state.shuffle, state.repeat]);
+
+  // Also persist position periodically while playing
+  useEffect(() => {
+    if (!state.isPlaying) return;
+    const interval = setInterval(() => {
+      savePlaybackState(stateRef.current, timeRef.current.currentTime);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [state.isPlaying]);
 
   // ── Check library availability on mount + window focus ──────
   const checkLibraryAvailable = useCallback(() => {
@@ -477,6 +541,18 @@ export const PlaybackProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   const resume = useCallback(() => {
+    const s = stateRef.current;
+    // Cold resume: track is restored from localStorage but audio engine hasn't loaded it
+    if (s.currentTrack && !s.isPlaying && timeRef.current.duration === 0) {
+      const seekPos = restoredPositionRef.current > 0 ? restoredPositionRef.current : null;
+      setState((prev) => ({ ...prev, isPlaying: true, playbackError: null }));
+      setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
+      lastPositionRef.current = seekPos ?? 0;
+      lastPositionTimeRef.current = performance.now();
+      invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch(() => {});
+      restoredPositionRef.current = 0;
+      return;
+    }
     invoke("audio_resume").catch(() => {});
     // Reset interpolation reference to current position
     lastPositionRef.current = timeRef.current.currentTime;

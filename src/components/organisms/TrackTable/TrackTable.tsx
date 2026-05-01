@@ -14,6 +14,10 @@ import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD, CELL_CLASSES } from "./co
 import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
 
+// Module-level drag payload so drop targets can read the tracks
+let dragPayload: LibraryTrack[] = [];
+export const getDragPayload = (): LibraryTrack[] => dragPayload;
+
 interface TrackTableProps {
   tracks: LibraryTrack[];
   sortBy: string;
@@ -424,7 +428,16 @@ export const TrackTable = memo(function TrackTable({
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   return (
-    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto outline-none" tabIndex={0} onKeyDown={handleKeyDown}>
+    <div
+      ref={scrollRef}
+      className="flex-1 min-h-0 overflow-auto outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onDragStartCapture={() => {
+        // Populate module-level drag payload with currently selected tracks (or all if none selected)
+        dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
+      }}
+    >
       <table className="table-fixed" style={{ width: totalWidth }}>
         <colgroup>
           {orderedColumns.map((col, i) => (
@@ -485,6 +498,7 @@ export const TrackTable = memo(function TrackTable({
                 isPlaying={currentTrackId === track.id && isActivePlaying}
                 isSelected={selected.has(track.id)}
                 isDragOver={reorderDragOver === virtualRow.index}
+                selectedCount={selected.size}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenu={handleContextMenu}
@@ -612,6 +626,7 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isPlaying,
   isSelected,
   isDragOver,
+  selectedCount,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -624,6 +639,7 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   isPlaying: boolean;
   isSelected: boolean;
   isDragOver?: boolean;
+  selectedCount: number;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
@@ -632,12 +648,27 @@ const TrackRowDynamic = memo(function TrackRowDynamic({
   return (
     <tr
       data-index={index}
+      draggable
+      onDragStart={(e) => {
+        const count = isSelected && selectedCount > 1 ? selectedCount : 1;
+        const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
+        e.dataTransfer.setData("application/x-crate-queue-drag", "1");
+        e.dataTransfer.effectAllowed = "copy";
+        // Store payload for drop target to read
+        // dragPayload is set by the parent table's onDragStartCapture
+        const el = document.createElement("div");
+        el.textContent = label;
+        el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
+        document.body.appendChild(el);
+        e.dataTransfer.setDragImage(el, 0, 0);
+        requestAnimationFrame(() => el.remove());
+      }}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
       onMouseDown={onMouseDown ? (e) => onMouseDown(e, index) : undefined}
       className={`group cursor-default select-none transition-colors ${
-        isSelected ? "" : isCurrentTrack ? "bg-accent/5" : "hover:bg-bg-hover/50"
+        isSelected ? "" : isCurrentTrack ? "bg-accent/8 border-l-2 border-l-accent" : "hover:bg-bg-hover/50"
       }`}
     >
       {columns.map((col) => (

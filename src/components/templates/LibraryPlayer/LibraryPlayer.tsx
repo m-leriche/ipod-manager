@@ -6,6 +6,7 @@ import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
 import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { PlaylistSidebar } from "./PlaylistSidebar";
+import type { SmartPlaylistType } from "./PlaylistSidebar";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
@@ -21,11 +22,7 @@ import type {
 } from "../../../types/library";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
-const COLUMN_BROWSER_KEY = "crate-show-column-browser";
-const INFO_PANEL_KEY = "crate-show-info-panel";
-const STATS_PANEL_KEY = "crate-show-stats-panel";
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
-const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
 const SORT_BY_KEY = "crate-sort-by";
 const SORT_DIR_KEY = "crate-sort-direction";
 
@@ -35,17 +32,32 @@ export const LibraryPlayer = ({
   onRefreshRef,
   isActive = true,
   onRepairMetadata,
+  showColumnBrowser,
+  showInfoPanel,
+  showStatsPanel,
+  showPlaylistSidebar,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
+  showColumnBrowser: boolean;
+  showInfoPanel: boolean;
+  showStatsPanel: boolean;
+  showPlaylistSidebar: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const {
     playTrack,
+    addToQueue,
     state: { libraryAvailable },
   } = usePlayback();
-  const { activePlaylistId, activePlaylistTracks, setActivePlaylist } = usePlaylist();
+  const {
+    playlists,
+    activePlaylistId,
+    activePlaylistTracks,
+    setActivePlaylist,
+    addTracks: addToPlaylistCtx,
+  } = usePlaylist();
   const playAfterFetchRef = useRef(false);
 
   // Column browser filter state
@@ -72,26 +84,56 @@ export const LibraryPlayer = ({
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Panel visibility (persisted)
-  const [showColumnBrowser, setShowColumnBrowser] = useState(
-    () => localStorage.getItem(COLUMN_BROWSER_KEY) !== "false",
-  );
-  const [showInfoPanel, setShowInfoPanel] = useState(() => localStorage.getItem(INFO_PANEL_KEY) !== "false");
-  const [showStatsPanel, setShowStatsPanel] = useState(() => localStorage.getItem(STATS_PANEL_KEY) === "true");
-  const [showPlaylistSidebar, setShowPlaylistSidebar] = useState(
-    () => localStorage.getItem(PLAYLIST_SIDEBAR_KEY) !== "false",
-  );
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
+  const [smartPlaylistType, setSmartPlaylistType] = useState<SmartPlaylistType>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
 
-  // ── Displayed tracks (library or playlist) ─────────────────────
+  // ── Global Cmd+F to focus search ─────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-  const displayedTracks = useMemo(
-    () => (activePlaylistId !== null ? activePlaylistTracks : tracks),
-    [activePlaylistId, activePlaylistTracks, tracks],
-  );
+  // ── Displayed tracks (library, playlist, or smart playlist) ────
+
+  const smartPlaylistTracks = useMemo(() => {
+    if (!smartPlaylistType) return null;
+    switch (smartPlaylistType) {
+      case "recently-added":
+        return [...tracks].sort((a, b) => b.created_at - a.created_at).slice(0, 100);
+      case "most-played":
+        return [...tracks]
+          .filter((t) => t.play_count > 0)
+          .sort((a, b) => b.play_count - a.play_count)
+          .slice(0, 100);
+      case "unplayed":
+        return tracks.filter((t) => t.play_count === 0);
+      default:
+        return null;
+    }
+  }, [smartPlaylistType, tracks]);
+
+  const displayedTracks = useMemo(() => {
+    const baseTracks = smartPlaylistTracks ?? (activePlaylistId !== null ? activePlaylistTracks : tracks);
+    if (!debouncedSearch) return baseTracks;
+    const q = debouncedSearch.toLowerCase();
+    return baseTracks.filter(
+      (t) =>
+        (t.title ?? t.file_name ?? "").toLowerCase().includes(q) ||
+        (t.artist ?? "").toLowerCase().includes(q) ||
+        (t.album ?? "").toLowerCase().includes(q),
+    );
+  }, [smartPlaylistTracks, activePlaylistId, activePlaylistTracks, tracks, debouncedSearch]);
 
   // ── Derived selected tracks ───────────────────────────────────
 
@@ -284,6 +326,54 @@ export const LibraryPlayer = ({
     fetchBrowserData();
   }, [fetchBrowserData]);
 
+  // ── Column browser context menu handlers ──────────────────────
+
+  const getTracksForColumnAction = useCallback(
+    (action: { column: string; value: string }) => {
+      return tracks.filter((t) => {
+        switch (action.column) {
+          case "genre":
+            return t.genre === action.value;
+          case "artist":
+            return t.artist === action.value;
+          case "album":
+            return t.album === action.value;
+          default:
+            return false;
+        }
+      });
+    },
+    [tracks],
+  );
+
+  const handleColumnPlayAll = useCallback(
+    (action: { column: string; value: string }) => {
+      const matched = getTracksForColumnAction(action);
+      if (matched.length > 0) playTrack(matched[0], matched);
+    },
+    [getTracksForColumnAction, playTrack],
+  );
+
+  const handleColumnAddToQueue = useCallback(
+    (action: { column: string; value: string }) => {
+      const matched = getTracksForColumnAction(action);
+      if (matched.length > 0) addToQueue(matched);
+    },
+    [getTracksForColumnAction, addToQueue],
+  );
+
+  const handleColumnAddToPlaylist = useCallback(
+    (action: { column: string; value: string }, playlistId: number) => {
+      const matched = getTracksForColumnAction(action);
+      if (matched.length > 0)
+        addToPlaylistCtx(
+          playlistId,
+          matched.map((t) => t.id),
+        );
+    },
+    [getTracksForColumnAction, addToPlaylistCtx],
+  );
+
   // ── Import / drag-and-drop ─────────────────────────────────────
 
   const { isDragOver, handleChooseLibrary } = useLibraryImport(
@@ -325,34 +415,6 @@ export const LibraryPlayer = ({
 
   const handleSelectionChange = useCallback((ids: Set<number>) => {
     setSelectedTrackIds(ids);
-  }, []);
-
-  const toggleColumnBrowser = useCallback(() => {
-    setShowColumnBrowser((prev) => {
-      localStorage.setItem(COLUMN_BROWSER_KEY, String(!prev));
-      return !prev;
-    });
-  }, []);
-
-  const toggleInfoPanel = useCallback(() => {
-    setShowInfoPanel((prev) => {
-      localStorage.setItem(INFO_PANEL_KEY, String(!prev));
-      return !prev;
-    });
-  }, []);
-
-  const toggleStatsPanel = useCallback(() => {
-    setShowStatsPanel((prev) => {
-      localStorage.setItem(STATS_PANEL_KEY, String(!prev));
-      return !prev;
-    });
-  }, []);
-
-  const togglePlaylistSidebar = useCallback(() => {
-    setShowPlaylistSidebar((prev) => {
-      localStorage.setItem(PLAYLIST_SIDEBAR_KEY, String(!prev));
-      return !prev;
-    });
   }, []);
 
   // ── Render ────────────────────────────────────────────────────
@@ -421,7 +483,15 @@ export const LibraryPlayer = ({
         </div>
       )}
       {showPlaylistSidebar && (
-        <PlaylistSidebar onPlaylistSelect={setActivePlaylist} activePlaylistId={activePlaylistId} />
+        <PlaylistSidebar
+          onPlaylistSelect={(id) => {
+            setActivePlaylist(id);
+            if (id !== null) setSmartPlaylistType(null);
+          }}
+          activePlaylistId={activePlaylistId}
+          activeSmartPlaylist={smartPlaylistType}
+          onSmartPlaylistSelect={setSmartPlaylistType}
+        />
       )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {/* Library offline banner */}
@@ -443,10 +513,11 @@ export const LibraryPlayer = ({
         {/* Search bar */}
         <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
+            placeholder="Search... (⌘F)"
             className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
           />
           <button
@@ -470,8 +541,8 @@ export const LibraryPlayer = ({
           <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
         </div>
 
-        {/* Column browser (toggleable, hidden when viewing playlist) */}
-        {showColumnBrowser && activePlaylistId === null && (
+        {/* Column browser (toggleable, hidden when viewing playlist or smart playlist) */}
+        {showColumnBrowser && activePlaylistId === null && smartPlaylistType === null && (
           <ColumnBrowser
             genres={genreList}
             artists={artistList}
@@ -483,6 +554,10 @@ export const LibraryPlayer = ({
             onSelectArtist={handleSelectArtist}
             onSelectAlbum={handleSelectAlbum}
             onPlay={handlePlayColumn}
+            onPlayAll={handleColumnPlayAll}
+            onAddAllToQueue={handleColumnAddToQueue}
+            onAddAllToPlaylist={handleColumnAddToPlaylist}
+            playlists={playlists}
           />
         )}
 
@@ -501,17 +576,7 @@ export const LibraryPlayer = ({
         />
 
         {/* Status bar */}
-        <LibraryStatusBar
-          selectedTracks={selectedTracks}
-          showColumnBrowser={showColumnBrowser}
-          showInfoPanel={showInfoPanel}
-          showStatsPanel={showStatsPanel}
-          showPlaylistSidebar={showPlaylistSidebar}
-          onToggleColumnBrowser={toggleColumnBrowser}
-          onToggleInfoPanel={toggleInfoPanel}
-          onToggleStatsPanel={toggleStatsPanel}
-          onTogglePlaylistSidebar={togglePlaylistSidebar}
-        />
+        <LibraryStatusBar selectedTracks={selectedTracks} />
       </div>
 
       {showInfoPanel && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}

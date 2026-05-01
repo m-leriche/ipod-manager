@@ -2,12 +2,27 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import type { Playlist, PlaylistExportResult } from "../../../types/library";
 
+export type SmartPlaylistType = "recently-added" | "most-played" | "unplayed" | null;
+
 interface PlaylistSidebarProps {
   onPlaylistSelect: (id: number | null) => void;
   activePlaylistId: number | null;
+  activeSmartPlaylist: SmartPlaylistType;
+  onSmartPlaylistSelect: (type: SmartPlaylistType) => void;
 }
 
-export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: PlaylistSidebarProps) => {
+const SMART_PLAYLISTS: { type: SmartPlaylistType; label: string; icon: string }[] = [
+  { type: "recently-added", label: "Recently Added", icon: "clock" },
+  { type: "most-played", label: "Most Played", icon: "fire" },
+  { type: "unplayed", label: "Unplayed", icon: "circle" },
+];
+
+export const PlaylistSidebar = ({
+  onPlaylistSelect,
+  activePlaylistId,
+  activeSmartPlaylist,
+  onSmartPlaylistSelect,
+}: PlaylistSidebarProps) => {
   const { playlists, createPlaylist, renamePlaylist, deletePlaylist, exportToIpod } = usePlaylist();
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -176,13 +191,45 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
       <div className="flex-1 overflow-y-auto">
         {/* "All Tracks" option */}
         <button
-          onClick={() => onPlaylistSelect(null)}
+          onClick={() => {
+            onPlaylistSelect(null);
+            onSmartPlaylistSelect(null);
+          }}
           className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${
-            activePlaylistId === null ? "text-accent bg-accent/10 font-medium" : "text-text-secondary hover:bg-bg-hover"
+            activePlaylistId === null && activeSmartPlaylist === null
+              ? "text-accent bg-accent/10 font-medium"
+              : "text-text-secondary hover:bg-bg-hover"
           }`}
         >
           All Tracks
         </button>
+
+        {/* Smart playlists */}
+        <div className="px-3 pt-3 pb-1">
+          <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest">Smart</span>
+        </div>
+        {SMART_PLAYLISTS.map((sp) => (
+          <button
+            key={sp.type}
+            onClick={() => {
+              onPlaylistSelect(null);
+              onSmartPlaylistSelect(sp.type);
+            }}
+            className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 transition-colors ${
+              activeSmartPlaylist === sp.type
+                ? "text-accent bg-accent/10 font-medium"
+                : "text-text-secondary hover:bg-bg-hover"
+            }`}
+          >
+            <SmartPlaylistIcon type={sp.icon} />
+            {sp.label}
+          </button>
+        ))}
+
+        {/* Playlists header */}
+        <div className="px-3 pt-3 pb-1">
+          <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest">Playlists</span>
+        </div>
 
         {playlists.length === 0 && !creating && (
           <div className="px-3 py-4 text-center">
@@ -206,7 +253,10 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
               </div>
             ) : (
               <button
-                onClick={() => onPlaylistSelect(p.id)}
+                onClick={() => {
+                  onPlaylistSelect(p.id);
+                  onSmartPlaylistSelect(null);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, playlist: p });
@@ -283,6 +333,41 @@ export const PlaylistSidebar = ({ onPlaylistSelect, activePlaylistId }: Playlist
       )}
     </div>
   );
+};
+
+const SmartPlaylistIcon = ({ type }: { type: string }) => {
+  switch (type) {
+    case "clock":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
+          <circle cx="12" cy="12" r="9" />
+          <path strokeLinecap="round" d="M12 7v5l3 3" />
+        </svg>
+      );
+    case "fire":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18z"
+          />
+        </svg>
+      );
+    case "circle":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 };
 
 const formatExportResult = (result: PlaylistExportResult): { text: string; type: "success" | "error" } => {

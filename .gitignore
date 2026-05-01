@@ -17,3 +17,7 @@ src-tauri/target/
 # Env
 .env
 .env.local
+
+# Playwright
+playwright-report/
+test-results/

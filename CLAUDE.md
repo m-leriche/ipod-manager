@@ -27,6 +27,15 @@ npm run test:watch
 # Run a single test file
 npx vitest run src/components/templates/SyncManager/SyncManager.test.tsx
 
+# Run all e2e tests (Playwright, requires Chromium)
+npm run test:e2e
+
+# Run e2e tests with UI mode for debugging
+npm run test:e2e:ui
+
+# Run a single e2e test file
+npx playwright test navigation
+
 # Type-check frontend
 npx tsc --noEmit
 
@@ -70,6 +79,7 @@ Tailwind v4 with a custom dark theme defined as CSS variables in `src/App.css`. 
 - **Progress events:** Backend emits events like `albumart-progress`, `albumart-scan-progress`, `copy-progress`. Frontend subscribes via `listen()` and updates UI in real-time.
 - **macOS only:** Disk operations rely on `diskutil` and `mount` CLI tools. Not portable to other OSes.
 - **Testing:** Every component has a co-located test file in its folder (e.g., `ComponentName.test.tsx`). When creating a new component, always create a test alongside it. Tests use Vitest + React Testing Library with Tauri API mocks defined in `src/test/setup.ts`.
+- **E2E testing:** Playwright tests in `e2e/tests/` run against the Vite dev server with Tauri APIs mocked via `e2e/fixtures/tauri-mocks.ts`. The mock injects `window.__TAURI_INTERNALS__` before the app boots so all `invoke()` and `listen()` calls are intercepted. Use `tauriMocks.override()` before `page.goto()` to set command responses, or `tauriMocks.setResponses()` to update responses at runtime on the current page.
 
 ## Component Structure
 

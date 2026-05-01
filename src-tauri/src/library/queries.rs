@@ -179,7 +179,6 @@ pub fn get_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, String> {
 }
 
 pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSummary>, String> {
-    let has_artist = artist.is_some();
     let (sql, param_values): (String, Vec<Box<dyn rusqlite::types::ToSql>>) =
         if let Some(artist) = artist {
             (
@@ -228,22 +227,7 @@ pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSu
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))?;
 
-    if has_artist {
-        // With artist filter: sort by year, then album name
-        results.sort_by(|a, b| {
-            a.year
-                .unwrap_or(0)
-                .cmp(&b.year.unwrap_or(0))
-                .then_with(|| sort_key(&a.name).cmp(&sort_key(&b.name)))
-        });
-    } else {
-        // No artist filter: sort by artist name, then year
-        results.sort_by(|a, b| {
-            sort_key(&a.artist)
-                .cmp(&sort_key(&b.artist))
-                .then_with(|| a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)))
-        });
-    }
+    results.sort_by_key(|a| sort_key(&a.name));
     Ok(results)
 }
 
@@ -435,18 +419,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         let mut results: Vec<_> = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Row read failed: {}", e))?;
-        if artist.is_some() {
-            // With artist filter: sort by year, then album name
-            results.sort_by(|a, b| {
-                a.year
-                    .unwrap_or(0)
-                    .cmp(&b.year.unwrap_or(0))
-                    .then_with(|| sort_key(&a.name).cmp(&sort_key(&b.name)))
-            });
-        } else {
-            // No artist filter: sort by album name
-            results.sort_by_key(|a| sort_key(&a.name));
-        }
+        results.sort_by_key(|a| sort_key(&a.name));
         results
     };
 

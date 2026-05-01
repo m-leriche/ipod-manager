@@ -8,6 +8,7 @@ use crate::ipod_info;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
 use crate::localvideo;
+use crate::mediakeys::MediaKeyState;
 use crate::metadata;
 use crate::metarepair;
 use crate::playlist_export;
@@ -974,4 +975,30 @@ pub async fn export_playlists_to_ipod(
         &sub,
         &output_dir,
     ))
+}
+
+// ── Media key / Now Playing commands ─────────────────────────────
+
+#[tauri::command]
+pub fn media_set_metadata(
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    duration_secs: Option<f64>,
+    state: State<'_, MediaKeyState>,
+) -> Result<(), String> {
+    crate::mediakeys::set_metadata(
+        &state,
+        title.as_deref(),
+        artist.as_deref(),
+        album.as_deref(),
+        duration_secs,
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn media_set_playback(is_playing: bool, state: State<'_, MediaKeyState>) -> Result<(), String> {
+    crate::mediakeys::set_playback(&state, is_playing);
+    Ok(())
 }

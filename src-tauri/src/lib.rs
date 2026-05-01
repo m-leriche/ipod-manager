@@ -9,6 +9,7 @@ mod ipod_info;
 mod library;
 mod libstats;
 mod localvideo;
+mod mediakeys;
 mod metadata;
 mod metarepair;
 mod musicbrainz;
@@ -67,6 +68,16 @@ pub fn run() {
             // Spawn native audio engine
             let audio_engine = audio::AudioEngine::spawn(app.handle().clone());
             app.manage(audio_engine);
+
+            // Initialize system media key handling (Now Playing integration)
+            match mediakeys::init(app.handle()) {
+                Ok(mk) => {
+                    app.manage(mk);
+                }
+                Err(e) => {
+                    log::warn!("Media keys unavailable: {}", e);
+                }
+            }
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -215,6 +226,8 @@ pub fn run() {
             commands::remove_tracks_from_playlist,
             commands::move_playlist_track,
             commands::export_playlists_to_ipod,
+            commands::media_set_metadata,
+            commands::media_set_playback,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

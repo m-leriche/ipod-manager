@@ -5,14 +5,6 @@ import type { LibraryTrack } from "../../../types/library";
 
 interface LibraryStatusBarProps {
   selectedTracks: LibraryTrack[];
-  showColumnBrowser: boolean;
-  showInfoPanel: boolean;
-  showStatsPanel: boolean;
-  showPlaylistSidebar: boolean;
-  onToggleColumnBrowser: () => void;
-  onToggleInfoPanel: () => void;
-  onToggleStatsPanel: () => void;
-  onTogglePlaylistSidebar: () => void;
 }
 
 const formatSize = (bytes: number): string => {
@@ -36,17 +28,7 @@ const formatDuration = (totalSecs: number): string => {
   return parts.join(", ");
 };
 
-export const LibraryStatusBar = ({
-  selectedTracks,
-  showColumnBrowser,
-  showInfoPanel,
-  showStatsPanel,
-  showPlaylistSidebar,
-  onToggleColumnBrowser,
-  onToggleInfoPanel,
-  onToggleStatsPanel,
-  onTogglePlaylistSidebar,
-}: LibraryStatusBarProps) => {
+export const LibraryStatusBar = ({ selectedTracks }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
 
   const stats = useMemo(() => {
@@ -64,7 +46,7 @@ export const LibraryStatusBar = ({
     <>
       <EqualizerPanel />
       <div className="h-[26px] border-t border-border bg-bg-secondary px-3 flex items-center gap-3 shrink-0 text-[10px] text-text-tertiary">
-        {/* Left — EQ button */}
+        {/* EQ button */}
         <button
           data-eq-toggle
           onClick={() => setEqOpen(!eqOpen)}
@@ -84,7 +66,7 @@ export const LibraryStatusBar = ({
           </svg>
         </button>
 
-        {/* Center — Selection stats */}
+        {/* Selection stats */}
         <div className="flex-1 text-center tabular-nums">
           {stats.label}
           {selectedTracks.length > 0 && (
@@ -92,73 +74,6 @@ export const LibraryStatusBar = ({
               , {stats.size}, {stats.duration}
             </>
           )}
-        </div>
-
-        {/* Right — Panel toggles */}
-        <div className="flex items-center gap-1">
-          {/* Playlist sidebar toggle */}
-          <button
-            onClick={onTogglePlaylistSidebar}
-            className={`p-0.5 rounded transition-colors ${
-              showPlaylistSidebar
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-            }`}
-            title={showPlaylistSidebar ? "Hide playlists" : "Show playlists"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-              <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
-            </svg>
-          </button>
-
-          {/* Column browser toggle */}
-          <button
-            onClick={onToggleColumnBrowser}
-            className={`p-0.5 rounded transition-colors ${
-              showColumnBrowser
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-            }`}
-            title={showColumnBrowser ? "Hide column browser" : "Show column browser"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-              <rect x="3" y="3" width="5" height="18" rx="1" />
-              <rect x="10" y="3" width="5" height="18" rx="1" />
-              <rect x="17" y="3" width="5" height="18" rx="1" />
-            </svg>
-          </button>
-
-          {/* Info panel toggle */}
-          <button
-            onClick={onToggleInfoPanel}
-            className={`p-0.5 rounded transition-colors ${
-              showInfoPanel
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-            }`}
-            title={showInfoPanel ? "Hide info panel" : "Show info panel"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-              <circle cx="12" cy="12" r="9" />
-              <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
-            </svg>
-          </button>
-
-          {/* Stats panel toggle */}
-          <button
-            onClick={onToggleStatsPanel}
-            className={`p-0.5 rounded transition-colors ${
-              showStatsPanel
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
-            }`}
-            title={showStatsPanel ? "Hide library stats" : "Show library stats"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-6 4 3 5-7" />
-            </svg>
-          </button>
         </div>
       </div>
     </>

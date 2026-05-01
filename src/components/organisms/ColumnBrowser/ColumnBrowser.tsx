@@ -1,8 +1,14 @@
-import { memo, useRef, useMemo, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
+
+export interface ColumnContextMenuAction {
+  column: "genre" | "artist" | "album";
+  value: string;
+}
 
 interface ColumnBrowserProps {
   genres: GenreSummary[];
@@ -15,6 +21,10 @@ interface ColumnBrowserProps {
   onSelectArtist: (artist: string | null) => void;
   onSelectAlbum: (album: string | null) => void;
   onPlay?: () => void;
+  onPlayAll?: (action: ColumnContextMenuAction) => void;
+  onAddAllToQueue?: (action: ColumnContextMenuAction) => void;
+  onAddAllToPlaylist?: (action: ColumnContextMenuAction, playlistId: number) => void;
+  playlists?: { id: number; name: string }[];
 }
 
 interface BrowserItem {
@@ -34,6 +44,10 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   onSelectArtist,
   onSelectAlbum,
   onPlay,
+  onPlayAll,
+  onAddAllToQueue,
+  onAddAllToPlaylist,
+  playlists,
 }: ColumnBrowserProps) {
   const genreItems = useMemo<BrowserItem[]>(
     () => genres.map((g) => ({ label: g.name, count: g.track_count })),
@@ -52,27 +66,42 @@ export const ColumnBrowser = memo(function ColumnBrowser({
     <div className="flex border-b border-border shrink-0" style={{ height: "35%" }}>
       <BrowserColumn
         title="Genres"
+        columnType="genre"
         allLabel={`All Genres (${genres.length})`}
         items={genreItems}
         selected={selectedGenre}
         onSelect={onSelectGenre}
         onPlay={onPlay}
+        onPlayAll={onPlayAll}
+        onAddAllToQueue={onAddAllToQueue}
+        onAddAllToPlaylist={onAddAllToPlaylist}
+        playlists={playlists}
       />
       <BrowserColumn
         title="Artists"
+        columnType="artist"
         allLabel={`All Artists (${artists.length})`}
         items={artistItems}
         selected={selectedArtist}
         onSelect={onSelectArtist}
         onPlay={onPlay}
+        onPlayAll={onPlayAll}
+        onAddAllToQueue={onAddAllToQueue}
+        onAddAllToPlaylist={onAddAllToPlaylist}
+        playlists={playlists}
       />
       <BrowserColumn
         title="Albums"
+        columnType="album"
         allLabel={`All Albums (${albums.length})`}
         items={albumItems}
         selected={selectedAlbum}
         onSelect={onSelectAlbum}
         onPlay={onPlay}
+        onPlayAll={onPlayAll}
+        onAddAllToQueue={onAddAllToQueue}
+        onAddAllToPlaylist={onAddAllToPlaylist}
+        playlists={playlists}
         isLast
       />
     </div>
@@ -81,11 +110,16 @@ export const ColumnBrowser = memo(function ColumnBrowser({
 
 interface BrowserColumnProps {
   title: string;
+  columnType: "genre" | "artist" | "album";
   allLabel: string;
   items: BrowserItem[];
   selected: string | null;
   onSelect: (value: string | null) => void;
   onPlay?: () => void;
+  onPlayAll?: (action: ColumnContextMenuAction) => void;
+  onAddAllToQueue?: (action: ColumnContextMenuAction) => void;
+  onAddAllToPlaylist?: (action: ColumnContextMenuAction, playlistId: number) => void;
+  playlists?: { id: number; name: string }[];
   isLast?: boolean;
 }
 
@@ -94,14 +128,37 @@ const ALL_BTN_HEIGHT = 27;
 
 const BrowserColumn = memo(function BrowserColumn({
   title,
+  columnType,
   allLabel,
   items,
   selected,
   onSelect,
   onPlay,
+  onPlayAll,
+  onAddAllToQueue,
+  onAddAllToPlaylist,
+  playlists,
   isLast,
 }: BrowserColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollRef = useRef(0);
+  const prevSelectedRef = useRef(selected);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; value: string } | null>(null);
+
+  // Save scroll position when making a selection, restore when clearing it
+  useEffect(() => {
+    const prev = prevSelectedRef.current;
+    prevSelectedRef.current = selected;
+    if (prev === null && selected !== null) {
+      // Selecting an item — save current scroll position
+      savedScrollRef.current = scrollRef.current?.scrollTop ?? 0;
+    } else if (prev !== null && selected === null) {
+      // Returning to "All" — restore saved position
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: savedScrollRef.current });
+      });
+    }
+  }, [selected]);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -187,6 +244,55 @@ const BrowserColumn = memo(function BrowserColumn({
     [items, onSelect, focusedIndexRef],
   );
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, value: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, value });
+  }, []);
+
+  const contextMenuItems = useMemo(() => {
+    if (!contextMenu) return [];
+    const action: ColumnContextMenuAction = { column: columnType, value: contextMenu.value };
+    return [
+      ...(onPlayAll
+        ? [
+            {
+              label: `Play All`,
+              onClick: () => {
+                onPlayAll(action);
+                setContextMenu(null);
+              },
+            },
+          ]
+        : []),
+      ...(onAddAllToQueue
+        ? [
+            {
+              label: `Add All to Queue`,
+              onClick: () => {
+                onAddAllToQueue(action);
+                setContextMenu(null);
+              },
+            },
+          ]
+        : []),
+      ...(playlists && playlists.length > 0 && onAddAllToPlaylist
+        ? [
+            {
+              type: "submenu" as const,
+              label: "Add All to Playlist",
+              children: playlists.map((p) => ({
+                label: p.name,
+                onClick: () => {
+                  onAddAllToPlaylist(action, p.id);
+                  setContextMenu(null);
+                },
+              })),
+            },
+          ]
+        : []),
+    ];
+  }, [contextMenu, columnType, onPlayAll, onAddAllToQueue, onAddAllToPlaylist, playlists]);
+
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
@@ -227,6 +333,7 @@ const BrowserColumn = memo(function BrowserColumn({
                 }}
                 onClick={() => handleItemClick(virtualItem.index)}
                 onDoubleClick={onPlay}
+                onContextMenu={(e) => handleContextMenu(e, item.label)}
                 className={`text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
                   selected === item.label ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
                 }`}
@@ -237,6 +344,15 @@ const BrowserColumn = memo(function BrowserColumn({
           })}
         </div>
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 });

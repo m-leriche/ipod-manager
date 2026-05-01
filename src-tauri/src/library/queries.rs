@@ -4,6 +4,23 @@ use super::types::{
     AlbumSummary, ArtistSummary, BrowserData, GenreSummary, LibraryFilter, LibraryTrack,
 };
 
+/// Generate a sort key that strips leading "The ", removes non-alphanumeric
+/// characters, and lowercases — so "The Beatles" sorts under "B" and
+/// punctuation like parentheses/quotes is ignored.
+fn sort_key(s: &str) -> String {
+    let trimmed = s.trim();
+    let without_the = trimmed
+        .strip_prefix("The ")
+        .or_else(|| trimmed.strip_prefix("the "))
+        .or_else(|| trimmed.strip_prefix("THE "))
+        .unwrap_or(trimmed);
+    without_the
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
 pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
     let mut conditions = Vec::new();
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -48,34 +65,34 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
 
     let order_by = match filter.sort_by.as_deref() {
         Some("title") => format!(
-            "COALESCE(title, file_name) {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(title, file_name) COLLATE NOCASE {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         Some("artist") => format!(
-            "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         Some("album") => format!(
-            "COALESCE(album, '') {dir}, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(album, '') COLLATE NOCASE {dir}, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         Some("track_number") => format!(
             "COALESCE(disc_number, 0) {dir}, COALESCE(track_number, 0) {dir}"
         ),
         Some("year") => format!(
-            "COALESCE(year, 0) {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(year, 0) {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         Some("duration") => format!("duration_secs {dir}"),
         Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
         Some("genre") => format!(
-            "COALESCE(genre, '') {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(genre, '') COLLATE NOCASE {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         Some("date_added") => format!("created_at {dir}"),
         Some("play_count") => format!(
-            "play_count {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(track_number, 0)"
+            "play_count {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(track_number, 0)"
         ),
         Some("flagged") => format!(
-            "flagged {dir}, COALESCE(sort_artist, artist, ''), COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "flagged {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
         _ => format!(
-            "COALESCE(sort_artist, artist, '') {dir}, COALESCE(album, ''), COALESCE(disc_number, 0), COALESCE(track_number, 0)"
+            "COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
         ),
     };
 
@@ -138,8 +155,7 @@ pub fn get_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, String> {
         FROM tracks
         WHERE COALESCE(album_artist, artist) IS NOT NULL
             AND COALESCE(album_artist, artist) != ''
-        GROUP BY display_artist
-        ORDER BY display_artist COLLATE NOCASE ASC";
+        GROUP BY display_artist";
 
     let mut stmt = conn
         .prepare(sql)
@@ -155,11 +171,15 @@ pub fn get_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, String> {
         })
         .map_err(|e| format!("Query failed: {}", e))?;
 
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Row read failed: {}", e))
+    let mut results: Vec<_> = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))?;
+    results.sort_by_key(|a| sort_key(&a.name));
+    Ok(results)
 }
 
 pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSummary>, String> {
+    let has_artist = artist.is_some();
     let (sql, param_values): (String, Vec<Box<dyn rusqlite::types::ToSql>>) =
         if let Some(artist) = artist {
             (
@@ -169,8 +189,7 @@ pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSu
              FROM tracks
              WHERE album IS NOT NULL AND album != ''
                 AND (album_artist = ?1 OR artist = ?1)
-             GROUP BY album, display_artist
-             ORDER BY COALESCE(MIN(year), 0) ASC, album COLLATE NOCASE ASC"
+             GROUP BY album, display_artist"
                     .to_string(),
                 vec![Box::new(artist.to_string())],
             )
@@ -181,8 +200,7 @@ pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSu
                     MIN(folder_path) as folder_path
              FROM tracks
              WHERE album IS NOT NULL AND album != ''
-             GROUP BY album, display_artist
-             ORDER BY display_artist COLLATE NOCASE ASC, COALESCE(MIN(year), 0) ASC"
+             GROUP BY album, display_artist"
                     .to_string(),
                 vec![],
             )
@@ -206,16 +224,34 @@ pub fn get_albums(conn: &Connection, artist: Option<&str>) -> Result<Vec<AlbumSu
         })
         .map_err(|e| format!("Query failed: {}", e))?;
 
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Row read failed: {}", e))
+    let mut results: Vec<_> = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))?;
+
+    if has_artist {
+        // With artist filter: sort by year, then album name
+        results.sort_by(|a, b| {
+            a.year
+                .unwrap_or(0)
+                .cmp(&b.year.unwrap_or(0))
+                .then_with(|| sort_key(&a.name).cmp(&sort_key(&b.name)))
+        });
+    } else {
+        // No artist filter: sort by artist name, then year
+        results.sort_by(|a, b| {
+            sort_key(&a.artist)
+                .cmp(&sort_key(&b.artist))
+                .then_with(|| a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)))
+        });
+    }
+    Ok(results)
 }
 
 pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
     let sql = "SELECT genre, COUNT(*) as track_count
         FROM tracks
         WHERE genre IS NOT NULL AND genre != ''
-        GROUP BY genre
-        ORDER BY genre COLLATE NOCASE ASC";
+        GROUP BY genre";
 
     let mut stmt = conn
         .prepare(sql)
@@ -230,8 +266,11 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
         })
         .map_err(|e| format!("Query failed: {}", e))?;
 
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Row read failed: {}", e))
+    let mut results: Vec<_> = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))?;
+    results.sort_by_key(|a| sort_key(&a.name));
+    Ok(results)
 }
 
 pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<LibraryTrack>, String> {
@@ -313,7 +352,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         conds.insert(0, "genre IS NOT NULL AND genre != ''".to_string());
         let wc = where_clause(&conds);
         let sql = format!(
-            "SELECT genre, COUNT(*) as track_count FROM tracks {} GROUP BY genre ORDER BY genre COLLATE NOCASE ASC",
+            "SELECT genre, COUNT(*) as track_count FROM tracks {} GROUP BY genre",
             wc
         );
         let mut stmt = conn
@@ -328,8 +367,11 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
                 })
             })
             .map_err(|e| format!("Query failed: {}", e))?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Row read failed: {}", e))?
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        results.sort_by_key(|a| sort_key(&a.name));
+        results
     };
 
     // Artists: filtered by genre + album (NOT artist) + search
@@ -342,7 +384,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         );
         let wc = where_clause(&conds);
         let sql = format!(
-            "SELECT COALESCE(album_artist, artist) as display_artist, COUNT(*) as track_count, COUNT(DISTINCT album) as album_count FROM tracks {} GROUP BY display_artist ORDER BY display_artist COLLATE NOCASE ASC",
+            "SELECT COALESCE(album_artist, artist) as display_artist, COUNT(*) as track_count, COUNT(DISTINCT album) as album_count FROM tracks {} GROUP BY display_artist",
             wc
         );
         let mut stmt = conn
@@ -358,8 +400,11 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
                 })
             })
             .map_err(|e| format!("Query failed: {}", e))?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Row read failed: {}", e))?
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        results.sort_by_key(|a| sort_key(&a.name));
+        results
     };
 
     // Albums: filtered by genre + artist (NOT album) + search
@@ -369,7 +414,7 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
         conds.insert(0, "album IS NOT NULL AND album != ''".to_string());
         let wc = where_clause(&conds);
         let sql = format!(
-            "SELECT album, COALESCE(album_artist, artist) as display_artist, MIN(year) as year, COUNT(*) as track_count, MIN(folder_path) as folder_path FROM tracks {} GROUP BY album, display_artist ORDER BY album COLLATE NOCASE ASC",
+            "SELECT album, COALESCE(album_artist, artist) as display_artist, MIN(year) as year, COUNT(*) as track_count, MIN(folder_path) as folder_path FROM tracks {} GROUP BY album, display_artist",
             wc
         );
         let mut stmt = conn
@@ -387,8 +432,22 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
                 })
             })
             .map_err(|e| format!("Query failed: {}", e))?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Row read failed: {}", e))?
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        if artist.is_some() {
+            // With artist filter: sort by year, then album name
+            results.sort_by(|a, b| {
+                a.year
+                    .unwrap_or(0)
+                    .cmp(&b.year.unwrap_or(0))
+                    .then_with(|| sort_key(&a.name).cmp(&sort_key(&b.name)))
+            });
+        } else {
+            // No artist filter: sort by album name
+            results.sort_by_key(|a| sort_key(&a.name));
+        }
+        results
     };
 
     Ok(BrowserData {

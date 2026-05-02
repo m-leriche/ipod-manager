@@ -124,7 +124,7 @@ pub fn detect_duplicates(
             .push(track.clone());
     }
 
-    for (_artist, artist_tracks) in &by_artist {
+    for artist_tracks in by_artist.values() {
         if artist_tracks.len() < 2 {
             continue;
         }
@@ -134,32 +134,31 @@ pub fn detect_duplicates(
 
         // Compare all pairs within same artist
         let mut used: std::collections::HashSet<i64> = std::collections::HashSet::new();
-        for i in 0..artist_tracks.len() {
-            if used.contains(&artist_tracks[i].id) || matched_ids.contains(&artist_tracks[i].id) {
+        for (i, anchor) in artist_tracks.iter().enumerate() {
+            if used.contains(&anchor.id) || matched_ids.contains(&anchor.id) {
                 continue;
             }
-            let title_a = normalize(artist_tracks[i].title.as_deref().unwrap_or(""));
-            let mut cluster = vec![artist_tracks[i].clone()];
+            let title_a = normalize(anchor.title.as_deref().unwrap_or(""));
+            let mut cluster = vec![anchor.clone()];
 
-            for j in (i + 1)..artist_tracks.len() {
-                if used.contains(&artist_tracks[j].id) || matched_ids.contains(&artist_tracks[j].id)
-                {
+            for candidate in &artist_tracks[i + 1..] {
+                if used.contains(&candidate.id) || matched_ids.contains(&candidate.id) {
                     continue;
                 }
-                let title_b = normalize(artist_tracks[j].title.as_deref().unwrap_or(""));
+                let title_b = normalize(candidate.title.as_deref().unwrap_or(""));
                 let sim = strsim::normalized_damerau_levenshtein(&title_a, &title_b);
                 if sim >= 0.85 {
-                    cluster.push(artist_tracks[j].clone());
-                    used.insert(artist_tracks[j].id);
+                    cluster.push(candidate.clone());
+                    used.insert(candidate.id);
                 }
             }
 
             if cluster.len() >= 2 {
-                used.insert(artist_tracks[i].id);
+                used.insert(anchor.id);
                 let fp = format!(
                     "{}|{}",
                     title_a,
-                    normalize(artist_tracks[i].artist.as_deref().unwrap_or(""))
+                    normalize(anchor.artist.as_deref().unwrap_or(""))
                 );
                 groups.push(build_group(group_id, fp, cluster));
                 group_id += 1;

@@ -156,38 +156,46 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 
     // Seed built-in smart playlists
     let now = now_epoch();
-    let builtins: &[(&str, &str, &str, Option<&str>, Option<&str>, Option<i64>)] = &[
-        (
+    let seed_sql = "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)";
+    let _ = conn.execute(
+        seed_sql,
+        rusqlite::params![
             "Recently Added",
             "clock",
             r#"{"match":"all","rules":[{"field":"created_at","operator":"in_last_days","value":"30"}]}"#,
-            Some("created_at"),
-            Some("desc"),
-            Some(100),
-        ),
-        (
+            "created_at",
+            "desc",
+            100_i64,
+            now,
+            now
+        ],
+    );
+    let _ = conn.execute(
+        seed_sql,
+        rusqlite::params![
             "Most Played",
             "fire",
             r#"{"match":"all","rules":[{"field":"play_count","operator":"greater_than","value":"0"}]}"#,
-            Some("play_count"),
-            Some("desc"),
-            Some(100),
-        ),
-        (
+            "play_count",
+            "desc",
+            100_i64,
+            now,
+            now
+        ],
+    );
+    let _ = conn.execute(
+        seed_sql,
+        rusqlite::params![
             "Unplayed",
             "circle",
             r#"{"match":"all","rules":[{"field":"play_count","operator":"equals","value":"0"}]}"#,
-            None,
-            None,
-            None,
-        ),
-    ];
-    for (name, icon, rules, sort_by, sort_dir, limit) in builtins {
-        let _ = conn.execute(
-            "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)",
-            rusqlite::params![name, icon, rules, sort_by, sort_dir, limit, now, now],
-        );
-    }
+            None::<&str>,
+            None::<&str>,
+            None::<i64>,
+            now,
+            now
+        ],
+    );
 
     Ok(conn)
 }

@@ -463,10 +463,16 @@ pub async fn scan_library_stats(
 
 #[tauri::command]
 pub async fn get_library_stats(db: State<'_, LibraryDb>) -> Result<libstats::LibraryStats, String> {
-    let conn = db.conn_arc();
-    let conn = conn.lock().map_err(|e| format!("DB lock error: {}", e))?;
-    let location = library::get_library_location(&conn).unwrap_or_default();
-    libstats::get_library_stats(&conn, &location)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock error: {}", e))?;
+        let location = library::get_library_location(&conn).unwrap_or_default();
+        libstats::get_library_stats(&conn, &location)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -492,23 +498,31 @@ pub async fn read_rockbox_playdata(ipod_path: String) -> Result<rockbox::Rockbox
 
 #[tauri::command]
 pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    match library::get_library_location(&conn) {
-        Some(loc) => Ok(std::path::Path::new(&loc).exists()),
-        None => Ok(false),
-    }
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        match library::get_library_location(&conn) {
+            Some(loc) => Ok(std::path::Path::new(&loc).exists()),
+            None => Ok(false),
+        }
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    Ok(library::get_library_location(&conn))
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        Ok(library::get_library_location(&conn))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -606,13 +620,17 @@ pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
 ) -> Result<usize, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    let library_root =
-        library::get_library_location(&conn).ok_or("No library location set".to_string())?;
-    library::delete_tracks(&conn, &library_root, &track_ids)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let library_root =
+            library::get_library_location(&conn).ok_or("No library location set".to_string())?;
+        library::delete_tracks(&conn, &library_root, &track_ids)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -624,58 +642,74 @@ pub async fn flag_tracks(
     if track_ids.is_empty() {
         return Ok(0);
     }
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    let placeholders: Vec<String> = (0..track_ids.len())
-        .map(|i| format!("?{}", i + 2))
-        .collect();
-    let sql = format!(
-        "UPDATE tracks SET flagged = ?1 WHERE id IN ({})",
-        placeholders.join(", ")
-    );
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(flagged)];
-    for id in &track_ids {
-        params.push(Box::new(*id));
-    }
-    let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    conn.execute(&sql, refs.as_slice())
-        .map_err(|e| format!("Flag update failed: {}", e))
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let placeholders: Vec<String> = (0..track_ids.len())
+            .map(|i| format!("?{}", i + 2))
+            .collect();
+        let sql = format!(
+            "UPDATE tracks SET flagged = ?1 WHERE id IN ({})",
+            placeholders.join(", ")
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(flagged)];
+        for id in &track_ids {
+            params.push(Box::new(*id));
+        }
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        conn.execute(&sql, refs.as_slice())
+            .map_err(|e| format!("Flag update failed: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    conn.execute(
-        "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?1",
-        rusqlite::params![track_id],
-    )
-    .map_err(|e| format!("Play count update failed: {}", e))?;
-    Ok(())
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        conn.execute(
+            "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?1",
+            rusqlite::params![track_id],
+        )
+        .map_err(|e| format!("Play count update failed: {}", e))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::remove_folder(&conn, &path)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::remove_folder(&conn, &path)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn get_library_folders(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryFolder>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_folders(&conn)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_folders(&conn)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -702,11 +736,15 @@ pub async fn get_library_tracks(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryTrack>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_tracks(&conn, &filter)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_tracks(&conn, &filter)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -714,22 +752,30 @@ pub async fn get_library_browser_data(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<library::BrowserData, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_browser_data(&conn, &filter)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_browser_data(&conn, &filter)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn get_library_artists(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::ArtistSummary>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_artists(&conn)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_artists(&conn)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -737,22 +783,30 @@ pub async fn get_library_albums(
     artist: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::AlbumSummary>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_albums(&conn, artist.as_deref())
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_albums(&conn, artist.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn get_library_genres(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::GenreSummary>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::get_genres(&conn)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_genres(&conn)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -760,11 +814,15 @@ pub async fn search_library(
     query: String,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryTrack>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::search_tracks(&conn, &query)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::search_tracks(&conn, &query)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -843,11 +901,15 @@ pub fn audio_set_eq(config: EqConfig, engine: State<'_, AudioEngine>) -> Result<
 
 #[tauri::command]
 pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Playlist>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::get_playlists(&conn)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::get_playlists(&conn)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -855,11 +917,15 @@ pub async fn create_playlist(
     name: String,
     db: State<'_, LibraryDb>,
 ) -> Result<library::Playlist, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::create_playlist(&conn, &name)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::create_playlist(&conn, &name)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -868,20 +934,28 @@ pub async fn rename_playlist(
     name: String,
     db: State<'_, LibraryDb>,
 ) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::rename_playlist(&conn, id, &name)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::rename_playlist(&conn, id, &name)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn delete_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::delete_playlist(&conn, id)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::delete_playlist(&conn, id)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -889,11 +963,15 @@ pub async fn get_playlist_tracks(
     playlist_id: i64,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::PlaylistTrack>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::get_playlist_tracks(&conn, playlist_id)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::get_playlist_tracks(&conn, playlist_id)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -902,11 +980,15 @@ pub async fn add_tracks_to_playlist(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
 ) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::add_tracks_to_playlist(&conn, playlist_id, &track_ids)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::add_tracks_to_playlist(&conn, playlist_id, &track_ids)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -915,11 +997,15 @@ pub async fn remove_tracks_from_playlist(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
 ) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::remove_tracks_from_playlist(&conn, playlist_id, &track_ids)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::remove_tracks_from_playlist(&conn, playlist_id, &track_ids)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -929,11 +1015,15 @@ pub async fn move_playlist_track(
     to_position: u32,
     db: State<'_, LibraryDb>,
 ) -> Result<(), String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    library::playlists::move_playlist_track(&conn, playlist_id, from_position, to_position)
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::playlists::move_playlist_track(&conn, playlist_id, from_position, to_position)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -943,38 +1033,43 @@ pub async fn export_playlists_to_ipod(
     music_subdir: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<playlist_export::PlaylistExportResult, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
 
-    let library_root = library::get_library_location(&conn)
-        .ok_or_else(|| "No library location configured. Set one in Settings first.".to_string())?;
+        let library_root = library::get_library_location(&conn).ok_or_else(|| {
+            "No library location configured. Set one in Settings first.".to_string()
+        })?;
 
-    let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
+        let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
 
-    let all_playlists = library::playlists::get_playlists(&conn)?;
-    let target: Vec<_> = if playlist_ids.is_empty() {
-        all_playlists
-    } else {
-        all_playlists
-            .into_iter()
-            .filter(|p| playlist_ids.contains(&p.id))
-            .collect()
-    };
+        let all_playlists = library::playlists::get_playlists(&conn)?;
+        let target: Vec<_> = if playlist_ids.is_empty() {
+            all_playlists
+        } else {
+            all_playlists
+                .into_iter()
+                .filter(|p| playlist_ids.contains(&p.id))
+                .collect()
+        };
 
-    let mut with_tracks = Vec::new();
-    for pl in target {
-        let tracks = library::playlists::get_playlist_tracks(&conn, pl.id)?;
-        with_tracks.push((pl, tracks));
-    }
+        let mut with_tracks = Vec::new();
+        for pl in target {
+            let tracks = library::playlists::get_playlist_tracks(&conn, pl.id)?;
+            with_tracks.push((pl, tracks));
+        }
 
-    Ok(playlist_export::export_playlists(
-        with_tracks,
-        &library_root,
-        &sub,
-        &output_dir,
-    ))
+        Ok(playlist_export::export_playlists(
+            with_tracks,
+            &library_root,
+            &sub,
+            &output_dir,
+        ))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 // ── Media key / Now Playing commands ─────────────────────────────

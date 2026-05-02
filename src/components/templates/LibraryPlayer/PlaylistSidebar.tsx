@@ -69,7 +69,7 @@ export const PlaylistSidebar = ({
       const playlist = await createPlaylist(name);
       onPlaylistSelect(playlist.id);
     } catch (e) {
-      console.error("Failed to create playlist:", e);
+      alert(`Failed to create playlist: ${e}`);
     }
     setInputValue("");
     setCreating(false);
@@ -84,7 +84,7 @@ export const PlaylistSidebar = ({
     try {
       await renamePlaylist(editingId, name);
     } catch (e) {
-      console.error("Failed to rename playlist:", e);
+      alert(`Failed to rename playlist: ${e}`);
     }
     setInputValue("");
     setEditingId(null);
@@ -95,7 +95,7 @@ export const PlaylistSidebar = ({
       try {
         await deletePlaylist(id);
       } catch (e) {
-        console.error("Failed to delete playlist:", e);
+        alert(`Failed to delete playlist: ${e}`);
       }
       setContextMenu(null);
     },

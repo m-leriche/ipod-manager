@@ -125,6 +125,10 @@ cd src-tauri && cargo check
 npm test
 ```
 
+## Tooling TODOs
+
+- [ ] Add ESLint with `@typescript-eslint` and `eslint-plugin-react-hooks` — no linter is currently configured
+
 ## Library Player TODOs
 
 - [ ] Refine playback engine — handle unsupported formats gracefully, persist queue across restarts

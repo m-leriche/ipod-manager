@@ -6,6 +6,7 @@ import type { Phase, StatsFilter } from "./types";
 import { StatsOverview } from "./StatsOverview";
 import { StatsDetailModal } from "./StatsDetailModal";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { cancelSync } from "../../../utils/cancelSync";
 
 interface LibraryStatsProps {
   libraryPath: string | null;
@@ -39,11 +40,7 @@ export const LibraryStats = ({ libraryPath }: LibraryStatsProps) => {
     };
   }, []);
 
-  const cancelScan = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {}
-  };
+  const cancelScan = cancelSync;
 
   // Load stats from DB (instant — no file I/O)
   const loadFromDb = async () => {

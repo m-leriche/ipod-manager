@@ -5,6 +5,14 @@ import type { LibraryTrack } from "../../../types/library";
  * sorted by disc number then track number. If the track has no album, returns just
  * that track.
  */
+/**
+ * Returns the IDs to operate on from a context menu action:
+ * all selected IDs if the right-clicked track is part of the selection,
+ * otherwise just the right-clicked track's ID.
+ */
+export const getContextIds = (trackId: number, selected: Set<number>): number[] =>
+  selected.size > 1 && selected.has(trackId) ? [...selected] : [trackId];
+
 export const getAlbumTracks = (track: LibraryTrack, allTracks: LibraryTrack[]): LibraryTrack[] => {
   if (!track.album) return [track];
 

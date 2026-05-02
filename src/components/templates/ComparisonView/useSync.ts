@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { cancelSync } from "../../../utils/cancelSync";
 import type { CompareEntry, CopyOp, CopyResult, SyncProgress } from "./types";
 
 export const useSync = (
@@ -53,13 +54,7 @@ export const useSync = (
     }
   };
 
-  const handleCancel = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {
-      /* ignore */
-    }
-  };
+  const handleCancel = cancelSync;
 
   const copyToTarget = () =>
     run("Copying files to target...", async () => {

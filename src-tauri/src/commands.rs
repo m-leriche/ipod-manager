@@ -667,6 +667,42 @@ pub async fn flag_tracks(
 }
 
 #[tauri::command]
+pub async fn rate_tracks(
+    track_ids: Vec<i64>,
+    rating: u8,
+    db: State<'_, LibraryDb>,
+) -> Result<usize, String> {
+    if track_ids.is_empty() {
+        return Ok(0);
+    }
+    if rating > 5 {
+        return Err("Rating must be 0-5".into());
+    }
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let placeholders: Vec<String> = (0..track_ids.len())
+            .map(|i| format!("?{}", i + 2))
+            .collect();
+        let sql = format!(
+            "UPDATE tracks SET rating = ?1 WHERE id IN ({})",
+            placeholders.join(", ")
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(rating as i64)];
+        for id in &track_ids {
+            params.push(Box::new(*id));
+        }
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        conn.execute(&sql, refs.as_slice())
+            .map_err(|e| format!("Rating update failed: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
 pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
@@ -1067,6 +1103,146 @@ pub async fn export_playlists_to_ipod(
             &sub,
             &output_dir,
         ))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+// ── Duplicate detection commands ─────────────────────────────────
+
+#[tauri::command]
+pub async fn detect_duplicates(
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<library::duplicates::DuplicateDetectionResult, String> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::duplicates::detect_duplicates(&conn, &app, &flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn delete_duplicate_tracks(
+    track_ids: Vec<i64>,
+    db: State<'_, LibraryDb>,
+) -> Result<usize, String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let library_root = library::get_library_location(&conn)
+            .ok_or_else(|| "No library location set".to_string())?;
+        library::delete_tracks(&conn, &library_root, &track_ids)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+// ── Smart playlist commands ──────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_smart_playlists(
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::SmartPlaylist>, String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::smart_playlists::get_smart_playlists(&conn)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn create_smart_playlist(
+    name: String,
+    rules: library::SmartPlaylistRuleGroup,
+    sort_by: Option<String>,
+    sort_direction: Option<String>,
+    limit: Option<u32>,
+    db: State<'_, LibraryDb>,
+) -> Result<library::SmartPlaylist, String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::smart_playlists::create_smart_playlist(
+            &conn,
+            &name,
+            &rules,
+            sort_by.as_deref(),
+            sort_direction.as_deref(),
+            limit,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn update_smart_playlist(
+    id: i64,
+    name: String,
+    rules: library::SmartPlaylistRuleGroup,
+    sort_by: Option<String>,
+    sort_direction: Option<String>,
+    limit: Option<u32>,
+    db: State<'_, LibraryDb>,
+) -> Result<(), String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::smart_playlists::update_smart_playlist(
+            &conn,
+            id,
+            &name,
+            &rules,
+            sort_by.as_deref(),
+            sort_direction.as_deref(),
+            limit,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn delete_smart_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::smart_playlists::delete_smart_playlist(&conn, id)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_smart_playlist_tracks(
+    id: i64,
+    db: State<'_, LibraryDb>,
+) -> Result<Vec<library::LibraryTrack>, String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::smart_playlists::get_smart_playlist_tracks(&conn, id)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

@@ -75,6 +75,13 @@ export const COLUMNS: TrackTableColumn[] = [
     def: { key: "date_added", minWidth: 70, initialWidth: 90 },
   },
   {
+    key: "rating",
+    label: "Rating",
+    sortKey: "rating",
+    align: "left",
+    def: { key: "rating", minWidth: 60, initialWidth: 80 },
+  },
+  {
     key: "plays",
     label: "Plays",
     sortKey: "play_count",
@@ -105,5 +112,6 @@ export const CELL_CLASSES: Record<string, string> = {
   year: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
   duration: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
   date_added: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
+  rating: "px-1 py-[7px] overflow-hidden",
   plays: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
 };

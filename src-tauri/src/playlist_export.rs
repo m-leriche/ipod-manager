@@ -127,6 +127,7 @@ mod tests {
                 created_at: 0,
                 play_count: 0,
                 flagged: false,
+                rating: 0,
             },
         }
     }

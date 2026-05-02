@@ -28,6 +28,7 @@ const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
   created_at: 1700000000,
   play_count: 0,
   flagged: false,
+  rating: 0,
   ...overrides,
 });
 

@@ -28,6 +28,7 @@ const track: LibraryTrack = {
   created_at: 1704067200,
   play_count: 0,
   flagged: false,
+  rating: 0,
 };
 
 // Controllable mock state

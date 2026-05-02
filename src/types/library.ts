@@ -23,6 +23,7 @@ export interface LibraryTrack {
   created_at: number;
   play_count: number;
   flagged: boolean;
+  rating: number;
 }
 
 export interface LibraryFolder {
@@ -65,6 +66,8 @@ export interface LibraryFilter {
   sort_by?: string;
   sort_direction?: "asc" | "desc";
   flagged_only?: boolean;
+  rating_min?: number;
+  rating_max?: number;
 }
 
 export interface Playlist {
@@ -102,6 +105,57 @@ export interface PlaylistTrack {
   created_at: number;
   play_count: number;
   flagged: boolean;
+  rating: number;
+}
+
+export interface SmartPlaylistRule {
+  field: string;
+  operator: string;
+  value: string;
+  value2?: string;
+}
+
+export interface SmartPlaylistRuleGroup {
+  match: "all" | "any";
+  rules: SmartPlaylistRule[];
+}
+
+export interface SmartPlaylist {
+  id: number;
+  name: string;
+  icon: string | null;
+  rules: SmartPlaylistRuleGroup;
+  sort_by: string | null;
+  sort_direction: string | null;
+  track_limit: number | null;
+  is_builtin: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface DuplicateTrack {
+  track: LibraryTrack;
+  quality_score: number;
+  is_recommended: boolean;
+}
+
+export interface DuplicateGroup {
+  group_id: number;
+  fingerprint: string;
+  tracks: DuplicateTrack[];
+  duration_mismatch: boolean;
+}
+
+export interface DuplicateDetectionResult {
+  groups: DuplicateGroup[];
+  total_duplicate_tracks: number;
+  potential_space_savings: number;
+}
+
+export interface DuplicateDetectionProgress {
+  phase: string;
+  completed: number;
+  total: number;
 }
 
 export type LibraryViewType = "tracks" | "artists" | "albums" | "genres";

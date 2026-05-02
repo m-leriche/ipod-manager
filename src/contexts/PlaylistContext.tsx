@@ -1,7 +1,14 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { pickFolder } from "../utils/pickPath";
-import type { Playlist, PlaylistTrack, LibraryTrack, PlaylistExportResult } from "../types/library";
+import type {
+  Playlist,
+  PlaylistTrack,
+  LibraryTrack,
+  PlaylistExportResult,
+  SmartPlaylist,
+  SmartPlaylistRuleGroup,
+} from "../types/library";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -19,6 +26,28 @@ interface PlaylistContextValue {
   removeTracks: (playlistId: number, trackIds: number[]) => Promise<void>;
   moveTrack: (playlistId: number, fromPosition: number, toPosition: number) => Promise<void>;
   exportToIpod: (playlistIds: number[]) => Promise<PlaylistExportResult>;
+  // Smart playlists
+  smartPlaylists: SmartPlaylist[];
+  activeSmartPlaylistId: number | null;
+  activeSmartPlaylistTracks: LibraryTrack[];
+  setActiveSmartPlaylist: (id: number | null) => void;
+  createSmartPlaylist: (
+    name: string,
+    rules: SmartPlaylistRuleGroup,
+    sortBy?: string,
+    sortDirection?: string,
+    limit?: number,
+  ) => Promise<SmartPlaylist>;
+  updateSmartPlaylist: (
+    id: number,
+    name: string,
+    rules: SmartPlaylistRuleGroup,
+    sortBy?: string,
+    sortDirection?: string,
+    limit?: number,
+  ) => Promise<void>;
+  deleteSmartPlaylist: (id: number) => Promise<void>;
+  refreshSmartPlaylists: () => Promise<void>;
 }
 
 // ── Context ─────────────────────────────────────────────────────
@@ -31,6 +60,11 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
   const [activePlaylistTracks, setActivePlaylistTracks] = useState<LibraryTrack[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Smart playlist state
+  const [smartPlaylists, setSmartPlaylists] = useState<SmartPlaylist[]>([]);
+  const [activeSmartPlaylistId, setActiveSmartPlaylistIdState] = useState<number | null>(null);
+  const [activeSmartPlaylistTracks, setActiveSmartPlaylistTracks] = useState<LibraryTrack[]>([]);
+
   // ── Fetch playlists ─────────────────────────────────────────
 
   const refresh = useCallback(async () => {
@@ -42,9 +76,19 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, []);
 
+  const refreshSmartPlaylists = useCallback(async () => {
+    try {
+      const result = await invoke<SmartPlaylist[]>("get_smart_playlists");
+      setSmartPlaylists(result);
+    } catch (e) {
+      console.error("Failed to load smart playlists:", e);
+    }
+  }, []);
+
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    refreshSmartPlaylists();
+  }, [refresh, refreshSmartPlaylists]);
 
   // ── Fetch active playlist tracks ────────────────────────────
 
@@ -65,12 +109,43 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
     (id: number | null) => {
       setActivePlaylistId(id);
       if (id !== null) {
+        setActiveSmartPlaylistIdState(null);
+        setActiveSmartPlaylistTracks([]);
         fetchPlaylistTracks(id);
       } else {
         setActivePlaylistTracks([]);
       }
     },
     [fetchPlaylistTracks],
+  );
+
+  // ── Smart playlist track fetching ──────────────────────────
+
+  const fetchSmartPlaylistTracks = useCallback(async (id: number) => {
+    setLoading(true);
+    try {
+      const result = await invoke<LibraryTrack[]>("get_smart_playlist_tracks", { id });
+      setActiveSmartPlaylistTracks(result);
+    } catch (e) {
+      console.error("Failed to load smart playlist tracks:", e);
+      setActiveSmartPlaylistTracks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const setActiveSmartPlaylist = useCallback(
+    (id: number | null) => {
+      setActiveSmartPlaylistIdState(id);
+      if (id !== null) {
+        setActivePlaylistId(null);
+        setActivePlaylistTracks([]);
+        fetchSmartPlaylistTracks(id);
+      } else {
+        setActiveSmartPlaylistTracks([]);
+      }
+    },
+    [fetchSmartPlaylistTracks],
   );
 
   // ── CRUD operations ─────────────────────────────────────────
@@ -146,6 +221,66 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
     });
   }, []);
 
+  // ── Smart playlist CRUD ────────────────────────────────────
+
+  const createSmartPlaylist = useCallback(
+    async (
+      name: string,
+      rules: SmartPlaylistRuleGroup,
+      sortBy?: string,
+      sortDirection?: string,
+      limit?: number,
+    ): Promise<SmartPlaylist> => {
+      const sp = await invoke<SmartPlaylist>("create_smart_playlist", {
+        name,
+        rules,
+        sortBy: sortBy ?? null,
+        sortDirection: sortDirection ?? null,
+        limit: limit ?? null,
+      });
+      await refreshSmartPlaylists();
+      return sp;
+    },
+    [refreshSmartPlaylists],
+  );
+
+  const updateSmartPlaylist = useCallback(
+    async (
+      id: number,
+      name: string,
+      rules: SmartPlaylistRuleGroup,
+      sortBy?: string,
+      sortDirection?: string,
+      limit?: number,
+    ) => {
+      await invoke("update_smart_playlist", {
+        id,
+        name,
+        rules,
+        sortBy: sortBy ?? null,
+        sortDirection: sortDirection ?? null,
+        limit: limit ?? null,
+      });
+      await refreshSmartPlaylists();
+      if (activeSmartPlaylistId === id) {
+        fetchSmartPlaylistTracks(id);
+      }
+    },
+    [refreshSmartPlaylists, activeSmartPlaylistId, fetchSmartPlaylistTracks],
+  );
+
+  const deleteSmartPlaylist = useCallback(
+    async (id: number) => {
+      await invoke("delete_smart_playlist", { id });
+      if (activeSmartPlaylistId === id) {
+        setActiveSmartPlaylistIdState(null);
+        setActiveSmartPlaylistTracks([]);
+      }
+      await refreshSmartPlaylists();
+    },
+    [refreshSmartPlaylists, activeSmartPlaylistId],
+  );
+
   // ── Memoized value ──────────────────────────────────────────
 
   const value = useMemo<PlaylistContextValue>(
@@ -163,6 +298,14 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
       removeTracks,
       moveTrack,
       exportToIpod,
+      smartPlaylists,
+      activeSmartPlaylistId,
+      activeSmartPlaylistTracks,
+      setActiveSmartPlaylist,
+      createSmartPlaylist,
+      updateSmartPlaylist,
+      deleteSmartPlaylist,
+      refreshSmartPlaylists,
     }),
     [
       playlists,
@@ -178,6 +321,14 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
       removeTracks,
       moveTrack,
       exportToIpod,
+      smartPlaylists,
+      activeSmartPlaylistId,
+      activeSmartPlaylistTracks,
+      setActiveSmartPlaylist,
+      createSmartPlaylist,
+      updateSmartPlaylist,
+      deleteSmartPlaylist,
+      refreshSmartPlaylists,
     ],
   );
 

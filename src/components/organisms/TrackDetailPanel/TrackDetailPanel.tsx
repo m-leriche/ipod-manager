@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
@@ -214,6 +215,24 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
             compact
           />
         </div>
+      </div>
+
+      {/* Rating */}
+      <div className="px-4 pb-3 flex items-center gap-2">
+        <span className="text-[10px] text-text-tertiary w-12 shrink-0">Rating</span>
+        <StarRating
+          rating={isSingle ? track.rating : 0}
+          size="md"
+          onChange={async (rating) => {
+            const ids = tracks.map((t) => t.id);
+            try {
+              await invoke("rate_tracks", { trackIds: ids, rating });
+              onSave?.();
+            } catch (e) {
+              console.error("Failed to rate tracks:", e);
+            }
+          }}
+        />
       </div>
 
       {/* Audio info (single track only) */}

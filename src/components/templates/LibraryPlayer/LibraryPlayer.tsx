@@ -6,7 +6,7 @@ import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
 import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { PlaylistSidebar } from "./PlaylistSidebar";
-import type { SmartPlaylistType } from "./PlaylistSidebar";
+import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
@@ -19,6 +19,7 @@ import type {
   GenreSummary,
   BrowserData,
   LibraryFilter,
+  SmartPlaylist,
 } from "../../../types/library";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
@@ -85,7 +86,8 @@ export const LibraryPlayer = ({
   const [dataLoaded, setDataLoaded] = useState(false);
 
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
-  const [smartPlaylistType, setSmartPlaylistType] = useState<SmartPlaylistType>(null);
+  const [smartPlaylistEditing, setSmartPlaylistEditing] = useState<SmartPlaylist | null>(null);
+  const [smartPlaylistCreating, setSmartPlaylistCreating] = useState(false);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -106,25 +108,15 @@ export const LibraryPlayer = ({
 
   // ── Displayed tracks (library, playlist, or smart playlist) ────
 
-  const smartPlaylistTracks = useMemo(() => {
-    if (!smartPlaylistType) return null;
-    switch (smartPlaylistType) {
-      case "recently-added":
-        return [...tracks].sort((a, b) => b.created_at - a.created_at).slice(0, 100);
-      case "most-played":
-        return [...tracks]
-          .filter((t) => t.play_count > 0)
-          .sort((a, b) => b.play_count - a.play_count)
-          .slice(0, 100);
-      case "unplayed":
-        return tracks.filter((t) => t.play_count === 0);
-      default:
-        return null;
-    }
-  }, [smartPlaylistType, tracks]);
+  const { activeSmartPlaylistId, activeSmartPlaylistTracks, createSmartPlaylist, updateSmartPlaylist } = usePlaylist();
 
   const displayedTracks = useMemo(() => {
-    const baseTracks = smartPlaylistTracks ?? (activePlaylistId !== null ? activePlaylistTracks : tracks);
+    const baseTracks =
+      activeSmartPlaylistId !== null
+        ? activeSmartPlaylistTracks
+        : activePlaylistId !== null
+          ? activePlaylistTracks
+          : tracks;
     if (!debouncedSearch) return baseTracks;
     const q = debouncedSearch.toLowerCase();
     return baseTracks.filter(
@@ -133,7 +125,14 @@ export const LibraryPlayer = ({
         (t.artist ?? "").toLowerCase().includes(q) ||
         (t.album ?? "").toLowerCase().includes(q),
     );
-  }, [smartPlaylistTracks, activePlaylistId, activePlaylistTracks, tracks, debouncedSearch]);
+  }, [
+    activeSmartPlaylistId,
+    activeSmartPlaylistTracks,
+    activePlaylistId,
+    activePlaylistTracks,
+    tracks,
+    debouncedSearch,
+  ]);
 
   // ── Derived selected tracks ───────────────────────────────────
 
@@ -264,6 +263,18 @@ export const LibraryPlayer = ({
         await fetchBrowserData();
       } catch (e) {
         alert(`Failed to update sync flags: ${e}`);
+      }
+    },
+    [fetchBrowserData],
+  );
+
+  const handleRateTracks = useCallback(
+    async (trackIds: number[], rating: number) => {
+      try {
+        await invoke("rate_tracks", { trackIds, rating });
+        await fetchBrowserData();
+      } catch (e) {
+        alert(`Failed to update ratings: ${e}`);
       }
     },
     [fetchBrowserData],
@@ -487,11 +498,10 @@ export const LibraryPlayer = ({
         <PlaylistSidebar
           onPlaylistSelect={(id) => {
             setActivePlaylist(id);
-            if (id !== null) setSmartPlaylistType(null);
           }}
           activePlaylistId={activePlaylistId}
-          activeSmartPlaylist={smartPlaylistType}
-          onSmartPlaylistSelect={setSmartPlaylistType}
+          onSmartPlaylistEdit={(sp) => setSmartPlaylistEditing(sp)}
+          onSmartPlaylistCreate={() => setSmartPlaylistCreating(true)}
         />
       )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
@@ -543,7 +553,7 @@ export const LibraryPlayer = ({
         </div>
 
         {/* Column browser (toggleable, hidden when viewing playlist or smart playlist) */}
-        {showColumnBrowser && activePlaylistId === null && smartPlaylistType === null && (
+        {showColumnBrowser && activePlaylistId === null && activeSmartPlaylistId === null && (
           <ColumnBrowser
             genres={genreList}
             artists={artistList}
@@ -572,6 +582,7 @@ export const LibraryPlayer = ({
           onSelectionChange={handleSelectionChange}
           onTracksDeleted={fetchBrowserData}
           onFlagTracks={handleFlagTracks}
+          onRateTracks={handleRateTracks}
           onRepairMetadata={onRepairMetadata}
           activePlaylistId={activePlaylistId}
         />
@@ -585,6 +596,34 @@ export const LibraryPlayer = ({
         <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
           <LibraryStats libraryPath={libraryPath} />
         </div>
+      )}
+
+      {/* Smart playlist editor modal */}
+      {(smartPlaylistCreating || smartPlaylistEditing) && (
+        <SmartPlaylistEditor
+          initialName={smartPlaylistEditing?.name}
+          initialRules={smartPlaylistEditing?.rules}
+          initialSortBy={smartPlaylistEditing?.sort_by}
+          initialSortDirection={smartPlaylistEditing?.sort_direction}
+          initialLimit={smartPlaylistEditing?.track_limit}
+          onSave={async (name, rules, sortBy, sortDirection, limit) => {
+            try {
+              if (smartPlaylistEditing) {
+                await updateSmartPlaylist(smartPlaylistEditing.id, name, rules, sortBy, sortDirection, limit);
+              } else {
+                await createSmartPlaylist(name, rules, sortBy, sortDirection, limit);
+              }
+            } catch (e) {
+              alert(`Failed to save smart playlist: ${e}`);
+            }
+            setSmartPlaylistEditing(null);
+            setSmartPlaylistCreating(false);
+          }}
+          onCancel={() => {
+            setSmartPlaylistEditing(null);
+            setSmartPlaylistCreating(false);
+          }}
+        />
       )}
     </div>
   );

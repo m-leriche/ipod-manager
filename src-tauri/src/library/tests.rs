@@ -36,7 +36,8 @@ fn test_db() -> Connection {
             scanned_at INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL DEFAULT 0,
             play_count INTEGER NOT NULL DEFAULT 0,
-            flagged INTEGER NOT NULL DEFAULT 0
+            flagged INTEGER NOT NULL DEFAULT 0,
+            rating INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS library_folders (
             id INTEGER PRIMARY KEY,
@@ -165,6 +166,8 @@ fn track_upsert_and_query() {
         sort_by: None,
         sort_direction: None,
         flagged_only: None,
+        rating_min: None,
+        rating_max: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -185,6 +188,8 @@ fn filter_by_artist() {
         sort_by: None,
         sort_direction: None,
         flagged_only: None,
+        rating_min: None,
+        rating_max: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -283,6 +288,8 @@ fn browser_data_filters_albums_by_artist() {
         sort_by: None,
         sort_direction: None,
         flagged_only: None,
+        rating_min: None,
+        rating_max: None,
     };
     let data = get_browser_data(&conn, &filter).unwrap();
 
@@ -473,6 +480,8 @@ fn delete_tracks_removes_files_and_db_records() {
             sort_by: None,
             sort_direction: None,
             flagged_only: None,
+            rating_min: None,
+            rating_max: None,
         },
     )
     .unwrap();
@@ -495,6 +504,8 @@ fn delete_tracks_removes_files_and_db_records() {
             sort_by: None,
             sort_direction: None,
             flagged_only: None,
+            rating_min: None,
+            rating_max: None,
         },
     )
     .unwrap();
@@ -533,6 +544,8 @@ fn delete_tracks_removes_album_folder_with_cover_art() {
             sort_by: None,
             sort_direction: None,
             flagged_only: None,
+            rating_min: None,
+            rating_max: None,
         },
     )
     .unwrap()[0]
@@ -589,6 +602,8 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             sort_by: None,
             sort_direction: None,
             flagged_only: None,
+            rating_min: None,
+            rating_max: None,
         },
     )
     .unwrap();
@@ -610,6 +625,8 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             sort_by: None,
             sort_direction: None,
             flagged_only: None,
+            rating_min: None,
+            rating_max: None,
         },
     )
     .unwrap();
@@ -630,6 +647,8 @@ fn flag_tracks_and_filter() {
         sort_by: None,
         sort_direction: None,
         flagged_only: None,
+        rating_min: None,
+        rating_max: None,
     };
 
     let tracks = get_tracks(&conn, &all_filter).unwrap();
@@ -660,6 +679,8 @@ fn flag_tracks_and_filter() {
         sort_by: None,
         sort_direction: None,
         flagged_only: Some(true),
+        rating_min: None,
+        rating_max: None,
     };
     let flagged = get_tracks(&conn, &flagged_filter).unwrap();
     assert_eq!(flagged.len(), 1);

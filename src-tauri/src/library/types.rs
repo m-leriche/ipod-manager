@@ -26,6 +26,7 @@ pub struct LibraryTrack {
     pub created_at: i64,
     pub play_count: u32,
     pub flagged: bool,
+    pub rating: u8,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,6 +67,8 @@ pub struct LibraryFilter {
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,
     pub flagged_only: Option<bool>,
+    pub rating_min: Option<u8>,
+    pub rating_max: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -137,4 +140,36 @@ pub(crate) struct TrackData {
     pub format: String,
     pub file_size: u64,
     pub play_count: Option<u32>,
+}
+
+// ── Smart playlist types ──────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartPlaylistRule {
+    pub field: String,
+    pub operator: String,
+    pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value2: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartPlaylistRuleGroup {
+    #[serde(rename = "match")]
+    pub match_type: String,
+    pub rules: Vec<SmartPlaylistRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartPlaylist {
+    pub id: i64,
+    pub name: String,
+    pub icon: Option<String>,
+    pub rules: SmartPlaylistRuleGroup,
+    pub sort_by: Option<String>,
+    pub sort_direction: Option<String>,
+    pub track_limit: Option<u32>,
+    pub is_builtin: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
 }

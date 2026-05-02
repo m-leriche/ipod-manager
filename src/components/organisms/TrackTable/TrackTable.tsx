@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
+import { StarRating } from "../../atoms/StarRating/StarRating";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
@@ -27,6 +28,7 @@ interface TrackTableProps {
   onSelectionChange?: (selectedIds: Set<number>) => void;
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
+  onRateTracks?: (trackIds: number[], rating: number) => void;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
@@ -46,6 +48,7 @@ export const TrackTable = memo(function TrackTable({
   onSelectionChange,
   onTracksDeleted,
   onFlagTracks,
+  onRateTracks,
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
@@ -351,6 +354,31 @@ export const TrackTable = memo(function TrackTable({
               setContextMenu(null);
             },
           },
+          ...(onRateTracks
+            ? [
+                {
+                  type: "submenu" as const,
+                  label: "Rate",
+                  children: [
+                    ...[5, 4, 3, 2, 1].map((r) => ({
+                      label: "\u2605".repeat(r),
+                      onClick: () => {
+                        onRateTracks(ids, r);
+                        setContextMenu(null);
+                      },
+                    })),
+                    { type: "separator" as const },
+                    {
+                      label: "No Rating",
+                      onClick: () => {
+                        onRateTracks(ids, 0);
+                        setContextMenu(null);
+                      },
+                    },
+                  ],
+                },
+              ]
+            : []),
           ...(onRepairMetadata
             ? [
                 {
@@ -565,6 +593,8 @@ const getCellContent = (
       return formatDuration(track.duration_secs);
     case "date_added":
       return formatDateAdded(track.created_at);
+    case "rating":
+      return <StarRating rating={track.rating} size="sm" />;
     case "plays":
       return track.play_count || "—";
     default:

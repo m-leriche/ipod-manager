@@ -275,11 +275,9 @@ pub async fn convert_audio(
 ) -> Result<convert::ConvertResult, String> {
     let flag = cancel.new_flag();
 
-    Ok(
-        tauri::async_runtime::spawn_blocking(move || convert::convert_batch(requests, app, flag))
-            .await
-            .map_err(|e| format!("Convert failed: {}", e))?,
-    )
+    tauri::async_runtime::spawn_blocking(move || convert::convert_batch(requests, app, flag))
+        .await
+        .map_err(|e| format!("Convert failed: {}", e))
 }
 
 #[tauri::command]

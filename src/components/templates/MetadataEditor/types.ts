@@ -2,7 +2,7 @@ export type { TrackMetadata, MetadataUpdate, MetadataScanProgress, MetadataSaveR
 
 export type Phase = "idle" | "scanning" | "scanned" | "looking_up" | "saving";
 
-export type View = "edit" | "repair" | "quality";
+export type View = "edit" | "repair" | "quality" | "identify";
 
 export interface EditableFields {
   title: string;
@@ -112,6 +112,33 @@ export interface RepairLookupProgress {
   total_albums: number;
   completed_albums: number;
   current_album: string;
+  phase: string;
+}
+
+// ── Identify / AcoustID types ──────────────────────────────────
+
+export interface AcoustIdMatch {
+  score: number;
+  recording_id: string;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  release_id: string | null;
+  date: string | null;
+  track_number: number | null;
+}
+
+export interface IdentifyResult {
+  file_path: string;
+  file_name: string;
+  matches: AcoustIdMatch[];
+  error: string | null;
+}
+
+export interface IdentifyProgress {
+  total: number;
+  completed: number;
+  current_file: string;
   phase: string;
 }
 

@@ -18,6 +18,7 @@ import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtra
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
 import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
 import { DuplicateDetector } from "./components/templates/DuplicateDetector/DuplicateDetector";
+import { AudioConverter } from "./components/templates/AudioConverter/AudioConverter";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
@@ -28,7 +29,7 @@ import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 
 type TopTab = "library" | "tools";
-type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "duplicates";
+type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "duplicates" | "convert";
 
 const App = () => (
   <ThemeProvider>
@@ -50,6 +51,7 @@ const COLUMN_BROWSER_KEY = "crate-show-column-browser";
 const INFO_PANEL_KEY = "crate-show-info-panel";
 const STATS_PANEL_KEY = "crate-show-stats-panel";
 const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
+const ALBUM_GRID_KEY = "crate-show-album-grid";
 
 const AppContent = () => {
   const [topTab, setTopTab] = useState<TopTab>("library");
@@ -70,13 +72,22 @@ const AppContent = () => {
   const [showPlaylistSidebar, setShowPlaylistSidebar] = useState(
     () => localStorage.getItem(PLAYLIST_SIDEBAR_KEY) !== "false",
   );
+  const [showAlbumGrid, setShowAlbumGrid] = useState(() => localStorage.getItem(ALBUM_GRID_KEY) === "true");
 
   const toggleColumnBrowser = useCallback(() => {
+    // If album grid is active, switch to column browser
+    if (showAlbumGrid) {
+      setShowAlbumGrid(false);
+      localStorage.setItem(ALBUM_GRID_KEY, "false");
+      setShowColumnBrowser(true);
+      localStorage.setItem(COLUMN_BROWSER_KEY, "true");
+      return;
+    }
     setShowColumnBrowser((prev) => {
       localStorage.setItem(COLUMN_BROWSER_KEY, String(!prev));
       return !prev;
     });
-  }, []);
+  }, [showAlbumGrid]);
   const toggleInfoPanel = useCallback(() => {
     setShowInfoPanel((prev) => {
       localStorage.setItem(INFO_PANEL_KEY, String(!prev));
@@ -93,6 +104,21 @@ const AppContent = () => {
     setShowPlaylistSidebar((prev) => {
       localStorage.setItem(PLAYLIST_SIDEBAR_KEY, String(!prev));
       return !prev;
+    });
+  }, []);
+  const toggleAlbumGrid = useCallback(() => {
+    setShowAlbumGrid((prev) => {
+      const next = !prev;
+      localStorage.setItem(ALBUM_GRID_KEY, String(next));
+      // When turning on album grid, turn off column browser; when turning off, restore column browser
+      if (next) {
+        setShowColumnBrowser(false);
+        localStorage.setItem(COLUMN_BROWSER_KEY, "false");
+      } else {
+        setShowColumnBrowser(true);
+        localStorage.setItem(COLUMN_BROWSER_KEY, "true");
+      }
+      return next;
     });
   }, []);
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
@@ -119,6 +145,17 @@ const AppContent = () => {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("open-settings", () => setSettingsOpen(true)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
+
+  // Auto-refresh library when filesystem watcher detects changes
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("library-changed", () => {
+      libraryRefreshRef.current?.();
+    }).then((fn) => {
       unlisten = fn;
     });
     return () => unlisten?.();
@@ -221,6 +258,7 @@ const AppContent = () => {
               showInfoPanel={showInfoPanel}
               showStatsPanel={showStatsPanel}
               showPlaylistSidebar={showPlaylistSidebar}
+              showAlbumGrid={showAlbumGrid}
             />
           </div>
           {topTab === "tools" && (
@@ -246,6 +284,9 @@ const AppContent = () => {
                   <ToolTabButton active={toolTab === "duplicates"} onClick={() => setToolTab("duplicates")}>
                     Duplicates
                   </ToolTabButton>
+                  <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
+                    Converter
+                  </ToolTabButton>
                 </div>
                 {toolTab === "ipod" && (
                   <IpodSummary
@@ -265,6 +306,7 @@ const AppContent = () => {
                 )}
                 {toolTab === "audio" && <AudioExtractor />}
                 {toolTab === "duplicates" && <DuplicateDetector />}
+                {toolTab === "convert" && <AudioConverter />}
               </div>
             </div>
           )}
@@ -285,6 +327,8 @@ const AppContent = () => {
         onToggleInfoPanel={toggleInfoPanel}
         onToggleStatsPanel={toggleStatsPanel}
         onTogglePlaylistSidebar={togglePlaylistSidebar}
+        showAlbumGrid={showAlbumGrid}
+        onToggleAlbumGrid={toggleAlbumGrid}
       />
 
       {settingsOpen && (

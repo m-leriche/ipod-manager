@@ -12,3 +12,11 @@ export const pickFile = async (title = "Select file", filters?: DialogFilter[]):
   const picked = await open({ multiple: false, title, filters });
   return typeof picked === "string" ? picked : null;
 };
+
+/** Pick multiple files via the native dialog. Returns an array of paths or `null` if cancelled. */
+export const pickFiles = async (title = "Select files", filters?: DialogFilter[]): Promise<string[] | null> => {
+  const picked = await open({ multiple: true, title, filters });
+  if (Array.isArray(picked)) return picked;
+  if (typeof picked === "string") return [picked];
+  return null;
+};

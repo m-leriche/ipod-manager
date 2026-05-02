@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
+import { useResizableHeight } from "../../organisms/AlbumGrid/useResizableHeight";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
 import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPanel";
@@ -37,6 +39,7 @@ export const LibraryPlayer = ({
   showInfoPanel,
   showStatsPanel,
   showPlaylistSidebar,
+  showAlbumGrid = false,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -45,8 +48,10 @@ export const LibraryPlayer = ({
   showInfoPanel: boolean;
   showStatsPanel: boolean;
   showPlaylistSidebar: boolean;
+  showAlbumGrid?: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const gridResize = useResizableHeight();
   const {
     playTrack,
     addToQueue,
@@ -552,24 +557,51 @@ export const LibraryPlayer = ({
           <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
         </div>
 
-        {/* Column browser (toggleable, hidden when viewing playlist or smart playlist) */}
-        {showColumnBrowser && activePlaylistId === null && activeSmartPlaylistId === null && (
-          <ColumnBrowser
-            genres={genreList}
-            artists={artistList}
-            albums={albumList}
-            selectedGenre={selectedGenre}
-            selectedArtist={selectedArtist}
-            selectedAlbum={selectedAlbum}
-            onSelectGenre={handleSelectGenre}
-            onSelectArtist={handleSelectArtist}
-            onSelectAlbum={handleSelectAlbum}
-            onPlay={handlePlayColumn}
-            onPlayAll={handleColumnPlayAll}
-            onAddAllToQueue={handleColumnAddToQueue}
-            onAddAllToPlaylist={handleColumnAddToPlaylist}
-            playlists={playlists}
-          />
+        {/* Column browser or album grid (toggleable, hidden when viewing playlist or smart playlist) */}
+        {activePlaylistId === null && activeSmartPlaylistId === null && (
+          <>
+            {showAlbumGrid ? (
+              <>
+                <div
+                  ref={gridResize.containerRef}
+                  style={{ height: `${gridResize.fraction * 100}%` }}
+                  className="shrink-0 min-h-0"
+                >
+                  <AlbumGrid
+                    albums={albumList}
+                    selectedAlbum={selectedAlbum}
+                    onSelectAlbum={handleSelectAlbum}
+                    onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
+                  />
+                </div>
+                <div
+                  onMouseDown={gridResize.onDragStart}
+                  className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                >
+                  <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+                </div>
+              </>
+            ) : (
+              showColumnBrowser && (
+                <ColumnBrowser
+                  genres={genreList}
+                  artists={artistList}
+                  albums={albumList}
+                  selectedGenre={selectedGenre}
+                  selectedArtist={selectedArtist}
+                  selectedAlbum={selectedAlbum}
+                  onSelectGenre={handleSelectGenre}
+                  onSelectArtist={handleSelectArtist}
+                  onSelectAlbum={handleSelectAlbum}
+                  onPlay={handlePlayColumn}
+                  onPlayAll={handleColumnPlayAll}
+                  onAddAllToQueue={handleColumnAddToQueue}
+                  onAddAllToPlaylist={handleColumnAddToPlaylist}
+                  playlists={playlists}
+                />
+              )
+            )}
+          </>
         )}
 
         {/* Track table */}

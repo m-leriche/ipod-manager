@@ -1,7 +1,9 @@
+use crate::acoustid;
 use crate::albumart;
 use crate::audio::types::{EqConfig, PlaybackStatus};
 use crate::audio::AudioEngine;
 use crate::audioquality;
+use crate::convert;
 use crate::disk::{self, DiskInfo};
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
 use crate::ipod_info;
@@ -15,6 +17,7 @@ use crate::playlist_export;
 use crate::profiles::{self, BrowseProfileStore, ProfileStore};
 use crate::rockbox;
 use crate::sanitize;
+use crate::watcher::FolderWatcher;
 use crate::youtube;
 use std::process::Command;
 use tauri::{AppHandle, Emitter, State};
@@ -229,6 +232,54 @@ pub async fn check_ffmpeg() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(localvideo::check_ffmpeg)
         .await
         .map_err(|e| format!("Check failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn check_fpcalc() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(acoustid::check_fpcalc)
+        .await
+        .map_err(|e| format!("Check failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn identify_tracks(
+    file_paths: Vec<String>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<Vec<acoustid::IdentifyResult>, String> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || acoustid::identify_tracks(file_paths, app, flag))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn probe_audio_files(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<Vec<convert::AudioProbeInfo>, String> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || convert::probe_audio_batch(&paths, &app, &flag))
+        .await
+        .map_err(|e| format!("Probe failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn convert_audio(
+    requests: Vec<convert::ConvertRequest>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<convert::ConvertResult, String> {
+    let flag = cancel.new_flag();
+
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || convert::convert_batch(requests, app, flag))
+            .await
+            .map_err(|e| format!("Convert failed: {}", e))?,
+    )
 }
 
 #[tauri::command]
@@ -1246,6 +1297,18 @@ pub async fn get_smart_playlist_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+// ── Folder watcher commands ─────────────────────────────────────
+
+#[tauri::command]
+pub async fn restart_watcher(
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    watcher: State<'_, FolderWatcher>,
+) -> Result<(), String> {
+    let db_arc = db.conn_arc();
+    crate::watcher::restart_from_db(&watcher, &app, &db_arc)
 }
 
 // ── Media key / Now Playing commands ─────────────────────────────

@@ -19,6 +19,8 @@ import { useMetadataEvents } from "./useMetadataEvents";
 import { useDragDrop } from "./useDragDrop";
 import { useRepairActions } from "./useRepairActions";
 import { useQualityActions } from "./useQualityActions";
+import { useIdentifyActions } from "./useIdentifyActions";
+import { IdentifyPanel } from "./IdentifyPanel";
 import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
 import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeResult } from "../../../types/metadata";
 import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
@@ -93,6 +95,19 @@ export const MetadataEditor = ({
     failProgress,
     cancel,
     refreshTracks,
+  );
+
+  // ── Identify actions ──
+  const identify = useIdentifyActions(
+    setPhase,
+    setError,
+    setSaveResult,
+    startProgress,
+    finishProgress,
+    failProgress,
+    cancel,
+    refreshTracks,
+    setView,
   );
 
   // ── Quality actions ──
@@ -407,7 +422,7 @@ export const MetadataEditor = ({
           ↻ Rescan
         </button>
 
-        {(repair.report || quality.qualityFiles.length > 0) && (
+        {(repair.report || quality.qualityFiles.length > 0 || identify.results) && (
           <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
             <button
               onClick={() => setView("edit")}
@@ -437,6 +452,16 @@ export const MetadataEditor = ({
                 Quality
               </button>
             )}
+            {identify.results && (
+              <button
+                onClick={() => setView("identify")}
+                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
+                  view === "identify" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                Identify
+              </button>
+            )}
           </div>
         )}
 
@@ -456,6 +481,14 @@ export const MetadataEditor = ({
                 className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
               >
                 Quality Scan
+              </button>
+            )}
+            {!identify.results && (
+              <button
+                onClick={() => identify.startIdentify(tracks.map((t) => t.file_path))}
+                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
+              >
+                Identify with AcoustID
               </button>
             )}
           </div>
@@ -497,6 +530,34 @@ export const MetadataEditor = ({
               Accept All Fixes
             </button>
           )}
+        {view === "identify" && identify.results && (
+          <>
+            {identify.chosenCount === 0 && identify.matchedCount > 0 && (
+              <button
+                onClick={identify.autoSelectBest}
+                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
+              >
+                Auto-Select Best
+              </button>
+            )}
+            {identify.chosenCount > 0 && (
+              <>
+                <button
+                  onClick={identify.clearAll}
+                  className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={identify.applyChoices}
+                  className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium shrink-0 hover:opacity-90 transition-all"
+                >
+                  Apply {identify.chosenCount} {identify.chosenCount === 1 ? "Tag" : "Tags"}
+                </button>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {view === "repair" && repair.report && (
@@ -515,6 +576,14 @@ export const MetadataEditor = ({
             repair.report.total_issues.info_count === 0 && (
               <span className="text-success">All metadata looks good</span>
             )}
+        </div>
+      )}
+
+      {view === "identify" && identify.results && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] bg-bg-secondary border border-border shrink-0">
+          <span className="text-success">{identify.matchedCount} matched</span>
+          <span className="text-text-tertiary">{identify.results.length - identify.matchedCount} unmatched</span>
+          {identify.chosenCount > 0 && <span className="text-accent">{identify.chosenCount} selected</span>}
         </div>
       )}
 
@@ -658,6 +727,18 @@ export const MetadataEditor = ({
               </div>
             )}
           </>
+        )}
+
+        {view === "identify" && identify.results && (
+          <IdentifyPanel
+            results={identify.results}
+            selectedFile={identify.selectedFile}
+            onSelectFile={identify.setSelectedFile}
+            selectedResult={identify.selectedResult}
+            choices={identify.choices}
+            onSelectMatch={identify.selectMatch}
+            onClearMatch={identify.clearMatch}
+          />
         )}
 
         {view === "quality" && quality.qualityFiles.length > 0 && (

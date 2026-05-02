@@ -41,6 +41,7 @@ cpal = "0.15"
 ringbuf = "0.4"
 crossbeam-channel = "0.5"
 souvlaki = "0.7"
+notify-debouncer-full = "0.6.0"
 
 [dev-dependencies]
 tempfile = "3"

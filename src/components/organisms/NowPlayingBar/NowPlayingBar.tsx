@@ -20,6 +20,8 @@ interface NowPlayingBarProps {
   onToggleInfoPanel?: () => void;
   onToggleStatsPanel?: () => void;
   onTogglePlaylistSidebar?: () => void;
+  showAlbumGrid?: boolean;
+  onToggleAlbumGrid?: () => void;
 }
 
 export const NowPlayingBar = ({
@@ -35,6 +37,8 @@ export const NowPlayingBar = ({
   onToggleInfoPanel,
   onToggleStatsPanel,
   onTogglePlaylistSidebar,
+  showAlbumGrid,
+  onToggleAlbumGrid,
 }: NowPlayingBarProps) => {
   const {
     state,
@@ -192,10 +196,22 @@ export const NowPlayingBar = ({
           </PanelToggle>
         )}
         {!miniPlayer && onToggleColumnBrowser && (
-          <PanelToggle active={showColumnBrowser} onClick={onToggleColumnBrowser} title="Column browser">
+          <PanelToggle
+            active={showColumnBrowser && !showAlbumGrid}
+            onClick={onToggleColumnBrowser}
+            title="Column browser"
+          >
             <rect x="3" y="3" width="5" height="18" rx="1" />
             <rect x="10" y="3" width="5" height="18" rx="1" />
             <rect x="17" y="3" width="5" height="18" rx="1" />
+          </PanelToggle>
+        )}
+        {!miniPlayer && onToggleAlbumGrid && (
+          <PanelToggle active={showAlbumGrid} onClick={onToggleAlbumGrid} title="Album grid">
+            <rect x="3" y="3" width="8" height="8" rx="1" />
+            <rect x="13" y="3" width="8" height="8" rx="1" />
+            <rect x="3" y="13" width="8" height="8" rx="1" />
+            <rect x="13" y="13" width="8" height="8" rx="1" />
           </PanelToggle>
         )}
         {!miniPlayer && onToggleInfoPanel && (

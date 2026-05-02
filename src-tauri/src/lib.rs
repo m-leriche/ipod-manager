@@ -1,8 +1,10 @@
+mod acoustid;
 mod albumart;
 mod audio;
 mod audio_utils;
 mod audioquality;
 mod commands;
+mod convert;
 mod disk;
 mod files;
 mod ipod_info;
@@ -18,6 +20,7 @@ mod profiles;
 mod rockbox;
 mod sanitize;
 mod streaming;
+mod watcher;
 mod youtube;
 
 use files::SyncCancel;
@@ -64,6 +67,12 @@ pub fn run() {
             let conn = library::init_db(&db_path).expect("Failed to initialize library database");
 
             app.manage(LibraryDb::new(conn));
+
+            // Start filesystem watcher for library folders
+            let folder_watcher = watcher::FolderWatcher::new();
+            let db_arc = app.state::<LibraryDb>().conn_arc();
+            let _ = watcher::restart_from_db(&folder_watcher, app.handle(), &db_arc);
+            app.manage(folder_watcher);
 
             // Spawn native audio engine
             let audio_engine = audio::AudioEngine::spawn(app.handle().clone());
@@ -236,6 +245,11 @@ pub fn run() {
             commands::get_smart_playlist_tracks,
             commands::media_set_metadata,
             commands::media_set_playback,
+            commands::check_fpcalc,
+            commands::identify_tracks,
+            commands::probe_audio_files,
+            commands::convert_audio,
+            commands::restart_watcher,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

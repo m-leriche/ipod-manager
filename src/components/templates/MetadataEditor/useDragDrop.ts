@@ -35,6 +35,7 @@ export const useDragDrop = (phase: Phase, onDrop: (paths: string[]) => void) => 
       active = false;
       unlisten?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only subscription
   }, []);
 
   return isDragOver;

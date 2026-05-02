@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
 import type { WaveformCanvasProps } from "./types";
 import { drawWaveform, fractionFromClick, DEFAULT_COLORS } from "./helpers";
 
@@ -14,11 +14,14 @@ export const WaveformCanvas = ({
 }: WaveformCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const colors = {
-    played: accentColor ?? DEFAULT_COLORS.played,
-    unplayed: baseColor ?? DEFAULT_COLORS.unplayed,
-    cursor: DEFAULT_COLORS.cursor,
-  };
+  const colors = useMemo(
+    () => ({
+      played: accentColor ?? DEFAULT_COLORS.played,
+      unplayed: baseColor ?? DEFAULT_COLORS.unplayed,
+      cursor: DEFAULT_COLORS.cursor,
+    }),
+    [accentColor, baseColor],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,7 +36,7 @@ export const WaveformCanvas = ({
 
     ctx.scale(dpr, dpr);
     drawWaveform(ctx, peaks, width, height, playbackFraction, colors);
-  }, [peaks, width, height, playbackFraction, colors.played, colors.unplayed]);
+  }, [peaks, width, height, playbackFraction, colors]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {

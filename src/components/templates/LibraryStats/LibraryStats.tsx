@@ -38,6 +38,7 @@ export const LibraryStats = ({ libraryPath }: LibraryStatsProps) => {
       active = false;
       unsubs.forEach((fn) => fn());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only subscription
   }, []);
 
   const cancelScan = cancelSync;
@@ -88,6 +89,7 @@ export const LibraryStats = ({ libraryPath }: LibraryStatsProps) => {
     if (libraryPath) {
       loadFromDb();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when library path changes
   }, [libraryPath]);
 
   if (!libraryPath) {

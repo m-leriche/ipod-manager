@@ -8,7 +8,8 @@ export const useTreeSelection = (filtered: CompareEntry[]) => {
   const toggle = (p: string) =>
     setSelected((prev) => {
       const n = new Set(prev);
-      n.has(p) ? n.delete(p) : n.add(p);
+      if (n.has(p)) n.delete(p);
+      else n.add(p);
       return n;
     });
 
@@ -35,7 +36,8 @@ export const useTreeExpansion = (tree: TreeNode[]) => {
   const toggleExpand = (path: string) => {
     setExpanded((prev) => {
       const n = new Set(prev);
-      n.has(path) ? n.delete(path) : n.add(path);
+      if (n.has(path)) n.delete(path);
+      else n.add(path);
       return n;
     });
   };

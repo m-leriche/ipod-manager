@@ -190,7 +190,8 @@ export const MetadataEditor = ({
   const toggleTrack = useCallback((filePath: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(filePath) ? next.delete(filePath) : next.add(filePath);
+      if (next.has(filePath)) next.delete(filePath);
+      else next.add(filePath);
       return next;
     });
   }, []);

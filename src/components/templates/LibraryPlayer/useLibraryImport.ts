@@ -49,12 +49,11 @@ export const useLibraryImport = (
 
   const handleDrop = useCallback(
     async (paths: string[]) => {
-      let location = await invoke<string | null>("get_library_location");
+      const location = await invoke<string | null>("get_library_location");
       if (!location) {
         const selected = await pickFolder("Choose library location");
         if (!selected) return;
         await invoke("set_library_location", { path: selected });
-        location = selected;
       }
 
       startProgress("Importing to library...", cancelSync);

@@ -33,7 +33,8 @@ export const MetadataTree = ({
   const toggleArtist = (artist: string) => {
     setExpandedArtists((prev) => {
       const next = new Set(prev);
-      next.has(artist) ? next.delete(artist) : next.add(artist);
+      if (next.has(artist)) next.delete(artist);
+      else next.add(artist);
       return next;
     });
   };
@@ -41,7 +42,8 @@ export const MetadataTree = ({
   const toggleAlbum = (key: string) => {
     setExpandedAlbums((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };

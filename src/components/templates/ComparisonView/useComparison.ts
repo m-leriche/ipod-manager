@@ -15,7 +15,7 @@ export const useComparison = (
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("differences");
 
-  const cancel = useCallback(cancelSync, []);
+  const cancel = useCallback(() => cancelSync(), []);
 
   const compare = useCallback(async () => {
     setLoading(true);

@@ -41,6 +41,7 @@ export const YouTubeDownloader = () => {
       active = false;
       unlistenRef.current?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only subscription
   }, []);
 
   const browse = async () => {

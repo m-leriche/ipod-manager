@@ -1,4 +1,5 @@
 mod delete;
+pub mod duplicates;
 mod folders;
 mod import;
 pub mod playlists;
@@ -6,6 +7,7 @@ mod queries;
 mod reorganize;
 mod scan;
 mod settings;
+pub mod smart_playlists;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
@@ -132,6 +134,60 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ =
         conn.execute_batch("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0");
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN rating INTEGER NOT NULL DEFAULT 0");
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(rating)");
+
+    // Smart playlists table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS smart_playlists (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            icon TEXT,
+            rules_json TEXT NOT NULL,
+            sort_by TEXT,
+            sort_direction TEXT,
+            track_limit INTEGER,
+            is_builtin INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );",
+    )
+    .map_err(|e| format!("Failed to create smart_playlists table: {}", e))?;
+
+    // Seed built-in smart playlists
+    let now = now_epoch();
+    let builtins: &[(&str, &str, &str, Option<&str>, Option<&str>, Option<i64>)] = &[
+        (
+            "Recently Added",
+            "clock",
+            r#"{"match":"all","rules":[{"field":"created_at","operator":"in_last_days","value":"30"}]}"#,
+            Some("created_at"),
+            Some("desc"),
+            Some(100),
+        ),
+        (
+            "Most Played",
+            "fire",
+            r#"{"match":"all","rules":[{"field":"play_count","operator":"greater_than","value":"0"}]}"#,
+            Some("play_count"),
+            Some("desc"),
+            Some(100),
+        ),
+        (
+            "Unplayed",
+            "circle",
+            r#"{"match":"all","rules":[{"field":"play_count","operator":"equals","value":"0"}]}"#,
+            None,
+            None,
+            None,
+        ),
+    ];
+    for (name, icon, rules, sort_by, sort_dir, limit) in builtins {
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)",
+            rusqlite::params![name, icon, rules, sort_by, sort_dir, limit, now, now],
+        );
+    }
 
     Ok(conn)
 }

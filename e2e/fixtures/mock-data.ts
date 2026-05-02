@@ -31,6 +31,7 @@ export const MOCK_TRACKS = [
     created_at: 1700000000,
     play_count: 5,
     flagged: false,
+    rating: 0,
   },
   {
     id: 2,
@@ -57,6 +58,7 @@ export const MOCK_TRACKS = [
     created_at: 1700000000,
     play_count: 0,
     flagged: false,
+    rating: 0,
   },
   {
     id: 3,
@@ -83,6 +85,7 @@ export const MOCK_TRACKS = [
     created_at: 1700000000,
     play_count: 2,
     flagged: true,
+    rating: 0,
   },
   {
     id: 4,
@@ -109,6 +112,7 @@ export const MOCK_TRACKS = [
     created_at: 1700000000,
     play_count: 0,
     flagged: false,
+    rating: 0,
   },
   {
     id: 5,
@@ -135,6 +139,7 @@ export const MOCK_TRACKS = [
     created_at: 1700000000,
     play_count: 10,
     flagged: false,
+    rating: 0,
   },
 ];
 

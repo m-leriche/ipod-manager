@@ -29,6 +29,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   get_library_genres: [],
   search_library: [],
   flag_tracks: null,
+  rate_tracks: null,
   increment_play_count: null,
 
   // Playlists
@@ -41,6 +42,17 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   remove_tracks_from_playlist: null,
   move_playlist_track: null,
   export_playlists_to_ipod: { exported: 0, errors: [] },
+
+  // Smart playlists
+  get_smart_playlists: [],
+  create_smart_playlist: { id: 1, name: "New Smart Playlist", rules: { match: "all", rules: [] }, is_builtin: false },
+  update_smart_playlist: null,
+  delete_smart_playlist: null,
+  get_smart_playlist_tracks: [],
+
+  // Duplicate detection
+  detect_duplicates: { groups: [], total_duplicate_tracks: 0, potential_space_savings: 0 },
+  delete_duplicate_tracks: 0,
 
   // Profiles
   get_profiles: { profiles: [] },

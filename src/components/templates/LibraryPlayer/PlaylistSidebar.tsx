@@ -1,34 +1,42 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
-import type { Playlist, PlaylistExportResult } from "../../../types/library";
-
-export type SmartPlaylistType = "recently-added" | "most-played" | "unplayed" | null;
+import type { Playlist, PlaylistExportResult, SmartPlaylist } from "../../../types/library";
 
 interface PlaylistSidebarProps {
   onPlaylistSelect: (id: number | null) => void;
   activePlaylistId: number | null;
-  activeSmartPlaylist: SmartPlaylistType;
-  onSmartPlaylistSelect: (type: SmartPlaylistType) => void;
+  onSmartPlaylistEdit: (sp: SmartPlaylist) => void;
+  onSmartPlaylistCreate: () => void;
 }
-
-const SMART_PLAYLISTS: { type: SmartPlaylistType; label: string; icon: string }[] = [
-  { type: "recently-added", label: "Recently Added", icon: "clock" },
-  { type: "most-played", label: "Most Played", icon: "fire" },
-  { type: "unplayed", label: "Unplayed", icon: "circle" },
-];
 
 export const PlaylistSidebar = ({
   onPlaylistSelect,
   activePlaylistId,
-  activeSmartPlaylist,
-  onSmartPlaylistSelect,
+  onSmartPlaylistEdit,
+  onSmartPlaylistCreate,
 }: PlaylistSidebarProps) => {
-  const { playlists, createPlaylist, renamePlaylist, deletePlaylist, exportToIpod } = usePlaylist();
+  const {
+    playlists,
+    createPlaylist,
+    renamePlaylist,
+    deletePlaylist,
+    exportToIpod,
+    smartPlaylists,
+    activeSmartPlaylistId,
+    setActiveSmartPlaylist,
+    deleteSmartPlaylist,
+  } = usePlaylist();
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    type: "playlist" | "smart";
+    playlist?: Playlist;
+    smartPlaylist?: SmartPlaylist;
+  } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [exportMsg, setExportMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -37,7 +45,6 @@ export const PlaylistSidebar = ({
     if (creating || editingId !== null) inputRef.current?.focus();
   }, [creating, editingId]);
 
-  // Close context menu on outside click
   useEffect(() => {
     if (!contextMenu) return;
     const handle = (e: MouseEvent) => {
@@ -52,7 +59,6 @@ export const PlaylistSidebar = ({
     };
   }, [contextMenu]);
 
-  // Auto-dismiss export message
   useEffect(() => {
     if (!exportMsg) return;
     const timer = setTimeout(() => setExportMsg(null), 4000);
@@ -100,6 +106,18 @@ export const PlaylistSidebar = ({
       setContextMenu(null);
     },
     [deletePlaylist],
+  );
+
+  const handleDeleteSmart = useCallback(
+    async (id: number) => {
+      try {
+        await deleteSmartPlaylist(id);
+      } catch (e) {
+        alert(`Failed to delete smart playlist: ${e}`);
+      }
+      setContextMenu(null);
+    },
+    [deleteSmartPlaylist],
   );
 
   const handleExport = useCallback(
@@ -155,6 +173,9 @@ export const PlaylistSidebar = ({
     return `${m}m`;
   };
 
+  const builtinSmartPlaylists = smartPlaylists.filter((sp) => sp.is_builtin);
+  const userSmartPlaylists = smartPlaylists.filter((sp) => !sp.is_builtin);
+
   return (
     <div className="w-[200px] shrink-0 border-r border-border bg-bg-secondary flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
@@ -193,10 +214,10 @@ export const PlaylistSidebar = ({
         <button
           onClick={() => {
             onPlaylistSelect(null);
-            onSmartPlaylistSelect(null);
+            setActiveSmartPlaylist(null);
           }}
           className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${
-            activePlaylistId === null && activeSmartPlaylist === null
+            activePlaylistId === null && activeSmartPlaylistId === null
               ? "text-accent bg-accent/10 font-medium"
               : "text-text-secondary hover:bg-bg-hover"
           }`}
@@ -205,24 +226,64 @@ export const PlaylistSidebar = ({
         </button>
 
         {/* Smart playlists */}
-        <div className="px-3 pt-3 pb-1">
+        <div className="px-3 pt-3 pb-1 flex items-center justify-between">
           <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest">Smart</span>
-        </div>
-        {SMART_PLAYLISTS.map((sp) => (
           <button
-            key={sp.type}
+            onClick={onSmartPlaylistCreate}
+            className="text-text-tertiary hover:text-text-secondary transition-colors"
+            title="New Smart Playlist"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Built-in smart playlists */}
+        {builtinSmartPlaylists.map((sp) => (
+          <button
+            key={sp.id}
             onClick={() => {
               onPlaylistSelect(null);
-              onSmartPlaylistSelect(sp.type);
+              setActiveSmartPlaylist(sp.id);
             }}
             className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 transition-colors ${
-              activeSmartPlaylist === sp.type
+              activeSmartPlaylistId === sp.id
                 ? "text-accent bg-accent/10 font-medium"
                 : "text-text-secondary hover:bg-bg-hover"
             }`}
           >
             <SmartPlaylistIcon type={sp.icon} />
-            {sp.label}
+            {sp.name}
+          </button>
+        ))}
+
+        {/* User smart playlists */}
+        {userSmartPlaylists.map((sp) => (
+          <button
+            key={sp.id}
+            onClick={() => {
+              onPlaylistSelect(null);
+              setActiveSmartPlaylist(sp.id);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu({ x: e.clientX, y: e.clientY, type: "smart", smartPlaylist: sp });
+            }}
+            className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 transition-colors ${
+              activeSmartPlaylistId === sp.id
+                ? "text-accent bg-accent/10 font-medium"
+                : "text-text-secondary hover:bg-bg-hover"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
+              />
+            </svg>
+            {sp.name}
           </button>
         ))}
 
@@ -255,11 +316,11 @@ export const PlaylistSidebar = ({
               <button
                 onClick={() => {
                   onPlaylistSelect(p.id);
-                  onSmartPlaylistSelect(null);
+                  setActiveSmartPlaylist(null);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, playlist: p });
+                  setContextMenu({ x: e.clientX, y: e.clientY, type: "playlist", playlist: p });
                 }}
                 className={`w-full text-left px-3 py-1.5 transition-colors group ${
                   activePlaylistId === p.id ? "text-accent bg-accent/10" : "text-text-secondary hover:bg-bg-hover"
@@ -309,33 +370,57 @@ export const PlaylistSidebar = ({
           className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button
-            onClick={() => startRename(contextMenu.playlist)}
-            className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            Rename
-          </button>
-          <button
-            onClick={() => handleExport([contextMenu.playlist.id])}
-            disabled={exporting}
-            className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-30"
-          >
-            Export to iPod
-          </button>
-          <div className="h-px bg-border my-1" />
-          <button
-            onClick={() => handleDelete(contextMenu.playlist.id)}
-            className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          >
-            Delete
-          </button>
+          {contextMenu.type === "playlist" && contextMenu.playlist && (
+            <>
+              <button
+                onClick={() => startRename(contextMenu.playlist!)}
+                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                Rename
+              </button>
+              <button
+                onClick={() => handleExport([contextMenu.playlist!.id])}
+                disabled={exporting}
+                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-30"
+              >
+                Export to iPod
+              </button>
+              <div className="h-px bg-border my-1" />
+              <button
+                onClick={() => handleDelete(contextMenu.playlist!.id)}
+                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                Delete
+              </button>
+            </>
+          )}
+          {contextMenu.type === "smart" && contextMenu.smartPlaylist && (
+            <>
+              <button
+                onClick={() => {
+                  onSmartPlaylistEdit(contextMenu.smartPlaylist!);
+                  setContextMenu(null);
+                }}
+                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                Edit Rules
+              </button>
+              <div className="h-px bg-border my-1" />
+              <button
+                onClick={() => handleDeleteSmart(contextMenu.smartPlaylist!.id)}
+                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-const SmartPlaylistIcon = ({ type }: { type: string }) => {
+const SmartPlaylistIcon = ({ type }: { type: string | null }) => {
   switch (type) {
     case "clock":
       return (
@@ -366,7 +451,15 @@ const SmartPlaylistIcon = ({ type }: { type: string }) => {
         </svg>
       );
     default:
-      return null;
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
+          />
+        </svg>
+      );
   }
 };
 

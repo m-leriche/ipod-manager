@@ -9,7 +9,7 @@ import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
 import { useColumnOrder } from "./useColumnOrder";
-import { getAlbumTracks } from "./helpers";
+import { getAlbumTracks, getContextIds } from "./helpers";
 import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD, CELL_CLASSES } from "./constants";
 import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
@@ -25,8 +25,6 @@ interface TrackTableProps {
   onSort: (key: string) => void;
   onTrackSelect?: (track: LibraryTrack) => void;
   onSelectionChange?: (selectedIds: Set<number>) => void;
-  onNavigateToArtist?: (artist: string) => void;
-  onNavigateToAlbum?: (album: string, artist: string) => void;
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
@@ -46,8 +44,6 @@ export const TrackTable = memo(function TrackTable({
   onSort,
   onTrackSelect,
   onSelectionChange,
-  onNavigateToArtist,
-  onNavigateToAlbum,
   onTracksDeleted,
   onFlagTracks,
   onRepairMetadata,
@@ -279,145 +275,103 @@ export const TrackTable = memo(function TrackTable({
       setSelected(new Set());
       onTracksDeleted?.();
     } catch (e) {
-      console.error("Failed to delete tracks:", e);
+      alert(`Failed to delete tracks: ${e}`);
     }
     setDeleteConfirm(null);
   }, [deleteConfirm, onTracksDeleted]);
 
   const contextMenuItems = contextMenu
-    ? [
-        {
-          label: "Play",
-          onClick: () => {
-            playTrack(contextMenu.track, getAlbumTracks(contextMenu.track, tracks));
-            setContextMenu(null);
+    ? (() => {
+        const ids = getContextIds(contextMenu.track.id, selected);
+        const isMulti = ids.length > 1;
+        return [
+          {
+            label: "Play",
+            onClick: () => {
+              playTrack(contextMenu.track, getAlbumTracks(contextMenu.track, tracks));
+              setContextMenu(null);
+            },
           },
-        },
-        {
-          label: "Play Next",
-          onClick: () => {
-            playNext([contextMenu.track]);
-            setContextMenu(null);
+          {
+            label: "Play Next",
+            onClick: () => {
+              playNext([contextMenu.track]);
+              setContextMenu(null);
+            },
           },
-        },
-        {
-          label: "Add to Queue",
-          onClick: () => {
-            addToQueue([contextMenu.track]);
-            setContextMenu(null);
+          {
+            label: "Add to Queue",
+            onClick: () => {
+              addToQueue([contextMenu.track]);
+              setContextMenu(null);
+            },
           },
-        },
-        ...(playlists.length > 0
-          ? [
-              {
-                type: "submenu" as const,
-                label: "Add to Playlist",
-                children: playlists.map((p) => ({
-                  label: p.name,
+          ...(playlists.length > 0
+            ? [
+                {
+                  type: "submenu" as const,
+                  label: "Add to Playlist",
+                  children: playlists.map((p) => ({
+                    label: p.name,
+                    onClick: () => {
+                      addToPlaylist(p.id, ids);
+                      setContextMenu(null);
+                    },
+                  })),
+                },
+              ]
+            : []),
+          ...(activePlaylistId != null
+            ? [
+                {
+                  label: isMulti ? `Remove ${ids.length} from Playlist` : "Remove from Playlist",
                   onClick: () => {
-                    const ids =
-                      selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-                    addToPlaylist(p.id, ids);
+                    removeFromPlaylist(activePlaylistId, ids);
                     setContextMenu(null);
                   },
-                })),
-              },
-            ]
-          : []),
-        ...(activePlaylistId != null
-          ? [
-              {
-                label:
-                  selected.size > 1 && selected.has(contextMenu.track.id)
-                    ? `Remove ${selected.size} from Playlist`
-                    : "Remove from Playlist",
-                onClick: () => {
-                  const ids =
-                    selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-                  removeFromPlaylist(activePlaylistId, ids);
-                  setContextMenu(null);
                 },
-              },
-            ]
-          : []),
-        { type: "separator" as const },
-        {
-          label: (() => {
-            const ids =
-              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-            const relevant = tracks.filter((t) => ids.includes(t.id));
-            const allFlagged = relevant.every((t) => t.flagged);
-            if (selected.size > 1 && selected.has(contextMenu.track.id)) {
-              return allFlagged
-                ? `Remove ${selected.size} Tracks from Sync List`
-                : `Add ${selected.size} Tracks to Sync List`;
-            }
-            return allFlagged ? "Remove from Sync List" : "Add to Sync List";
-          })(),
-          onClick: () => {
-            const ids =
-              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-            const relevant = tracks.filter((t) => ids.includes(t.id));
-            const allFlagged = relevant.every((t) => t.flagged);
-            onFlagTracks?.(ids, !allFlagged);
-            setContextMenu(null);
+              ]
+            : []),
+          { type: "separator" as const },
+          {
+            label: (() => {
+              const relevant = tracks.filter((t) => ids.includes(t.id));
+              const allFlagged = relevant.every((t) => t.flagged);
+              if (isMulti) {
+                return allFlagged
+                  ? `Remove ${ids.length} Tracks from Sync List`
+                  : `Add ${ids.length} Tracks to Sync List`;
+              }
+              return allFlagged ? "Remove from Sync List" : "Add to Sync List";
+            })(),
+            onClick: () => {
+              const relevant = tracks.filter((t) => ids.includes(t.id));
+              const allFlagged = relevant.every((t) => t.flagged);
+              onFlagTracks?.(ids, !allFlagged);
+              setContextMenu(null);
+            },
           },
-        },
-        ...(onRepairMetadata
-          ? [
-              {
-                label:
-                  selected.size > 1 && selected.has(contextMenu.track.id)
-                    ? `Repair Metadata for ${selected.size} Tracks`
-                    : "Repair Metadata",
-                onClick: () => {
-                  const ids =
-                    selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-                  onRepairMetadata(tracks.filter((t) => ids.includes(t.id)));
-                  setContextMenu(null);
+          ...(onRepairMetadata
+            ? [
+                {
+                  label: isMulti ? `Repair Metadata for ${ids.length} Tracks` : "Repair Metadata",
+                  onClick: () => {
+                    onRepairMetadata(tracks.filter((t) => ids.includes(t.id)));
+                    setContextMenu(null);
+                  },
                 },
-              },
-            ]
-          : []),
-        ...(contextMenu.track.artist && onNavigateToArtist
-          ? [
-              {
-                label: `Go to ${contextMenu.track.artist}`,
-                onClick: () => {
-                  onNavigateToArtist(contextMenu.track.artist!);
-                  setContextMenu(null);
-                },
-              },
-            ]
-          : []),
-        ...(contextMenu.track.album && onNavigateToAlbum
-          ? [
-              {
-                label: `Go to ${contextMenu.track.album}`,
-                onClick: () => {
-                  onNavigateToAlbum(
-                    contextMenu.track.album!,
-                    contextMenu.track.artist || contextMenu.track.album_artist || "",
-                  );
-                  setContextMenu(null);
-                },
-              },
-            ]
-          : []),
-        { type: "separator" as const },
-        {
-          label:
-            selected.size > 1 && selected.has(contextMenu.track.id)
-              ? `Delete ${selected.size} Tracks from Library`
-              : "Delete from Library",
-          onClick: () => {
-            const ids =
-              selected.size > 1 && selected.has(contextMenu.track.id) ? [...selected] : [contextMenu.track.id];
-            setDeleteConfirm(ids);
-            setContextMenu(null);
+              ]
+            : []),
+          { type: "separator" as const },
+          {
+            label: isMulti ? `Delete ${ids.length} Tracks from Library` : "Delete from Library",
+            onClick: () => {
+              setDeleteConfirm(ids);
+              setContextMenu(null);
+            },
           },
-        },
-      ]
+        ];
+      })()
     : [];
 
   const currentTrackId = state.currentTrack?.id ?? null;

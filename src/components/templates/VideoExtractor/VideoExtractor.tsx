@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { FormatButton } from "../../atoms/FormatButton/FormatButton";
@@ -9,12 +8,14 @@ import { ChapterEditor } from "./ChapterEditor";
 import { buildChapters, fileNameFromPath } from "./helpers";
 import type { VideoProbe, EditableChapter, Phase, AudioFormat, DownloadProgress, DownloadResult } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useDependencyCheck } from "../../../hooks/useDependencyCheck";
+import { cancelSync } from "../../../utils/cancelSync";
+import { pickFolder, pickFile } from "../../../utils/pickPath";
 
 export const VideoExtractor = () => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
-  const [depsOk, setDepsOk] = useState<boolean | null>(null);
-  const [depsError, setDepsError] = useState<string | null>(null);
+  const deps = useDependencyCheck("check_ffmpeg");
 
   const [videoPath, setVideoPath] = useState("");
   const [videoInfo, setVideoInfo] = useState<VideoProbe | null>(null);
@@ -28,13 +29,6 @@ export const VideoExtractor = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke("check_ffmpeg")
-      .then(() => setDepsOk(true))
-      .catch((e) => {
-        setDepsOk(false);
-        setDepsError(`${e}`);
-      });
-
     let active = true;
     const unsubs: UnlistenFn[] = [];
     listen<DownloadProgress>("video-extract-progress", (e) => {
@@ -53,13 +47,10 @@ export const VideoExtractor = () => {
 
   const browseVideo = async () => {
     try {
-      const picked = await open({
-        multiple: false,
-        filters: [{ name: "Video", extensions: ["mp4", "mkv", "avi", "mov", "webm", "flv", "m4v", "ts"] }],
-        title: "Select video file",
-      });
-      if (picked) {
-        const path = picked as string;
+      const path = await pickFile("Select video file", [
+        { name: "Video", extensions: ["mp4", "mkv", "avi", "mov", "webm", "flv", "m4v", "ts"] },
+      ]);
+      if (path) {
         setVideoPath(path);
         setError(null);
         setVideoInfo(null);
@@ -80,8 +71,8 @@ export const VideoExtractor = () => {
 
   const browseOutput = async () => {
     try {
-      const picked = await open({ directory: true, multiple: false, title: "Select output folder" });
-      if (picked) setOutputDir(picked as string);
+      const path = await pickFolder("Select output folder");
+      if (path) setOutputDir(path);
     } catch (e) {
       setError(`Failed to open folder picker: ${e}`);
     }
@@ -126,7 +117,7 @@ export const VideoExtractor = () => {
     setPhase("extracting");
     setResult(null);
     setError(null);
-    startProgress("Extracting audio...", cancel);
+    startProgress("Extracting audio...", cancelSync);
 
     try {
       const res = await invoke<DownloadResult>("extract_audio_from_video", {
@@ -145,12 +136,6 @@ export const VideoExtractor = () => {
     }
   };
 
-  const cancel = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {}
-  };
-
   const reset = () => {
     setPhase("idle");
     setVideoPath("");
@@ -167,26 +152,18 @@ export const VideoExtractor = () => {
 
   // ── Dependencies missing ──
 
-  if (depsOk === false) {
+  if (deps.ok === false) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
           <p className="text-text-secondary text-xs mb-2 font-medium">Missing required tools</p>
-          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">{depsError}</p>
+          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">{deps.error}</p>
           <p className="text-text-tertiary text-[11px] mb-4">
             Run in your terminal:{" "}
             <code className="bg-bg-card px-1.5 py-0.5 rounded text-text-secondary">brew install ffmpeg</code>
           </p>
           <button
-            onClick={() => {
-              setDepsOk(null);
-              invoke("check_ffmpeg")
-                .then(() => setDepsOk(true))
-                .catch((e) => {
-                  setDepsOk(false);
-                  setDepsError(`${e}`);
-                });
-            }}
+            onClick={deps.recheck}
             className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
           >
             Retry
@@ -198,7 +175,7 @@ export const VideoExtractor = () => {
 
   // ── Loading deps check ──
 
-  if (depsOk === null) {
+  if (deps.ok === null) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-text-tertiary text-xs">

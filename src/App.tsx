@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize, PhysicalSize } from "@tauri-apps/api/dpi";
+import { cancelSync } from "./utils/cancelSync";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
 import { PlaybackProvider } from "./contexts/PlaybackContext";
 import { EqualizerProvider } from "./contexts/EqualizerContext";
@@ -159,7 +160,7 @@ const AppContent = () => {
   }, [miniPlayer]);
 
   const handleRescan = useCallback(async () => {
-    startProgress("Rescanning library...", () => invoke("cancel_sync"));
+    startProgress("Rescanning library...", cancelSync);
 
     const unlisten = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
       updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);

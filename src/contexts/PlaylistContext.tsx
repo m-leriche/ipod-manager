@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../utils/pickPath";
 import type { Playlist, PlaylistTrack, LibraryTrack, PlaylistExportResult } from "../types/library";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ export const PlaylistProvider = ({ children }: { children: React.ReactNode }) =>
   );
 
   const exportToIpod = useCallback(async (playlistIds: number[]): Promise<PlaylistExportResult> => {
-    const dir = await open({ directory: true, title: "Choose export folder" });
+    const dir = await pickFolder("Choose export folder");
     if (!dir) throw new Error("cancelled");
 
     return invoke<PlaylistExportResult>("export_playlists_to_ipod", {

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { cancelSync } from "../../../utils/cancelSync";
+import { pickFolder } from "../../../utils/pickPath";
 import { useTheme } from "../../../contexts/ThemeContext";
 import type { ThemeName } from "../../../contexts/ThemeContext";
 import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
@@ -46,10 +47,10 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   }, [onClose]);
 
   const handleSetLibraryLocation = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: false, title: "Choose library location" });
+    const selected = await pickFolder("Choose library location");
     if (!selected) return;
 
-    startProgress("Scanning library...", () => invoke("cancel_sync"));
+    startProgress("Scanning library...", cancelSync);
 
     const unlisten = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
       updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);

@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../../../utils/pickPath";
+import { cancelSync } from "../../../utils/cancelSync";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MetadataTree } from "./MetadataTree";
@@ -56,13 +57,7 @@ export const MetadataEditor = ({
   const lastScanPaths = useRef<string[]>([]);
 
   // ── Cancel ──
-  const cancel = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {
-      /* ignore */
-    }
-  };
+  const cancel = cancelSync;
 
   // ── Refresh tracks ──
   const refreshTracks = async () => {
@@ -115,7 +110,7 @@ export const MetadataEditor = ({
   const audio = useAudioPlayback(quality.selectedQualityFile);
 
   // ── Scan actions ──
-  const scanPaths = async (paths: string[]) => {
+  const doScan = async (paths: string[], invokeFn: () => Promise<TrackMetadata[]>) => {
     lastScanPaths.current = paths;
     setPhase("scanning");
     setError(null);
@@ -126,7 +121,7 @@ export const MetadataEditor = ({
     repair.resetRepair();
     startProgress("Scanning metadata...", cancel);
     try {
-      const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
+      const data = await invokeFn();
       setTracks(data);
       setScanPath(paths.length === 1 ? paths[0] : `${paths.length} dropped items`);
       setPhase("scanned");
@@ -145,46 +140,22 @@ export const MetadataEditor = ({
     }
   };
 
+  const scanPaths = (paths: string[]) => doScan(paths, () => invoke<TrackMetadata[]>("scan_metadata_paths", { paths }));
+
+  const scan = (path?: string) => {
+    const targetPath = path ?? scanPath;
+    return doScan([targetPath], () => invoke<TrackMetadata[]>("scan_metadata", { path: targetPath }));
+  };
+
   const browse = async () => {
     try {
-      const picked = await open({ directory: true, multiple: false, title: "Select music folder" });
-      if (picked) {
-        const path = picked as string;
+      const path = await pickFolder("Select music folder");
+      if (path) {
         setScanPath(path);
         scan(path);
       }
     } catch (e) {
       setError(`Failed to open folder picker: ${e}`);
-    }
-  };
-
-  const scan = async (path?: string) => {
-    const targetPath = path ?? scanPath;
-    lastScanPaths.current = [targetPath];
-    setPhase("scanning");
-    setError(null);
-    setSaveResult(null);
-    setTracks([]);
-    setEditedTracks({});
-    setSelected(new Set());
-    repair.resetRepair();
-    startProgress("Scanning metadata...", cancel);
-    try {
-      const data = await invoke<TrackMetadata[]>("scan_metadata", { path: targetPath });
-      setTracks(data);
-      setPhase("scanned");
-      setView("edit");
-      finishProgress(`Scanned ${data.length} tracks`);
-    } catch (e) {
-      const msg = `${e}`;
-      if (msg === "Cancelled") {
-        setPhase("idle");
-        failProgress("Scan cancelled");
-      } else {
-        setError(msg);
-        setPhase("idle");
-        failProgress(msg);
-      }
     }
   };
 

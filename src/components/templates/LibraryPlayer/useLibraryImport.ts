@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../../../utils/pickPath";
+import { cancelSync } from "../../../utils/cancelSync";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { LibraryScanProgress, ImportProgress, ImportResult } from "../../../types/library";
 
@@ -24,10 +25,10 @@ export const useLibraryImport = (
   }, [isActive]);
 
   const handleChooseLibrary = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: false, title: "Choose library location" });
+    const selected = await pickFolder("Choose library location");
     if (!selected) return;
 
-    startProgress("Scanning library...", () => invoke("cancel_sync"));
+    startProgress("Scanning library...", cancelSync);
 
     const unlisten = await listen<LibraryScanProgress>("library-scan-progress", (e) => {
       updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
@@ -50,17 +51,13 @@ export const useLibraryImport = (
     async (paths: string[]) => {
       let location = await invoke<string | null>("get_library_location");
       if (!location) {
-        const selected = await open({
-          directory: true,
-          multiple: false,
-          title: "Choose library location",
-        });
+        const selected = await pickFolder("Choose library location");
         if (!selected) return;
         await invoke("set_library_location", { path: selected });
         location = selected;
       }
 
-      startProgress("Importing to library...", () => invoke("cancel_sync"));
+      startProgress("Importing to library...", cancelSync);
 
       const unlistenImport = await listen<ImportProgress>("import-progress", (e) => {
         updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);

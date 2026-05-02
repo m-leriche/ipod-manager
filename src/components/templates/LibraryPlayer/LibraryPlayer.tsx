@@ -188,8 +188,9 @@ export const LibraryPlayer = ({
         playAfterFetchRef.current = false;
         playTrack(data.tracks[0], data.tracks);
       }
-    } catch {
+    } catch (e) {
       if (id !== fetchIdRef.current) return;
+      console.error("Failed to load library data:", e);
       playAfterFetchRef.current = false;
       setTracks([]);
       setGenreList([]);
@@ -262,7 +263,7 @@ export const LibraryPlayer = ({
         await invoke("flag_tracks", { trackIds, flagged });
         await fetchBrowserData();
       } catch (e) {
-        console.error("Failed to flag tracks:", e);
+        alert(`Failed to update sync flags: ${e}`);
       }
     },
     [fetchBrowserData],

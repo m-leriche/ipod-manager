@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildTree, collectDiffPaths } from "./helpers";
+import { cancelSync } from "../../../utils/cancelSync";
 import type { CompareEntry, Filter } from "./types";
 
 export const useComparison = (
@@ -14,11 +15,7 @@ export const useComparison = (
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("differences");
 
-  const cancel = useCallback(async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {}
-  }, []);
+  const cancel = useCallback(cancelSync, []);
 
   const compare = useCallback(async () => {
     setLoading(true);

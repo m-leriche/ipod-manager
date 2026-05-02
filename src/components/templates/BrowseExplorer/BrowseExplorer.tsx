@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../../../utils/pickPath";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { FileExplorer } from "../../organisms/FileExplorer/FileExplorer";
 import { ProfileSelector } from "../../organisms/ProfileSelector/ProfileSelector";
@@ -151,13 +151,13 @@ export const BrowseExplorer = () => {
   };
 
   const browseLeft = async () => {
-    const picked = await open({ directory: true, multiple: false, title: "Select folder to explore" });
-    if (picked) setLeftPath(picked as string);
+    const path = await pickFolder("Select folder to explore");
+    if (path) setLeftPath(path);
   };
 
   const browseRight = async () => {
-    const picked = await open({ directory: true, multiple: false, title: "Select folder to explore" });
-    if (picked) setRightPath(picked as string);
+    const path = await pickFolder("Select folder to explore");
+    if (path) setRightPath(path);
   };
 
   // ── Render ───────────────────────────────────────────────────────

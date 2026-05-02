@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImper
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { cancelSync } from "../../../utils/cancelSync";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { InlineRenameInput } from "./InlineRenameInput";
@@ -90,7 +91,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         const action = isMove ? "Moving" : "Copying";
         const label =
           operations.length === 1 ? (operations[0].source_path.split("/").pop() ?? "") : `${operations.length} items`;
-        startProgress(`${action} ${label}...`, () => invoke("cancel_sync"));
+        startProgress(`${action} ${label}...`, cancelSync);
 
         const unlisten = await listen<{ total: number; completed: number; current_file: string }>(
           "sync-progress",

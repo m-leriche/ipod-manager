@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { pickFolder } from "../../../utils/pickPath";
 import { ComparisonView } from "../ComparisonView/ComparisonView";
 import { SplitComparisonView } from "../SplitComparisonView/SplitComparisonView";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
@@ -148,8 +148,8 @@ export const SyncManager = () => {
   };
 
   const browse = async (setter: (path: string) => void, title: string) => {
-    const picked = await open({ directory: true, multiple: false, title });
-    if (picked) setter(picked as string);
+    const path = await pickFolder(title);
+    if (path) setter(path);
   };
 
   return (

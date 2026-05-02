@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useDependencyCheck } from "../../../hooks/useDependencyCheck";
+import { cancelSync } from "../../../utils/cancelSync";
+import { pickFolder } from "../../../utils/pickPath";
 
 export const YouTubeDownloader = () => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [phase, setPhase] = useState<Phase>("idle");
-  const [depsOk, setDepsOk] = useState<boolean | null>(null);
-  const [depsError, setDepsError] = useState<string | null>(null);
+  const deps = useDependencyCheck("check_yt_dependencies");
 
   const [url, setUrl] = useState("");
   const [outputDir, setOutputDir] = useState("");
@@ -25,15 +26,7 @@ export const YouTubeDownloader = () => {
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
-  // Check dependencies on mount and subscribe to progress events
   useEffect(() => {
-    invoke("check_yt_dependencies")
-      .then(() => setDepsOk(true))
-      .catch((e) => {
-        setDepsOk(false);
-        setDepsError(`${e}`);
-      });
-
     let active = true;
     listen<DownloadProgress>("youtube-progress", (e) => {
       if (active) {
@@ -52,12 +45,8 @@ export const YouTubeDownloader = () => {
 
   const browse = async () => {
     try {
-      const picked = await open({
-        directory: true,
-        multiple: false,
-        title: "Select output folder",
-      });
-      if (picked) setOutputDir(picked as string);
+      const path = await pickFolder("Select output folder");
+      if (path) setOutputDir(path);
     } catch (e) {
       setError(`Failed to open folder picker: ${e}`);
     }
@@ -83,7 +72,7 @@ export const YouTubeDownloader = () => {
     setPhase("downloading");
     setResult(null);
     setError(null);
-    startProgress("Downloading audio...", cancel);
+    startProgress("Downloading audio...", cancelSync);
     try {
       const res = await invoke<DownloadResult>("download_audio", {
         url,
@@ -101,12 +90,6 @@ export const YouTubeDownloader = () => {
     }
   };
 
-  const cancel = async () => {
-    try {
-      await invoke("cancel_sync");
-    } catch (_) {}
-  };
-
   const reset = () => {
     setPhase("idle");
     setUrl("");
@@ -119,26 +102,18 @@ export const YouTubeDownloader = () => {
 
   // ── Dependencies missing ──
 
-  if (depsOk === false) {
+  if (deps.ok === false) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-md">
           <p className="text-text-secondary text-xs mb-2 font-medium">Missing required tools</p>
-          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">{depsError}</p>
+          <p className="text-text-tertiary text-[11px] mb-4 leading-relaxed">{deps.error}</p>
           <p className="text-text-tertiary text-[11px] mb-4">
             Run in your terminal:{" "}
             <code className="bg-bg-card px-1.5 py-0.5 rounded text-text-secondary">brew install yt-dlp ffmpeg</code>
           </p>
           <button
-            onClick={() => {
-              setDepsOk(null);
-              invoke("check_yt_dependencies")
-                .then(() => setDepsOk(true))
-                .catch((e) => {
-                  setDepsOk(false);
-                  setDepsError(`${e}`);
-                });
-            }}
+            onClick={deps.recheck}
             className="px-5 py-2 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:opacity-90"
           >
             Retry
@@ -150,7 +125,7 @@ export const YouTubeDownloader = () => {
 
   // ── Loading deps check ──
 
-  if (depsOk === null) {
+  if (deps.ok === null) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-text-tertiary text-xs">

@@ -79,6 +79,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // ── Persist playback state to localStorage ──────────────────
   useEffect(() => {
     savePlaybackState(state, timeRef.current.currentTime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only persist on specific state changes
   }, [state.currentTrack, state.queue, state.queueIndex, state.shuffle, state.repeat]);
 
   // Also persist position periodically while playing

@@ -71,7 +71,8 @@ export const useRepairActions = (
   const toggleFix = useCallback((key: string) => {
     setAcceptedFixes((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -123,7 +124,7 @@ export const useRepairActions = (
         setSwitching(false);
       }
     },
-    [selectedAlbumData, selectedAlbum, clearAllForAlbum],
+    [selectedAlbumData, selectedAlbum, clearAllForAlbum, setError],
   );
 
   const handleApplyRepairs = async () => {

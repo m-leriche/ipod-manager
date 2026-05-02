@@ -44,6 +44,7 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
     };
 
     fetchInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch only when mount state changes
   }, [isMounted, diskInfo?.mount_point]);
 
   if (status === "no_ipod") {

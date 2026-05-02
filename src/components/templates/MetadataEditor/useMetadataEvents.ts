@@ -62,5 +62,6 @@ export const useMetadataEvents = (
       active = false;
       unsubs.forEach((fn) => fn());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only subscription
   }, []);
 };

@@ -119,7 +119,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     const dnd = useDragAndDrop({ paneId, currentPath: path, selected, onDrop: handleDrop });
 
-    const into = (name: string) => load(joinPath(path, name));
+    const into = useCallback((name: string) => load(joinPath(path, name)), [load, path]);
 
     const up = () => {
       if (!allowParentNavigation && path === rootPath) return;
@@ -167,7 +167,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
       } else {
         setRenamingEntry(name);
       }
-    }, [selected, entries]);
+    }, [selected, entries, into]);
 
     // ── Keyboard shortcuts ─────────────────────────────────────────
 

@@ -42,7 +42,7 @@ export const deduplicateName = (name: string, existingNames: Set<string>): strin
   const base = hasExt ? name.slice(0, dotIndex) : name;
   const ext = hasExt ? name.slice(dotIndex) : "";
 
-  let candidate = `${base} (copy)${ext}`;
+  const candidate = `${base} (copy)${ext}`;
   if (!existingNames.has(candidate)) return candidate;
 
   let n = 2;

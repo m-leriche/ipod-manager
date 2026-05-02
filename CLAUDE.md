@@ -109,6 +109,9 @@ Rules:
 Before committing and pushing, always run these checks and fix any issues:
 
 ```bash
+# Lint frontend code
+npm run lint
+
 # Format frontend code
 npx prettier --write "src/**/*.{ts,tsx}"
 
@@ -127,7 +130,7 @@ npm test
 
 ## Tooling TODOs
 
-- [ ] Add ESLint with `@typescript-eslint` and `eslint-plugin-react-hooks` — no linter is currently configured
+- [x] ~~Add ESLint with `@typescript-eslint` and `eslint-plugin-react-hooks`~~
 
 ## Library Player TODOs
 

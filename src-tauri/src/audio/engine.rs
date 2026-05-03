@@ -67,15 +67,6 @@ impl SharedState {
         self.volume
             .store(f32::to_bits(vol) as u64, Ordering::Relaxed);
     }
-
-    /// Compute position in seconds from the output sample counter.
-    pub fn update_position_from_output(&self) {
-        let samples = self.out_samples.load(Ordering::Relaxed);
-        let ch = self.out_channels.load(Ordering::Relaxed).max(1);
-        let rate = self.out_rate.load(Ordering::Relaxed).max(1);
-        let secs = samples as f64 / (rate as f64 * ch as f64);
-        self.set_position(secs);
-    }
 }
 
 // Ring buffer size: ~500ms at 96kHz stereo (generous for high sample rates)
@@ -115,10 +106,13 @@ pub fn run<R: Runtime>(
     let mut equalizer = Equalizer::new(output_rate, output_channels);
     let mut time_stretcher = TimeStretcher::new(output_channels);
     let mut source_channels: u16 = 2;
+    let mut source_rate: u32 = 44100;
     // Leftover samples from a partially-pushed decode packet
     let mut leftover: Vec<f32> = Vec::new();
     // Preloaded next track for gapless playback
     let mut preloaded: Option<(AudioDecoder, Option<Resampler>, u16)> = None;
+    // Track source position directly (accurate at any speed)
+    let mut source_pos_secs: f64 = 0.0;
 
     // Position event timer
     let mut last_position_event = std::time::Instant::now();
@@ -153,6 +147,7 @@ pub fn run<R: Runtime>(
                                 .store(output_channels as u64, Ordering::Relaxed);
                             shared.out_rate.store(output_rate as u64, Ordering::Relaxed);
                             source_channels = src_ch;
+                            source_rate = src_rate;
 
                             // Create resampler if source and output rates differ
                             let rs = Resampler::new(src_rate, output_rate, output_channels);
@@ -163,11 +158,10 @@ pub fn run<R: Runtime>(
                             }
 
                             // Seek if requested
+                            source_pos_secs = 0.0;
                             if let Some(secs) = seek_secs {
                                 if dec.seek(secs).is_ok() {
-                                    let out_samples =
-                                        (secs * output_rate as f64 * output_channels as f64) as u64;
-                                    shared.out_samples.store(out_samples, Ordering::Relaxed);
+                                    source_pos_secs = secs;
                                     shared.set_position(secs);
                                 }
                             }
@@ -277,10 +271,7 @@ pub fn run<R: Runtime>(
                                 }
                             }
 
-                            let out_samples =
-                                (position_secs * output_rate as f64 * output_channels as f64)
-                                    as u64;
-                            shared.out_samples.store(out_samples, Ordering::Relaxed);
+                            source_pos_secs = position_secs;
                             shared.set_position(position_secs);
                         }
                     }
@@ -342,6 +333,10 @@ pub fn run<R: Runtime>(
                     while prod.vacant_len() > 4096 && filled < 32768 {
                         match dec.next_samples() {
                             Ok(Some(samples)) => {
+                                // Track source position from decoded frames
+                                let decoded_frames = samples.len() / source_channels as usize;
+                                source_pos_secs += decoded_frames as f64 / source_rate as f64;
+
                                 // Convert to output channel layout if needed
                                 let adapted =
                                     adapt_channels(samples, source_channels, output_channels);
@@ -388,21 +383,22 @@ pub fn run<R: Runtime>(
                     }
                 }
 
-                // Update position from output sample counter (tracks what's actually been played)
-                shared.update_position_from_output();
+                // Update position from source decode tracking (accurate at any speed)
+                shared.set_position(source_pos_secs);
             }
 
             // Handle gapless transition outside the borrow scope
             if gapless_transition {
                 if let Some((next_dec, next_rs, next_src_ch)) = preloaded.take() {
                     let dur = next_dec.duration_secs;
+                    source_rate = next_dec.sample_rate;
                     decoder = Some(next_dec);
                     resampler = next_rs;
                     source_channels = next_src_ch;
                     equalizer.reset();
                     time_stretcher.reset();
                     leftover.clear();
-                    shared.out_samples.store(0, Ordering::Relaxed);
+                    source_pos_secs = 0.0;
                     shared.set_position(0.0);
                     shared.set_duration(dur);
                     let _ = app_handle.emit("audio:gapless-transition", dur);

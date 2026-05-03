@@ -2,7 +2,7 @@
 //! Changes playback speed without altering pitch.
 //! Operates on interleaved multi-channel audio.
 
-const WINDOW_FRAMES: usize = 4096; // ~93ms at 44100Hz
+const WINDOW_FRAMES: usize = 2048; // ~46ms at 44100Hz — better transient preservation
 const SYNTHESIS_HOP: usize = WINDOW_FRAMES / 2; // 50% overlap
 const SEARCH_RANGE: usize = WINDOW_FRAMES / 4; // ±search range for best overlap
 
@@ -58,7 +58,8 @@ impl TimeStretcher {
         let ch = self.channels;
         let win_samples = WINDOW_FRAMES * ch;
         let hop_samples = SYNTHESIS_HOP * ch;
-        let analysis_hop = (SYNTHESIS_HOP as f64 * self.speed) as usize;
+        // Keep fractional analysis hop to avoid tempo drift at non-integer speed ratios
+        let analysis_hop_f = SYNTHESIS_HOP as f64 * self.speed;
 
         let mut output = Vec::new();
 
@@ -87,34 +88,34 @@ impl TimeStretcher {
 
             // Apply Hann window and overlap-add
             if self.has_prev {
-                // First half: cross-fade with previous tail
+                // First half: cross-fade previous tail (fading out) with current (fading in)
                 for i in 0..hop_samples {
                     let frame = i / ch;
-                    let w = self.window[frame];
+                    let w = self.window[frame]; // periodic Hann first half: 0 → 1
                     let prev = self.prev_tail[i];
                     let cur = self.input_buf[seg_start + i] * w;
                     output.push(prev + cur);
                 }
-                // Second half becomes the new tail
+                // Second half: window and save as tail for next overlap
                 for i in 0..hop_samples {
                     let frame = SYNTHESIS_HOP + i / ch;
-                    let w = self.window[frame];
-                    self.prev_tail[i] = self.input_buf[seg_start + hop_samples + i] * (1.0 - w);
+                    let w = self.window[frame]; // periodic Hann second half: 1 → 0
+                    self.prev_tail[i] = self.input_buf[seg_start + hop_samples + i] * w;
                 }
             } else {
-                // First window: output first half directly, save second half as tail
+                // First window: output first half directly, save windowed second half as tail
                 for i in 0..hop_samples {
                     output.push(self.input_buf[seg_start + i]);
                 }
                 for i in 0..hop_samples {
                     let frame = SYNTHESIS_HOP + i / ch;
                     let w = self.window[frame];
-                    self.prev_tail[i] = self.input_buf[seg_start + hop_samples + i] * (1.0 - w);
+                    self.prev_tail[i] = self.input_buf[seg_start + hop_samples + i] * w;
                 }
                 self.has_prev = true;
             }
 
-            self.input_pos += analysis_hop as f64;
+            self.input_pos += analysis_hop_f;
         }
 
         // Drain consumed input
@@ -214,11 +215,13 @@ fn cross_correlate(a: &[f32], b: &[f32]) -> f64 {
     }
 }
 
-/// Generate a Hann window of given length.
+/// Generate a periodic Hann window of given length.
+/// Periodic form (i/N instead of i/(N-1)) ensures w[n] + w[n+N/2] = 1.0 exactly
+/// for 50% overlap, giving artifact-free constant-gain overlap-add.
 fn hann_window(len: usize) -> Vec<f32> {
     (0..len)
         .map(|i| {
-            let t = i as f32 / (len - 1) as f32;
+            let t = i as f32 / len as f32;
             0.5 * (1.0 - (2.0 * std::f32::consts::PI * t).cos())
         })
         .collect()

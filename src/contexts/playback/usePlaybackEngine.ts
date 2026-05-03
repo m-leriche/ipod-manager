@@ -226,7 +226,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
     const tick = () => {
       const elapsed = (performance.now() - lastPositionTimeRef.current) / 1000;
-      const interpolated = lastPositionRef.current + elapsed;
+      const interpolated = lastPositionRef.current + elapsed * stateRef.current.speed;
       setTime((prev) => {
         if (Math.abs(prev.currentTime - interpolated) < 0.01) return prev;
         return { ...prev, currentTime: interpolated };

@@ -42,6 +42,7 @@ export const LibraryPlayer = ({
   showStatsPanel,
   showPlaylistSidebar,
   showAlbumGrid = false,
+  showTrackList = true,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -51,6 +52,7 @@ export const LibraryPlayer = ({
   showStatsPanel: boolean;
   showPlaylistSidebar: boolean;
   showAlbumGrid?: boolean;
+  showTrackList?: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const gridResize = useResizableHeight();
@@ -569,8 +571,8 @@ export const LibraryPlayer = ({
               <>
                 <div
                   ref={gridResize.containerRef}
-                  style={{ height: `${gridResize.fraction * 100}%` }}
-                  className="shrink-0 min-h-0"
+                  style={showTrackList ? { height: `${gridResize.fraction * 100}%` } : undefined}
+                  className={showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"}
                 >
                   <AlbumGrid
                     albums={albumList}
@@ -584,12 +586,14 @@ export const LibraryPlayer = ({
                     }}
                   />
                 </div>
-                <div
-                  onMouseDown={gridResize.onDragStart}
-                  className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
-                >
-                  <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
-                </div>
+                {showTrackList && (
+                  <div
+                    onMouseDown={gridResize.onDragStart}
+                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                  >
+                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+                  </div>
+                )}
               </>
             ) : (
               showColumnBrowser && (
@@ -614,20 +618,22 @@ export const LibraryPlayer = ({
           </>
         )}
 
-        {/* Track table */}
-        <TrackTable
-          tracks={displayedTracks}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          onTrackSelect={handleTrackSelect}
-          onSelectionChange={handleSelectionChange}
-          onTracksDeleted={fetchBrowserData}
-          onFlagTracks={handleFlagTracks}
-          onRateTracks={handleRateTracks}
-          onRepairMetadata={onRepairMetadata}
-          activePlaylistId={activePlaylistId}
-        />
+        {/* Track table (hidden when album grid is active with track list toggled off) */}
+        {(!showAlbumGrid || showTrackList) && (
+          <TrackTable
+            tracks={displayedTracks}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            onTrackSelect={handleTrackSelect}
+            onSelectionChange={handleSelectionChange}
+            onTracksDeleted={fetchBrowserData}
+            onFlagTracks={handleFlagTracks}
+            onRateTracks={handleRateTracks}
+            onRepairMetadata={onRepairMetadata}
+            activePlaylistId={activePlaylistId}
+          />
+        )}
 
         {/* Status bar */}
         <LibraryStatusBar selectedTracks={selectedTracks} />

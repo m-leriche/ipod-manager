@@ -63,6 +63,11 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         .map_err(|e| format!("Failed to set pragmas: {}", e))?;
 
+    // Register sort_key() as a SQL scalar so ORDER BY can normalise strings
+    // the same way the Rust browser sorting does (strip "The ", drop
+    // non-alphanumeric, lowercase).
+    queries::register_sort_key(&conn)?;
+
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tracks (
             id INTEGER PRIMARY KEY,

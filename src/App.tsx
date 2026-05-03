@@ -52,6 +52,7 @@ const INFO_PANEL_KEY = "crate-show-info-panel";
 const STATS_PANEL_KEY = "crate-show-stats-panel";
 const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
 const ALBUM_GRID_KEY = "crate-show-album-grid";
+const TRACK_LIST_KEY = "crate-show-track-list";
 
 const AppContent = () => {
   const [topTab, setTopTab] = useState<TopTab>("library");
@@ -73,6 +74,7 @@ const AppContent = () => {
     () => localStorage.getItem(PLAYLIST_SIDEBAR_KEY) !== "false",
   );
   const [showAlbumGrid, setShowAlbumGrid] = useState(() => localStorage.getItem(ALBUM_GRID_KEY) === "true");
+  const [showTrackList, setShowTrackList] = useState(() => localStorage.getItem(TRACK_LIST_KEY) !== "false");
 
   const toggleColumnBrowser = useCallback(() => {
     // If album grid is active, switch to column browser
@@ -119,6 +121,12 @@ const AppContent = () => {
         localStorage.setItem(COLUMN_BROWSER_KEY, "true");
       }
       return next;
+    });
+  }, []);
+  const toggleTrackList = useCallback(() => {
+    setShowTrackList((prev) => {
+      localStorage.setItem(TRACK_LIST_KEY, String(!prev));
+      return !prev;
     });
   }, []);
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
@@ -259,6 +267,7 @@ const AppContent = () => {
               showStatsPanel={showStatsPanel}
               showPlaylistSidebar={showPlaylistSidebar}
               showAlbumGrid={showAlbumGrid}
+              showTrackList={showTrackList}
             />
           </div>
           {topTab === "tools" && (
@@ -329,6 +338,8 @@ const AppContent = () => {
         onTogglePlaylistSidebar={togglePlaylistSidebar}
         showAlbumGrid={showAlbumGrid}
         onToggleAlbumGrid={toggleAlbumGrid}
+        showTrackList={showTrackList}
+        onToggleTrackList={toggleTrackList}
       />
 
       {settingsOpen && (

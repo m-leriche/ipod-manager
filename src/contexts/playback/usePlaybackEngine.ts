@@ -105,7 +105,22 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     checkLibraryAvailable();
     const onFocus = () => checkLibraryAvailable();
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+
+    let unlisten: (() => void) | undefined;
+    listen<{ library_available: boolean }>("volume-changed", (event) => {
+      setState((prev) =>
+        prev.libraryAvailable === event.payload.library_available
+          ? prev
+          : { ...prev, libraryAvailable: event.payload.library_available },
+      );
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      unlisten?.();
+    };
   }, [checkLibraryAvailable]);
 
   // ── Listen for Rust audio engine events ──────────────────────

@@ -319,10 +319,8 @@ fn try_save_cover(releases: &[crate::musicbrainz::MbRelease], dir: &Path) -> Res
 fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), String> {
     // Attempt 1: exact names
     if let Ok(releases) = crate::musicbrainz::search_releases(artist, album) {
-        if !releases.is_empty() {
-            if try_save_cover(&releases, dir).is_ok() {
-                return Ok(());
-            }
+        if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+            return Ok(());
         }
     }
 
@@ -335,10 +333,8 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
 
     if album_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(artist, &clean_album) {
-            if !releases.is_empty() {
-                if try_save_cover(&releases, dir).is_ok() {
-                    return Ok(());
-                }
+            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+                return Ok(());
             }
         }
     }
@@ -346,18 +342,14 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
     // Attempt 3: both normalized
     if artist_changed && album_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, &clean_album) {
-            if !releases.is_empty() {
-                if try_save_cover(&releases, dir).is_ok() {
-                    return Ok(());
-                }
+            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+                return Ok(());
             }
         }
     } else if artist_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, album) {
-            if !releases.is_empty() {
-                if try_save_cover(&releases, dir).is_ok() {
-                    return Ok(());
-                }
+            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+                return Ok(());
             }
         }
     }

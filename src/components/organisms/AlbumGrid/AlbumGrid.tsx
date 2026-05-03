@@ -100,13 +100,10 @@ export const AlbumGrid = ({
     [onSortModeChange],
   );
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, album: AlbumSummary) => {
-      e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, album });
-    },
-    [],
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent, album: AlbumSummary) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, album });
+  }, []);
 
   if (albums.length === 0) {
     return (

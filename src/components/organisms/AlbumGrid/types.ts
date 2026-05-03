@@ -7,6 +7,7 @@ export interface AlbumGridProps {
   selectedAlbum: string | null;
   onSelectAlbum: (album: string | null) => void;
   onPlayAlbum?: (albumName: string) => void;
+  onFixAlbumArt?: (album: AlbumSummary) => void;
   sortMode?: AlbumSortMode;
   onSortModeChange?: (mode: AlbumSortMode) => void;
 }

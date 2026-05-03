@@ -321,6 +321,32 @@ export const LibraryPlayer = ({
     [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
   );
 
+  const handleFixAlbumArtForAlbum = useCallback(
+    async (album: AlbumSummary) => {
+      startProgress(`Repairing album art for "${album.name}"…`);
+
+      const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
+        "albumart-progress",
+        (event) => {
+          const { total, completed, current_album } = event.payload;
+          updateProgress(completed, total, current_album);
+        },
+      );
+
+      try {
+        await invoke("fix_album_art", { folders: [album.folder_path] });
+        finishProgress("Album art repair complete");
+        bumpArtCache();
+        await fetchBrowserData();
+      } catch (e) {
+        failProgress(`Album art repair failed: ${e}`);
+      } finally {
+        unlisten();
+      }
+    },
+    [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
+  );
+
   // ── Re-fetch when any filter/sort changes ─────────────────────
 
   useEffect(() => {
@@ -608,6 +634,7 @@ export const LibraryPlayer = ({
                     selectedAlbum={selectedAlbum}
                     onSelectAlbum={handleSelectAlbum}
                     onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
+                    onFixAlbumArt={handleFixAlbumArtForAlbum}
                     sortMode={albumSortMode}
                     onSortModeChange={(mode) => {
                       setAlbumSortMode(mode);

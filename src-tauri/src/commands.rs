@@ -982,6 +982,12 @@ pub fn audio_set_eq(config: EqConfig, engine: State<'_, AudioEngine>) -> Result<
     Ok(())
 }
 
+#[tauri::command]
+pub fn audio_set_speed(speed: f64, engine: State<'_, AudioEngine>) -> Result<(), String> {
+    engine.set_speed(speed);
+    Ok(())
+}
+
 // ── Playlists ──────────────────────────────────────────────────
 
 #[tauri::command]

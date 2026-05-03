@@ -44,13 +44,37 @@ pub struct IdentifyProgress {
 
 // ── Dependency check ────────────────────────────────────────────
 
+/// Common paths where fpcalc may be installed on macOS (homebrew, etc.)
+const FPCALC_PATHS: &[&str] = &[
+    "/opt/homebrew/bin/fpcalc",
+    "/usr/local/bin/fpcalc",
+    "/usr/bin/fpcalc",
+];
+
+/// Find the fpcalc binary, checking PATH first then common install locations.
+fn find_fpcalc() -> Option<String> {
+    // Check PATH first
+    if let Ok(output) = Command::new("which").arg("fpcalc").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+    }
+
+    // Check common install locations (important for macOS apps not launched from terminal)
+    for path in FPCALC_PATHS {
+        if std::path::Path::new(path).exists() {
+            return Some(path.to_string());
+        }
+    }
+
+    None
+}
+
 pub fn check_fpcalc() -> Result<(), String> {
-    if Command::new("which")
-        .arg("fpcalc")
-        .output()
-        .map(|o| !o.status.success())
-        .unwrap_or(true)
-    {
+    if find_fpcalc().is_none() {
         return Err("fpcalc not found. Install with: brew install chromaprint".to_string());
     }
     Ok(())
@@ -72,7 +96,10 @@ fn rate_limit() {
 // ── Fingerprinting ──────────────────────────────────────────────
 
 fn generate_fingerprint(file_path: &str) -> Result<(String, u32), String> {
-    let output = Command::new("fpcalc")
+    let fpcalc = find_fpcalc()
+        .ok_or_else(|| "fpcalc not found. Install with: brew install chromaprint".to_string())?;
+
+    let output = Command::new(&fpcalc)
         .arg("-json")
         .arg(file_path)
         .output()

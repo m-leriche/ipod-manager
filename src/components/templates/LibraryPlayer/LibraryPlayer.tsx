@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
+import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { useResizableHeight } from "../../organisms/AlbumGrid/useResizableHeight";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
@@ -28,6 +29,7 @@ import { getCachedLibrary, setCachedLibrary } from "./helpers";
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
 const SORT_BY_KEY = "crate-sort-by";
 const SORT_DIR_KEY = "crate-sort-direction";
+const ALBUM_SORT_MODE_KEY = "crate-album-sort-mode";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -93,6 +95,9 @@ export const LibraryPlayer = ({
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
   const [smartPlaylistEditing, setSmartPlaylistEditing] = useState<SmartPlaylist | null>(null);
   const [smartPlaylistCreating, setSmartPlaylistCreating] = useState(false);
+  const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(
+    () => (localStorage.getItem(ALBUM_SORT_MODE_KEY) as AlbumSortMode) || "album",
+  );
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -572,6 +577,11 @@ export const LibraryPlayer = ({
                     selectedAlbum={selectedAlbum}
                     onSelectAlbum={handleSelectAlbum}
                     onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
+                    sortMode={albumSortMode}
+                    onSortModeChange={(mode) => {
+                      setAlbumSortMode(mode);
+                      localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
+                    }}
                   />
                 </div>
                 <div

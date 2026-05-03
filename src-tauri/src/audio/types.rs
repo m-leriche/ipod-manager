@@ -22,6 +22,9 @@ pub enum AudioCommand {
     SetEq {
         config: EqConfig,
     },
+    SetSpeed {
+        speed: f64,
+    },
     Shutdown,
 }
 

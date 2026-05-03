@@ -12,6 +12,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 use super::decoder::AudioDecoder;
 use super::equalizer::Equalizer;
 use super::resampler::Resampler;
+use super::time_stretch::TimeStretcher;
 use super::types::{AudioCommand, PlayState};
 
 /// Shared state between the engine thread, cpal callback, and Tauri commands.
@@ -112,6 +113,7 @@ pub fn run<R: Runtime>(
     let mut ring_producer: Option<ringbuf::HeapProd<f32>> = None;
     let mut resampler: Option<Resampler> = None;
     let mut equalizer = Equalizer::new(output_rate, output_channels);
+    let mut time_stretcher = TimeStretcher::new(output_channels);
     let mut source_channels: u16 = 2;
     // Leftover samples from a partially-pushed decode packet
     let mut leftover: Vec<f32> = Vec::new();
@@ -242,6 +244,7 @@ pub fn run<R: Runtime>(
                             if let Some(ref mut rs) = resampler {
                                 rs.reset();
                             }
+                            time_stretcher.reset();
                             equalizer.reset();
 
                             // Clear ring buffer by dropping and recreating
@@ -304,6 +307,10 @@ pub fn run<R: Runtime>(
                     equalizer.update_config(&config);
                 }
 
+                AudioCommand::SetSpeed { speed } => {
+                    time_stretcher.set_speed(speed);
+                }
+
                 AudioCommand::Shutdown => {
                     if let Some(stream) = current_stream.take() {
                         stream.pause().ok();
@@ -339,11 +346,13 @@ pub fn run<R: Runtime>(
                                 let adapted =
                                     adapt_channels(samples, source_channels, output_channels);
                                 // Resample if source and output rates differ
-                                let mut out_samples = if let Some(ref mut rs) = resampler {
+                                let resampled = if let Some(ref mut rs) = resampler {
                                     rs.process(&adapted)
                                 } else {
                                     adapted
                                 };
+                                // Time-stretch for speed control (pitch-preserving)
+                                let mut out_samples = time_stretcher.process(&resampled);
                                 // Apply EQ
                                 equalizer.process(&mut out_samples, output_channels);
                                 let mut pushed = 0;
@@ -391,6 +400,7 @@ pub fn run<R: Runtime>(
                     resampler = next_rs;
                     source_channels = next_src_ch;
                     equalizer.reset();
+                    time_stretcher.reset();
                     leftover.clear();
                     shared.out_samples.store(0, Ordering::Relaxed);
                     shared.set_position(0.0);

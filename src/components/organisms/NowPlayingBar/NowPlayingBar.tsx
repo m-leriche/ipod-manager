@@ -3,6 +3,7 @@ import { usePlayback, usePlaybackTime } from "../../../contexts/PlaybackContext"
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import { SeekBar } from "../../atoms/SeekBar/SeekBar";
 import { NowPlayingInfo } from "../../molecules/NowPlayingInfo/NowPlayingInfo";
+import { SpeedControl } from "../../molecules/SpeedControl/SpeedControl";
 import { TransportControls } from "../../molecules/TransportControls/TransportControls";
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 import { getDragPayload } from "../TrackTable/TrackTable";
@@ -51,6 +52,7 @@ export const NowPlayingBar = ({
     addToQueue,
     toggleShuffle,
     cycleRepeat,
+    setSpeed,
     clearPlaybackError,
   } = usePlayback();
   const { currentTime, duration } = usePlaybackTime();
@@ -227,6 +229,7 @@ export const NowPlayingBar = ({
           </PanelToggle>
         )}
         {!miniPlayer && <div className="w-px h-4 bg-border mx-1" />}
+        <SpeedControl speed={state.speed} onChange={setSpeed} />
         <VolumeControl volume={state.volume} onChange={setVolume} />
         {onToggleQueue && !miniPlayer && (
           <button

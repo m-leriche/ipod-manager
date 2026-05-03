@@ -299,7 +299,9 @@ export const LibraryPlayer = ({
   const handleRepairAlbumArt = useCallback(
     async (tracks: LibraryTrack[]) => {
       const folders = [...new Set(tracks.map((t) => t.folder_path))];
-      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}…`);
+      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}…`, () =>
+        invoke("cancel_sync"),
+      );
 
       const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
         "albumart-progress",
@@ -310,8 +312,12 @@ export const LibraryPlayer = ({
       );
 
       try {
-        await invoke("fix_album_art", { folders });
-        finishProgress("Album art repair complete");
+        const result = await invoke<{ cancelled: boolean; fixed: number }>("fix_album_art", { folders });
+        if (result.cancelled) {
+          failProgress("Album art repair cancelled");
+        } else {
+          finishProgress(`Album art repair complete — ${result.fixed} fixed`);
+        }
         bumpArtCache();
         await fetchBrowserData();
       } catch (e) {
@@ -325,7 +331,7 @@ export const LibraryPlayer = ({
 
   const handleFixAlbumArtForAlbum = useCallback(
     async (album: AlbumSummary) => {
-      startProgress(`Repairing album art for "${album.name}"…`);
+      startProgress(`Repairing album art for "${album.name}"…`, () => invoke("cancel_sync"));
 
       const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
         "albumart-progress",
@@ -336,8 +342,14 @@ export const LibraryPlayer = ({
       );
 
       try {
-        await invoke("fix_album_art", { folders: [album.folder_path] });
-        finishProgress("Album art repair complete");
+        const result = await invoke<{ cancelled: boolean; fixed: number }>("fix_album_art", {
+          folders: [album.folder_path],
+        });
+        if (result.cancelled) {
+          failProgress("Album art repair cancelled");
+        } else {
+          finishProgress("Album art repair complete");
+        }
         bumpArtCache();
         await fetchBrowserData();
       } catch (e) {

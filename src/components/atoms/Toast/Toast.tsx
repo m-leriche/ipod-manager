@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useToast } from "../../../contexts/ToastContext";
+import { useToast, useToastState } from "../../../contexts/ToastContext";
 import type { Toast as ToastData, ToastType } from "../../../contexts/ToastContext";
 
 const ICONS: Record<ToastType, React.ReactNode> = {
@@ -69,7 +69,8 @@ const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
 };
 
 export const ToastContainer = () => {
-  const { toasts, dismiss } = useToast();
+  const toasts = useToastState();
+  const { dismiss } = useToast();
 
   if (toasts.length === 0) return null;
 

@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import type { LibraryTrack } from "../../../types/library";
@@ -23,6 +24,7 @@ const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
   const { width, onDragStart } = useResizableWidth();
+  const { bumpArtCache } = useArtCache();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -86,6 +88,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
     try {
       await invoke("fix_album_art", { folders });
       setArtCacheBust((n) => n + 1);
+      bumpArtCache();
       onSave?.();
     } catch (e) {
       console.error("Failed to repair album art:", e);
@@ -93,7 +96,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       setRepairing(false);
       unlisten();
     }
-  }, [tracks, onSave]);
+  }, [tracks, onSave, bumpArtCache]);
 
   if (tracks.length === 0) return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
 

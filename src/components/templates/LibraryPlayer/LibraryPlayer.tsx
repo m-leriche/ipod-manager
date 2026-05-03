@@ -12,6 +12,7 @@ import { PlaylistSidebar } from "./PlaylistSidebar";
 import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useLibraryImport } from "./useLibraryImport";
@@ -55,6 +56,7 @@ export const LibraryPlayer = ({
   showTrackList?: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const { bumpArtCache } = useArtCache();
   const gridResize = useResizableHeight();
   const {
     playTrack,
@@ -290,6 +292,33 @@ export const LibraryPlayer = ({
       }
     },
     [fetchBrowserData],
+  );
+
+  const handleRepairAlbumArt = useCallback(
+    async (tracks: LibraryTrack[]) => {
+      const folders = [...new Set(tracks.map((t) => t.folder_path))];
+      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}…`);
+
+      const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
+        "albumart-progress",
+        (event) => {
+          const { total, completed, current_album } = event.payload;
+          updateProgress(completed, total, current_album);
+        },
+      );
+
+      try {
+        await invoke("fix_album_art", { folders });
+        finishProgress("Album art repair complete");
+        bumpArtCache();
+        await fetchBrowserData();
+      } catch (e) {
+        failProgress(`Album art repair failed: ${e}`);
+      } finally {
+        unlisten();
+      }
+    },
+    [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
   );
 
   // ── Re-fetch when any filter/sort changes ─────────────────────
@@ -630,6 +659,7 @@ export const LibraryPlayer = ({
             onTracksDeleted={fetchBrowserData}
             onFlagTracks={handleFlagTracks}
             onRateTracks={handleRateTracks}
+            onRepairAlbumArt={handleRepairAlbumArt}
             onRepairMetadata={onRepairMetadata}
             activePlaylistId={activePlaylistId}
           />

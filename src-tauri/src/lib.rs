@@ -20,6 +20,7 @@ mod profiles;
 mod rockbox;
 mod sanitize;
 mod streaming;
+mod volume_monitor;
 mod watcher;
 mod youtube;
 
@@ -73,6 +74,11 @@ pub fn run() {
             let db_arc = app.state::<LibraryDb>().conn_arc();
             let _ = watcher::restart_from_db(&folder_watcher, app.handle(), &db_arc);
             app.manage(folder_watcher);
+
+            // Start volume monitor for external drive mount/unmount detection
+            let vol_monitor = volume_monitor::VolumeMonitor::new();
+            let _ = vol_monitor.start(app.handle().clone());
+            app.manage(vol_monitor);
 
             // Spawn native audio engine
             let audio_engine = audio::AudioEngine::spawn(app.handle().clone());

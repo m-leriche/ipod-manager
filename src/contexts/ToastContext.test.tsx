@@ -1,20 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { ToastProvider, useToast } from "./ToastContext";
+import { ToastProvider, useToast, useToastState } from "./ToastContext";
 
 // Unmock ToastContext for these tests since we're testing the real implementation
 vi.unmock("./ToastContext");
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <ToastProvider>{children}</ToastProvider>;
 
+/** Hook that combines actions + state for test convenience. */
+const useToastAll = () => ({ ...useToast(), toasts: useToastState() });
+
 describe("ToastContext", () => {
   it("starts with empty toast list", () => {
-    const { result } = renderHook(() => useToast(), { wrapper });
-    expect(result.current.toasts).toEqual([]);
+    const { result } = renderHook(() => useToastState(), { wrapper });
+    expect(result.current).toEqual([]);
   });
 
   it("adds a success toast", () => {
-    const { result } = renderHook(() => useToast(), { wrapper });
+    const { result } = renderHook(() => useToastAll(), { wrapper });
 
     act(() => {
       result.current.success("Done!");
@@ -26,7 +29,7 @@ describe("ToastContext", () => {
   });
 
   it("adds an error toast", () => {
-    const { result } = renderHook(() => useToast(), { wrapper });
+    const { result } = renderHook(() => useToastAll(), { wrapper });
 
     act(() => {
       result.current.error("Something broke");
@@ -37,7 +40,7 @@ describe("ToastContext", () => {
   });
 
   it("dismisses a toast by id", () => {
-    const { result } = renderHook(() => useToast(), { wrapper });
+    const { result } = renderHook(() => useToastAll(), { wrapper });
 
     act(() => {
       result.current.success("First");
@@ -58,5 +61,11 @@ describe("ToastContext", () => {
     expect(() => {
       renderHook(() => useToast());
     }).toThrow("useToast must be used within ToastProvider");
+  });
+
+  it("throws useToastState when used outside provider", () => {
+    expect(() => {
+      renderHook(() => useToastState());
+    }).toThrow("useToastState must be used within ToastProvider");
   });
 });

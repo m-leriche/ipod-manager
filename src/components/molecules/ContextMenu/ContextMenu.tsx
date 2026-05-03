@@ -3,14 +3,16 @@ import type { ContextMenuProps, ContextMenuItem } from "./types";
 
 export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (ref.current && !ref.current.contains(e.target as Node)) onCloseRef.current();
     };
     document.addEventListener("keydown", handleKey);
     document.addEventListener("mousedown", handleClick);
@@ -18,7 +20,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
       document.removeEventListener("keydown", handleKey);
       document.removeEventListener("mousedown", handleClick);
     };
-  }, [onClose]);
+  }, []);
 
   // Measure off-screen on first render, then place in the correct position
   useEffect(() => {

@@ -6,6 +6,7 @@ mod audioquality;
 mod commands;
 mod convert;
 mod disk;
+pub mod error;
 mod files;
 mod ipod_info;
 mod library;

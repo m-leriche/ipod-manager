@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
+import { useToast } from "../../../contexts/ToastContext";
 import type { Playlist, PlaylistExportResult, SmartPlaylist } from "../../../types/library";
 
 interface PlaylistSidebarProps {
@@ -26,6 +27,7 @@ export const PlaylistSidebar = ({
     setActiveSmartPlaylist,
     deleteSmartPlaylist,
   } = usePlaylist();
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -75,11 +77,11 @@ export const PlaylistSidebar = ({
       const playlist = await createPlaylist(name);
       onPlaylistSelect(playlist.id);
     } catch (e) {
-      alert(`Failed to create playlist: ${e}`);
+      toast.error(`Failed to create playlist: ${e}`);
     }
     setInputValue("");
     setCreating(false);
-  }, [inputValue, createPlaylist, onPlaylistSelect]);
+  }, [inputValue, createPlaylist, onPlaylistSelect, toast]);
 
   const handleRename = useCallback(async () => {
     const name = inputValue.trim();
@@ -90,22 +92,22 @@ export const PlaylistSidebar = ({
     try {
       await renamePlaylist(editingId, name);
     } catch (e) {
-      alert(`Failed to rename playlist: ${e}`);
+      toast.error(`Failed to rename playlist: ${e}`);
     }
     setInputValue("");
     setEditingId(null);
-  }, [inputValue, editingId, renamePlaylist]);
+  }, [inputValue, editingId, renamePlaylist, toast]);
 
   const handleDelete = useCallback(
     async (id: number) => {
       try {
         await deletePlaylist(id);
       } catch (e) {
-        alert(`Failed to delete playlist: ${e}`);
+        toast.error(`Failed to delete playlist: ${e}`);
       }
       setContextMenu(null);
     },
-    [deletePlaylist],
+    [deletePlaylist, toast],
   );
 
   const handleDeleteSmart = useCallback(
@@ -113,11 +115,11 @@ export const PlaylistSidebar = ({
       try {
         await deleteSmartPlaylist(id);
       } catch (e) {
-        alert(`Failed to delete smart playlist: ${e}`);
+        toast.error(`Failed to delete smart playlist: ${e}`);
       }
       setContextMenu(null);
     },
-    [deleteSmartPlaylist],
+    [deleteSmartPlaylist, toast],
   );
 
   const handleExport = useCallback(

@@ -1,9 +1,10 @@
+use crate::error::AppError;
 use crate::library::{self, LibraryDb};
 use crate::playlist_export;
 use tauri::State;
 
 #[tauri::command]
-pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Playlist>, String> {
+pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Playlist>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -13,13 +14,14 @@ pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Play
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn create_playlist(
     name: String,
     db: State<'_, LibraryDb>,
-) -> Result<library::Playlist, String> {
+) -> Result<library::Playlist, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -29,6 +31,7 @@ pub async fn create_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -36,7 +39,7 @@ pub async fn rename_playlist(
     id: i64,
     name: String,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -46,10 +49,11 @@ pub async fn rename_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn delete_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+pub async fn delete_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -59,13 +63,14 @@ pub async fn delete_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), St
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_playlist_tracks(
     playlist_id: i64,
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::PlaylistTrack>, String> {
+) -> Result<Vec<library::PlaylistTrack>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -75,6 +80,7 @@ pub async fn get_playlist_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -82,7 +88,7 @@ pub async fn add_tracks_to_playlist(
     playlist_id: i64,
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -92,6 +98,7 @@ pub async fn add_tracks_to_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -99,7 +106,7 @@ pub async fn remove_tracks_from_playlist(
     playlist_id: i64,
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -109,6 +116,7 @@ pub async fn remove_tracks_from_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -117,7 +125,7 @@ pub async fn move_playlist_track(
     from_position: u32,
     to_position: u32,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -127,6 +135,7 @@ pub async fn move_playlist_track(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -135,7 +144,7 @@ pub async fn export_playlists_to_ipod(
     output_dir: String,
     music_subdir: Option<String>,
     db: State<'_, LibraryDb>,
-) -> Result<playlist_export::PlaylistExportResult, String> {
+) -> Result<playlist_export::PlaylistExportResult, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -164,7 +173,7 @@ pub async fn export_playlists_to_ipod(
             with_tracks.push((pl, tracks));
         }
 
-        Ok(playlist_export::export_playlists(
+        Ok::<_, String>(playlist_export::export_playlists(
             with_tracks,
             &library_root,
             &sub,
@@ -173,6 +182,7 @@ pub async fn export_playlists_to_ipod(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 // ── Smart playlists ──────────────────────────────────────────────
@@ -180,7 +190,7 @@ pub async fn export_playlists_to_ipod(
 #[tauri::command]
 pub async fn get_smart_playlists(
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::SmartPlaylist>, String> {
+) -> Result<Vec<library::SmartPlaylist>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -190,6 +200,7 @@ pub async fn get_smart_playlists(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -200,7 +211,7 @@ pub async fn create_smart_playlist(
     sort_direction: Option<String>,
     limit: Option<u32>,
     db: State<'_, LibraryDb>,
-) -> Result<library::SmartPlaylist, String> {
+) -> Result<library::SmartPlaylist, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -217,6 +228,7 @@ pub async fn create_smart_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -228,7 +240,7 @@ pub async fn update_smart_playlist(
     sort_direction: Option<String>,
     limit: Option<u32>,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -246,10 +258,11 @@ pub async fn update_smart_playlist(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn delete_smart_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+pub async fn delete_smart_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -259,13 +272,14 @@ pub async fn delete_smart_playlist(id: i64, db: State<'_, LibraryDb>) -> Result<
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_smart_playlist_tracks(
     id: i64,
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::LibraryTrack>, String> {
+) -> Result<Vec<library::LibraryTrack>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -275,4 +289,5 @@ pub async fn get_smart_playlist_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }

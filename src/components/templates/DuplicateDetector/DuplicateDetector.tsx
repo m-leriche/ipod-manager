@@ -1,11 +1,13 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useToast } from "../../../contexts/ToastContext";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { formatSize, formatDuration } from "./helpers";
 import type { DuplicateDetectionResult, DuplicateDetectionProgress, DuplicateGroup } from "../../../types/library";
 
 export const DuplicateDetector = () => {
+  const toast = useToast();
   const [result, setResult] = useState<DuplicateDetectionResult | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState<DuplicateDetectionProgress | null>(null);
@@ -38,14 +40,14 @@ export const DuplicateDetector = () => {
     } catch (e) {
       const msg = `${e}`;
       if (!msg.includes("Cancelled")) {
-        alert(`Duplicate detection failed: ${e}`);
+        toast.error(`Duplicate detection failed: ${e}`);
       }
     } finally {
       unlisten();
       setScanning(false);
       setProgress(null);
     }
-  }, []);
+  }, [toast]);
 
   const toggleTrack = useCallback((trackId: number) => {
     setSelectedForDeletion((prev) => {
@@ -85,11 +87,11 @@ export const DuplicateDetector = () => {
       // Re-scan after deletion
       await handleScan();
     } catch (e) {
-      alert(`Failed to delete tracks: ${e}`);
+      toast.error(`Failed to delete tracks: ${e}`);
     } finally {
       setDeleting(false);
     }
-  }, [selectedForDeletion, handleScan]);
+  }, [selectedForDeletion, handleScan, toast]);
 
   const selectedSize = result
     ? result.groups

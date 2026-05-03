@@ -12,6 +12,7 @@ import { PlaylistSidebar } from "./PlaylistSidebar";
 import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useToast } from "../../../contexts/ToastContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
@@ -56,6 +57,7 @@ export const LibraryPlayer = ({
   showTrackList?: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
+  const toast = useToast();
   const { bumpArtCache } = useArtCache();
   const gridResize = useResizableHeight();
   const {
@@ -276,10 +278,10 @@ export const LibraryPlayer = ({
         await invoke("flag_tracks", { trackIds, flagged });
         await fetchBrowserData();
       } catch (e) {
-        alert(`Failed to update sync flags: ${e}`);
+        toast.error(`Failed to update sync flags: ${e}`);
       }
     },
-    [fetchBrowserData],
+    [fetchBrowserData, toast],
   );
 
   const handleRateTracks = useCallback(
@@ -288,10 +290,10 @@ export const LibraryPlayer = ({
         await invoke("rate_tracks", { trackIds, rating });
         await fetchBrowserData();
       } catch (e) {
-        alert(`Failed to update ratings: ${e}`);
+        toast.error(`Failed to update ratings: ${e}`);
       }
     },
-    [fetchBrowserData],
+    [fetchBrowserData, toast],
   );
 
   const handleRepairAlbumArt = useCallback(
@@ -692,7 +694,7 @@ export const LibraryPlayer = ({
                 await createSmartPlaylist(name, rules, sortBy, sortDirection, limit);
               }
             } catch (e) {
-              alert(`Failed to save smart playlist: ${e}`);
+              toast.error(`Failed to save smart playlist: ${e}`);
             }
             setSmartPlaylistEditing(null);
             setSmartPlaylistCreating(false);

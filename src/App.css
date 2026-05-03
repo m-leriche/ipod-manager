@@ -44,6 +44,17 @@
   }
 }
 
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Equalizer animation for now-playing indicator */
 @keyframes equalizer {
   0%,

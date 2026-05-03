@@ -1,4 +1,5 @@
 use crate::albumart;
+use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::metadata;
@@ -11,12 +12,13 @@ pub async fn scan_album_art(
     path: String,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<Vec<albumart::AlbumInfo>, String> {
+) -> Result<Vec<albumart::AlbumInfo>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || albumart::scan_albums(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -24,7 +26,7 @@ pub async fn fix_album_art(
     folders: Vec<String>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<albumart::AlbumArtResult, String> {
+) -> Result<albumart::AlbumArtResult, AppError> {
     let flag = cancel.new_flag();
 
     let result =
@@ -40,12 +42,13 @@ pub async fn scan_metadata_paths(
     paths: Vec<String>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<Vec<metadata::TrackMetadata>, String> {
+) -> Result<Vec<metadata::TrackMetadata>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata_paths(paths, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -53,12 +56,13 @@ pub async fn scan_metadata(
     path: String,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<Vec<metadata::TrackMetadata>, String> {
+) -> Result<Vec<metadata::TrackMetadata>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || metadata::scan_metadata(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -67,7 +71,7 @@ pub async fn save_metadata(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<metadata::MetadataSaveResult, String> {
+) -> Result<metadata::MetadataSaveResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
     let app_clone = app.clone();
@@ -75,7 +79,7 @@ pub async fn save_metadata(
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
-        Ok::<_, String>(metadata::save_metadata(updates, app, flag))
+        Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))??;
@@ -106,12 +110,13 @@ pub async fn repair_analyze(
     tracks: Vec<metadata::TrackMetadata>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<metarepair::RepairReport, String> {
+) -> Result<metarepair::RepairReport, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || metarepair::lookup_and_compare(tracks, app, flag))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -119,13 +124,14 @@ pub async fn repair_compare_release(
     tracks: Vec<metadata::TrackMetadata>,
     mbid: String,
     app: AppHandle,
-) -> Result<metarepair::AlbumRepairReport, String> {
+) -> Result<metarepair::AlbumRepairReport, AppError> {
     tauri::async_runtime::spawn_blocking(move || {
         let _ = &app;
         metarepair::compare_against_release(tracks, &mbid)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -133,7 +139,7 @@ pub async fn sanitize_tags(
     options: sanitize::SanitizeOptions,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<sanitize::SanitizeResult, String> {
+) -> Result<sanitize::SanitizeResult, AppError> {
     let flag = cancel.new_flag();
 
     let result =

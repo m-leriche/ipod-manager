@@ -61,11 +61,11 @@ pub fn run() {
             let db_path = app
                 .path()
                 .app_data_dir()
-                .map_err(|e| format!("Failed to resolve app data dir: {}", e))
-                .unwrap()
+                .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
                 .join("library.db");
 
-            let conn = library::init_db(&db_path).expect("Failed to initialize library database");
+            let conn = library::init_db(&db_path)
+                .map_err(|e| format!("Failed to initialize library database: {}", e))?;
 
             app.manage(LibraryDb::new(conn));
 

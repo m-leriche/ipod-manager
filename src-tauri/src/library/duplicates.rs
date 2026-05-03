@@ -261,7 +261,11 @@ fn build_group(group_id: usize, fingerprint: String, tracks: Vec<LibraryTrack>) 
     if let Some(best_idx) = scored
         .iter()
         .enumerate()
-        .max_by(|a, b| a.1.quality_score.partial_cmp(&b.1.quality_score).unwrap())
+        .max_by(|a, b| {
+            a.1.quality_score
+                .partial_cmp(&b.1.quality_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|(i, _)| i)
     {
         scored[best_idx].is_recommended = true;

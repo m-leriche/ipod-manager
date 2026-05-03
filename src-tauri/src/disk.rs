@@ -50,8 +50,8 @@ pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
         }
     }
 
-    // Priority 3: Fall back to first FAT32 partition
-    Ok(Some(candidates.into_iter().next().unwrap()))
+    // Priority 3: Fall back to first FAT32 partition (vec is non-empty per check above)
+    Ok(candidates.into_iter().next())
 }
 
 /// Check if a mounted filesystem looks like an iPod (has iPod_Control/ or .rockbox/).

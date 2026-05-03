@@ -108,6 +108,19 @@ vi.mock("../contexts/PlaylistContext", () => ({
   PlaylistProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock ToastContext — provides a no-op implementation for all components
+vi.mock("../contexts/ToastContext", () => ({
+  useToast: () => ({
+    toasts: [],
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    dismiss: vi.fn(),
+  }),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({

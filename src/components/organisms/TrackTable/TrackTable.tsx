@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
+import { useToast } from "../../../contexts/ToastContext";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
@@ -56,6 +57,7 @@ export const TrackTable = memo(function TrackTable({
 }: TrackTableProps) {
   const { state, playTrack, playNext, addToQueue } = usePlayback();
   const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist, moveTrack } = usePlaylist();
+  const toast = useToast();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
@@ -280,10 +282,10 @@ export const TrackTable = memo(function TrackTable({
       setSelected(new Set());
       onTracksDeleted?.();
     } catch (e) {
-      alert(`Failed to delete tracks: ${e}`);
+      toast.error(`Failed to delete tracks: ${e}`);
     }
     setDeleteConfirm(null);
-  }, [deleteConfirm, onTracksDeleted]);
+  }, [deleteConfirm, onTracksDeleted, toast]);
 
   const contextMenuItems = contextMenu
     ? (() => {

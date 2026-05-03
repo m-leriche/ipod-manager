@@ -1,5 +1,6 @@
 use crate::audioquality;
 use crate::convert;
+use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::localvideo;
 use crate::youtube;
@@ -7,17 +8,19 @@ use std::process::Command;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
-pub async fn check_yt_dependencies() -> Result<(), String> {
+pub async fn check_yt_dependencies() -> Result<(), AppError> {
     tauri::async_runtime::spawn_blocking(youtube::check_dependencies)
         .await
         .map_err(|e| format!("Check failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn fetch_video_info(url: String) -> Result<youtube::VideoInfo, String> {
+pub async fn fetch_video_info(url: String) -> Result<youtube::VideoInfo, AppError> {
     tauri::async_runtime::spawn_blocking(move || youtube::fetch_video_info(&url))
         .await
         .map_err(|e| format!("Fetch failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -28,7 +31,7 @@ pub async fn download_audio(
     chapters: Vec<youtube::Chapter>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<youtube::DownloadResult, String> {
+) -> Result<youtube::DownloadResult, AppError> {
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -41,21 +44,23 @@ pub async fn download_audio(
 }
 
 #[tauri::command]
-pub async fn check_ffmpeg() -> Result<(), String> {
+pub async fn check_ffmpeg() -> Result<(), AppError> {
     tauri::async_runtime::spawn_blocking(localvideo::check_ffmpeg)
         .await
         .map_err(|e| format!("Check failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn probe_video(path: String) -> Result<localvideo::VideoProbe, String> {
+pub async fn probe_video(path: String) -> Result<localvideo::VideoProbe, AppError> {
     tauri::async_runtime::spawn_blocking(move || localvideo::probe_video(&path))
         .await
         .map_err(|e| format!("Probe failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn get_accurate_duration(path: String) -> Result<f64, String> {
+pub async fn get_accurate_duration(path: String) -> Result<f64, AppError> {
     tauri::async_runtime::spawn_blocking(move || {
         let output = Command::new("ffprobe")
             .args([
@@ -83,6 +88,7 @@ pub async fn get_accurate_duration(path: String) -> Result<f64, String> {
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -93,7 +99,7 @@ pub async fn extract_audio_from_video(
     chapters: Vec<youtube::Chapter>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<youtube::DownloadResult, String> {
+) -> Result<youtube::DownloadResult, AppError> {
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -110,12 +116,13 @@ pub async fn probe_audio_files(
     paths: Vec<String>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<Vec<convert::AudioProbeInfo>, String> {
+) -> Result<Vec<convert::AudioProbeInfo>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || convert::probe_audio_batch(&paths, &app, &flag))
         .await
         .map_err(|e| format!("Probe failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -123,12 +130,15 @@ pub async fn convert_audio(
     requests: Vec<convert::ConvertRequest>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<convert::ConvertResult, String> {
+) -> Result<convert::ConvertResult, AppError> {
     let flag = cancel.new_flag();
 
-    tauri::async_runtime::spawn_blocking(move || convert::convert_batch(requests, app, flag))
-        .await
-        .map_err(|e| format!("Convert failed: {}", e))
+    let result =
+        tauri::async_runtime::spawn_blocking(move || convert::convert_batch(requests, app, flag))
+            .await
+            .map_err(|e| format!("Convert failed: {}", e))?;
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -136,26 +146,31 @@ pub async fn scan_audio_quality(
     path: String,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<Vec<audioquality::AudioFileInfo>, String> {
+) -> Result<Vec<audioquality::AudioFileInfo>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || audioquality::scan_audio_quality(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn generate_spectrogram(
     file_path: String,
-) -> Result<audioquality::SpectrogramResult, String> {
+) -> Result<audioquality::SpectrogramResult, AppError> {
     tauri::async_runtime::spawn_blocking(move || audioquality::generate_spectrogram(&file_path))
         .await
         .map_err(|e| format!("Generation failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn generate_waveform(file_path: String) -> Result<audioquality::WaveformResult, String> {
+pub async fn generate_waveform(
+    file_path: String,
+) -> Result<audioquality::WaveformResult, AppError> {
     tauri::async_runtime::spawn_blocking(move || audioquality::generate_waveform(&file_path, 800))
         .await
         .map_err(|e| format!("Generation failed: {}", e))?
+        .map_err(Into::into)
 }

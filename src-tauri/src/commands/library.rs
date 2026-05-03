@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
@@ -8,16 +9,19 @@ pub async fn scan_library_stats(
     path: String,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
-) -> Result<libstats::LibraryStats, String> {
+) -> Result<libstats::LibraryStats, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || libstats::scan_library_stats(&path, app, flag))
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn get_library_stats(db: State<'_, LibraryDb>) -> Result<libstats::LibraryStats, String> {
+pub async fn get_library_stats(
+    db: State<'_, LibraryDb>,
+) -> Result<libstats::LibraryStats, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -28,35 +32,38 @@ pub async fn get_library_stats(db: State<'_, LibraryDb>) -> Result<libstats::Lib
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, String> {
+pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
         match library::get_library_location(&conn) {
-            Some(loc) => Ok(std::path::Path::new(&loc).exists()),
-            None => Ok(false),
+            Some(loc) => Ok::<_, String>(std::path::Path::new(&loc).exists()),
+            None => Ok::<_, String>(false),
         }
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, String> {
+pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
-        Ok(library::get_library_location(&conn))
+        Ok::<_, String>(library::get_library_location(&conn))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -65,7 +72,7 @@ pub async fn set_library_location(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     let flag = cancel.new_flag();
 
@@ -94,7 +101,7 @@ pub async fn import_to_library(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<library::ImportResult, String> {
+) -> Result<library::ImportResult, AppError> {
     let conn_arc = db.conn_arc();
     let flag = cancel.new_flag();
 
@@ -103,7 +110,7 @@ pub async fn import_to_library(
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
         library::get_library_location(&conn).ok_or_else(|| {
-            "No library location configured. Set one in Settings first.".to_string()
+            AppError::NotFound("No library location configured. Set one in Settings first.".into())
         })?
     };
 
@@ -115,6 +122,7 @@ pub async fn import_to_library(
     })
     .await
     .map_err(|e| format!("Import failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -123,7 +131,7 @@ pub async fn add_library_folder(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
 
@@ -150,18 +158,19 @@ pub async fn add_library_folder(
 pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
-        let library_root =
-            library::get_library_location(&conn).ok_or("No library location set".to_string())?;
+        let library_root = library::get_library_location(&conn)
+            .ok_or_else(|| "No library location set".to_string())?;
         library::delete_tracks(&conn, &library_root, &track_ids)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -169,7 +178,7 @@ pub async fn flag_tracks(
     track_ids: Vec<i64>,
     flagged: bool,
     db: State<'_, LibraryDb>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     if track_ids.is_empty() {
         return Ok(0);
     }
@@ -195,6 +204,7 @@ pub async fn flag_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -202,12 +212,12 @@ pub async fn rate_tracks(
     track_ids: Vec<i64>,
     rating: u8,
     db: State<'_, LibraryDb>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     if track_ids.is_empty() {
         return Ok(0);
     }
     if rating > 5 {
-        return Err("Rating must be 0-5".into());
+        return Err(AppError::InvalidInput("Rating must be 0-5".into()));
     }
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
@@ -231,10 +241,11 @@ pub async fn rate_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), String> {
+pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -245,14 +256,15 @@ pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Re
             rusqlite::params![track_id],
         )
         .map_err(|e| format!("Play count update failed: {}", e))?;
-        Ok(())
+        Ok::<_, String>(())
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), String> {
+pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -262,12 +274,13 @@ pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Re
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_folders(
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::LibraryFolder>, String> {
+) -> Result<Vec<library::LibraryFolder>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -277,6 +290,7 @@ pub async fn get_library_folders(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -284,7 +298,7 @@ pub async fn refresh_library(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
 
@@ -296,13 +310,14 @@ pub async fn refresh_library(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_tracks(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::LibraryTrack>, String> {
+) -> Result<Vec<library::LibraryTrack>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -312,13 +327,14 @@ pub async fn get_library_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_browser_data(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
-) -> Result<library::BrowserData, String> {
+) -> Result<library::BrowserData, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -328,12 +344,13 @@ pub async fn get_library_browser_data(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_artists(
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::ArtistSummary>, String> {
+) -> Result<Vec<library::ArtistSummary>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -343,13 +360,14 @@ pub async fn get_library_artists(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_albums(
     artist: Option<String>,
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::AlbumSummary>, String> {
+) -> Result<Vec<library::AlbumSummary>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -359,12 +377,13 @@ pub async fn get_library_albums(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_genres(
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::GenreSummary>, String> {
+) -> Result<Vec<library::GenreSummary>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -374,13 +393,14 @@ pub async fn get_library_genres(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn search_library(
     query: String,
     db: State<'_, LibraryDb>,
-) -> Result<Vec<library::LibraryTrack>, String> {
+) -> Result<Vec<library::LibraryTrack>, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -390,6 +410,7 @@ pub async fn search_library(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -397,7 +418,7 @@ pub async fn detect_duplicates(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
-) -> Result<library::duplicates::DuplicateDetectionResult, String> {
+) -> Result<library::duplicates::DuplicateDetectionResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
@@ -408,13 +429,14 @@ pub async fn detect_duplicates(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn delete_duplicate_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let conn_arc = db.conn_arc();
     tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
@@ -426,4 +448,5 @@ pub async fn delete_duplicate_tracks(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }

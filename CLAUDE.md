@@ -164,7 +164,7 @@ npm test
 
 - [x] ~~Replace all production `.unwrap()` calls with proper error handling~~
 - [x] ~~Split `commands.rs` (1,342 lines) into domain-focused submodules~~
-- [ ] Add `thiserror`-based `AppError` type for structured errors (replace `String` error propagation)
+- [x] ~~Add `thiserror`-based `AppError` type for structured errors (replace `String` error propagation)~~
 - [ ] Add timeout to sudo operations in `disk.rs` to prevent indefinite hangs
 - [ ] Add proper URL validation for YouTube URLs (use `url` crate instead of `starts_with("http")`)
 - [ ] Add integration tests for Tauri command handlers
@@ -176,13 +176,13 @@ npm test
 - [ ] Add aria-labels to all icon-only buttons (play, stop, expand, close, etc.)
 - [ ] Use semantic HTML for dialogs (`role="dialog"`) and menus (`role="menuitem"`)
 - [ ] Extract remaining inline prop interfaces to `types.ts` files
-- [ ] Replace any `alert()` calls with proper toast/modal notifications
+- [x] ~~Replace any `alert()` calls with proper toast/modal notifications~~
 
 ## Feature TODOs
 
 - [ ] Playlist export (M3U/PLS) for portability beyond iPod
 - [ ] Manual album art upload when auto-repair fails
-- [ ] Toast notification system for non-blocking user feedback
+- [x] ~~Toast notification system for non-blocking user feedback~~
 - [ ] "Recently Added" default smart playlist
 - [ ] Batch find-and-replace in metadata tags
 - [ ] Gapless playback support

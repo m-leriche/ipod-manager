@@ -291,19 +291,22 @@ pub fn get_smart_playlist_tracks(conn: &Connection, id: i64) -> Result<Vec<Libra
         _ => "DESC",
     };
 
+    let sk_title = "sort_key(COALESCE(title, file_name))";
+    let sk_artist = "sort_key(COALESCE(sort_artist, artist, ''))";
+    let sk_album = "sort_key(COALESCE(album, ''))";
+    let disc_track = "COALESCE(disc_number, 0), COALESCE(track_number, 0)";
+
     let order_by = match sort_by.as_deref() {
-        Some("title") => format!("COALESCE(title, file_name) COLLATE NOCASE {dir}"),
-        Some("artist") => format!("COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}"),
-        Some("album") => format!("COALESCE(album, '') COLLATE NOCASE {dir}"),
+        Some("title") => format!("{sk_title} {dir}"),
+        Some("artist") => format!("{sk_artist} {dir}"),
+        Some("album") => format!("{sk_album} {dir}"),
         Some("year") => format!("COALESCE(year, 0) {dir}"),
         Some("rating") => format!("rating {dir}"),
         Some("play_count") => format!("play_count {dir}"),
         Some("duration") => format!("duration_secs {dir}"),
         Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
         Some("date_added") | Some("created_at") => format!("created_at {dir}"),
-        _ => format!(
-            "COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
+        _ => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
     };
 
     let limit_clause = match track_limit {

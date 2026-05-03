@@ -9,6 +9,7 @@ fn test_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         .unwrap();
+    crate::library::queries::register_sort_key(&conn).unwrap();
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tracks (
             id INTEGER PRIMARY KEY,

@@ -8,10 +8,11 @@ const CELL_HEIGHT = 230;
 const GAP = 16;
 const PADDING = 16;
 
+/** Sort key matching the backend: strip "The ", remove non-alphanumeric, lowercase. */
 const sortKey = (s: string): string => {
-  const trimmed = s.trim().toLowerCase();
-  if (trimmed.startsWith("the ")) return trimmed.slice(4);
-  return trimmed;
+  const trimmed = s.trim();
+  const withoutThe = /^the /i.test(trimmed) ? trimmed.slice(4) : trimmed;
+  return withoutThe.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 };
 
 export const AlbumGrid = ({

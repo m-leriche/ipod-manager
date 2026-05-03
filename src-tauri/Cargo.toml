@@ -34,7 +34,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 base64 = "0.22"
 strsim = "0.11"
 rayon = "1.10"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "functions"] }
 percent-encoding = "2"
 symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "ogg", "vorbis", "isomp4", "aiff"] }
 cpal = "0.15"

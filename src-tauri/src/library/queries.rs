@@ -1,3 +1,4 @@
+use rusqlite::functions::FunctionFlags;
 use rusqlite::Connection;
 
 use super::types::{
@@ -7,7 +8,7 @@ use super::types::{
 /// Generate a sort key that strips leading "The ", removes non-alphanumeric
 /// characters, and lowercases — so "The Beatles" sorts under "B" and
 /// punctuation like parentheses/quotes is ignored.
-fn sort_key(s: &str) -> String {
+pub(crate) fn sort_key(s: &str) -> String {
     let trimmed = s.trim();
     let without_the = trimmed
         .strip_prefix("The ")
@@ -19,6 +20,20 @@ fn sort_key(s: &str) -> String {
         .filter(|c| c.is_alphanumeric())
         .flat_map(|c| c.to_lowercase())
         .collect()
+}
+
+/// Register sort_key() as a SQL scalar function on the given connection.
+pub(crate) fn register_sort_key(conn: &Connection) -> Result<(), String> {
+    conn.create_scalar_function(
+        "sort_key",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let raw: String = ctx.get(0)?;
+            Ok(sort_key(&raw))
+        },
+    )
+    .map_err(|e| format!("Failed to register sort_key function: {e}"))
 }
 
 pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
@@ -71,40 +86,33 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         _ => "ASC",
     };
 
+    // Helper fragments — sort_key() is a custom SQL scalar registered on the
+    // connection that mirrors the Rust sort_key(): strips "The ", removes
+    // non-alphanumeric chars, and lowercases.
+    let sk_title = "sort_key(COALESCE(title, file_name))";
+    let sk_artist = "sort_key(COALESCE(sort_artist, artist, ''))";
+    let sk_album = "sort_key(COALESCE(album, ''))";
+    let sk_genre = "sort_key(COALESCE(genre, ''))";
+    let disc_track = "COALESCE(disc_number, 0), COALESCE(track_number, 0)";
+
     let order_by = match filter.sort_by.as_deref() {
-        Some("title") => format!(
-            "COALESCE(title, file_name) COLLATE NOCASE {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
-        Some("artist") => format!(
-            "COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
-        Some("album") => format!(
-            "COALESCE(album, '') COLLATE NOCASE {dir}, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
-        Some("track_number") => format!(
-            "COALESCE(disc_number, 0) {dir}, COALESCE(track_number, 0) {dir}"
-        ),
-        Some("year") => format!(
-            "COALESCE(year, 0) {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
+        Some("title") => format!("{sk_title} {dir}, {sk_artist}, {sk_album}, {disc_track}"),
+        Some("artist") => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
+        Some("album") => format!("{sk_album} {dir}, {disc_track}"),
+        Some("track_number") => {
+            format!("COALESCE(disc_number, 0) {dir}, COALESCE(track_number, 0) {dir}")
+        }
+        Some("year") => format!("COALESCE(year, 0) {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("duration") => format!("duration_secs {dir}"),
         Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
-        Some("genre") => format!(
-            "COALESCE(genre, '') COLLATE NOCASE {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
+        Some("genre") => format!("{sk_genre} {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("date_added") => format!("created_at {dir}"),
-        Some("play_count") => format!(
-            "play_count {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(track_number, 0)"
-        ),
-        Some("flagged") => format!(
-            "flagged {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
-        Some("rating") => format!(
-            "rating {dir}, COALESCE(sort_artist, artist, '') COLLATE NOCASE, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
-        _ => format!(
-            "COALESCE(sort_artist, artist, '') COLLATE NOCASE {dir}, COALESCE(album, '') COLLATE NOCASE, COALESCE(disc_number, 0), COALESCE(track_number, 0)"
-        ),
+        Some("play_count") => {
+            format!("play_count {dir}, {sk_artist}, {sk_album}, COALESCE(track_number, 0)")
+        }
+        Some("flagged") => format!("flagged {dir}, {sk_artist}, {sk_album}, {disc_track}"),
+        Some("rating") => format!("rating {dir}, {sk_artist}, {sk_album}, {disc_track}"),
+        _ => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
     };
 
     let sql = format!(

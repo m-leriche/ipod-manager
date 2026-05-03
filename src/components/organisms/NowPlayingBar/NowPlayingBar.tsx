@@ -23,6 +23,8 @@ interface NowPlayingBarProps {
   onTogglePlaylistSidebar?: () => void;
   showAlbumGrid?: boolean;
   onToggleAlbumGrid?: () => void;
+  showTrackList?: boolean;
+  onToggleTrackList?: () => void;
 }
 
 export const NowPlayingBar = ({
@@ -40,6 +42,8 @@ export const NowPlayingBar = ({
   onTogglePlaylistSidebar,
   showAlbumGrid,
   onToggleAlbumGrid,
+  showTrackList,
+  onToggleTrackList,
 }: NowPlayingBarProps) => {
   const {
     state,
@@ -214,6 +218,11 @@ export const NowPlayingBar = ({
             <rect x="13" y="3" width="8" height="8" rx="1" />
             <rect x="3" y="13" width="8" height="8" rx="1" />
             <rect x="13" y="13" width="8" height="8" rx="1" />
+          </PanelToggle>
+        )}
+        {!miniPlayer && showAlbumGrid && onToggleTrackList && (
+          <PanelToggle active={showTrackList} onClick={onToggleTrackList} title="Track list">
+            <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </PanelToggle>
         )}
         {!miniPlayer && onToggleInfoPanel && (

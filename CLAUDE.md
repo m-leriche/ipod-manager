@@ -121,8 +121,8 @@ cd src-tauri && cargo fmt
 # Type-check frontend
 npx tsc --noEmit
 
-# Check Rust compiles
-cd src-tauri && cargo check
+# Check Rust compiles and passes clippy (CI runs clippy with -D warnings)
+cd src-tauri && cargo clippy -- -D warnings
 
 # Run all tests
 npm test

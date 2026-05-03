@@ -25,6 +25,7 @@ import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackT
 import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeResult } from "../../../types/metadata";
 import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { useArtCache } from "../../../contexts/ArtCacheContext";
 
 export const MetadataEditor = ({
   initialPaths,
@@ -40,6 +41,7 @@ export const MetadataEditor = ({
     finish: finishProgress,
     fail: failProgress,
   } = useProgress();
+  const { bumpArtCache } = useArtCache();
 
   // ── Shared state ──
   const [phase, setPhase] = useState<Phase>("idle");
@@ -262,13 +264,14 @@ export const MetadataEditor = ({
     try {
       await invoke("fix_album_art", { folders });
       setArtCacheBust((n) => n + 1);
+      bumpArtCache();
     } catch (e) {
       console.error("Failed to repair album art:", e);
     } finally {
       setRepairingArt(false);
       unlisten();
     }
-  }, [selectedTracks]);
+  }, [selectedTracks, bumpArtCache]);
 
   const handleSave = async () => {
     const updates = [];

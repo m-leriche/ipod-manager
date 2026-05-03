@@ -29,6 +29,7 @@ interface TrackTableProps {
   onTracksDeleted?: () => void;
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
   onRateTracks?: (trackIds: number[], rating: number) => void;
+  onRepairAlbumArt?: (tracks: LibraryTrack[]) => void;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
@@ -49,6 +50,7 @@ export const TrackTable = memo(function TrackTable({
   onTracksDeleted,
   onFlagTracks,
   onRateTracks,
+  onRepairAlbumArt,
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
@@ -376,6 +378,23 @@ export const TrackTable = memo(function TrackTable({
                       },
                     },
                   ],
+                },
+              ]
+            : []),
+          ...(onRepairAlbumArt
+            ? [
+                {
+                  label: (() => {
+                    const folderCount = new Set(tracks.filter((t) => ids.includes(t.id)).map((t) => t.folder_path))
+                      .size;
+                    return folderCount > 1
+                      ? `Find & Repair Album Art (${folderCount} albums)`
+                      : "Find & Repair Album Art";
+                  })(),
+                  onClick: () => {
+                    onRepairAlbumArt(tracks.filter((t) => ids.includes(t.id)));
+                    setContextMenu(null);
+                  },
                 },
               ]
             : []),

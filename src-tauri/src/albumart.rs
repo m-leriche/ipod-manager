@@ -287,14 +287,9 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
     Ok(false)
 }
 
-/// Fetch cover art from the MusicBrainz Cover Art Archive.
-fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), String> {
-    let releases = crate::musicbrainz::search_releases(artist, album)?;
-    if releases.is_empty() {
-        return Err("No results from MusicBrainz".into());
-    }
-
-    for release in &releases {
+/// Try to download and save cover art from a list of MusicBrainz releases.
+fn try_save_cover(releases: &[crate::musicbrainz::MbRelease], dir: &Path) -> Result<(), String> {
+    for release in releases {
         let Ok(bytes) = crate::musicbrainz::fetch_cover_art(&release.id) else {
             continue;
         };
@@ -313,6 +308,58 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
             .map_err(|e| format!("Save failed: {}", e))?;
 
         return Ok(());
+    }
+
+    Err("No cover art found".into())
+}
+
+/// Fetch cover art from the MusicBrainz Cover Art Archive.
+/// Tries exact names first, then retries with normalized names (stripping
+/// disc indicators, edition markers, remaster tags, etc.).
+fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), String> {
+    // Attempt 1: exact names
+    if let Ok(releases) = crate::musicbrainz::search_releases(artist, album) {
+        if !releases.is_empty() {
+            if try_save_cover(&releases, dir).is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    // Attempt 2: normalized album name (strip disc/edition/remaster noise)
+    let clean_album = crate::musicbrainz::normalize_for_search(album);
+    let clean_artist = crate::musicbrainz::normalize_for_search(artist);
+
+    let album_changed = clean_album != album;
+    let artist_changed = clean_artist != artist;
+
+    if album_changed {
+        if let Ok(releases) = crate::musicbrainz::search_releases(artist, &clean_album) {
+            if !releases.is_empty() {
+                if try_save_cover(&releases, dir).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    // Attempt 3: both normalized
+    if artist_changed && album_changed {
+        if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, &clean_album) {
+            if !releases.is_empty() {
+                if try_save_cover(&releases, dir).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+    } else if artist_changed {
+        if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, album) {
+            if !releases.is_empty() {
+                if try_save_cover(&releases, dir).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
     }
 
     Err("No cover art found on MusicBrainz".into())

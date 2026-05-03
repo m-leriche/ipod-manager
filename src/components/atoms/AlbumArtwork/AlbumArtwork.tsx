@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useArtCache } from "../../../contexts/ArtCacheContext";
 
 const sizes = {
   sm: "w-8 h-8",
@@ -26,12 +27,14 @@ export const AlbumArtwork = ({
   onRepair,
   cacheBust,
 }: AlbumArtworkProps) => {
+  const { artCacheBust } = useArtCache();
+  const effectiveBust = (cacheBust ?? 0) + artCacheBust;
   const [failed, setFailed] = useState(false);
 
   // Reset failed state when the folder changes or after a repair (cacheBust changes)
   useEffect(() => {
     setFailed(false);
-  }, [folderPath, cacheBust]);
+  }, [folderPath, effectiveBust]);
 
   const showFallback = !folderPath || failed;
 
@@ -71,7 +74,7 @@ export const AlbumArtwork = ({
         </div>
       ) : (
         <img
-          src={convertFileSrc(folderPath + "/cover.jpg") + (cacheBust ? `?v=${cacheBust}` : "")}
+          src={convertFileSrc(folderPath + "/cover.jpg") + (effectiveBust ? `?v=${effectiveBust}` : "")}
           alt=""
           loading="lazy"
           className="w-full h-full object-cover"

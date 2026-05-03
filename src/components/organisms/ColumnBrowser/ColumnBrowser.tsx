@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
+import { useColumnBrowserWidths } from "./useColumnBrowserWidths";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
 export interface ColumnContextMenuAction {
@@ -49,6 +50,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   onAddAllToPlaylist,
   playlists,
 }: ColumnBrowserProps) {
+  const { widths, containerRef, onDragStart } = useColumnBrowserWidths();
+
   const genreItems = useMemo<BrowserItem[]>(
     () => genres.map((g) => ({ label: g.name, count: g.track_count })),
     [genres],
@@ -63,7 +66,7 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   );
 
   return (
-    <div className="flex border-b border-border shrink-0" style={{ height: "35%" }}>
+    <div ref={containerRef} className="flex border-b border-border h-full">
       <BrowserColumn
         title="Genres"
         columnType="genre"
@@ -76,6 +79,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         onAddAllToQueue={onAddAllToQueue}
         onAddAllToPlaylist={onAddAllToPlaylist}
         playlists={playlists}
+        widthPercent={`${widths[0] * 100}%`}
+        onResizeStart={(e) => onDragStart(0, e)}
       />
       <BrowserColumn
         title="Artists"
@@ -89,6 +94,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         onAddAllToQueue={onAddAllToQueue}
         onAddAllToPlaylist={onAddAllToPlaylist}
         playlists={playlists}
+        widthPercent={`${widths[1] * 100}%`}
+        onResizeStart={(e) => onDragStart(1, e)}
       />
       <BrowserColumn
         title="Albums"
@@ -102,6 +109,7 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         onAddAllToQueue={onAddAllToQueue}
         onAddAllToPlaylist={onAddAllToPlaylist}
         playlists={playlists}
+        widthPercent={`${widths[2] * 100}%`}
         isLast
       />
     </div>
@@ -120,6 +128,8 @@ interface BrowserColumnProps {
   onAddAllToQueue?: (action: ColumnContextMenuAction) => void;
   onAddAllToPlaylist?: (action: ColumnContextMenuAction, playlistId: number) => void;
   playlists?: { id: number; name: string }[];
+  widthPercent: string;
+  onResizeStart?: (e: React.MouseEvent) => void;
   isLast?: boolean;
 }
 
@@ -138,6 +148,8 @@ const BrowserColumn = memo(function BrowserColumn({
   onAddAllToQueue,
   onAddAllToPlaylist,
   playlists,
+  widthPercent,
+  onResizeStart,
   isLast,
 }: BrowserColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -297,7 +309,8 @@ const BrowserColumn = memo(function BrowserColumn({
 
   return (
     <div
-      className={`flex-1 min-w-0 flex flex-col outline-none ${isLast ? "" : "border-r border-border"}`}
+      className={`min-w-0 flex flex-col outline-none relative ${isLast ? "" : "border-r border-border"}`}
+      style={{ width: widthPercent, flex: "none" }}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
@@ -352,6 +365,15 @@ const BrowserColumn = memo(function BrowserColumn({
           items={contextMenuItems}
           onClose={() => setContextMenu(null)}
         />
+      )}
+
+      {onResizeStart && (
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute top-0 -right-[4px] w-[9px] h-full cursor-col-resize group/handle z-20"
+        >
+          <div className="absolute left-1 top-1 bottom-1 w-px bg-transparent group-hover/handle:bg-text-tertiary group-active/handle:bg-accent transition-colors" />
+        </div>
       )}
     </div>
   );

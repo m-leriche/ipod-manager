@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import type { AlbumSummary } from "../../../types/library";
 import type { AlbumGridProps, AlbumSortMode } from "./types";
 
 const MIN_CELL_WIDTH = 160;
@@ -20,12 +22,14 @@ export const AlbumGrid = ({
   selectedAlbum,
   onSelectAlbum,
   onPlayAlbum,
+  onFixAlbumArt,
   sortMode = "album",
   onSortModeChange,
 }: AlbumGridProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [lanes, setLanes] = useState(4);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumSummary } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -96,6 +100,11 @@ export const AlbumGrid = ({
     [onSortModeChange],
   );
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, album: AlbumSummary) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, album });
+  }, []);
+
   if (albums.length === 0) {
     return (
       <div className="h-full flex items-center justify-center bg-bg-secondary border border-border rounded-2xl">
@@ -146,6 +155,7 @@ export const AlbumGrid = ({
                     key={`${album.artist}-${album.name}`}
                     onClick={() => handleClick(album.name)}
                     onDoubleClick={() => handleDoubleClick(album.name)}
+                    onContextMenu={(e) => handleContextMenu(e, album)}
                     className={`flex flex-col items-center text-center transition-all rounded-xl p-2 min-w-0 ${
                       selectedAlbum === album.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-bg-card/50"
                     }`}
@@ -166,6 +176,32 @@ export const AlbumGrid = ({
           })}
         </div>
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: "Play Album",
+              onClick: () => {
+                onPlayAlbum?.(contextMenu.album.name);
+                setContextMenu(null);
+              },
+            },
+            { type: "separator" },
+            {
+              label: "Fix Album Artwork",
+              onClick: () => {
+                onFixAlbumArt?.(contextMenu.album);
+                setContextMenu(null);
+              },
+              disabled: !onFixAlbumArt,
+            },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

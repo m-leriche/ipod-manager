@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
@@ -60,6 +60,12 @@ export const LibraryPlayer = ({
   const toast = useToast();
   const { bumpArtCache } = useArtCache();
   const gridResize = useResizableHeight();
+  const browserResize = useResizableHeight({
+    storageKey: "crate-browser-height",
+    defaultFraction: 0.35,
+    minFraction: 0.15,
+    maxFraction: 0.6,
+  });
   const {
     playTrack,
     addToQueue,
@@ -108,6 +114,7 @@ export const LibraryPlayer = ({
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
+  const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
 
   // ── Global Cmd+F to focus search ─────────────────────────────
   useEffect(() => {
@@ -180,6 +187,22 @@ export const LibraryPlayer = ({
 
   const fetchBrowserData = useCallback(async () => {
     const id = ++fetchIdRef.current;
+    const isUnfiltered = !selectedGenre && !selectedArtist && !selectedAlbum && !debouncedSearch && !flaggedOnly;
+
+    // Instant restore from in-memory cache when returning to unfiltered state
+    if (
+      isUnfiltered &&
+      unfilteredCacheRef.current &&
+      unfilteredCacheRef.current.sortBy === sortBy &&
+      unfilteredCacheRef.current.sortDirection === sortDirection
+    ) {
+      const cached = unfilteredCacheRef.current.data;
+      setTracks(cached.tracks);
+      setGenreList(cached.genres);
+      setArtistList(cached.artists);
+      setAlbumList(cached.albums);
+    }
+
     try {
       const filter: LibraryFilter = {
         sort_by: sortBy,
@@ -192,11 +215,14 @@ export const LibraryPlayer = ({
       };
       const data = await invoke<BrowserData>("get_library_browser_data", { filter });
       if (id !== fetchIdRef.current) return;
-      setTracks(data.tracks);
-      setGenreList(data.genres);
-      setArtistList(data.artists);
-      setAlbumList(data.albums);
-      if (!selectedGenre && !selectedArtist && !selectedAlbum && !debouncedSearch) {
+      startTransition(() => {
+        setTracks(data.tracks);
+        setGenreList(data.genres);
+        setArtistList(data.artists);
+        setAlbumList(data.albums);
+      });
+      if (isUnfiltered) {
+        unfilteredCacheRef.current = { data, sortBy, sortDirection };
         setCachedLibrary({ hasLibrary: true, browserData: data, cachedAt: Date.now() });
       }
       if (playAfterFetchRef.current && data.tracks.length > 0) {
@@ -230,6 +256,11 @@ export const LibraryPlayer = ({
         setGenreList(cached.browserData.genres);
         setArtistList(cached.browserData.artists);
         setAlbumList(cached.browserData.albums);
+        unfilteredCacheRef.current = {
+          data: cached.browserData,
+          sortBy: localStorage.getItem(SORT_BY_KEY) || "artist",
+          sortDirection: localStorage.getItem(SORT_DIR_KEY) || "asc",
+        };
         setDataLoaded(true);
         // Background revalidation happens via the useEffect that watches dataLoaded
         return;
@@ -667,22 +698,36 @@ export const LibraryPlayer = ({
               </>
             ) : (
               showColumnBrowser && (
-                <ColumnBrowser
-                  genres={genreList}
-                  artists={artistList}
-                  albums={albumList}
-                  selectedGenre={selectedGenre}
-                  selectedArtist={selectedArtist}
-                  selectedAlbum={selectedAlbum}
-                  onSelectGenre={handleSelectGenre}
-                  onSelectArtist={handleSelectArtist}
-                  onSelectAlbum={handleSelectAlbum}
-                  onPlay={handlePlayColumn}
-                  onPlayAll={handleColumnPlayAll}
-                  onAddAllToQueue={handleColumnAddToQueue}
-                  onAddAllToPlaylist={handleColumnAddToPlaylist}
-                  playlists={playlists}
-                />
+                <>
+                  <div
+                    ref={browserResize.containerRef}
+                    style={{ height: `${browserResize.fraction * 100}%` }}
+                    className="shrink-0 min-h-0"
+                  >
+                    <ColumnBrowser
+                      genres={genreList}
+                      artists={artistList}
+                      albums={albumList}
+                      selectedGenre={selectedGenre}
+                      selectedArtist={selectedArtist}
+                      selectedAlbum={selectedAlbum}
+                      onSelectGenre={handleSelectGenre}
+                      onSelectArtist={handleSelectArtist}
+                      onSelectAlbum={handleSelectAlbum}
+                      onPlay={handlePlayColumn}
+                      onPlayAll={handleColumnPlayAll}
+                      onAddAllToQueue={handleColumnAddToQueue}
+                      onAddAllToPlaylist={handleColumnAddToPlaylist}
+                      playlists={playlists}
+                    />
+                  </div>
+                  <div
+                    onMouseDown={browserResize.onDragStart}
+                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                  >
+                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+                  </div>
+                </>
               )
             )}
           </>

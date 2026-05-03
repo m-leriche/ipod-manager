@@ -9,9 +9,11 @@ import { PlaybackProvider } from "./contexts/PlaybackContext";
 import { EqualizerProvider } from "./contexts/EqualizerContext";
 import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { ToastProvider } from "./contexts/ToastContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
+import { ToastContainer } from "./components/atoms/Toast/Toast";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
 import { SyncManager } from "./components/templates/SyncManager/SyncManager";
@@ -34,18 +36,21 @@ type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "duplicates" 
 
 const App = () => (
   <ThemeProvider>
-    <ProgressProvider>
-      <ArtCacheProvider>
-        <EqualizerProvider>
-          <PlaybackProvider>
-            <PlaylistProvider>
-              <AppContent />
-              <ProgressModal />
-            </PlaylistProvider>
-          </PlaybackProvider>
-        </EqualizerProvider>
-      </ArtCacheProvider>
-    </ProgressProvider>
+    <ToastProvider>
+      <ProgressProvider>
+        <ArtCacheProvider>
+          <EqualizerProvider>
+            <PlaybackProvider>
+              <PlaylistProvider>
+                <AppContent />
+                <ProgressModal />
+                <ToastContainer />
+              </PlaylistProvider>
+            </PlaybackProvider>
+          </EqualizerProvider>
+        </ArtCacheProvider>
+      </ProgressProvider>
+    </ToastProvider>
   </ThemeProvider>
 );
 

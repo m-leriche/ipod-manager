@@ -24,6 +24,7 @@ const initialState: PlaybackState = {
   currentTrack: restoredState?.currentTrack ?? null,
   isPlaying: false,
   volume: loadVolume(),
+  speed: 1.0,
   queue: restoredState?.queue ?? [],
   queueIndex: restoredState?.queueIndex ?? -1,
   shuffle: restoredState?.shuffle ?? false,
@@ -629,6 +630,12 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     });
   }, []);
 
+  const setSpeed = useCallback((speed: number) => {
+    const clamped = Math.max(0.25, Math.min(4, speed));
+    invoke("audio_set_speed", { speed: clamped }).catch(() => {});
+    setState((prev) => ({ ...prev, speed: clamped }));
+  }, []);
+
   const clearPlaybackError = useCallback(() => {
     setState((prev) => (prev.playbackError ? { ...prev, playbackError: null } : prev));
   }, []);
@@ -653,6 +660,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       clearQueue,
       toggleShuffle,
       cycleRepeat,
+      setSpeed,
       clearPlaybackError,
     }),
     [
@@ -673,6 +681,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       clearQueue,
       toggleShuffle,
       cycleRepeat,
+      setSpeed,
       clearPlaybackError,
     ],
   );

@@ -38,6 +38,16 @@ export const useIdentifyActions = (
 
   const startIdentify = async (filePaths: string[]) => {
     if (filePaths.length === 0) return;
+
+    // Check that fpcalc is installed before starting
+    try {
+      await invoke("check_fpcalc");
+    } catch (e) {
+      setError(`${e}`);
+      failProgress(`${e}`);
+      return;
+    }
+
     setPhase("looking_up");
     setError(null);
     setResults(null);

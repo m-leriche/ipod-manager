@@ -1,16 +1,30 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
-import type { AlbumGridProps } from "./types";
+import type { AlbumGridProps, AlbumSortMode } from "./types";
 
 const MIN_CELL_WIDTH = 160;
 const CELL_HEIGHT = 230;
 const GAP = 16;
 const PADDING = 16;
 
-export const AlbumGrid = ({ albums, selectedAlbum, onSelectAlbum, onPlayAlbum }: AlbumGridProps) => {
+const sortKey = (s: string): string => {
+  const trimmed = s.trim().toLowerCase();
+  if (trimmed.startsWith("the ")) return trimmed.slice(4);
+  return trimmed;
+};
+
+export const AlbumGrid = ({
+  albums,
+  selectedAlbum,
+  onSelectAlbum,
+  onPlayAlbum,
+  sortMode = "album",
+  onSortModeChange,
+}: AlbumGridProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [lanes, setLanes] = useState(4);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -24,7 +38,21 @@ export const AlbumGrid = ({ albums, selectedAlbum, onSelectAlbum, onPlayAlbum }:
     return () => observer.disconnect();
   }, []);
 
-  const rowCount = Math.ceil(albums.length / lanes);
+  const sortedAlbums = useMemo(() => {
+    const sorted = [...albums];
+    if (sortMode === "artist") {
+      sorted.sort((a, b) => {
+        const cmp = sortKey(a.artist).localeCompare(sortKey(b.artist));
+        if (cmp !== 0) return cmp;
+        return sortKey(a.name).localeCompare(sortKey(b.name));
+      });
+    } else {
+      sorted.sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name)));
+    }
+    return sorted;
+  }, [albums, sortMode]);
+
+  const rowCount = Math.ceil(sortedAlbums.length / lanes);
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -33,11 +61,38 @@ export const AlbumGrid = ({ albums, selectedAlbum, onSelectAlbum, onPlayAlbum }:
     overscan: 3,
   });
 
+  // Delay single-click to avoid interfering with double-click
   const handleClick = useCallback(
     (albumName: string) => {
-      onSelectAlbum(selectedAlbum === albumName ? null : albumName);
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = undefined;
+        return;
+      }
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = undefined;
+        onSelectAlbum(selectedAlbum === albumName ? null : albumName);
+      }, 200);
     },
     [selectedAlbum, onSelectAlbum],
+  );
+
+  const handleDoubleClick = useCallback(
+    (albumName: string) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = undefined;
+      }
+      onPlayAlbum?.(albumName);
+    },
+    [onPlayAlbum],
+  );
+
+  const handleSortToggle = useCallback(
+    (mode: AlbumSortMode) => {
+      onSortModeChange?.(mode);
+    },
+    [onSortModeChange],
   );
 
   if (albums.length === 0) {
@@ -49,58 +104,78 @@ export const AlbumGrid = ({ albums, selectedAlbum, onSelectAlbum, onPlayAlbum }:
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full overflow-y-auto overflow-x-hidden bg-bg-secondary border border-border rounded-2xl"
-    >
-      <div
-        className="relative"
-        style={{
-          height: virtualizer.getTotalSize() + PADDING * 2,
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const startIndex = virtualRow.index * lanes;
-          const rowAlbums = albums.slice(startIndex, startIndex + lanes);
+    <div className="h-full flex flex-col bg-bg-secondary border border-border rounded-2xl overflow-hidden">
+      {/* Sort toggle header */}
+      <div className="flex items-center gap-1 px-3 py-1 border-b border-border shrink-0">
+        <span className="text-[10px] text-text-tertiary mr-1">Sort:</span>
+        <SortButton active={sortMode === "album"} onClick={() => handleSortToggle("album")} label="Album" />
+        <SortButton active={sortMode === "artist"} onClick={() => handleSortToggle("artist")} label="Artist" />
+        <span className="flex-1" />
+        <span className="text-[10px] text-text-tertiary tabular-nums">{albums.length} albums</span>
+      </div>
 
-          return (
-            <div
-              key={virtualRow.key}
-              className="absolute left-0 right-0"
-              style={{
-                top: virtualRow.start + PADDING,
-                height: CELL_HEIGHT,
-                display: "grid",
-                gridTemplateColumns: `repeat(${lanes}, 1fr)`,
-                gap: GAP,
-                paddingLeft: PADDING,
-                paddingRight: PADDING,
-              }}
-            >
-              {rowAlbums.map((album) => (
-                <button
-                  key={`${album.artist}-${album.name}`}
-                  onClick={() => handleClick(album.name)}
-                  onDoubleClick={() => onPlayAlbum?.(album.name)}
-                  className={`flex flex-col items-center text-center transition-all rounded-xl p-2 min-w-0 ${
-                    selectedAlbum === album.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-bg-card/50"
-                  }`}
-                >
-                  <AlbumArtwork folderPath={album.folder_path} size="lg" className="rounded-lg" />
-                  <div className="mt-2 w-full min-w-0">
-                    <div className="text-[11px] font-medium text-text-primary truncate">{album.name}</div>
-                    <div className="text-[10px] text-text-tertiary truncate">{album.artist}</div>
-                    <div className="text-[10px] text-text-tertiary/60 mt-0.5">
-                      {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
-                      {album.year && ` · ${album.year}`}
+      {/* Scrollable grid */}
+      <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+        <div
+          className="relative"
+          style={{
+            height: virtualizer.getTotalSize() + PADDING * 2,
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const startIndex = virtualRow.index * lanes;
+            const rowAlbums = sortedAlbums.slice(startIndex, startIndex + lanes);
+
+            return (
+              <div
+                key={virtualRow.key}
+                className="absolute left-0 right-0"
+                style={{
+                  top: virtualRow.start + PADDING,
+                  height: CELL_HEIGHT,
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${lanes}, 1fr)`,
+                  gap: GAP,
+                  paddingLeft: PADDING,
+                  paddingRight: PADDING,
+                }}
+              >
+                {rowAlbums.map((album) => (
+                  <button
+                    key={`${album.artist}-${album.name}`}
+                    onClick={() => handleClick(album.name)}
+                    onDoubleClick={() => handleDoubleClick(album.name)}
+                    className={`flex flex-col items-center text-center transition-all rounded-xl p-2 min-w-0 ${
+                      selectedAlbum === album.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-bg-card/50"
+                    }`}
+                  >
+                    <AlbumArtwork folderPath={album.folder_path} size="lg" className="rounded-lg" />
+                    <div className="mt-2 w-full min-w-0">
+                      <div className="text-[11px] font-medium text-text-primary truncate">{album.name}</div>
+                      <div className="text-[10px] text-text-tertiary truncate">{album.artist}</div>
+                      <div className="text-[10px] text-text-tertiary/60 mt-0.5">
+                        {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
+                        {album.year && ` · ${album.year}`}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          );
-        })}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 };
+
+const SortButton = ({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) => (
+  <button
+    onClick={onClick}
+    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+      active ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
+    }`}
+  >
+    {label}
+  </button>
+);

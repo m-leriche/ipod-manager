@@ -6,6 +6,7 @@ export interface PlaybackState {
   currentTrack: LibraryTrack | null;
   isPlaying: boolean;
   volume: number;
+  speed: number;
   queue: LibraryTrack[];
   queueIndex: number;
   shuffle: boolean;
@@ -37,5 +38,6 @@ export interface PlaybackContextValue {
   clearQueue: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  setSpeed: (speed: number) => void;
   clearPlaybackError: () => void;
 }

@@ -2,6 +2,7 @@ pub mod decoder;
 pub mod engine;
 pub mod equalizer;
 pub mod resampler;
+pub mod time_stretch;
 pub mod types;
 
 use std::sync::Arc;
@@ -70,6 +71,10 @@ impl AudioEngine {
 
     pub fn set_eq(&self, config: EqConfig) {
         self.send(AudioCommand::SetEq { config });
+    }
+
+    pub fn set_speed(&self, speed: f64) {
+        self.send(AudioCommand::SetSpeed { speed });
     }
 
     pub fn get_status(&self) -> PlaybackStatus {

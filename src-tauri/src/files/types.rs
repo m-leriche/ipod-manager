@@ -51,11 +51,15 @@ impl SyncCancel {
         Self(Mutex::new(Arc::new(AtomicBool::new(false))))
     }
     pub fn cancel(&self) {
-        self.0.lock().unwrap().store(true, Ordering::Relaxed);
+        if let Ok(guard) = self.0.lock() {
+            guard.store(true, Ordering::Relaxed);
+        }
     }
     pub fn new_flag(&self) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(false));
-        *self.0.lock().unwrap() = flag.clone();
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = flag.clone();
+        }
         flag
     }
 }

@@ -17,7 +17,7 @@ fn copy_pool() -> &'static rayon::ThreadPool {
             .num_threads(4)
             .thread_name(|i| format!("copy-worker-{}", i))
             .build()
-            .unwrap()
+            .expect("failed to create copy thread pool")
     })
 }
 
@@ -154,10 +154,9 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
             }
             if let Some(parent) = dest_file.parent() {
                 if let Err(e) = fs::create_dir_all(parent) {
-                    errors
-                        .lock()
-                        .unwrap()
-                        .push(format!("Create dir {}: {}", parent.display(), e));
+                    if let Ok(mut errs) = errors.lock() {
+                        errs.push(format!("Create dir {}: {}", parent.display(), e));
+                    }
                     return;
                 }
             }
@@ -173,22 +172,17 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
                     let _ = fs::remove_file(dest_file);
                     if is_no_space(&e) {
                         progress.cancel_flag.store(true, Ordering::Relaxed);
-                        errors
-                            .lock()
-                            .unwrap()
-                            .push("Disk full — stopped copying".to_string());
-                    } else {
-                        errors.lock().unwrap().push(format!(
-                            "Copy {} failed: {}",
-                            src_file.display(),
-                            e
-                        ));
+                        if let Ok(mut errs) = errors.lock() {
+                            errs.push("Disk full — stopped copying".to_string());
+                        }
+                    } else if let Ok(mut errs) = errors.lock() {
+                        errs.push(format!("Copy {} failed: {}", src_file.display(), e));
                     }
                 }
             }
         });
     });
-    errors.into_inner().unwrap()
+    errors.into_inner().unwrap_or_else(|e| e.into_inner())
 }
 
 pub fn copy_file_list(

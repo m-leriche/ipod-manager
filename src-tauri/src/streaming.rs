@@ -69,7 +69,7 @@ pub fn handle_request<R: tauri::Runtime>(
             return Response::builder()
                 .status(400)
                 .body(b"Bad path encoding".to_vec())
-                .unwrap();
+                .expect("valid HTTP response");
         }
     };
 
@@ -79,7 +79,7 @@ pub fn handle_request<R: tauri::Runtime>(
         return Response::builder()
             .status(404)
             .body(b"Not found".to_vec())
-            .unwrap();
+            .expect("valid HTTP response");
     }
 
     let file_size = match fs::metadata(file_path) {
@@ -88,7 +88,7 @@ pub fn handle_request<R: tauri::Runtime>(
             return Response::builder()
                 .status(404)
                 .body(b"Not found".to_vec())
-                .unwrap();
+                .expect("valid HTTP response");
         }
     };
 
@@ -110,7 +110,7 @@ pub fn handle_request<R: tauri::Runtime>(
                     return Response::builder()
                         .status(500)
                         .body(b"Read error".to_vec())
-                        .unwrap();
+                        .expect("valid HTTP response");
                 }
             };
 
@@ -118,7 +118,7 @@ pub fn handle_request<R: tauri::Runtime>(
                 return Response::builder()
                     .status(500)
                     .body(b"Seek error".to_vec())
-                    .unwrap();
+                    .expect("valid HTTP response");
             }
 
             let mut buf = vec![0u8; length as usize];
@@ -128,7 +128,7 @@ pub fn handle_request<R: tauri::Runtime>(
                     return Response::builder()
                         .status(500)
                         .body(b"Read error".to_vec())
-                        .unwrap();
+                        .expect("valid HTTP response");
                 }
             };
             buf.truncate(bytes_read);
@@ -148,7 +148,7 @@ pub fn handle_request<R: tauri::Runtime>(
                 )
                 .header("Accept-Ranges", "bytes")
                 .body(buf)
-                .unwrap();
+                .expect("valid HTTP response");
         }
     }
 
@@ -159,7 +159,7 @@ pub fn handle_request<R: tauri::Runtime>(
             return Response::builder()
                 .status(500)
                 .body(b"Read error".to_vec())
-                .unwrap();
+                .expect("valid HTTP response");
         }
     };
 
@@ -169,7 +169,7 @@ pub fn handle_request<R: tauri::Runtime>(
         .header("Content-Length", file_size.to_string())
         .header("Accept-Ranges", "bytes")
         .body(body)
-        .unwrap()
+        .expect("valid HTTP response")
 }
 
 #[cfg(test)]

@@ -53,7 +53,7 @@ React calls Rust via `invoke()` from `@tauri-apps/api/core`. Tauri commands are 
 
 ### Rust Backend Modules (src-tauri/src/)
 
-- **commands.rs** — Thin Tauri command handlers. Each one delegates to `disk`, `files`, `albumart`, `youtube`, or `localvideo`. Entry point for all frontend `invoke()` calls.
+- **commands/** — Thin Tauri command handlers split by domain: `ipod.rs`, `files.rs`, `media.rs`, `metadata.rs`, `library.rs`, `playlists.rs`, `audio.rs`, `system.rs`. Each command delegates to domain modules. Entry point for all frontend `invoke()` calls.
 - **disk.rs** — macOS-specific iPod detection by parsing `diskutil list` output for FAT32 partitions. Mount/unmount via `sudo mount -t msdos` with password piped through stdin.
 - **files.rs** — Directory listing (`FileEntry`), recursive comparison (`CompareEntry` tree), copy/delete with progress events. `SyncCancel` (shared `Arc<AtomicBool>`) enables cancellation from the frontend.
 - **albumart.rs** — Scans folders for albums missing `cover.jpg`. Two-tier fix: (1) extract embedded art from audio tags via `lofty`, (2) fetch from MusicBrainz Cover Art Archive via `ureq`. Resizes to 600x600 via `image` crate.
@@ -104,6 +104,20 @@ Rules:
 - No barrel files. Import directly from the component's folder — never create re-export files that just forward imports.
 - Name component files `ComponentName.tsx`, not `index.tsx`. Imports should be explicit: `from "./ComponentName/ComponentName"`.
 
+## Rust Module Structure
+
+Keep Rust modules small, focused, and single-purpose — the same discipline as frontend components. A senior engineer should be able to read any file top-to-bottom and understand it in one sitting.
+
+Rules:
+- **Max ~500 lines per file.** If a module exceeds this, split it. Extract types, helpers, tests into submodules.
+- **One concern per module.** `albumart.rs` handles album art. It should not also handle metadata parsing or HTTP retries.
+- **Commands are thin wrappers.** `commands/*.rs` files only do: validate input, call domain logic, format output. No business logic in command handlers.
+- **Split by domain, not by layer.** Organize commands by feature area (ipod, library, audio, etc.) not by abstraction level.
+- **Types live near their domain.** If a struct is used only by one module, define it there. Shared types go in a common `types.rs` within the relevant submodule.
+- **Tests live in a `tests.rs` submodule** or a `#[cfg(test)] mod tests` block. For modules with extensive tests (100+ lines), prefer a separate `tests.rs` file.
+- **Error handling:** Use `?` with `map_err()` for error propagation. Never use `.unwrap()` in production code — reserve it for tests only. Handle mutex locks, file I/O, parsing, and external command results gracefully.
+- **No `.unwrap()` outside `#[cfg(test)]`.** Use `.expect("reason")` only for truly infallible operations (e.g., hardcoded regex, static thread pool init). For anything that could plausibly fail at runtime, propagate the error.
+
 ## Pre-PR Checklist
 
 Before committing and pushing, always run these checks and fix any issues:
@@ -145,6 +159,34 @@ npm test
 - [ ] Remember column widths, sort preferences, and column browser selections in localStorage
 - [ ] Right-click context menus in column browser (play all by artist, etc.)
 - [ ] Status bar with total library stats (tracks, duration, size)
+
+## Rust Quality TODOs
+
+- [x] ~~Replace all production `.unwrap()` calls with proper error handling~~
+- [x] ~~Split `commands.rs` (1,342 lines) into domain-focused submodules~~
+- [ ] Add `thiserror`-based `AppError` type for structured errors (replace `String` error propagation)
+- [ ] Add timeout to sudo operations in `disk.rs` to prevent indefinite hangs
+- [ ] Add proper URL validation for YouTube URLs (use `url` crate instead of `starts_with("http")`)
+- [ ] Add integration tests for Tauri command handlers
+- [ ] Add security-focused tests (path traversal attempts, malformed inputs, cancel-during-copy)
+
+## Frontend Quality TODOs
+
+- [ ] Expand test coverage to untested organisms: TrackTable, FileExplorer, ColumnBrowser, AlbumGrid, EqualizerPanel, QueuePanel
+- [ ] Add aria-labels to all icon-only buttons (play, stop, expand, close, etc.)
+- [ ] Use semantic HTML for dialogs (`role="dialog"`) and menus (`role="menuitem"`)
+- [ ] Extract remaining inline prop interfaces to `types.ts` files
+- [ ] Replace any `alert()` calls with proper toast/modal notifications
+
+## Feature TODOs
+
+- [ ] Playlist export (M3U/PLS) for portability beyond iPod
+- [ ] Manual album art upload when auto-repair fails
+- [ ] Toast notification system for non-blocking user feedback
+- [ ] "Recently Added" default smart playlist
+- [ ] Batch find-and-replace in metadata tags
+- [ ] Gapless playback support
+- [ ] Last.fm scrobbling integration
 
 ## Code Style
 

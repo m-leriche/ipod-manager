@@ -38,14 +38,15 @@ pub struct MbReleaseDetail {
 // ── Rate limiting ───────────────────────────────────────────────
 
 fn rate_limit() {
-    let mut last = LAST_REQUEST.lock().unwrap();
-    if let Some(prev) = *last {
-        let elapsed = prev.elapsed();
-        if elapsed < RATE_LIMIT {
-            std::thread::sleep(RATE_LIMIT - elapsed);
+    if let Ok(mut last) = LAST_REQUEST.lock() {
+        if let Some(prev) = *last {
+            let elapsed = prev.elapsed();
+            if elapsed < RATE_LIMIT {
+                std::thread::sleep(RATE_LIMIT - elapsed);
+            }
         }
+        *last = Some(Instant::now());
     }
-    *last = Some(Instant::now());
 }
 
 // ── API functions ───────────────────────────────────────────────

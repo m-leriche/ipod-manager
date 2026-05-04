@@ -486,6 +486,33 @@ pub fn fix_album_art(
     }
 }
 
+/// Save a user-provided image file as cover.jpg in the given directory.
+/// Loads the image, resizes to 600x600 if oversized, and saves as JPEG.
+pub fn save_uploaded_cover(folder: &str, image_path: &str) -> Result<(), String> {
+    let dir = Path::new(folder);
+    if !dir.is_dir() {
+        return Err(format!("Not a directory: {}", folder));
+    }
+
+    let src = Path::new(image_path);
+    if !src.is_file() {
+        return Err(format!("File not found: {}", image_path));
+    }
+
+    let img = image::open(src).map_err(|e| format!("Failed to load image: {}", e))?;
+
+    let img = if img.width() > 600 || img.height() > 600 {
+        img.resize(600, 600, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    img.save(dir.join("cover.jpg"))
+        .map_err(|e| format!("Failed to save cover.jpg: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -522,5 +549,100 @@ mod tests {
     fn is_audio_double_extension() {
         // "file.mp3.bak" has extension "bak", not "mp3"
         assert!(!is_audio(&PathBuf::from("file.mp3.bak")));
+    }
+
+    // ── Cover detection tests ────────────────────────────────────
+
+    #[test]
+    fn has_cover_returns_false_for_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!has_cover(tmp.path()));
+    }
+
+    #[test]
+    fn has_cover_returns_true_for_cover_jpg() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("cover.jpg"), "fake").unwrap();
+        assert!(has_cover(tmp.path()));
+    }
+
+    #[test]
+    fn has_cover_detects_variant_names() {
+        for name in &["folder.jpg", "album.jpg", "front.jpg", "cover.png"] {
+            let tmp = tempfile::tempdir().unwrap();
+            std::fs::write(tmp.path().join(name), "fake").unwrap();
+            assert!(has_cover(tmp.path()), "should detect {}", name);
+        }
+    }
+
+    #[test]
+    fn has_cover_case_insensitive() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("Cover.JPG"), "fake").unwrap();
+        // find_cover lowercases filenames, so Cover.JPG matches cover.jpg
+        assert!(has_cover(tmp.path()));
+    }
+
+    #[test]
+    fn has_cover_nonexistent_dir() {
+        assert!(!has_cover(Path::new("/this/does/not/exist")));
+    }
+
+    // ── Upload art validation tests ──────────────────────────────
+
+    #[test]
+    fn upload_rejects_nonexistent_folder() {
+        let result = save_uploaded_cover("/no/such/folder/xyz", "/tmp/image.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a directory"));
+    }
+
+    #[test]
+    fn upload_rejects_nonexistent_image() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = save_uploaded_cover(tmp.path().to_str().unwrap(), "/no/such/image_xyz.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("File not found"));
+    }
+
+    #[test]
+    fn upload_rejects_non_image_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let text_file = tmp.path().join("not_an_image.txt");
+        std::fs::write(&text_file, "this is not an image").unwrap();
+
+        let target_dir = tempfile::tempdir().unwrap();
+        let result = save_uploaded_cover(
+            target_dir.path().to_str().unwrap(),
+            text_file.to_str().unwrap(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to load image"));
+    }
+
+    #[test]
+    fn upload_rejects_file_as_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("somefile.txt");
+        std::fs::write(&file, "data").unwrap();
+
+        let result = save_uploaded_cover(file.to_str().unwrap(), "/tmp/image.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a directory"));
+    }
+
+    // ── Normalize cover tests ────────────────────────────────────
+
+    #[test]
+    fn normalize_cover_returns_false_for_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(normalize_cover(tmp.path()).unwrap(), false);
+    }
+
+    #[test]
+    fn normalize_cover_returns_true_if_cover_jpg_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("cover.jpg"), "fake jpg data").unwrap();
+        assert_eq!(normalize_cover(tmp.path()).unwrap(), true);
     }
 }

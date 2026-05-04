@@ -8,6 +8,7 @@ import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
+import { pickFile } from "../../../utils/pickPath";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
@@ -103,6 +104,23 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
     }
   }, [tracks, onSave, bumpArtCache]);
 
+  const handleUploadArt = useCallback(async () => {
+    const imagePath = await pickFile("Select album artwork", [
+      { name: "Images", extensions: ["jpg", "jpeg", "png", "bmp", "webp"] },
+    ]);
+    if (!imagePath) return;
+
+    const folder = tracks[0].folder_path;
+    try {
+      await invoke("upload_album_art", { folderPath: folder, imagePath });
+      setArtCacheBust((n) => n + 1);
+      bumpArtCache();
+      onSave?.();
+    } catch (e) {
+      console.error("Failed to upload album art:", e);
+    }
+  }, [tracks, onSave, bumpArtCache]);
+
   if (tracks.length === 0) return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
 
   const isSingle = tracks.length === 1;
@@ -127,6 +145,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
           size="full"
           showMissingLabel
           onRepair={repairing ? undefined : handleRepairArt}
+          onUpload={handleUploadArt}
           cacheBust={artCacheBust}
         />
       </div>
@@ -137,6 +156,14 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
             y={artContextMenu.y}
             items={[
               {
+                label: "Upload Artwork...",
+                onClick: () => {
+                  handleUploadArt();
+                  setArtContextMenu(null);
+                },
+              },
+              { type: "separator" },
+              {
                 label: "Find & Repair Album Art",
                 onClick: () => {
                   handleRepairArt();
@@ -144,7 +171,6 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
                 },
                 disabled: repairing,
               },
-              { type: "separator" },
               {
                 label: "Find & Repair Art for Entire Library",
                 onClick: () => {

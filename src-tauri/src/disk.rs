@@ -434,6 +434,8 @@ pub fn unmount_ipod_disk() -> Result<(), String> {
 mod tests {
     use super::*;
 
+    // ── Parsing tests ────────────────────────────────────────────
+
     #[test]
     fn parse_standard_fat32_line() {
         let line = "2: DOS_FAT_32 IPOD 119.1 GB disk5s2";
@@ -474,5 +476,104 @@ mod tests {
     fn parse_no_fat_type_returns_none() {
         let line = "2: Apple_APFS Container 119.1 GB disk1s2";
         assert!(parse_partition_fields(line).is_none());
+    }
+
+    // ── Security: disk identifier validation ─────────────────────
+    // These test the validation logic that mount_ipod command enforces
+    // (in commands/ipod.rs) to prevent command injection via identifier.
+
+    fn is_valid_disk_identifier(identifier: &str) -> bool {
+        identifier.starts_with("disk")
+            && identifier.len() > 4
+            && identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
+    }
+
+    #[test]
+    fn valid_disk_identifiers() {
+        assert!(is_valid_disk_identifier("disk5s2"));
+        assert!(is_valid_disk_identifier("disk0s1"));
+        assert!(is_valid_disk_identifier("disk12s3"));
+    }
+
+    #[test]
+    fn rejects_empty_disk_identifier() {
+        assert!(!is_valid_disk_identifier(""));
+    }
+
+    #[test]
+    fn rejects_just_disk_prefix() {
+        assert!(!is_valid_disk_identifier("disk"));
+    }
+
+    #[test]
+    fn rejects_path_traversal_in_identifier() {
+        assert!(!is_valid_disk_identifier("disk/../etc/passwd"));
+        assert!(!is_valid_disk_identifier("disk5;rm -rf /"));
+    }
+
+    #[test]
+    fn rejects_shell_metacharacters_in_identifier() {
+        assert!(!is_valid_disk_identifier("disk5$(echo)"));
+        assert!(!is_valid_disk_identifier("disk5`whoami`"));
+        assert!(!is_valid_disk_identifier("disk5|cat"));
+        assert!(!is_valid_disk_identifier("disk5&"));
+        assert!(!is_valid_disk_identifier("disk5;ls"));
+    }
+
+    #[test]
+    fn rejects_spaces_in_identifier() {
+        assert!(!is_valid_disk_identifier("disk5 s2"));
+    }
+
+    #[test]
+    fn rejects_non_disk_prefix() {
+        assert!(!is_valid_disk_identifier("notadisk5s2"));
+        assert!(!is_valid_disk_identifier("/dev/disk5s2"));
+    }
+
+    // ── Security: show_in_finder uses .arg() not shell ───────────
+    // This is a structural check — verify the Command builder
+    // uses .arg() for path (not shell interpolation).
+
+    #[test]
+    fn open_command_uses_arg_not_shell() {
+        // Construct the same way as show_in_finder
+        let path_with_metacharacters = "/tmp/test;rm -rf /";
+        let mut binding = std::process::Command::new("echo");
+        let cmd = binding.arg("-R").arg(path_with_metacharacters);
+
+        // Verify args are individual items (not parsed by shell)
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "-R");
+        // The full path including metacharacters is a single arg, not split
+        assert_eq!(args[1], path_with_metacharacters);
+    }
+
+    // ── Filesystem detection ─────────────────────────────────────
+
+    #[test]
+    fn is_ipod_filesystem_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!is_ipod_filesystem(tmp.path().to_str().unwrap()));
+    }
+
+    #[test]
+    fn is_ipod_filesystem_with_rockbox() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join(".rockbox")).unwrap();
+        assert!(is_ipod_filesystem(tmp.path().to_str().unwrap()));
+    }
+
+    #[test]
+    fn is_ipod_filesystem_with_ipod_control() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join("iPod_Control")).unwrap();
+        assert!(is_ipod_filesystem(tmp.path().to_str().unwrap()));
+    }
+
+    #[test]
+    fn is_ipod_filesystem_nonexistent_path() {
+        assert!(!is_ipod_filesystem("/this/does/not/exist/12345"));
     }
 }

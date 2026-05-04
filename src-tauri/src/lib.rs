@@ -9,6 +9,8 @@ mod disk;
 pub mod error;
 mod files;
 mod ipod_info;
+mod lastfm;
+mod lastfm_queue;
 mod library;
 mod libstats;
 mod localvideo;
@@ -261,6 +263,15 @@ pub fn run() {
             commands::restart_watcher,
             commands::fix_library_album_art,
             commands::cancel_art_repair,
+            commands::lastfm_get_token,
+            commands::lastfm_get_session,
+            commands::lastfm_disconnect,
+            commands::lastfm_get_status,
+            commands::lastfm_update_now_playing,
+            commands::lastfm_scrobble,
+            commands::lastfm_set_scrobble_enabled,
+            commands::lastfm_flush_queue,
+            commands::lastfm_open_auth_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

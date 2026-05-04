@@ -68,6 +68,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Dedupe guard: prevent double-incrementing the same track (e.g. from StrictMode double-mount)
   const lastCountedRef = useRef<{ id: number; at: number }>({ id: -1, at: 0 });
 
+  // Unix timestamp (seconds) of when the current track started playing — used for scrobble submission
+  const trackStartedAtRef = useRef<number>(0);
+
   // Restored position for resume-from-where-you-left-off
   const restoredPositionRef = useRef(restoredState?.position ?? 0);
 
@@ -293,6 +296,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
 
+    trackStartedAtRef.current = Math.floor(Date.now() / 1000);
+    window.dispatchEvent(new CustomEvent("track-started", { detail: track }));
+
     invoke("audio_play", { path: track.file_path, seekSecs: null }).catch(() => {});
   }, []);
 
@@ -310,7 +316,21 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   const handleTrackEnded = useCallback(() => {
     const s = stateRef.current;
-    if (s.currentTrack) recordPlay(s.currentTrack.id);
+    if (s.currentTrack) {
+      recordPlay(s.currentTrack.id);
+      // Dispatch scrobble if track meets Last.fm eligibility (>30s, played >50% or >4min)
+      const t = timeRef.current;
+      if (
+        s.currentTrack.duration_secs > 30 &&
+        (t.currentTime >= s.currentTrack.duration_secs * 0.5 || t.currentTime >= 240)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("track-scrobble", {
+            detail: { track: s.currentTrack, startedAt: trackStartedAtRef.current },
+          }),
+        );
+      }
+    }
 
     const nextIdx = getNextIndex();
     if (nextIdx === null) {
@@ -352,7 +372,20 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   const handleGaplessTransition = useCallback(() => {
     const s = stateRef.current;
-    if (s.currentTrack) recordPlay(s.currentTrack.id);
+    if (s.currentTrack) {
+      recordPlay(s.currentTrack.id);
+      const t = timeRef.current;
+      if (
+        s.currentTrack.duration_secs > 30 &&
+        (t.currentTime >= s.currentTrack.duration_secs * 0.5 || t.currentTime >= 240)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("track-scrobble", {
+            detail: { track: s.currentTrack, startedAt: trackStartedAtRef.current },
+          }),
+        );
+      }
+    }
 
     const nextIdx = getNextIndex();
     if (nextIdx === null) return;

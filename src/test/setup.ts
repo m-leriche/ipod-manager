@@ -121,6 +121,24 @@ vi.mock("../contexts/ToastContext", () => ({
   ToastProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock LastfmContext
+vi.mock("../contexts/LastfmContext", () => ({
+  useLastfmState: () => ({
+    connected: false,
+    username: null,
+    scrobbleEnabled: true,
+    queueCount: 0,
+    connecting: false,
+  }),
+  useLastfm: () => ({
+    connect: vi.fn(),
+    cancelConnect: vi.fn(),
+    disconnect: vi.fn(),
+    setScrobbleEnabled: vi.fn(),
+  }),
+  LastfmProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({

@@ -29,7 +29,9 @@ pub use queries::{
 pub use reorganize::reorganize_library_file;
 pub(crate) use scan::{read_track_for_library, upsert_track};
 pub use scan::{rescan_all_folders, scan_folder};
-pub use settings::{get_library_location, set_library_location};
+pub use settings::{
+    delete_setting, get_library_location, get_setting, set_library_location, set_setting,
+};
 pub use types::*;
 
 // ── Database state ─────────────────────────────────────────────
@@ -159,6 +161,21 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         );",
     )
     .map_err(|e| format!("Failed to create smart_playlists table: {}", e))?;
+
+    // Last.fm scrobble queue (offline retry)
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS scrobble_queue (
+            id INTEGER PRIMARY KEY,
+            artist TEXT NOT NULL,
+            track TEXT NOT NULL,
+            album TEXT,
+            album_artist TEXT,
+            duration_secs INTEGER NOT NULL,
+            timestamp INTEGER NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT 0
+        );",
+    )
+    .map_err(|e| format!("Failed to create scrobble_queue table: {}", e))?;
 
     // Seed built-in smart playlists
     let now = now_epoch();

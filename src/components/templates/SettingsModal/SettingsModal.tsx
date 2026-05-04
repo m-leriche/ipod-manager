@@ -8,6 +8,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import type { ThemeName } from "../../../contexts/ThemeContext";
 import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
+import { LastfmSettings } from "./LastfmSettings";
 import type { SettingsModalProps } from "./types";
 
 const THEMES: { id: ThemeName; label: string; description: string; preview: [string, string, string] }[] = [
@@ -157,6 +158,9 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
               ))}
             </div>
           </div>
+
+          {/* Last.fm */}
+          <LastfmSettings />
         </div>
       </div>
     </div>

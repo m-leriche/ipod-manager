@@ -2,7 +2,7 @@ use rusqlite::{params, Connection};
 
 use super::folders::add_folder;
 
-fn get_setting(conn: &Connection, key: &str) -> Option<String> {
+pub fn get_setting(conn: &Connection, key: &str) -> Option<String> {
     conn.query_row(
         "SELECT value FROM settings WHERE key = ?1",
         params![key],
@@ -11,13 +11,19 @@ fn get_setting(conn: &Connection, key: &str) -> Option<String> {
     .ok()
 }
 
-fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
     conn.execute(
         "INSERT INTO settings (key, value) VALUES (?1, ?2)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![key, value],
     )
     .map_err(|e| format!("Failed to save setting: {}", e))?;
+    Ok(())
+}
+
+pub fn delete_setting(conn: &Connection, key: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", params![key])
+        .map_err(|e| format!("Failed to delete setting: {}", e))?;
     Ok(())
 }
 

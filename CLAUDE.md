@@ -186,7 +186,7 @@ npm test
 - [ ] "Recently Added" default smart playlist
 - [ ] Batch find-and-replace in metadata tags
 - [ ] Gapless playback support
-- [ ] Last.fm scrobbling integration
+- [x] ~~Last.fm scrobbling integration~~
 
 ## Code Style
 

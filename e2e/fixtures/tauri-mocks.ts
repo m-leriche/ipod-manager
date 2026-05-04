@@ -115,6 +115,17 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   // Library stats
   scan_library_stats: null,
   get_library_stats: null,
+
+  // Last.fm
+  lastfm_get_token: { token: "mock-token", auth_url: "https://www.last.fm/api/auth/" },
+  lastfm_get_session: "mock-user",
+  lastfm_disconnect: null,
+  lastfm_get_status: { connected: false, username: null, scrobble_enabled: true, queue_count: 0 },
+  lastfm_update_now_playing: null,
+  lastfm_scrobble: null,
+  lastfm_set_scrobble_enabled: null,
+  lastfm_flush_queue: null,
+  lastfm_open_auth_url: null,
 };
 
 type CommandOverrides = Record<string, unknown>;

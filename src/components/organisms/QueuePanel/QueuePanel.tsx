@@ -67,7 +67,7 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
   );
 
   return (
-    <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col h-full">
+    <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col h-full panel-slide-right">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h3 className="text-xs font-medium text-text-primary">Queue</h3>
@@ -89,7 +89,23 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
       {/* Track list */}
       <div className="flex-1 overflow-y-auto">
         {state.queue.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-text-tertiary text-[11px]">Queue is empty</div>
+          <div className="flex flex-col items-center justify-center h-32 gap-2">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              className="w-6 h-6 text-text-tertiary/40"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
+              />
+            </svg>
+            <span className="text-text-tertiary/60 text-[11px]">Queue is empty</span>
+            <span className="text-text-tertiary/30 text-[10px]">Drag tracks here or right-click to add</span>
+          </div>
         ) : (
           state.queue.map((track, i) => {
             const isCurrent = i === state.queueIndex;

@@ -1,8 +1,11 @@
 import { memo, useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
+import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import type { LibraryTrack } from "../../../types/library";
@@ -25,6 +28,7 @@ const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
   const { width, onDragStart } = useResizableWidth();
   const { bumpArtCache } = useArtCache();
+  const { state: artRepairState, startRepair } = useBackgroundArtRepair();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -33,6 +37,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   const [saving, setSaving] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [artCacheBust, setArtCacheBust] = useState(0);
+  const [artContextMenu, setArtContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Reset edited fields when selection changes
   useEffect(() => {
@@ -106,11 +111,17 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   return (
     <div
       style={{ width }}
-      className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto"
+      className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto panel-slide-right"
     >
       <ResizeHandle onMouseDown={onDragStart} />
       {/* Album artwork */}
-      <div className="p-4">
+      <div
+        className="p-4"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setArtContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
         <AlbumArtwork
           folderPath={track.folder_path}
           size="full"
@@ -119,6 +130,34 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
           cacheBust={artCacheBust}
         />
       </div>
+      {artContextMenu &&
+        createPortal(
+          <ContextMenu
+            x={artContextMenu.x}
+            y={artContextMenu.y}
+            items={[
+              {
+                label: "Find & Repair Album Art",
+                onClick: () => {
+                  handleRepairArt();
+                  setArtContextMenu(null);
+                },
+                disabled: repairing,
+              },
+              { type: "separator" },
+              {
+                label: "Find & Repair Art for Entire Library",
+                onClick: () => {
+                  startRepair();
+                  setArtContextMenu(null);
+                },
+                disabled: artRepairState.active,
+              },
+            ]}
+            onClose={() => setArtContextMenu(null)}
+          />,
+          document.body,
+        )}
 
       {/* Header */}
       <div className="px-4 pb-3">
@@ -286,7 +325,7 @@ const EMPTY_PAIRED = [
 const EmptyDetailPanel = ({ width, onDragStart }: { width: number; onDragStart: (e: React.MouseEvent) => void }) => (
   <div
     style={{ width }}
-    className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto"
+    className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto panel-slide-right"
   >
     <ResizeHandle onMouseDown={onDragStart} />
     {/* Album art placeholder */}

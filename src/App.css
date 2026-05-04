@@ -76,6 +76,68 @@
   animation: equalizer 0.4s ease-in-out infinite 0.3s;
 }
 
+/* ── View / tab transition ────────────────────────────────── */
+.view-enter {
+  animation: view-fade-in 0.18s ease-out both;
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Panel slide transitions ──────────────────────────────── */
+.panel-slide-left {
+  animation: slide-in-left 0.18s ease-out both;
+}
+.panel-slide-right {
+  animation: slide-in-right 0.18s ease-out both;
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Skeleton shimmer ─────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-bg-card) 25%, var(--color-bg-elevated) 50%, var(--color-bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
 /* ══════════════════════════════════════════════════════
    WINDOWS 95 THEME — Authentic Win95 desktop aesthetic
    Silver gray chrome, navy title bars, 3D beveled controls

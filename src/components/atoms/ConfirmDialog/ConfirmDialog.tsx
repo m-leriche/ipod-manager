@@ -6,6 +6,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -16,6 +17,7 @@ export const ConfirmDialog = ({
   confirmLabel = "OK",
   cancelLabel = "Cancel",
   danger = false,
+  hideCancel = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) => {
@@ -37,13 +39,15 @@ export const ConfirmDialog = ({
         <div className="text-sm font-medium text-text-primary mb-2">{title}</div>
         <div className="text-xs text-text-secondary leading-relaxed mb-6">{message}</div>
         <div className="flex justify-end gap-2">
-          <button
-            ref={cancelRef}
-            onClick={onCancel}
-            className="px-4 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium hover:text-text-primary hover:border-border-active transition-all"
-          >
-            {cancelLabel}
-          </button>
+          {!hideCancel && (
+            <button
+              ref={cancelRef}
+              onClick={onCancel}
+              className="px-4 py-2 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium hover:text-text-primary hover:border-border-active transition-all"
+            >
+              {cancelLabel}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${

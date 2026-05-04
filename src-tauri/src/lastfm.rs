@@ -3,8 +3,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const API_URL: &str = "https://ws.audioscrobbler.com/2.0/";
-const API_KEY: &str = "YOUR_LASTFM_API_KEY"; // TODO: Replace with real key from https://www.last.fm/api/account/create
-const SHARED_SECRET: &str = "YOUR_LASTFM_SECRET"; // TODO: Replace with real shared secret
+const API_KEY: &str = "f6ad6a5c7af9858475b5d8a9acaaadd8";
+const SHARED_SECRET: &str = "4c7db236befa62efaac4176a818ace6c";
 const USER_AGENT: &str = "Crate/1.0 (crate-music-app)";
 const RATE_LIMIT: Duration = Duration::from_millis(250);
 

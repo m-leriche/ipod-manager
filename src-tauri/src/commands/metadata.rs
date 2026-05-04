@@ -1,10 +1,12 @@
 use crate::albumart;
 use crate::error::AppError;
-use crate::files::SyncCancel;
+use crate::files::{ArtRepairCancel, SyncCancel};
 use crate::library::{self, LibraryDb};
 use crate::metadata;
 use crate::metarepair;
 use crate::sanitize;
+use rusqlite::params;
+use std::path::Path;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
@@ -29,10 +31,11 @@ pub async fn fix_album_art(
 ) -> Result<albumart::AlbumArtResult, AppError> {
     let flag = cancel.new_flag();
 
-    let result =
-        tauri::async_runtime::spawn_blocking(move || albumart::fix_album_art(folders, app, flag))
-            .await
-            .map_err(|e| format!("Task failed: {}", e))?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        albumart::fix_album_art(folders, app, flag, "albumart-progress")
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
 }
@@ -148,4 +151,59 @@ pub async fn sanitize_tags(
             .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn fix_library_album_art(
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, ArtRepairCancel>,
+) -> Result<albumart::AlbumArtResult, AppError> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<_, AppError> {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT folder_path FROM tracks")
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        let folders: Vec<String> = stmt
+            .query_map(params![], |row| row.get(0))
+            .map_err(|e| format!("Query failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .filter(|path: &String| !albumart::has_cover(Path::new(path)))
+            .collect();
+
+        if folders.is_empty() {
+            return Ok(albumart::AlbumArtResult {
+                total: 0,
+                fixed: 0,
+                already_ok: 0,
+                failed: 0,
+                cancelled: false,
+                errors: Vec::new(),
+            });
+        }
+
+        Ok(albumart::fix_album_art(
+            folders,
+            app,
+            flag,
+            "library-art-repair-progress",
+        ))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn cancel_art_repair(cancel: State<'_, ArtRepairCancel>) -> Result<(), AppError> {
+    cancel.cancel();
+    Ok(())
 }

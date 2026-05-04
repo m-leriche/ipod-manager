@@ -60,9 +60,9 @@ pub struct GenreSummary {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct LibraryFilter {
-    pub artist: Option<String>,
-    pub album: Option<String>,
-    pub genre: Option<String>,
+    pub artist: Option<Vec<String>>,
+    pub album: Option<Vec<String>>,
+    pub genre: Option<Vec<String>>,
     pub search: Option<String>,
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,

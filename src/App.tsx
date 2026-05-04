@@ -11,6 +11,7 @@ import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
+import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
@@ -39,15 +40,17 @@ const App = () => (
     <ToastProvider>
       <ProgressProvider>
         <ArtCacheProvider>
-          <EqualizerProvider>
-            <PlaybackProvider>
-              <PlaylistProvider>
-                <AppContent />
-                <ProgressModal />
-                <ToastContainer />
-              </PlaylistProvider>
-            </PlaybackProvider>
-          </EqualizerProvider>
+          <BackgroundArtRepairProvider>
+            <EqualizerProvider>
+              <PlaybackProvider>
+                <PlaylistProvider>
+                  <AppContent />
+                  <ProgressModal />
+                  <ToastContainer />
+                </PlaylistProvider>
+              </PlaybackProvider>
+            </EqualizerProvider>
+          </BackgroundArtRepairProvider>
         </ArtCacheProvider>
       </ProgressProvider>
     </ToastProvider>
@@ -265,7 +268,9 @@ const AppContent = () => {
       <main className={`flex-1 min-h-0 relative flex ${miniPlayer ? "hidden" : ""}`}>
         <div className="flex-1 min-w-0 min-h-0 relative">
           {/* Library stays mounted always — hidden via CSS to preserve state */}
-          <div className={`h-full ${topTab === "library" ? "" : "hidden"}`}>
+          <div
+            className={`h-full transition-opacity duration-150 ${topTab === "library" ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0"}`}
+          >
             <LibraryPlayer
               onRefreshRef={libraryRefreshRef}
               isActive={topTab === "library"}
@@ -279,7 +284,7 @@ const AppContent = () => {
             />
           </div>
           {topTab === "tools" && (
-            <div className="flex gap-6 p-6 h-full">
+            <div className="flex gap-6 p-6 h-full view-enter">
               <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
               <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
                 <div className="flex gap-1.5 shrink-0">
@@ -305,25 +310,27 @@ const AppContent = () => {
                     Converter
                   </ToolTabButton>
                 </div>
-                {toolTab === "ipod" && (
-                  <IpodSummary
-                    diskInfo={diskInfo}
-                    isMounted={ipodMounted}
-                    cachedInfo={ipodInfo}
-                    onInfoLoaded={setIpodInfo}
-                  />
-                )}
-                {toolTab === "browse" && <BrowseExplorer />}
-                {toolTab === "sync" && <SyncManager />}
-                {toolTab === "metadata" && (
-                  <MetadataEditor
-                    initialPaths={metadataRepairPaths}
-                    onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
-                  />
-                )}
-                {toolTab === "audio" && <AudioExtractor />}
-                {toolTab === "duplicates" && <DuplicateDetector />}
-                {toolTab === "convert" && <AudioConverter />}
+                <div key={toolTab} className="flex-1 min-h-0 view-enter">
+                  {toolTab === "ipod" && (
+                    <IpodSummary
+                      diskInfo={diskInfo}
+                      isMounted={ipodMounted}
+                      cachedInfo={ipodInfo}
+                      onInfoLoaded={setIpodInfo}
+                    />
+                  )}
+                  {toolTab === "browse" && <BrowseExplorer />}
+                  {toolTab === "sync" && <SyncManager />}
+                  {toolTab === "metadata" && (
+                    <MetadataEditor
+                      initialPaths={metadataRepairPaths}
+                      onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                    />
+                  )}
+                  {toolTab === "audio" && <AudioExtractor />}
+                  {toolTab === "duplicates" && <DuplicateDetector />}
+                  {toolTab === "convert" && <AudioConverter />}
+                </div>
               </div>
             </div>
           )}

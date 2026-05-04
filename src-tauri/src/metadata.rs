@@ -300,16 +300,32 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
     let mut tag = id3::Tag::read_from_path(path).unwrap_or_else(|_| id3::Tag::new());
 
     if let Some(ref v) = update.title {
-        tag.set_title(v.as_str());
+        if v.is_empty() {
+            tag.remove_title();
+        } else {
+            tag.set_title(v.as_str());
+        }
     }
     if let Some(ref v) = update.artist {
-        tag.set_artist(v.as_str());
+        if v.is_empty() {
+            tag.remove_artist();
+        } else {
+            tag.set_artist(v.as_str());
+        }
     }
     if let Some(ref v) = update.album {
-        tag.set_album(v.as_str());
+        if v.is_empty() {
+            tag.remove_album();
+        } else {
+            tag.set_album(v.as_str());
+        }
     }
     if let Some(ref v) = update.genre {
-        tag.set_genre(v.as_str());
+        if v.is_empty() {
+            tag.remove_genre();
+        } else {
+            tag.set_genre(v.as_str());
+        }
     }
     if let Some(v) = update.year {
         // Use set_date_recorded (TDRC) instead of set_year (TYER) so that
@@ -336,13 +352,25 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
         tag.set_total_discs(v);
     }
     if let Some(ref v) = update.album_artist {
-        tag.set_album_artist(v.as_str());
+        if v.is_empty() {
+            tag.remove_album_artist();
+        } else {
+            tag.set_album_artist(v.as_str());
+        }
     }
     if let Some(ref v) = update.sort_artist {
-        tag.add_frame(id3::frame::Frame::text("TSOP", v.as_str()));
+        if v.is_empty() {
+            tag.remove("TSOP");
+        } else {
+            tag.add_frame(id3::frame::Frame::text("TSOP", v.as_str()));
+        }
     }
     if let Some(ref v) = update.sort_album_artist {
-        tag.add_frame(id3::frame::Frame::text("TSO2", v.as_str()));
+        if v.is_empty() {
+            tag.remove("TSO2");
+        } else {
+            tag.add_frame(id3::frame::Frame::text("TSO2", v.as_str()));
+        }
     }
 
     tag.write_to_path(path, id3::Version::Id3v24)
@@ -367,16 +395,32 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
     };
 
     if let Some(ref v) = update.title {
-        tag.set_title(v.to_string());
+        if v.is_empty() {
+            tag.remove_title();
+        } else {
+            tag.set_title(v.to_string());
+        }
     }
     if let Some(ref v) = update.artist {
-        tag.set_artist(v.to_string());
+        if v.is_empty() {
+            tag.remove_artist();
+        } else {
+            tag.set_artist(v.to_string());
+        }
     }
     if let Some(ref v) = update.album {
-        tag.set_album(v.to_string());
+        if v.is_empty() {
+            tag.remove_album();
+        } else {
+            tag.set_album(v.to_string());
+        }
     }
     if let Some(ref v) = update.genre {
-        tag.set_genre(v.to_string());
+        if v.is_empty() {
+            tag.remove_genre();
+        } else {
+            tag.set_genre(v.to_string());
+        }
     }
     if let Some(v) = update.year {
         tag.set_year(v);
@@ -394,13 +438,25 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
         tag.set_disk_total(v);
     }
     if let Some(ref v) = update.album_artist {
-        tag.insert_text(ItemKey::AlbumArtist, v.to_string());
+        if v.is_empty() {
+            tag.remove_key(&ItemKey::AlbumArtist);
+        } else {
+            tag.insert_text(ItemKey::AlbumArtist, v.to_string());
+        }
     }
     if let Some(ref v) = update.sort_artist {
-        tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
+        if v.is_empty() {
+            tag.remove_key(&ItemKey::TrackArtistSortOrder);
+        } else {
+            tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
+        }
     }
     if let Some(ref v) = update.sort_album_artist {
-        tag.insert_text(ItemKey::AlbumArtistSortOrder, v.to_string());
+        if v.is_empty() {
+            tag.remove_key(&ItemKey::AlbumArtistSortOrder);
+        } else {
+            tag.insert_text(ItemKey::AlbumArtistSortOrder, v.to_string());
+        }
     }
 
     tag.save_to_path(path, WriteOptions::default())

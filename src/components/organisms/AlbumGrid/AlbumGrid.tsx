@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
@@ -23,6 +24,8 @@ export const AlbumGrid = ({
   onSelectAlbum,
   onPlayAlbum,
   onFixAlbumArt,
+  onFixAllAlbumArt,
+  isFixingAllArt,
   sortMode = "album",
   onSortModeChange,
 }: AlbumGridProps) => {
@@ -107,8 +110,22 @@ export const AlbumGrid = ({
 
   if (albums.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center bg-bg-secondary border border-border rounded-2xl">
+      <div className="h-full flex flex-col items-center justify-center gap-2 bg-bg-secondary border border-border rounded-2xl">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          className="w-8 h-8 text-text-tertiary/30"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 001.5-1.5V4.5a1.5 1.5 0 00-1.5-1.5H3.75a1.5 1.5 0 00-1.5 1.5v15a1.5 1.5 0 001.5 1.5z"
+          />
+        </svg>
         <span className="text-text-tertiary text-xs">No albums</span>
+        <span className="text-text-tertiary/40 text-[10px]">Albums will appear as you add music</span>
       </div>
     );
   }
@@ -125,7 +142,11 @@ export const AlbumGrid = ({
       </div>
 
       {/* Scrollable grid */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+      <div
+        ref={containerRef}
+        key={sortedAlbums.length}
+        className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 view-enter"
+      >
         <div
           className="relative"
           style={{
@@ -156,8 +177,10 @@ export const AlbumGrid = ({
                     onClick={() => handleClick(album.name)}
                     onDoubleClick={() => handleDoubleClick(album.name)}
                     onContextMenu={(e) => handleContextMenu(e, album)}
-                    className={`flex flex-col items-center text-center transition-all rounded-xl p-2 min-w-0 ${
-                      selectedAlbum === album.name ? "bg-accent/10 ring-1 ring-accent" : "hover:bg-bg-card/50"
+                    className={`flex flex-col items-center text-center transition-all duration-150 rounded-xl p-2 min-w-0 ${
+                      selectedAlbum === album.name
+                        ? "bg-accent/10 ring-1 ring-accent"
+                        : "hover:bg-bg-card/50 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/20"
                     }`}
                   >
                     <AlbumArtwork folderPath={album.folder_path} size="lg" className="rounded-lg" />
@@ -177,31 +200,41 @@ export const AlbumGrid = ({
         </div>
       </div>
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={[
-            {
-              label: "Play Album",
-              onClick: () => {
-                onPlayAlbum?.(contextMenu.album.name);
-                setContextMenu(null);
+      {contextMenu &&
+        createPortal(
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={[
+              {
+                label: "Play Album",
+                onClick: () => {
+                  onPlayAlbum?.(contextMenu.album.name);
+                  setContextMenu(null);
+                },
               },
-            },
-            { type: "separator" },
-            {
-              label: "Fix Album Artwork",
-              onClick: () => {
-                onFixAlbumArt?.(contextMenu.album);
-                setContextMenu(null);
+              { type: "separator" },
+              {
+                label: "Fix Album Artwork",
+                onClick: () => {
+                  onFixAlbumArt?.(contextMenu.album);
+                  setContextMenu(null);
+                },
+                disabled: !onFixAlbumArt,
               },
-              disabled: !onFixAlbumArt,
-            },
-          ]}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+              {
+                label: "Fix All Album Artwork",
+                onClick: () => {
+                  onFixAllAlbumArt?.();
+                  setContextMenu(null);
+                },
+                disabled: !onFixAllAlbumArt || isFixingAllArt,
+              },
+            ]}
+            onClose={() => setContextMenu(null)}
+          />,
+          document.body,
+        )}
     </div>
   );
 };

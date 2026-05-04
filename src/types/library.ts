@@ -59,9 +59,9 @@ export interface BrowserData {
 }
 
 export interface LibraryFilter {
-  artist?: string;
-  album?: string;
-  genre?: string;
+  artist?: string[];
+  album?: string[];
+  genre?: string[];
   search?: string;
   sort_by?: string;
   sort_direction?: "asc" | "desc";

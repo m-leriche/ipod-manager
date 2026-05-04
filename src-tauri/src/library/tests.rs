@@ -182,7 +182,7 @@ fn filter_by_artist() {
     insert_test_track(&conn, "/m/b.mp3", "B", "Artist2", "Album2", "Pop", 2021);
 
     let filter = LibraryFilter {
-        artist: Some("Artist1".to_string()),
+        artist: Some(vec!["Artist1".to_string()]),
         album: None,
         genre: None,
         search: None,
@@ -282,7 +282,7 @@ fn browser_data_filters_albums_by_artist() {
     );
 
     let filter = LibraryFilter {
-        artist: Some("Beatles".to_string()),
+        artist: Some(vec!["Beatles".to_string()]),
         genre: None,
         album: None,
         search: None,

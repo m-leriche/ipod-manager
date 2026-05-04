@@ -1,4 +1,5 @@
 import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
@@ -15,12 +16,12 @@ interface ColumnBrowserProps {
   genres: GenreSummary[];
   artists: ArtistSummary[];
   albums: AlbumSummary[];
-  selectedGenre: string | null;
-  selectedArtist: string | null;
-  selectedAlbum: string | null;
-  onSelectGenre: (genre: string | null) => void;
-  onSelectArtist: (artist: string | null) => void;
-  onSelectAlbum: (album: string | null) => void;
+  selectedGenres: Set<string>;
+  selectedArtists: Set<string>;
+  selectedAlbums: Set<string>;
+  onSelectGenres: (genres: Set<string>) => void;
+  onSelectArtists: (artists: Set<string>) => void;
+  onSelectAlbums: (albums: Set<string>) => void;
   onPlay?: () => void;
   onPlayAll?: (action: ColumnContextMenuAction) => void;
   onAddAllToQueue?: (action: ColumnContextMenuAction) => void;
@@ -38,12 +39,12 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   genres,
   artists,
   albums,
-  selectedGenre,
-  selectedArtist,
-  selectedAlbum,
-  onSelectGenre,
-  onSelectArtist,
-  onSelectAlbum,
+  selectedGenres,
+  selectedArtists,
+  selectedAlbums,
+  onSelectGenres,
+  onSelectArtists,
+  onSelectAlbums,
   onPlay,
   onPlayAll,
   onAddAllToQueue,
@@ -72,8 +73,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         columnType="genre"
         allLabel={`All Genres (${genres.length})`}
         items={genreItems}
-        selected={selectedGenre}
-        onSelect={onSelectGenre}
+        selected={selectedGenres}
+        onSelect={onSelectGenres}
         onPlay={onPlay}
         onPlayAll={onPlayAll}
         onAddAllToQueue={onAddAllToQueue}
@@ -87,8 +88,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         columnType="artist"
         allLabel={`All Artists (${artists.length})`}
         items={artistItems}
-        selected={selectedArtist}
-        onSelect={onSelectArtist}
+        selected={selectedArtists}
+        onSelect={onSelectArtists}
         onPlay={onPlay}
         onPlayAll={onPlayAll}
         onAddAllToQueue={onAddAllToQueue}
@@ -102,8 +103,8 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         columnType="album"
         allLabel={`All Albums (${albums.length})`}
         items={albumItems}
-        selected={selectedAlbum}
-        onSelect={onSelectAlbum}
+        selected={selectedAlbums}
+        onSelect={onSelectAlbums}
         onPlay={onPlay}
         onPlayAll={onPlayAll}
         onAddAllToQueue={onAddAllToQueue}
@@ -121,8 +122,8 @@ interface BrowserColumnProps {
   columnType: "genre" | "artist" | "album";
   allLabel: string;
   items: BrowserItem[];
-  selected: string | null;
-  onSelect: (value: string | null) => void;
+  selected: Set<string>;
+  onSelect: (value: Set<string>) => void;
   onPlay?: () => void;
   onPlayAll?: (action: ColumnContextMenuAction) => void;
   onAddAllToQueue?: (action: ColumnContextMenuAction) => void;
@@ -154,18 +155,17 @@ const BrowserColumn = memo(function BrowserColumn({
 }: BrowserColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScrollRef = useRef(0);
-  const prevSelectedRef = useRef(selected);
+  const prevSelectedSizeRef = useRef(selected.size);
+  const lastClickedIndexRef = useRef<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; value: string } | null>(null);
 
   // Save scroll position when making a selection, restore when clearing it
   useEffect(() => {
-    const prev = prevSelectedRef.current;
-    prevSelectedRef.current = selected;
-    if (prev === null && selected !== null) {
-      // Selecting an item — save current scroll position
+    const prevSize = prevSelectedSizeRef.current;
+    prevSelectedSizeRef.current = selected.size;
+    if (prevSize === 0 && selected.size > 0) {
       savedScrollRef.current = scrollRef.current?.scrollTop ?? 0;
-    } else if (prev !== null && selected === null) {
-      // Returning to "All" — restore saved position
+    } else if (prevSize > 0 && selected.size === 0) {
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ top: savedScrollRef.current });
       });
@@ -185,17 +185,19 @@ const BrowserColumn = memo(function BrowserColumn({
   // ── Keyboard navigation ──────────────────────────────────────
 
   const selectedIndex = useMemo(() => {
-    if (selected === null) return -1;
-    return items.findIndex((item) => item.label === selected);
+    if (selected.size === 0) return -1;
+    // Use last-clicked index for keyboard navigation anchor
+    return items.findIndex((item) => selected.has(item.label));
   }, [items, selected]);
 
   const handleNavNavigate = useCallback(
     (index: number) => {
       if (index === -1) {
-        onSelect(null);
+        onSelect(new Set());
         scrollRef.current?.scrollTo({ top: 0 });
       } else {
-        onSelect(items[index]?.label ?? null);
+        onSelect(new Set([items[index]?.label].filter(Boolean)));
+        lastClickedIndexRef.current = index;
       }
     },
     [items, onSelect],
@@ -206,8 +208,9 @@ const BrowserColumn = memo(function BrowserColumn({
   }, [onPlay]);
 
   const handleNavDeselect = useCallback(() => {
-    onSelect(null);
+    onSelect(new Set());
     scrollRef.current?.scrollTo({ top: 0 });
+    lastClickedIndexRef.current = null;
   }, [onSelect]);
 
   const { onKeyDown: handleNavKeyDown, focusedIndexRef } = useKeyboardNavigation({
@@ -224,7 +227,8 @@ const BrowserColumn = memo(function BrowserColumn({
 
   const handleTypeToSelectMatch = useCallback(
     (index: number) => {
-      onSelect(items[index].label);
+      onSelect(new Set([items[index].label]));
+      lastClickedIndexRef.current = index;
       focusedIndexRef.current = index;
       virtualizer.scrollToIndex(index, { align: "center" });
     },
@@ -244,16 +248,44 @@ const BrowserColumn = memo(function BrowserColumn({
   // ── Click handlers ───────────────────────────────────────────
 
   const handleAllClick = useCallback(() => {
-    onSelect(null);
+    onSelect(new Set());
     focusedIndexRef.current = -1;
+    lastClickedIndexRef.current = null;
   }, [onSelect, focusedIndexRef]);
 
   const handleItemClick = useCallback(
-    (index: number) => {
-      onSelect(items[index].label);
+    (index: number, e: React.MouseEvent) => {
+      const label = items[index].label;
+      const isMeta = e.metaKey || e.ctrlKey;
+      const isShift = e.shiftKey;
+
+      if (isShift && lastClickedIndexRef.current !== null) {
+        // Shift+click: range select from last clicked to current
+        const start = Math.min(lastClickedIndexRef.current, index);
+        const end = Math.max(lastClickedIndexRef.current, index);
+        const next = new Set(selected);
+        for (let i = start; i <= end; i++) {
+          next.add(items[i].label);
+        }
+        onSelect(next);
+      } else if (isMeta) {
+        // Cmd/Ctrl+click: toggle individual item
+        const next = new Set(selected);
+        if (next.has(label)) {
+          next.delete(label);
+        } else {
+          next.add(label);
+        }
+        onSelect(next);
+        lastClickedIndexRef.current = index;
+      } else {
+        // Plain click: single select (click "All" to deselect)
+        onSelect(new Set([label]));
+        lastClickedIndexRef.current = index;
+      }
       focusedIndexRef.current = index;
     },
-    [items, onSelect, focusedIndexRef],
+    [items, selected, onSelect, focusedIndexRef],
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, value: string) => {
@@ -323,7 +355,7 @@ const BrowserColumn = memo(function BrowserColumn({
           onClick={handleAllClick}
           onDoubleClick={onPlay}
           className={`w-full text-left px-3 py-[5px] text-[11px] transition-colors ${
-            selected === null ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+            selected.size === 0 ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
           }`}
         >
           {allLabel}
@@ -344,11 +376,11 @@ const BrowserColumn = memo(function BrowserColumn({
                   height: virtualItem.size,
                   transform: `translateY(${virtualItem.start - virtualizer.options.scrollMargin}px)`,
                 }}
-                onClick={() => handleItemClick(virtualItem.index)}
+                onClick={(e) => handleItemClick(virtualItem.index, e)}
                 onDoubleClick={onPlay}
                 onContextMenu={(e) => handleContextMenu(e, item.label)}
                 className={`text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
-                  selected === item.label ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+                  selected.has(item.label) ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
                 }`}
               >
                 {item.label}
@@ -358,14 +390,16 @@ const BrowserColumn = memo(function BrowserColumn({
         </div>
       </div>
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenuItems}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {contextMenu &&
+        createPortal(
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={contextMenuItems}
+            onClose={() => setContextMenu(null)}
+          />,
+          document.body,
+        )}
 
       {onResizeStart && (
         <div

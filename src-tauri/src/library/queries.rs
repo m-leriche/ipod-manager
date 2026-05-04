@@ -36,26 +36,53 @@ pub(crate) fn register_sort_key(conn: &Connection) -> Result<(), String> {
     .map_err(|e| format!("Failed to register sort_key function: {e}"))
 }
 
+/// Push an `IN (?, ?, ...)` condition for a multi-value filter.
+fn push_in_condition(
+    column: &str,
+    values: &[String],
+    conditions: &mut Vec<String>,
+    params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+) {
+    if values.len() == 1 {
+        conditions.push(format!("{column} = ?"));
+        params.push(Box::new(values[0].clone()));
+    } else {
+        let placeholders: Vec<&str> = values.iter().map(|_| "?").collect();
+        conditions.push(format!("{column} IN ({})", placeholders.join(", ")));
+        for v in values {
+            params.push(Box::new(v.clone()));
+        }
+    }
+}
+
 pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
     let mut conditions = Vec::new();
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-    if let Some(ref artist) = filter.artist {
-        conditions.push("COALESCE(album_artist, artist) = ?");
-        param_values.push(Box::new(artist.clone()));
+    if let Some(ref artists) = filter.artist {
+        if !artists.is_empty() {
+            push_in_condition(
+                "COALESCE(album_artist, artist)",
+                artists,
+                &mut conditions,
+                &mut param_values,
+            );
+        }
     }
-    if let Some(ref album) = filter.album {
-        conditions.push("album = ?");
-        param_values.push(Box::new(album.clone()));
+    if let Some(ref albums) = filter.album {
+        if !albums.is_empty() {
+            push_in_condition("album", albums, &mut conditions, &mut param_values);
+        }
     }
-    if let Some(ref genre) = filter.genre {
-        conditions.push("genre = ?");
-        param_values.push(Box::new(genre.clone()));
+    if let Some(ref genres) = filter.genre {
+        if !genres.is_empty() {
+            push_in_condition("genre", genres, &mut conditions, &mut param_values);
+        }
     }
     if let Some(ref search) = filter.search {
         if !search.is_empty() {
             conditions.push(
-                "(title LIKE ? OR artist LIKE ? OR album LIKE ? OR album_artist LIKE ? OR genre LIKE ?)",
+                "(title LIKE ? OR artist LIKE ? OR album LIKE ? OR album_artist LIKE ? OR genre LIKE ?)".to_string(),
             );
             let like = format!("%{}%", search);
             for _ in 0..5 {
@@ -64,14 +91,14 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         }
     }
     if filter.flagged_only == Some(true) {
-        conditions.push("flagged = 1");
+        conditions.push("flagged = 1".to_string());
     }
     if let Some(min) = filter.rating_min {
-        conditions.push("rating >= ?");
+        conditions.push("rating >= ?".to_string());
         param_values.push(Box::new(min as i64));
     }
     if let Some(max) = filter.rating_max {
-        conditions.push("rating <= ?");
+        conditions.push("rating <= ?".to_string());
         param_values.push(Box::new(max as i64));
     }
 
@@ -292,12 +319,17 @@ pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<LibraryTrack>
     get_tracks(conn, &filter)
 }
 
+/// Convert `Option<Vec<String>>` to the slice form needed by `build_filter_conditions`.
+fn filter_strs(opt: &Option<Vec<String>>) -> Option<&[String]> {
+    opt.as_deref().filter(|v| !v.is_empty())
+}
+
 // ── Browser data (combined endpoint for column browser) ────────
 
 fn build_filter_conditions(
-    genre: Option<&str>,
-    artist: Option<&str>,
-    album: Option<&str>,
+    genre: Option<&[String]>,
+    artist: Option<&[String]>,
+    album: Option<&[String]>,
     search: Option<&str>,
     flagged_only: Option<bool>,
     rating_min: Option<u8>,
@@ -306,17 +338,19 @@ fn build_filter_conditions(
     let mut conditions = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-    if let Some(genre) = genre {
-        conditions.push("genre = ?".to_string());
-        params.push(Box::new(genre.to_string()));
+    if let Some(genres) = genre {
+        push_in_condition("genre", genres, &mut conditions, &mut params);
     }
-    if let Some(artist) = artist {
-        conditions.push("COALESCE(album_artist, artist) = ?".to_string());
-        params.push(Box::new(artist.to_string()));
+    if let Some(artists) = artist {
+        push_in_condition(
+            "COALESCE(album_artist, artist)",
+            artists,
+            &mut conditions,
+            &mut params,
+        );
     }
-    if let Some(album) = album {
-        conditions.push("album = ?".to_string());
-        params.push(Box::new(album.to_string()));
+    if let Some(albums) = album {
+        push_in_condition("album", albums, &mut conditions, &mut params);
     }
     if let Some(search) = search {
         if !search.is_empty() {
@@ -353,9 +387,9 @@ fn where_clause(conditions: &[String]) -> String {
 }
 
 pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<BrowserData, String> {
-    let genre = filter.genre.as_deref();
-    let artist = filter.artist.as_deref();
-    let album = filter.album.as_deref();
+    let genre = filter_strs(&filter.genre);
+    let artist = filter_strs(&filter.artist);
+    let album = filter_strs(&filter.album);
     let search = filter.search.as_deref();
     let flagged_only = filter.flagged_only;
     let rating_min = filter.rating_min;

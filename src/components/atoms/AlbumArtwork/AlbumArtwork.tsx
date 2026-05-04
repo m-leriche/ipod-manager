@@ -16,6 +16,7 @@ interface AlbumArtworkProps {
   className?: string;
   showMissingLabel?: boolean;
   onRepair?: () => void;
+  onUpload?: () => void;
   cacheBust?: number;
 }
 
@@ -25,6 +26,7 @@ export const AlbumArtwork = ({
   className = "",
   showMissingLabel = false,
   onRepair,
+  onUpload,
   cacheBust,
 }: AlbumArtworkProps) => {
   const { artCacheBust } = useArtCache();
@@ -70,17 +72,30 @@ export const AlbumArtwork = ({
           {showMissingLabel && (
             <>
               <span className="text-[9px] text-text-tertiary font-medium">Missing Art</span>
-              {onRepair && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRepair();
-                  }}
-                  className="text-[9px] text-accent hover:text-accent-hover font-medium transition-colors"
-                >
-                  Repair
-                </button>
-              )}
+              <div className="flex gap-2">
+                {onUpload && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpload();
+                    }}
+                    className="text-[9px] text-accent hover:text-accent-hover font-medium transition-colors"
+                  >
+                    Upload
+                  </button>
+                )}
+                {onRepair && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRepair();
+                    }}
+                    className="text-[9px] text-accent hover:text-accent-hover font-medium transition-colors"
+                  >
+                    Repair
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>

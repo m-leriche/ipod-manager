@@ -262,6 +262,7 @@ pub fn run() {
             commands::convert_audio,
             commands::restart_watcher,
             commands::fix_library_album_art,
+            commands::upload_album_art,
             commands::cancel_art_repair,
             commands::lastfm_get_token,
             commands::lastfm_get_session,

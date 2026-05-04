@@ -203,6 +203,21 @@ pub async fn fix_library_album_art(
 }
 
 #[tauri::command]
+pub async fn upload_album_art(
+    folder_path: String,
+    image_path: String,
+    app: AppHandle,
+) -> Result<(), AppError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), AppError> {
+        albumart::save_uploaded_cover(&folder_path, &image_path)?;
+        let _ = app.emit("album-art-fixed", folder_path);
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
 pub fn cancel_art_repair(cancel: State<'_, ArtRepairCancel>) -> Result<(), AppError> {
     cancel.cancel();
     Ok(())

@@ -24,6 +24,7 @@ export const AlbumGrid = ({
   onSelectAlbum,
   onPlayAlbum,
   onFixAlbumArt,
+  onUploadAlbumArt,
   onFixAllAlbumArt,
   isFixingAllArt,
   sortMode = "album",
@@ -214,6 +215,14 @@ export const AlbumGrid = ({
                 },
               },
               { type: "separator" },
+              {
+                label: "Upload Artwork...",
+                onClick: () => {
+                  onUploadAlbumArt?.(contextMenu.album);
+                  setContextMenu(null);
+                },
+                disabled: !onUploadAlbumArt,
+              },
               {
                 label: "Fix Album Artwork",
                 onClick: () => {

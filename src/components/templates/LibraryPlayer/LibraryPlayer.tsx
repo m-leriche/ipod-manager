@@ -29,6 +29,7 @@ import type {
 } from "../../../types/library";
 import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
+import { pickFile } from "../../../utils/pickPath";
 
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
 const SORT_BY_KEY = "crate-sort-by";
@@ -400,6 +401,24 @@ export const LibraryPlayer = ({
     [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
   );
 
+  const handleUploadAlbumArt = useCallback(
+    async (album: AlbumSummary) => {
+      const imagePath = await pickFile("Select album artwork", [
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "bmp", "webp"] },
+      ]);
+      if (!imagePath) return;
+
+      try {
+        await invoke("upload_album_art", { folderPath: album.folder_path, imagePath });
+        bumpArtCache();
+        await fetchBrowserData();
+      } catch (e) {
+        console.error("Failed to upload album art:", e);
+      }
+    },
+    [fetchBrowserData, bumpArtCache],
+  );
+
   // ── Re-fetch when any filter/sort changes ─────────────────────
 
   useEffect(() => {
@@ -684,6 +703,7 @@ export const LibraryPlayer = ({
                     onSelectAlbum={(name) => handleSelectAlbum(name ? new Set([name]) : new Set())}
                     onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
                     onFixAlbumArt={handleFixAlbumArtForAlbum}
+                    onUploadAlbumArt={handleUploadAlbumArt}
                     onFixAllAlbumArt={startArtRepair}
                     isFixingAllArt={artRepairState.active}
                     sortMode={albumSortMode}

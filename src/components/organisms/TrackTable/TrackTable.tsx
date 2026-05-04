@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
@@ -31,6 +32,8 @@ interface TrackTableProps {
   onFlagTracks?: (trackIds: number[], flagged: boolean) => void;
   onRateTracks?: (trackIds: number[], rating: number) => void;
   onRepairAlbumArt?: (tracks: LibraryTrack[]) => void;
+  onRepairAllAlbumArt?: () => void;
+  isRepairingAllArt?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
@@ -52,6 +55,8 @@ export const TrackTable = memo(function TrackTable({
   onFlagTracks,
   onRateTracks,
   onRepairAlbumArt,
+  onRepairAllAlbumArt,
+  isRepairingAllArt,
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
@@ -400,6 +405,18 @@ export const TrackTable = memo(function TrackTable({
                 },
               ]
             : []),
+          ...(onRepairAllAlbumArt
+            ? [
+                {
+                  label: "Find & Repair Art for Entire Library",
+                  onClick: () => {
+                    onRepairAllAlbumArt();
+                    setContextMenu(null);
+                  },
+                  disabled: isRepairingAllArt,
+                },
+              ]
+            : []),
           ...(onRepairMetadata
             ? [
                 {
@@ -433,7 +450,7 @@ export const TrackTable = memo(function TrackTable({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 min-h-0 overflow-auto outline-none"
+      className="flex-1 min-h-0 overflow-auto outline-none view-enter"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onDragStartCapture={() => {
@@ -518,17 +535,35 @@ export const TrackTable = memo(function TrackTable({
       </table>
 
       {tracks.length === 0 && (
-        <div className="flex items-center justify-center h-48 text-text-tertiary text-xs">No tracks found</div>
+        <div className="flex flex-col items-center justify-center h-48 gap-2">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            className="w-8 h-8 text-text-tertiary/30"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+            />
+          </svg>
+          <span className="text-text-tertiary text-xs">No tracks found</span>
+          <span className="text-text-tertiary/40 text-[10px]">Try adjusting your search or filters</span>
+        </div>
       )}
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenuItems}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {contextMenu &&
+        createPortal(
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={contextMenuItems}
+            onClose={() => setContextMenu(null)}
+          />,
+          document.body,
+        )}
 
       {deleteConfirm && (
         <ConfirmDialog

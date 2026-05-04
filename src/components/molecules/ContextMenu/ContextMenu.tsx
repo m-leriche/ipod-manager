@@ -45,7 +45,7 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
     <div
       ref={ref}
       style={pos ? { left: pos.left, top: pos.top } : { left: x, top: y, visibility: "hidden" }}
-      className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
+      className="fixed z-[90] min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
     >
       {items.map((item, i) =>
         isSeparator(item) ? (

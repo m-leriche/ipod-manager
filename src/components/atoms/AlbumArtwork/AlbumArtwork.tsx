@@ -28,13 +28,25 @@ export const AlbumArtwork = ({
   cacheBust,
 }: AlbumArtworkProps) => {
   const { artCacheBust } = useArtCache();
-  const effectiveBust = (cacheBust ?? 0) + artCacheBust;
+  const [localBust, setLocalBust] = useState(0);
+  const effectiveBust = (cacheBust ?? 0) + artCacheBust + localBust;
   const [failed, setFailed] = useState(false);
 
   // Reset failed state when the folder changes or after a repair (cacheBust changes)
   useEffect(() => {
     setFailed(false);
   }, [folderPath, effectiveBust]);
+
+  // Respond to per-folder art fix events (only re-render this artwork when its folder is fixed)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === folderPath) {
+        setLocalBust((n) => n + 1);
+      }
+    };
+    window.addEventListener("album-art-fixed", handler);
+    return () => window.removeEventListener("album-art-fixed", handler);
+  }, [folderPath]);
 
   const showFallback = !folderPath || failed;
 

@@ -69,7 +69,7 @@ fn is_audio(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn has_cover(dir: &Path) -> bool {
+pub fn has_cover(dir: &Path) -> bool {
     find_cover(dir).is_some()
 }
 
@@ -288,8 +288,16 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
 }
 
 /// Try to download and save cover art from a list of MusicBrainz releases.
-fn try_save_cover(releases: &[crate::musicbrainz::MbRelease], dir: &Path) -> Result<(), String> {
+fn try_save_cover(
+    releases: &[crate::musicbrainz::MbRelease],
+    dir: &Path,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
     for release in releases {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("Cancelled".into());
+        }
+
         let Ok(bytes) = crate::musicbrainz::fetch_cover_art(&release.id) else {
             continue;
         };
@@ -316,12 +324,25 @@ fn try_save_cover(releases: &[crate::musicbrainz::MbRelease], dir: &Path) -> Res
 /// Fetch cover art from the MusicBrainz Cover Art Archive.
 /// Tries exact names first, then retries with normalized names (stripping
 /// disc indicators, edition markers, remaster tags, etc.).
-fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), String> {
+fn fetch_from_musicbrainz(
+    artist: &str,
+    album: &str,
+    dir: &Path,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".into());
+    }
+
     // Attempt 1: exact names
     if let Ok(releases) = crate::musicbrainz::search_releases(artist, album) {
-        if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+        if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
             return Ok(());
         }
+    }
+
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".into());
     }
 
     // Attempt 2: normalized album name (strip disc/edition/remaster noise)
@@ -333,22 +354,26 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
 
     if album_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(artist, &clean_album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
                 return Ok(());
             }
         }
     }
 
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".into());
+    }
+
     // Attempt 3: both normalized
     if artist_changed && album_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, &clean_album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
                 return Ok(());
             }
         }
     } else if artist_changed {
         if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir).is_ok() {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
                 return Ok(());
             }
         }
@@ -359,10 +384,12 @@ fn fetch_from_musicbrainz(artist: &str, album: &str, dir: &Path) -> Result<(), S
 
 /// Fix album art for a list of folders.
 /// Tries embedded extraction first (fast, no network), then MusicBrainz.
+/// `event_name` controls the Tauri event used for progress updates.
 pub fn fix_album_art(
     folders: Vec<String>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
+    event_name: &str,
 ) -> AlbumArtResult {
     let total = folders.len();
     let mut fixed = 0;
@@ -384,7 +411,7 @@ pub fn fix_album_art(
             .unwrap_or_default();
 
         let _ = app.emit(
-            "albumart-progress",
+            event_name,
             AlbumArtProgress {
                 total,
                 completed: i,
@@ -408,6 +435,7 @@ pub fn fix_album_art(
         match extract_embedded(dir) {
             Ok(true) => {
                 fixed += 1;
+                let _ = app.emit("album-art-fixed", folder_str.clone());
                 continue;
             }
             Ok(false) => {}
@@ -417,8 +445,15 @@ pub fn fix_album_art(
         // Fall back to MusicBrainz API
         let (artist, album, _) = read_metadata(dir);
         match (artist, album) {
-            (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir) {
-                Ok(()) => fixed += 1,
+            (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir, &cancel_flag) {
+                Ok(()) => {
+                    fixed += 1;
+                    let _ = app.emit("album-art-fixed", folder_str.clone());
+                }
+                Err(e) if e == "Cancelled" => {
+                    cancelled = true;
+                    break;
+                }
                 Err(e) => {
                     errors.push(format!("{}: {}", name, e));
                     failed += 1;
@@ -432,7 +467,7 @@ pub fn fix_album_art(
     }
 
     let _ = app.emit(
-        "albumart-progress",
+        event_name,
         AlbumArtProgress {
             total,
             completed: fixed + already_ok + failed,

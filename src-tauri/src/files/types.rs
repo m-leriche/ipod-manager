@@ -52,7 +52,29 @@ impl SyncCancel {
     }
     pub fn cancel(&self) {
         if let Ok(guard) = self.0.lock() {
-            guard.store(true, Ordering::Relaxed);
+            guard.store(true, Ordering::SeqCst);
+        }
+    }
+    pub fn new_flag(&self) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = flag.clone();
+        }
+        flag
+    }
+}
+
+/// Independent cancel flag for background album art repair.
+/// Separate from `SyncCancel` so the two operations don't interfere.
+pub struct ArtRepairCancel(Mutex<Arc<AtomicBool>>);
+
+impl ArtRepairCancel {
+    pub fn new() -> Self {
+        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
+    }
+    pub fn cancel(&self) {
+        if let Ok(guard) = self.0.lock() {
+            guard.store(true, Ordering::SeqCst);
         }
     }
     pub fn new_flag(&self) -> Arc<AtomicBool> {

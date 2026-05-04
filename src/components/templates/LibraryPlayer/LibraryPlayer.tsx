@@ -15,6 +15,7 @@ import { useProgress } from "../../../contexts/ProgressContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useLibraryImport } from "./useLibraryImport";
 import type {
@@ -26,6 +27,7 @@ import type {
   LibraryFilter,
   SmartPlaylist,
 } from "../../../types/library";
+import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
@@ -59,6 +61,7 @@ export const LibraryPlayer = ({
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
   const { bumpArtCache } = useArtCache();
+  const { state: artRepairState, startRepair: startArtRepair } = useBackgroundArtRepair();
   const gridResize = useResizableHeight();
   const browserResize = useResizableHeight({
     storageKey: "crate-browser-height",
@@ -80,10 +83,10 @@ export const LibraryPlayer = ({
   } = usePlaylist();
   const playAfterFetchRef = useRef(false);
 
-  // Column browser filter state
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
-  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
-  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
+  // Column browser filter state (multi-select via Cmd+click / Shift+click)
+  const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
+  const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
+  const [selectedAlbums, setSelectedAlbums] = useState<Set<string>>(new Set());
 
   // Track table state (persisted)
   const [sortBy, setSortBy] = useState(() => localStorage.getItem(SORT_BY_KEY) || "artist");
@@ -187,7 +190,12 @@ export const LibraryPlayer = ({
 
   const fetchBrowserData = useCallback(async () => {
     const id = ++fetchIdRef.current;
-    const isUnfiltered = !selectedGenre && !selectedArtist && !selectedAlbum && !debouncedSearch && !flaggedOnly;
+    const isUnfiltered =
+      selectedGenres.size === 0 &&
+      selectedArtists.size === 0 &&
+      selectedAlbums.size === 0 &&
+      !debouncedSearch &&
+      !flaggedOnly;
 
     // Instant restore from in-memory cache when returning to unfiltered state
     if (
@@ -207,9 +215,9 @@ export const LibraryPlayer = ({
       const filter: LibraryFilter = {
         sort_by: sortBy,
         sort_direction: sortDirection,
-        ...(selectedGenre ? { genre: selectedGenre } : {}),
-        ...(selectedArtist ? { artist: selectedArtist } : {}),
-        ...(selectedAlbum ? { album: selectedAlbum } : {}),
+        ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
+        ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
+        ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(flaggedOnly ? { flagged_only: true } : {}),
       };
@@ -238,7 +246,7 @@ export const LibraryPlayer = ({
       setArtistList([]);
       setAlbumList([]);
     }
-  }, [sortBy, sortDirection, selectedGenre, selectedArtist, selectedAlbum, debouncedSearch, flaggedOnly, playTrack]);
+  }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly, playTrack]);
 
   // ── Initial load ──────────────────────────────────────────────
 
@@ -425,17 +433,17 @@ export const LibraryPlayer = ({
 
   // ── Column selection handlers ─────────────────────────────────
 
-  const handleSelectGenre = useCallback((genre: string | null) => {
-    setSelectedGenre(genre);
+  const handleSelectGenre = useCallback((genres: Set<string>) => {
+    setSelectedGenres(genres);
   }, []);
 
-  const handleSelectArtist = useCallback((artist: string | null) => {
-    setSelectedArtist(artist);
+  const handleSelectArtist = useCallback((artists: Set<string>) => {
+    setSelectedArtists(artists);
   }, []);
 
-  const handleSelectAlbum = useCallback((album: string | null) => {
-    setSelectedAlbum(album);
-    if (album) {
+  const handleSelectAlbum = useCallback((albums: Set<string>) => {
+    setSelectedAlbums(albums);
+    if (albums.size > 0) {
       setSortBy("track_number");
       setSortDirection("asc");
     } else {
@@ -588,11 +596,7 @@ export const LibraryPlayer = ({
   }
 
   if (!dataLoaded) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-xs text-text-tertiary">Loading library...</div>
-      </div>
-    );
+    return <LibraryLoadingSkeleton />;
   }
 
   return (
@@ -672,14 +676,16 @@ export const LibraryPlayer = ({
                 <div
                   ref={gridResize.containerRef}
                   style={showTrackList ? { height: `${gridResize.fraction * 100}%` } : undefined}
-                  className={showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"}
+                  className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
                   <AlbumGrid
                     albums={albumList}
-                    selectedAlbum={selectedAlbum}
-                    onSelectAlbum={handleSelectAlbum}
+                    selectedAlbum={selectedAlbums.size === 1 ? [...selectedAlbums][0] : null}
+                    onSelectAlbum={(name) => handleSelectAlbum(name ? new Set([name]) : new Set())}
                     onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
                     onFixAlbumArt={handleFixAlbumArtForAlbum}
+                    onFixAllAlbumArt={startArtRepair}
+                    isFixingAllArt={artRepairState.active}
                     sortMode={albumSortMode}
                     onSortModeChange={(mode) => {
                       setAlbumSortMode(mode);
@@ -702,18 +708,18 @@ export const LibraryPlayer = ({
                   <div
                     ref={browserResize.containerRef}
                     style={{ height: `${browserResize.fraction * 100}%` }}
-                    className="shrink-0 min-h-0"
+                    className="shrink-0 min-h-0 view-enter"
                   >
                     <ColumnBrowser
                       genres={genreList}
                       artists={artistList}
                       albums={albumList}
-                      selectedGenre={selectedGenre}
-                      selectedArtist={selectedArtist}
-                      selectedAlbum={selectedAlbum}
-                      onSelectGenre={handleSelectGenre}
-                      onSelectArtist={handleSelectArtist}
-                      onSelectAlbum={handleSelectAlbum}
+                      selectedGenres={selectedGenres}
+                      selectedArtists={selectedArtists}
+                      selectedAlbums={selectedAlbums}
+                      onSelectGenres={handleSelectGenre}
+                      onSelectArtists={handleSelectArtist}
+                      onSelectAlbums={handleSelectAlbum}
                       onPlay={handlePlayColumn}
                       onPlayAll={handleColumnPlayAll}
                       onAddAllToQueue={handleColumnAddToQueue}
@@ -746,6 +752,8 @@ export const LibraryPlayer = ({
             onFlagTracks={handleFlagTracks}
             onRateTracks={handleRateTracks}
             onRepairAlbumArt={handleRepairAlbumArt}
+            onRepairAllAlbumArt={startArtRepair}
+            isRepairingAllArt={artRepairState.active}
             onRepairMetadata={onRepairMetadata}
             activePlaylistId={activePlaylistId}
           />
@@ -757,7 +765,7 @@ export const LibraryPlayer = ({
 
       {showInfoPanel && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
       {showStatsPanel && (
-        <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
+        <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden panel-slide-right">
           <LibraryStats libraryPath={libraryPath} />
         </div>
       )}

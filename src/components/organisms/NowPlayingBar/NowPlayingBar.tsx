@@ -6,7 +6,9 @@ import { NowPlayingInfo } from "../../molecules/NowPlayingInfo/NowPlayingInfo";
 import { SpeedControl } from "../../molecules/SpeedControl/SpeedControl";
 import { TransportControls } from "../../molecules/TransportControls/TransportControls";
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
+import { LyricsPanel } from "../LyricsPanel/LyricsPanel";
 import { getDragPayload } from "../TrackTable/TrackTable";
+import type { LibraryTrack } from "../../../types/library";
 
 interface NowPlayingBarProps {
   onToggleQueue?: () => void;
@@ -17,10 +19,12 @@ interface NowPlayingBarProps {
   showInfoPanel?: boolean;
   showStatsPanel?: boolean;
   showPlaylistSidebar?: boolean;
+  showLyricsPanel?: boolean;
   onToggleColumnBrowser?: () => void;
   onToggleInfoPanel?: () => void;
   onToggleStatsPanel?: () => void;
   onTogglePlaylistSidebar?: () => void;
+  onToggleLyricsPanel?: () => void;
   showAlbumGrid?: boolean;
   onToggleAlbumGrid?: () => void;
   showTrackList?: boolean;
@@ -36,10 +40,12 @@ export const NowPlayingBar = ({
   showInfoPanel,
   showStatsPanel,
   showPlaylistSidebar,
+  showLyricsPanel,
   onToggleColumnBrowser,
   onToggleInfoPanel,
   onToggleStatsPanel,
   onTogglePlaylistSidebar,
+  onToggleLyricsPanel,
   showAlbumGrid,
   onToggleAlbumGrid,
   showTrackList,
@@ -225,6 +231,15 @@ export const NowPlayingBar = ({
             <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </PanelToggle>
         )}
+        {!miniPlayer && onToggleLyricsPanel && (
+          <PanelToggle active={showLyricsPanel} onClick={onToggleLyricsPanel} title="Lyrics">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
+            />
+          </PanelToggle>
+        )}
         {!miniPlayer && onToggleInfoPanel && (
           <PanelToggle active={showInfoPanel} onClick={onToggleInfoPanel} title="Info panel">
             <circle cx="12" cy="12" r="9" />
@@ -303,7 +318,7 @@ const MiniPlayerView = ({
   onSeek,
   onExpand,
 }: {
-  track: { title: string | null; artist: string | null; file_name: string; folder_path: string };
+  track: LibraryTrack;
   isPlaying: boolean;
   fraction: number;
   currentTime: number;
@@ -313,73 +328,102 @@ const MiniPlayerView = ({
   onPrevious: () => void;
   onSeek: (fraction: number) => void;
   onExpand?: () => void;
-}) => (
-  <div className="flex flex-col flex-1 h-full bg-bg-secondary select-none overflow-hidden">
-    {/* Album art — shrinks to fit, controls always visible */}
-    <div className="flex-1 min-h-0 relative overflow-hidden">
-      <AlbumArtwork folderPath={track.folder_path} size="full" className="!rounded-none !aspect-auto !h-full" />
-      {/* Expand button overlay */}
-      {onExpand && (
-        <button
-          onClick={onExpand}
-          className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-white/80 hover:text-white hover:bg-black/60 transition-colors"
-          title="Exit mini player"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-            />
+}) => {
+  const [showLyrics, setShowLyrics] = useState(false);
+
+  return (
+    <div className="flex flex-col flex-1 h-full bg-bg-secondary select-none overflow-hidden">
+      {/* Album art or lyrics — shrinks to fit, controls always visible */}
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        {showLyrics ? (
+          <div className="absolute inset-0 bg-bg-primary/95">
+            <LyricsPanel track={track} variant="overlay" />
+          </div>
+        ) : (
+          <AlbumArtwork folderPath={track.folder_path} size="full" className="!rounded-none !aspect-auto !h-full" />
+        )}
+        {/* Overlay buttons */}
+        <div className="absolute top-2 right-2 flex gap-1">
+          <button
+            onClick={() => setShowLyrics((prev) => !prev)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              showLyrics ? "bg-accent/80 text-white" : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
+            }`}
+            title={showLyrics ? "Show album art" : "Show lyrics"}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
+              />
+            </svg>
+          </button>
+          {onExpand && (
+            <button
+              onClick={onExpand}
+              className="p-1.5 rounded-lg bg-black/40 text-white/80 hover:text-white hover:bg-black/60 transition-colors"
+              title="Exit mini player"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Track info */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <div className="text-xs font-medium text-text-primary truncate text-center">
+          {track.title || track.file_name}
+        </div>
+        <div className="text-[11px] text-text-secondary truncate text-center mt-0.5">
+          {track.artist || "Unknown Artist"}
+        </div>
+      </div>
+
+      {/* Seek bar */}
+      <div className="px-4 flex items-center gap-2 shrink-0">
+        <span className="text-[9px] text-text-tertiary tabular-nums w-6 text-right">{formatTime(currentTime)}</span>
+        <SeekBar value={fraction} onChange={onSeek} className="flex-1" />
+        <span className="text-[9px] text-text-tertiary tabular-nums w-6">{formatTime(duration)}</span>
+      </div>
+
+      {/* Transport controls */}
+      <div className="flex items-center justify-center gap-3 py-3 shrink-0">
+        <button onClick={onPrevious} className="text-text-secondary hover:text-text-primary transition-colors">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
           </svg>
         </button>
-      )}
-    </div>
-
-    {/* Track info */}
-    <div className="px-4 pt-3 pb-2 shrink-0">
-      <div className="text-xs font-medium text-text-primary truncate text-center">{track.title || track.file_name}</div>
-      <div className="text-[11px] text-text-secondary truncate text-center mt-0.5">
-        {track.artist || "Unknown Artist"}
+        <button
+          onClick={onPlayPause}
+          className="w-9 h-9 rounded-full bg-text-primary text-bg-primary flex items-center justify-center hover:opacity-90 transition-opacity"
+        >
+          {isPlaying ? (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
+        <button onClick={onNext} className="text-text-secondary hover:text-text-primary transition-colors">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+          </svg>
+        </button>
       </div>
     </div>
-
-    {/* Seek bar */}
-    <div className="px-4 flex items-center gap-2 shrink-0">
-      <span className="text-[9px] text-text-tertiary tabular-nums w-6 text-right">{formatTime(currentTime)}</span>
-      <SeekBar value={fraction} onChange={onSeek} className="flex-1" />
-      <span className="text-[9px] text-text-tertiary tabular-nums w-6">{formatTime(duration)}</span>
-    </div>
-
-    {/* Transport controls */}
-    <div className="flex items-center justify-center gap-3 py-3 shrink-0">
-      <button onClick={onPrevious} className="text-text-secondary hover:text-text-primary transition-colors">
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-        </svg>
-      </button>
-      <button
-        onClick={onPlayPause}
-        className="w-9 h-9 rounded-full bg-text-primary text-bg-primary flex items-center justify-center hover:opacity-90 transition-opacity"
-      >
-        {isPlaying ? (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-            <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        )}
-      </button>
-      <button onClick={onNext} className="text-text-secondary hover:text-text-primary transition-colors">
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-        </svg>
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
 const PanelToggle = ({
   active,

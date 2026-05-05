@@ -14,6 +14,7 @@ mod lastfm_queue;
 mod library;
 mod libstats;
 mod localvideo;
+mod lyrics;
 mod mediakeys;
 mod metadata;
 mod metarepair;
@@ -273,6 +274,10 @@ pub fn run() {
             commands::lastfm_set_scrobble_enabled,
             commands::lastfm_flush_queue,
             commands::lastfm_open_auth_url,
+            commands::get_lyrics,
+            commands::fetch_lyrics,
+            commands::save_lyrics,
+            commands::write_lyrics_to_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -140,6 +140,7 @@ pub(crate) struct TrackData {
     pub format: String,
     pub file_size: u64,
     pub play_count: Option<u32>,
+    pub lyrics: Option<String>,
 }
 
 // ── Smart playlist types ──────────────────────────────────────

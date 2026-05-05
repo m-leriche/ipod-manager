@@ -13,6 +13,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
+import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
@@ -44,15 +45,17 @@ const App = () => (
         <ProgressProvider>
           <ArtCacheProvider>
             <BackgroundArtRepairProvider>
-              <EqualizerProvider>
-                <PlaybackProvider>
-                  <PlaylistProvider>
-                    <AppContent />
-                    <ProgressModal />
-                    <ToastContainer />
-                  </PlaylistProvider>
-                </PlaybackProvider>
-              </EqualizerProvider>
+              <BackgroundLyricsProvider>
+                <EqualizerProvider>
+                  <PlaybackProvider>
+                    <PlaylistProvider>
+                      <AppContent />
+                      <ProgressModal />
+                      <ToastContainer />
+                    </PlaylistProvider>
+                  </PlaybackProvider>
+                </EqualizerProvider>
+              </BackgroundLyricsProvider>
             </BackgroundArtRepairProvider>
           </ArtCacheProvider>
         </ProgressProvider>

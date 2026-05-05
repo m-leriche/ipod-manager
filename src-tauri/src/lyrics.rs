@@ -2,6 +2,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tauri::Emitter;
 
 const USER_AGENT: &str = "Crate/1.0 (https://github.com/m-leriche/ipod-manager)";
 const RATE_LIMIT: Duration = Duration::from_millis(250);
@@ -259,6 +260,140 @@ fn write_lyrics_lofty(path: &std::path::Path, lyrics: &str) -> Result<(), String
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())
+}
+
+// ── Library-wide lyrics fetching ────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LyricsProgress {
+    pub total: usize,
+    pub completed: usize,
+    pub current_track: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LyricsFetchResult {
+    pub total: usize,
+    pub fetched: usize,
+    pub already_had: usize,
+    pub not_found: usize,
+    pub cancelled: bool,
+}
+
+/// A track row from the database with just enough info to fetch lyrics.
+struct TrackRow {
+    id: i64,
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    duration_secs: f64,
+    file_name: String,
+}
+
+/// Fetch lyrics for all tracks in the library that don't have any yet.
+pub fn fetch_library_lyrics(
+    conn: &Connection,
+    app: &tauri::AppHandle,
+    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> LyricsFetchResult {
+    use std::sync::atomic::Ordering;
+
+    // Query tracks missing both plain and synced lyrics
+    let tracks = match conn.prepare(
+        "SELECT id, title, artist, album, duration_secs, file_name
+         FROM tracks
+         WHERE lyrics IS NULL AND synced_lyrics IS NULL
+           AND (artist IS NOT NULL OR title IS NOT NULL)",
+    ) {
+        Ok(mut stmt) => stmt
+            .query_map(params![], |row| {
+                Ok(TrackRow {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    artist: row.get(2)?,
+                    album: row.get(3)?,
+                    duration_secs: row.get(4)?,
+                    file_name: row.get(5)?,
+                })
+            })
+            .ok()
+            .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+
+    let total = tracks.len();
+    let mut fetched = 0;
+    let mut not_found = 0;
+
+    for (i, track) in tracks.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return LyricsFetchResult {
+                total,
+                fetched,
+                already_had: 0,
+                not_found,
+                cancelled: true,
+            };
+        }
+
+        let display = track.title.as_deref().unwrap_or(track.file_name.as_str());
+        let _ = app.emit(
+            "library-lyrics-progress",
+            LyricsProgress {
+                total,
+                completed: i,
+                current_track: display.to_string(),
+            },
+        );
+
+        let artist = match &track.artist {
+            Some(a) if !a.is_empty() => a.as_str(),
+            _ => continue,
+        };
+        let title = match &track.title {
+            Some(t) if !t.is_empty() => t.as_str(),
+            _ => continue,
+        };
+
+        match fetch_lyrics(
+            artist,
+            title,
+            track.album.as_deref(),
+            Some(track.duration_secs),
+        ) {
+            Ok(result) => {
+                let _ = save_lyrics(
+                    conn,
+                    track.id,
+                    result.plain_lyrics.as_deref(),
+                    result.synced_lyrics.as_deref(),
+                );
+                fetched += 1;
+            }
+            Err(_) => {
+                not_found += 1;
+            }
+        }
+    }
+
+    // Final progress event
+    let _ = app.emit(
+        "library-lyrics-progress",
+        LyricsProgress {
+            total,
+            completed: total,
+            current_track: String::new(),
+        },
+    );
+
+    LyricsFetchResult {
+        total,
+        fetched,
+        already_had: 0,
+        not_found,
+        cancelled: false,
+    }
 }
 
 #[cfg(test)]

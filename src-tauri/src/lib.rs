@@ -28,7 +28,7 @@ mod volume_monitor;
 mod watcher;
 mod youtube;
 
-use files::{ArtRepairCancel, SyncCancel};
+use files::{ArtRepairCancel, LyricsCancel, SyncCancel};
 use library::LibraryDb;
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -61,6 +61,7 @@ pub fn run() {
         })
         .manage(SyncCancel::new())
         .manage(ArtRepairCancel::new())
+        .manage(LyricsCancel::new())
         .setup(|app| {
             // Initialize library database
             let db_path = app
@@ -278,6 +279,8 @@ pub fn run() {
             commands::fetch_lyrics,
             commands::save_lyrics,
             commands::write_lyrics_to_file,
+            commands::fetch_library_lyrics,
+            commands::cancel_lyrics_fetch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

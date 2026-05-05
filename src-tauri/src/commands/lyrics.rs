@@ -1,7 +1,8 @@
 use crate::error::AppError;
+use crate::files::LyricsCancel;
 use crate::library::LibraryDb;
 use crate::lyrics;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_lyrics(
@@ -82,4 +83,30 @@ pub async fn write_lyrics_to_file(file_path: String, plain_lyrics: String) -> Re
     .await
     .map_err(|e| format!("Task failed: {}", e))?
     .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn fetch_library_lyrics(
+    app: AppHandle,
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, LyricsCancel>,
+) -> Result<lyrics::LyricsFetchResult, AppError> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<lyrics::LyricsFetchResult, AppError> {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+
+        Ok(lyrics::fetch_library_lyrics(&conn, &app, &flag))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub fn cancel_lyrics_fetch(cancel: State<'_, LyricsCancel>) -> Result<(), AppError> {
+    cancel.cancel();
+    Ok(())
 }

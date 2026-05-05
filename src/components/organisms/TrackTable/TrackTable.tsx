@@ -34,6 +34,9 @@ interface TrackTableProps {
   onRepairAlbumArt?: (tracks: LibraryTrack[]) => void;
   onRepairAllAlbumArt?: () => void;
   isRepairingAllArt?: boolean;
+  onFetchLyrics?: (track: LibraryTrack) => void;
+  onFetchAllLyrics?: () => void;
+  isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
@@ -57,6 +60,9 @@ export const TrackTable = memo(function TrackTable({
   onRepairAlbumArt,
   onRepairAllAlbumArt,
   isRepairingAllArt,
+  onFetchLyrics,
+  onFetchAllLyrics,
+  isFetchingAllLyrics,
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
@@ -414,6 +420,30 @@ export const TrackTable = memo(function TrackTable({
                     setContextMenu(null);
                   },
                   disabled: isRepairingAllArt,
+                },
+              ]
+            : []),
+          ...(onFetchLyrics && !isMulti
+            ? [
+                {
+                  label: "Fetch Lyrics",
+                  onClick: () => {
+                    const track = tracks.find((t) => t.id === ids[0]);
+                    if (track) onFetchLyrics(track);
+                    setContextMenu(null);
+                  },
+                },
+              ]
+            : []),
+          ...(onFetchAllLyrics
+            ? [
+                {
+                  label: "Fetch Lyrics for Entire Library",
+                  onClick: () => {
+                    onFetchAllLyrics();
+                    setContextMenu(null);
+                  },
+                  disabled: isFetchingAllLyrics,
                 },
               ]
             : []),

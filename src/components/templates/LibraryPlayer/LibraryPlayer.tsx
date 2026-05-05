@@ -16,6 +16,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
+import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useLibraryImport } from "./useLibraryImport";
 import type {
@@ -63,6 +64,7 @@ export const LibraryPlayer = ({
   const toast = useToast();
   const { bumpArtCache } = useArtCache();
   const { state: artRepairState, startRepair: startArtRepair } = useBackgroundArtRepair();
+  const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
   const gridResize = useResizableHeight();
   const browserResize = useResizableHeight({
     storageKey: "crate-browser-height",
@@ -367,6 +369,25 @@ export const LibraryPlayer = ({
       }
     },
     [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
+  );
+
+  const handleFetchLyrics = useCallback(
+    async (track: LibraryTrack) => {
+      if (!track.artist && !track.title) return;
+      try {
+        await invoke("fetch_lyrics", {
+          trackId: track.id,
+          artist: track.artist || "",
+          title: track.title || track.file_name,
+          album: track.album,
+          durationSecs: track.duration_secs || null,
+        });
+        toast.success(`Lyrics fetched for "${track.title || track.file_name}"`);
+      } catch {
+        toast.error(`No lyrics found for "${track.title || track.file_name}"`);
+      }
+    },
+    [toast],
   );
 
   const handleFixAlbumArtForAlbum = useCallback(
@@ -774,6 +795,9 @@ export const LibraryPlayer = ({
             onRepairAlbumArt={handleRepairAlbumArt}
             onRepairAllAlbumArt={startArtRepair}
             isRepairingAllArt={artRepairState.active}
+            onFetchLyrics={handleFetchLyrics}
+            onFetchAllLyrics={startLyricsFetch}
+            isFetchingAllLyrics={lyricsState.active}
             onRepairMetadata={onRepairMetadata}
             activePlaylistId={activePlaylistId}
           />

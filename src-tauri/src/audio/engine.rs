@@ -111,8 +111,12 @@ pub fn run<R: Runtime>(
     let mut leftover: Vec<f32> = Vec::new();
     // Preloaded next track for gapless playback
     let mut preloaded: Option<(AudioDecoder, Option<Resampler>, u16)> = None;
-    // Track source position directly (accurate at any speed)
+    // Track source decode position (may be ahead of audible output due to buffering)
     let mut source_pos_secs: f64 = 0.0;
+    // Offset added to out_samples-based position after seek
+    let mut playback_offset_secs: f64 = 0.0;
+    // Current playback speed (for computing source position from output samples)
+    let mut current_speed: f64 = 1.0;
 
     // Position event timer
     let mut last_position_event = std::time::Instant::now();
@@ -159,9 +163,11 @@ pub fn run<R: Runtime>(
 
                             // Seek if requested
                             source_pos_secs = 0.0;
+                            playback_offset_secs = 0.0;
                             if let Some(secs) = seek_secs {
                                 if dec.seek(secs).is_ok() {
                                     source_pos_secs = secs;
+                                    playback_offset_secs = secs;
                                     shared.set_position(secs);
                                 }
                             }
@@ -272,6 +278,8 @@ pub fn run<R: Runtime>(
                             }
 
                             source_pos_secs = position_secs;
+                            playback_offset_secs = position_secs;
+                            shared.out_samples.store(0, Ordering::Relaxed);
                             shared.set_position(position_secs);
                         }
                     }
@@ -299,6 +307,16 @@ pub fn run<R: Runtime>(
                 }
 
                 AudioCommand::SetSpeed { speed } => {
+                    // Anchor playback position before speed change so out_samples
+                    // count restarts relative to the new speed.
+                    let out = shared.out_samples.load(Ordering::Relaxed);
+                    let ch = shared.out_channels.load(Ordering::Relaxed).max(1);
+                    let rate = shared.out_rate.load(Ordering::Relaxed).max(1);
+                    let wall_secs = out as f64 / (rate as f64 * ch as f64);
+                    playback_offset_secs += wall_secs * current_speed;
+                    shared.out_samples.store(0, Ordering::Relaxed);
+
+                    current_speed = speed;
                     time_stretcher.set_speed(speed);
                 }
 
@@ -399,6 +417,8 @@ pub fn run<R: Runtime>(
                     time_stretcher.reset();
                     leftover.clear();
                     source_pos_secs = 0.0;
+                    playback_offset_secs = 0.0;
+                    shared.out_samples.store(0, Ordering::Relaxed);
                     shared.set_position(0.0);
                     shared.set_duration(dur);
                     let _ = app_handle.emit("audio:gapless-transition", dur);
@@ -406,10 +426,19 @@ pub fn run<R: Runtime>(
             }
 
             // Emit position events at ~20Hz
+            // Use output-sample-based position (what's actually been heard)
+            // instead of decode position (which runs ahead due to buffering).
             if last_position_event.elapsed() >= Duration::from_millis(50) {
                 last_position_event = std::time::Instant::now();
-                let pos = shared.get_position();
+                let out = shared.out_samples.load(Ordering::Relaxed);
+                let ch = shared.out_channels.load(Ordering::Relaxed).max(1);
+                let rate = shared.out_rate.load(Ordering::Relaxed).max(1);
+                let wall_secs = out as f64 / (rate as f64 * ch as f64);
+                let playback_pos = playback_offset_secs + wall_secs * current_speed;
                 let dur = shared.get_duration();
+                // Clamp to duration — decode position can slightly overshoot
+                let pos = playback_pos.min(dur);
+                shared.set_position(pos);
                 let _ = app_handle.emit(
                     "audio:position",
                     serde_json::json!({

@@ -97,6 +97,12 @@ export const useDragAndDrop = ({ paneId, currentPath, selected, onDrop }: UseDra
       const paths = selected.has(entryPath) ? [...selected] : [entryPath];
       let dragging = false;
 
+      // Suppress text selection immediately — selectstart fires before
+      // the browser begins highlighting, so this prevents the blue
+      // selection flash during the pre-threshold mouse movement.
+      const onSelectStart = (se: Event) => se.preventDefault();
+      document.addEventListener("selectstart", onSelectStart);
+
       const findTarget = (cx: number, cy: number) => {
         const el = document.elementFromPoint?.(cx, cy);
         if (!el) return null;
@@ -120,6 +126,7 @@ export const useDragAndDrop = ({ paneId, currentPath, selected, onDrop }: UseDra
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
         document.removeEventListener("keydown", onKeyDown);
+        document.removeEventListener("selectstart", onSelectStart);
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         removeOverlay();

@@ -24,6 +24,7 @@ pub async fn fetch_lyrics(
     title: String,
     album: Option<String>,
     duration_secs: Option<f64>,
+    file_path: String,
     db: State<'_, LibraryDb>,
 ) -> Result<lyrics::TrackLyrics, AppError> {
     let conn_arc = db.conn_arc();
@@ -42,6 +43,11 @@ pub async fn fetch_lyrics(
             result.plain_lyrics.as_deref(),
             result.synced_lyrics.as_deref(),
         )?;
+
+        // Embed plain lyrics in audio file tags
+        if let Some(ref plain) = result.plain_lyrics {
+            let _ = lyrics::write_lyrics_to_file(&file_path, plain);
+        }
 
         Ok(lyrics::TrackLyrics {
             track_id,

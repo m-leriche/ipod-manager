@@ -288,6 +288,7 @@ struct TrackRow {
     album: Option<String>,
     duration_secs: f64,
     file_name: String,
+    file_path: String,
 }
 
 /// Fetch lyrics for all tracks in the library that don't have any yet.
@@ -300,7 +301,7 @@ pub fn fetch_library_lyrics(
 
     // Query tracks missing both plain and synced lyrics
     let tracks = match conn.prepare(
-        "SELECT id, title, artist, album, duration_secs, file_name
+        "SELECT id, title, artist, album, duration_secs, file_name, file_path
          FROM tracks
          WHERE lyrics IS NULL AND synced_lyrics IS NULL
            AND (artist IS NOT NULL OR title IS NOT NULL)",
@@ -314,6 +315,7 @@ pub fn fetch_library_lyrics(
                     album: row.get(3)?,
                     duration_secs: row.get(4)?,
                     file_name: row.get(5)?,
+                    file_path: row.get(6)?,
                 })
             })
             .ok()
@@ -369,6 +371,10 @@ pub fn fetch_library_lyrics(
                     result.plain_lyrics.as_deref(),
                     result.synced_lyrics.as_deref(),
                 );
+                // Embed plain lyrics in audio file tags
+                if let Some(ref plain) = result.plain_lyrics {
+                    let _ = write_lyrics_to_file(&track.file_path, plain);
+                }
                 fetched += 1;
             }
             Err(_) => {

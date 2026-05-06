@@ -86,8 +86,7 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
 
   const dismissResult = useCallback(() => setResult(null), []);
 
-  const showRetryOption = (r: LyricsFetchResult): boolean =>
-    r.skipped_not_found > 0 || r.not_found > 0;
+  const showRetryOption = (r: LyricsFetchResult): boolean => r.skipped_not_found > 0 || r.not_found > 0;
 
   const handleRetryNotFound = useCallback(async () => {
     await invoke("reset_lyrics_not_found");

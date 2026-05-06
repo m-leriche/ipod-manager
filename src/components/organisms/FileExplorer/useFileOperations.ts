@@ -39,33 +39,31 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
   );
 
   const handleDelete = useCallback(
-    async (names: string[]) => {
-      if (names.length === 0) return;
+    async (paths: string[]) => {
+      if (paths.length === 0) return;
       const label =
-        names.length === 1
-          ? `Are you sure you want to delete "${names[0]}"?`
-          : `Are you sure you want to delete ${names.length} items?`;
+        paths.length === 1
+          ? `Are you sure you want to delete "${paths[0].split("/").pop()}"?`
+          : `Are you sure you want to delete ${paths.length} items?`;
       const ok = await confirm(label, { title: "Delete", kind: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
       if (!ok) return;
 
-      if (names.length === 1) {
+      if (paths.length === 1) {
         try {
-          await invoke("delete_entry", { path: joinPath(currentPath, names[0]) });
+          await invoke("delete_entry", { path: paths[0] });
         } catch (e) {
           await message(`Delete failed: ${e}`, { title: "Error", kind: "error" });
         }
       } else {
         try {
-          await invoke("delete_files", {
-            paths: names.map((n) => joinPath(currentPath, n)),
-          });
+          await invoke("delete_files", { paths });
         } catch (e) {
           await message(`Delete failed: ${e}`, { title: "Error", kind: "error" });
         }
       }
       reload();
     },
-    [currentPath, reload],
+    [reload],
   );
 
   const handlePaste = useCallback(

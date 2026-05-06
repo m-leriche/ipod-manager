@@ -1,13 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useDragAndDrop } from "./useDragAndDrop";
-import type { FileEntry } from "./types";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
-
-const folder: FileEntry = { name: "subdir", is_dir: true, size: 0, modified: 0 };
 
 const makeDragEvent = (overrides: Partial<React.DragEvent> = {}): React.DragEvent =>
   ({
@@ -15,7 +12,7 @@ const makeDragEvent = (overrides: Partial<React.DragEvent> = {}): React.DragEven
     stopPropagation: vi.fn(),
     dataTransfer: {
       setData: vi.fn(),
-      getData: vi.fn(() => "{}"),
+      getData: vi.fn(() => ""),
       effectAllowed: "copyMove",
       dropEffect: "copy",
       setDragImage: vi.fn(),
@@ -45,39 +42,36 @@ describe("useDragAndDrop", () => {
 
   it("rowDragStart sets drag data for single file", () => {
     const onDrop = vi.fn();
-    const entry: FileEntry = { name: "file.txt", is_dir: false, size: 100, modified: 0 };
     const { result } = renderHook(() =>
       useDragAndDrop({ paneId: "left", currentPath: "/test", selected: new Set(), onDrop }),
     );
 
     const e = makeDragEvent();
-    act(() => result.current.rowDragStart(e, entry));
-    expect(e.dataTransfer.setData).toHaveBeenCalledWith("application/json", expect.stringContaining("/test/file.txt"));
+    act(() => result.current.rowDragStart(e, "/test/file.txt"));
+    expect(e.dataTransfer.setData).toHaveBeenCalledWith("text/plain", "/test/file.txt");
   });
 
   it("rowDragStart includes all selected files when entry is selected", () => {
     const onDrop = vi.fn();
-    const entry: FileEntry = { name: "file1.txt", is_dir: false, size: 100, modified: 0 };
-    const selected = new Set(["file1.txt", "file2.txt"]);
+    const selected = new Set(["/test/file1.txt", "/test/file2.txt"]);
     const { result } = renderHook(() => useDragAndDrop({ paneId: "left", currentPath: "/test", selected, onDrop }));
 
     const e = makeDragEvent();
-    act(() => result.current.rowDragStart(e, entry));
-    const data = JSON.parse((e.dataTransfer.setData as ReturnType<typeof vi.fn>).mock.calls[0][1]);
-    expect(data.paths).toContain("/test/file1.txt");
-    expect(data.paths).toContain("/test/file2.txt");
+    act(() => result.current.rowDragStart(e, "/test/file1.txt"));
+    const setDataCall = (e.dataTransfer.setData as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    const paths = setDataCall.split("\n");
+    expect(paths).toContain("/test/file1.txt");
+    expect(paths).toContain("/test/file2.txt");
   });
 
   it("rowDragStart only drags the clicked entry if not in selection", () => {
     const onDrop = vi.fn();
-    const entry: FileEntry = { name: "file3.txt", is_dir: false, size: 100, modified: 0 };
-    const selected = new Set(["file1.txt", "file2.txt"]);
+    const selected = new Set(["/test/file1.txt", "/test/file2.txt"]);
     const { result } = renderHook(() => useDragAndDrop({ paneId: "left", currentPath: "/test", selected, onDrop }));
 
     const e = makeDragEvent();
-    act(() => result.current.rowDragStart(e, entry));
-    const data = JSON.parse((e.dataTransfer.setData as ReturnType<typeof vi.fn>).mock.calls[0][1]);
-    expect(data.paths).toEqual(["/test/file3.txt"]);
+    act(() => result.current.rowDragStart(e, "/test/file3.txt"));
+    expect(e.dataTransfer.setData).toHaveBeenCalledWith("text/plain", "/test/file3.txt");
   });
 
   it("folderHandlers returns handlers for a folder entry", () => {
@@ -86,7 +80,7 @@ describe("useDragAndDrop", () => {
       useDragAndDrop({ paneId: "left", currentPath: "/test", selected: new Set(), onDrop }),
     );
 
-    const handlers = result.current.folderHandlers(folder);
+    const handlers = result.current.folderHandlers("/test/subdir");
     expect(handlers).toHaveProperty("onDragEnter");
     expect(handlers).toHaveProperty("onDragOver");
     expect(handlers).toHaveProperty("onDragLeave");

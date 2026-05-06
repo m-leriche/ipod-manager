@@ -168,7 +168,7 @@ npm test
 ## Feature TODOs
 
 - [ ] Batch find-and-replace in metadata tags
-- [ ] Fix scrolling for file explorer — users cannot currently scroll open folders
+- [ ] Fix drag-and-drop between file explorer panes — HTML5 DnD `drop` event never fires in Tauri's WKWebView (macOS) when `dragDropEnabled: true`. Current workaround attempts using `dragend` + module-level state don't work. May need a mouse-event-based custom drag system or disabling Tauri's native drag-drop for the file explorer webview.
 
 ## Code Style
 

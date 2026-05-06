@@ -121,8 +121,15 @@ describe("BrowseExplorer", () => {
     });
   });
 
-  it("shows profile selector", async () => {
+  it("shows profile selector when toggled open", async () => {
+    const user = userEvent.setup();
     render(<BrowseExplorer />);
+
+    // Profiles panel is hidden by default, toggle button is visible
+    const toggle = await screen.findByRole("button", { name: "Profiles" });
+    expect(toggle).toBeInTheDocument();
+
+    await user.click(toggle);
     await waitFor(() => {
       expect(screen.getByText("Profile")).toBeInTheDocument();
     });
@@ -143,6 +150,10 @@ describe("BrowseExplorer", () => {
     const user = userEvent.setup();
     render(<BrowseExplorer />);
 
+    // Open the profiles panel first
+    const toggle = await screen.findByRole("button", { name: "Profiles" });
+    await user.click(toggle);
+
     // Select the profile from the dropdown
     const select = await screen.findByRole("combobox");
     await user.selectOptions(select, "My Setup");
@@ -162,6 +173,9 @@ describe("BrowseExplorer", () => {
     await waitFor(() => screen.getByRole("button", { name: "Browse" }));
     await user.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => screen.getByText("/Volumes/IPOD"));
+
+    // Open the profiles panel first
+    await user.click(screen.getByRole("button", { name: "Profiles" }));
 
     // Create a profile — should reset explorer state
     await user.click(screen.getByTitle("Create profile"));

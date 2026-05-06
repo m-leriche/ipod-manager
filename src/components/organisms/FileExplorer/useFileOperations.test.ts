@@ -110,7 +110,7 @@ describe("useFileOperations", () => {
       mockInvoke.mockResolvedValue(undefined);
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete(["file1.txt"]);
+        await result.current.handleDelete(["/test/file1.txt"]);
       });
       expect(mockConfirm).toHaveBeenCalledWith('Are you sure you want to delete "file1.txt"?', expect.any(Object));
       expect(mockInvoke).toHaveBeenCalledWith("delete_entry", { path: "/test/file1.txt" });
@@ -121,7 +121,7 @@ describe("useFileOperations", () => {
       mockInvoke.mockResolvedValue(undefined);
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete(["file1.txt", "file2.txt"]);
+        await result.current.handleDelete(["/test/file1.txt", "/test/file2.txt"]);
       });
       expect(mockConfirm).toHaveBeenCalledWith("Are you sure you want to delete 2 items?", expect.any(Object));
       expect(mockInvoke).toHaveBeenCalledWith("delete_files", {
@@ -133,7 +133,7 @@ describe("useFileOperations", () => {
       mockConfirm.mockResolvedValue(false);
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete(["file1.txt"]);
+        await result.current.handleDelete(["/test/file1.txt"]);
       });
       expect(mockInvoke).not.toHaveBeenCalled();
     });

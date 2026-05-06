@@ -4,9 +4,92 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>iPod Manager</title>
+    <script>
+      // Apply stored theme immediately to prevent flash of wrong colors
+      (function() {
+        var theme = localStorage.getItem('crate-theme') || 'dark';
+        var valid = ['dark','win95','classic','winamp','aqua','spotify'];
+        if (valid.indexOf(theme) === -1) theme = 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+    <style>
+      /* Prevent white flash — default to dark, override per theme */
+      html { background: #000000; }
+      html[data-theme="win95"] { background: #c0c0c0; }
+      html[data-theme="classic"] { background: #f2f0ed; }
+      html[data-theme="winamp"] { background: #292b2f; }
+      html[data-theme="aqua"] { background: #e8e8e8; }
+      html[data-theme="spotify"] { background: #121212; }
+
+      body { margin: 0; }
+
+      .splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      .splash-title {
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        opacity: 0.4;
+      }
+
+      /* Theme-aware text color */
+      html[data-theme="dark"] .splash-title,
+      html:not([data-theme]) .splash-title,
+      html[data-theme="winamp"] .splash-title,
+      html[data-theme="spotify"] .splash-title { color: #ffffff; }
+
+      html[data-theme="win95"] .splash-title,
+      html[data-theme="classic"] .splash-title,
+      html[data-theme="aqua"] .splash-title { color: #000000; }
+
+      /* Subtle loading dots */
+      .splash-dots {
+        display: flex;
+        gap: 6px;
+      }
+      .splash-dots span {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        animation: splash-pulse 1.2s ease-in-out infinite;
+      }
+
+      html[data-theme="dark"] .splash-dots span,
+      html:not([data-theme]) .splash-dots span,
+      html[data-theme="winamp"] .splash-dots span,
+      html[data-theme="spotify"] .splash-dots span { background: #ffffff30; }
+
+      html[data-theme="win95"] .splash-dots span,
+      html[data-theme="classic"] .splash-dots span,
+      html[data-theme="aqua"] .splash-dots span { background: #00000030; }
+
+      .splash-dots span:nth-child(2) { animation-delay: 0.15s; }
+      .splash-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+      @keyframes splash-pulse {
+        0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+        40% { opacity: 1; transform: scale(1.3); }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="splash">
+        <div class="splash-title">Crate</div>
+        <div class="splash-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

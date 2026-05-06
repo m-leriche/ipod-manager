@@ -281,11 +281,17 @@ export const ArtworkCarousel = ({
                 Math.abs(intOffset) <= VISIBLE_RANGE
                   ? () => {
                       if (intOffset !== 0) onSelectAlbum(album.name);
-                      else onSelectAlbum(selectedAlbum === album.name ? null : album.name);
                     }
                   : undefined
               }
-              onDoubleClick={intOffset === 0 ? () => onPlayAlbum(album.name) : undefined}
+              onDoubleClick={
+                Math.abs(intOffset) <= VISIBLE_RANGE
+                  ? () => {
+                      onSelectAlbum(album.name);
+                      onPlayAlbum(album.name);
+                    }
+                  : undefined
+              }
             >
               <AlbumArt album={album} isCenter={intOffset === 0} />
             </div>

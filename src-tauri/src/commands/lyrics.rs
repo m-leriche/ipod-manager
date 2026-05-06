@@ -101,11 +101,7 @@ pub async fn fetch_library_lyrics(
     let conn_arc = db.conn_arc();
 
     tauri::async_runtime::spawn_blocking(move || -> Result<lyrics::LyricsFetchResult, AppError> {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-
-        Ok(lyrics::fetch_library_lyrics(&conn, &app, &flag))
+        Ok(lyrics::fetch_library_lyrics(&conn_arc, &app, &flag))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

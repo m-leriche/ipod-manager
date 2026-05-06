@@ -32,7 +32,6 @@ export const AlbumGrid = ({
 }: AlbumGridProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [lanes, setLanes] = useState(4);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumSummary } | null>(null);
 
   useEffect(() => {
@@ -70,31 +69,19 @@ export const AlbumGrid = ({
     overscan: 3,
   });
 
-  // Delay single-click to avoid interfering with double-click
   const handleClick = useCallback(
     (albumName: string) => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = undefined;
-        return;
-      }
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = undefined;
-        onSelectAlbum(selectedAlbum === albumName ? null : albumName);
-      }, 200);
+      onSelectAlbum(selectedAlbum === albumName ? null : albumName);
     },
     [selectedAlbum, onSelectAlbum],
   );
 
   const handleDoubleClick = useCallback(
     (albumName: string) => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = undefined;
-      }
+      onSelectAlbum(albumName);
       onPlayAlbum?.(albumName);
     },
-    [onPlayAlbum],
+    [onSelectAlbum, onPlayAlbum],
   );
 
   const handleSortToggle = useCallback(

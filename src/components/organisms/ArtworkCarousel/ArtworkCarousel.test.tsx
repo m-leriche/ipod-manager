@@ -45,12 +45,12 @@ describe("ArtworkCarousel", () => {
     expect(onSelect).toHaveBeenCalledWith("Beta");
   });
 
-  it("calls onSelectAlbum(null) when clicking the center album to deselect", () => {
+  it("does not fire onSelectAlbum when clicking the center album (only navigates non-center)", () => {
     const onSelect = vi.fn();
     render(<ArtworkCarousel albums={albums} selectedAlbum="Gamma" onSelectAlbum={onSelect} onPlayAlbum={vi.fn()} />);
     const gammaImg = screen.getByAltText("Gamma");
     fireEvent.click(gammaImg.closest("div[class*='absolute']")!);
-    expect(onSelect).toHaveBeenCalledWith(null);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("calls onPlayAlbum on double-click of center album", () => {

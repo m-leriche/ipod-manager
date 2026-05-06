@@ -28,18 +28,11 @@ export const BrowseExplorer = ({
     if (path) onRightPathChange(path);
   };
 
-  // No left folder selected — show initial prompt
+  // No left folder selected — show folder picker at top
   if (!leftPath) {
     return (
       <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center max-w-sm">
-            <p className="text-text-tertiary text-xs mb-4">Choose a folder to explore its contents</p>
-            <div className="mb-4">
-              <FolderPicker label="Folder" path={null} onBrowse={browseLeft} />
-            </div>
-          </div>
-        </div>
+        <FolderPicker label="Folder" path={null} onBrowse={browseLeft} placeholder="Choose a folder to explore" />
       </div>
     );
   }

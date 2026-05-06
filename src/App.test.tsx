@@ -50,6 +50,6 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Tools" }));
-    expect(await screen.findByText("Select or create a profile to get started")).toBeInTheDocument();
+    expect(await screen.findByText("Choose a folder to explore")).toBeInTheDocument();
   });
 });

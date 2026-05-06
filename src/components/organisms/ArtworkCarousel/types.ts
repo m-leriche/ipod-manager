@@ -8,6 +8,8 @@ export interface ArtworkCarouselProps {
   onPlayAlbum: (name: string) => void;
   sortMode?: AlbumSortMode;
   onSortModeChange?: (mode: AlbumSortMode) => void;
+  lyricsOverlay?: boolean;
+  onLyricsOverlayDismiss?: () => void;
 }
 
 export interface AlbumArtProps {

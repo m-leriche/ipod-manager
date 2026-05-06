@@ -81,7 +81,9 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
   }, [activeLine]);
 
   const isOverlay = variant === "overlay";
-  const baseClass = isOverlay ? "flex flex-col h-full px-4 py-3" : "flex flex-col h-full bg-bg-secondary";
+  const baseClass = isOverlay
+    ? "flex flex-col h-full px-4 py-3"
+    : "flex flex-col h-full bg-bg-secondary overflow-hidden pl-2";
 
   // No lyrics yet — show fetch prompt
   if (!loading && !lyrics) {
@@ -120,25 +122,30 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
     return (
       <div className={baseClass}>
         {!isOverlay && <PanelHeader onRefetch={handleFetch} fetching={fetching} />}
-        <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
+        <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth">
           <div className="space-y-2">
-            {syncedLines.map((line, i) => (
-              <div
-                key={i}
-                ref={i === activeLine ? activeLineRef : undefined}
-                className={`transition-all duration-300 ${
-                  i === activeLine
-                    ? isOverlay
-                      ? "text-white text-base font-semibold"
-                      : "text-text-primary text-sm font-semibold"
-                    : isOverlay
-                      ? "text-white/40 text-sm"
-                      : "text-text-tertiary text-xs"
-                } ${line.text === "" ? "h-4" : ""}`}
-              >
-                {line.text || "\u00A0"}
-              </div>
-            ))}
+            {syncedLines.map((line, i) => {
+              const isActive = i === activeLine;
+              return (
+                <div
+                  key={i}
+                  ref={isActive ? activeLineRef : undefined}
+                  className={`transition-[transform,color,opacity] duration-500 ease-in-out origin-left ${
+                    isOverlay ? "text-sm" : "text-xs"
+                  } ${
+                    isActive
+                      ? isOverlay
+                        ? "text-white font-semibold scale-[1.15]"
+                        : "text-text-primary font-semibold scale-110"
+                      : isOverlay
+                        ? "text-white/40"
+                        : "text-text-tertiary"
+                  } ${line.text === "" ? "h-4" : ""}`}
+                >
+                  {line.text || "\u00A0"}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

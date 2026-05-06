@@ -73,4 +73,38 @@ describe("ArtworkCarousel", () => {
     // First album should be shown as centered (its name appears in the info area)
     expect(screen.getByText("Alpha")).toBeInTheDocument();
   });
+
+  it("dismisses lyrics overlay when clicking a side album", () => {
+    const onDismiss = vi.fn();
+    render(
+      <ArtworkCarousel
+        albums={albums}
+        selectedAlbum="Delta"
+        onSelectAlbum={vi.fn()}
+        onPlayAlbum={vi.fn()}
+        lyricsOverlay
+        onLyricsOverlayDismiss={onDismiss}
+      />,
+    );
+    const betaImg = screen.getByAltText("Beta");
+    fireEvent.click(betaImg.closest("div[class*='absolute']")!);
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("does not dismiss lyrics overlay when clicking center album", () => {
+    const onDismiss = vi.fn();
+    render(
+      <ArtworkCarousel
+        albums={albums}
+        selectedAlbum="Delta"
+        onSelectAlbum={vi.fn()}
+        onPlayAlbum={vi.fn()}
+        lyricsOverlay
+        onLyricsOverlayDismiss={onDismiss}
+      />,
+    );
+    const deltaImg = screen.getByAltText("Delta");
+    fireEvent.click(deltaImg.closest("div[class*='absolute']")!);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
 });

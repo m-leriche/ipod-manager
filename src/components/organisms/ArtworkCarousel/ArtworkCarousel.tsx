@@ -4,6 +4,7 @@ import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
 import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/helpers";
+import { CoverFlowLyrics } from "./CoverFlowLyrics";
 import type { ArtworkCarouselProps, AlbumArtProps } from "./types";
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
@@ -110,6 +111,8 @@ export const ArtworkCarousel = ({
   onPlayAlbum,
   sortMode = "album",
   onSortModeChange,
+  lyricsOverlay = false,
+  onLyricsOverlayDismiss,
 }: ArtworkCarouselProps) => {
   const {
     state: { currentTrack },
@@ -293,7 +296,10 @@ export const ArtworkCarousel = ({
               onClick={
                 Math.abs(intOffset) <= VISIBLE_RANGE
                   ? () => {
-                      if (intOffset !== 0) onSelectAlbum(album.name);
+                      if (intOffset !== 0) {
+                        onSelectAlbum(album.name);
+                        if (lyricsOverlay) onLyricsOverlayDismiss?.();
+                      }
                     }
                   : undefined
               }
@@ -313,6 +319,8 @@ export const ArtworkCarousel = ({
 
         <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
       </div>
+
+      {lyricsOverlay && <CoverFlowLyrics />}
 
       {/* Alphabet scroller */}
       <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center">

@@ -14,6 +14,7 @@ import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
 import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
+import { ErrorBoundary } from "./components/atoms/ErrorBoundary/ErrorBoundary";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
@@ -310,22 +311,26 @@ const AppContent = () => {
           <div
             className={`h-full transition-opacity duration-150 ${topTab === "library" ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0"}`}
           >
-            <LibraryPlayer
-              onRefreshRef={libraryRefreshRef}
-              isActive={topTab === "library"}
-              onRepairMetadata={handleRepairMetadata}
-              showColumnBrowser={showColumnBrowser}
-              showInfoPanel={showInfoPanel}
-              showStatsPanel={showStatsPanel}
-              showPlaylistSidebar={showPlaylistSidebar}
-              showAlbumGrid={showAlbumGrid}
-              showTrackList={showTrackList}
-              showArtworkCarousel={showArtworkCarousel}
-            />
+            <ErrorBoundary name="Library">
+              <LibraryPlayer
+                onRefreshRef={libraryRefreshRef}
+                isActive={topTab === "library"}
+                onRepairMetadata={handleRepairMetadata}
+                showColumnBrowser={showColumnBrowser}
+                showInfoPanel={showInfoPanel}
+                showStatsPanel={showStatsPanel}
+                showPlaylistSidebar={showPlaylistSidebar}
+                showAlbumGrid={showAlbumGrid}
+                showTrackList={showTrackList}
+                showArtworkCarousel={showArtworkCarousel}
+              />
+            </ErrorBoundary>
           </div>
           {topTab === "tools" && (
             <div className="flex gap-6 p-6 h-full view-enter">
-              <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
+              <ErrorBoundary name="Mount Panel">
+                <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
+              </ErrorBoundary>
               <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
                 <div className="flex gap-1.5 shrink-0">
                   <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
@@ -352,62 +357,99 @@ const AppContent = () => {
                 </div>
                 <div key={toolTab} className="flex-1 min-h-0 view-enter">
                   {toolTab === "ipod" && (
-                    <IpodSummary
-                      diskInfo={diskInfo}
-                      isMounted={ipodMounted}
-                      cachedInfo={ipodInfo}
-                      onInfoLoaded={setIpodInfo}
-                    />
+                    <ErrorBoundary name="iPod Summary">
+                      <IpodSummary
+                        diskInfo={diskInfo}
+                        isMounted={ipodMounted}
+                        cachedInfo={ipodInfo}
+                        onInfoLoaded={setIpodInfo}
+                      />
+                    </ErrorBoundary>
                   )}
-                  {toolTab === "browse" && <BrowseExplorer />}
-                  {toolTab === "sync" && <SyncManager />}
+                  {toolTab === "browse" && (
+                    <ErrorBoundary name="File Explorer">
+                      <BrowseExplorer />
+                    </ErrorBoundary>
+                  )}
+                  {toolTab === "sync" && (
+                    <ErrorBoundary name="File Sync">
+                      <SyncManager />
+                    </ErrorBoundary>
+                  )}
                   {toolTab === "metadata" && (
-                    <MetadataEditor
-                      initialPaths={metadataRepairPaths}
-                      onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
-                    />
+                    <ErrorBoundary name="Metadata Editor">
+                      <MetadataEditor
+                        initialPaths={metadataRepairPaths}
+                        onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                      />
+                    </ErrorBoundary>
                   )}
-                  {toolTab === "audio" && <AudioExtractor />}
-                  {toolTab === "duplicates" && <DuplicateDetector />}
-                  {toolTab === "convert" && <AudioConverter />}
+                  {toolTab === "audio" && (
+                    <ErrorBoundary name="Audio Extractor">
+                      <AudioExtractor />
+                    </ErrorBoundary>
+                  )}
+                  {toolTab === "duplicates" && (
+                    <ErrorBoundary name="Duplicate Detector">
+                      <DuplicateDetector />
+                    </ErrorBoundary>
+                  )}
+                  {toolTab === "convert" && (
+                    <ErrorBoundary name="Audio Converter">
+                      <AudioConverter />
+                    </ErrorBoundary>
+                  )}
                 </div>
               </div>
             </div>
           )}
         </div>
-        {showLyricsPanel && playbackState.currentTrack && (
+        {topTab === "library" && showLyricsPanel && playbackState.currentTrack && (
           <div className="w-[280px] shrink-0 border-l border-border">
-            <LyricsPanel track={playbackState.currentTrack} />
+            <ErrorBoundary name="Lyrics" compact>
+              <LyricsPanel track={playbackState.currentTrack} />
+            </ErrorBoundary>
           </div>
         )}
-        {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
+        {queueOpen && (
+          <ErrorBoundary name="Queue">
+            <QueuePanel onClose={() => setQueueOpen(false)} />
+          </ErrorBoundary>
+        )}
       </main>
 
-      <NowPlayingBar
-        onToggleQueue={() => setQueueOpen((prev) => !prev)}
-        queueOpen={queueOpen}
-        onToggleMiniPlayer={toggleMiniPlayer}
-        miniPlayer={miniPlayer}
-        showColumnBrowser={showColumnBrowser}
-        showInfoPanel={showInfoPanel}
-        showStatsPanel={showStatsPanel}
-        showPlaylistSidebar={showPlaylistSidebar}
-        showLyricsPanel={showLyricsPanel}
-        onToggleColumnBrowser={toggleColumnBrowser}
-        onToggleInfoPanel={toggleInfoPanel}
-        onToggleStatsPanel={toggleStatsPanel}
-        onTogglePlaylistSidebar={togglePlaylistSidebar}
-        onToggleLyricsPanel={toggleLyricsPanel}
-        showAlbumGrid={showAlbumGrid}
-        onToggleAlbumGrid={toggleAlbumGrid}
-        showTrackList={showTrackList}
-        onToggleTrackList={toggleTrackList}
-        showArtworkCarousel={showArtworkCarousel}
-        onToggleArtworkCarousel={toggleArtworkCarousel}
-      />
+      <ErrorBoundary name="Now Playing" compact>
+        <NowPlayingBar
+          onToggleQueue={() => setQueueOpen((prev) => !prev)}
+          queueOpen={queueOpen}
+          onToggleMiniPlayer={toggleMiniPlayer}
+          miniPlayer={miniPlayer}
+          showColumnBrowser={showColumnBrowser}
+          showInfoPanel={showInfoPanel}
+          showStatsPanel={showStatsPanel}
+          showPlaylistSidebar={showPlaylistSidebar}
+          showLyricsPanel={showLyricsPanel}
+          onToggleColumnBrowser={toggleColumnBrowser}
+          onToggleInfoPanel={toggleInfoPanel}
+          onToggleStatsPanel={toggleStatsPanel}
+          onTogglePlaylistSidebar={togglePlaylistSidebar}
+          onToggleLyricsPanel={toggleLyricsPanel}
+          showAlbumGrid={showAlbumGrid}
+          onToggleAlbumGrid={toggleAlbumGrid}
+          showTrackList={showTrackList}
+          onToggleTrackList={toggleTrackList}
+          showArtworkCarousel={showArtworkCarousel}
+          onToggleArtworkCarousel={toggleArtworkCarousel}
+        />
+      </ErrorBoundary>
 
       {settingsOpen && (
-        <SettingsModal onClose={() => setSettingsOpen(false)} onLibraryChanged={() => libraryRefreshRef.current?.()} />
+        <ErrorBoundary name="Settings">
+          <SettingsModal
+            onClose={() => setSettingsOpen(false)}
+            onLibraryChanged={() => libraryRefreshRef.current?.()}
+          />
+        </ErrorBoundary>
       )}
       {shortcutsOpen && <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     </div>

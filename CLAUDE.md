@@ -155,6 +155,10 @@ npm test
 - [ ] Remember column widths, sort preferences, and column browser selections in localStorage
 - [ ] Right-click context menus in column browser (play all by artist, etc.)
 - [ ] Status bar with total library stats (tracks, duration, size)
+- [ ] Inline metadata editing in the track table — edit tags directly without switching to Metadata tab
+- [ ] Vertical hovering alphabet scroll on album art view to quickly jump to albums by letter
+- [ ] Drag-to-reorder tracks within playlist detail view
+- [ ] Unified search with dedicated results view and advanced query syntax (backend exists, frontend incomplete)
 
 ## Rust Quality TODOs
 
@@ -166,6 +170,9 @@ npm test
 - [ ] Add aria-labels to all icon-only buttons (play, stop, expand, close, etc.)
 - [ ] Use semantic HTML for dialogs (`role="dialog"`) and menus (`role="menuitem"`)
 - [ ] Extract remaining inline prop interfaces to `types.ts` files
+- [ ] Unify settings persistence — consolidate scattered localStorage, SQLite, and hardcoded values into a single config system
+- [ ] Add retry/resume for failed long-running operations (sync, album art repair, etc.)
+- [ ] Undo support for destructive actions — at minimum, metadata edits should store previous values for rollback
 
 ## Feature TODOs
 

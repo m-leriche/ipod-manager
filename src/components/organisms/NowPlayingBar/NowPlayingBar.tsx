@@ -151,7 +151,7 @@ export const NowPlayingBar = ({
 
   return (
     <div
-      className={`h-[72px] border-t bg-bg-secondary px-6 flex items-center gap-4 shrink-0 transition-colors ${
+      className={`h-[72px] border-t bg-bg-secondary px-6 flex items-center gap-4 shrink-0 transition-colors relative z-10 ${
         dragOver ? "border-t-accent border-t-2 bg-accent/5" : "border-border"
       }`}
       onDragOver={(e) => {

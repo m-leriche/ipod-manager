@@ -144,7 +144,6 @@ npm test
 
 ## Library Player TODOs
 
-- [ ] Lazy-load album artwork in column browser and grid views (batch load visible items)
 - [ ] Waveform preview in now-playing bar (exists in MiniPlayer, missing from main NowPlayingBar)
 - [ ] Remember column browser selections (genre/artist/album) in localStorage (widths and sort prefs already persisted)
 - [ ] Inline metadata editing in the track table — edit tags directly without switching to Metadata tab
@@ -169,6 +168,7 @@ npm test
 ## Feature TODOs
 
 - [ ] Batch find-and-replace in metadata tags
+- [ ] Fix scrolling for file explorer — users cannot currently scroll open folders
 
 ## Code Style
 

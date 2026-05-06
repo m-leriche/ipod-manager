@@ -4,6 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ColumnBrowser } from "./ColumnBrowser";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
+// Mock ArtCacheContext used by AlbumArtwork in album column
+vi.mock("../../../contexts/ArtCacheContext", () => ({
+  useArtCache: () => ({ artCacheBust: 0, bumpArtCache: vi.fn() }),
+}));
+
 const genres: GenreSummary[] = [
   { name: "Rock", track_count: 50 },
   { name: "Jazz", track_count: 30 },

@@ -30,6 +30,7 @@ import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlaye
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
 import { LyricsPanel } from "./components/organisms/LyricsPanel/LyricsPanel";
+import { useResizableWidth as useLyricsPanelWidth } from "./components/organisms/LyricsPanel/useResizableWidth";
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
 import { KeyboardShortcutsDialog } from "./components/atoms/KeyboardShortcutsDialog/KeyboardShortcutsDialog";
 import type { LibraryScanProgress, LibraryTrack } from "./types/library";
@@ -74,6 +75,7 @@ const ALBUM_GRID_KEY = "crate-show-album-grid";
 const TRACK_LIST_KEY = "crate-show-track-list";
 const LYRICS_PANEL_KEY = "crate-show-lyrics-panel";
 const ARTWORK_CAROUSEL_KEY = "crate-show-artwork-carousel";
+const LYRICS_OVERLAY_KEY = "crate-lyrics-overlay";
 
 const AppContent = () => {
   const { state: playbackState } = usePlayback();
@@ -84,6 +86,7 @@ const AppContent = () => {
   const [queueOpen, setQueueOpen] = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
   const savedSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const lyricsPanelResize = useLyricsPanelWidth();
   const [ipodMounted, setIpodMounted] = useState(false);
 
   // Panel visibility state (shared between LibraryPlayer and NowPlayingBar)
@@ -101,6 +104,7 @@ const AppContent = () => {
   const [showArtworkCarousel, setShowArtworkCarousel] = useState(
     () => localStorage.getItem(ARTWORK_CAROUSEL_KEY) === "true",
   );
+  const [lyricsOverlay, setLyricsOverlay] = useState(() => localStorage.getItem(LYRICS_OVERLAY_KEY) === "true");
 
   const toggleColumnBrowser = useCallback(() => {
     // If another browser mode is active, switch to column browser
@@ -179,6 +183,18 @@ const AppContent = () => {
       localStorage.setItem(LYRICS_PANEL_KEY, String(!prev));
       return !prev;
     });
+  }, []);
+  const toggleLyricsOverlay = useCallback(() => {
+    setLyricsOverlay((prev) => {
+      localStorage.setItem(LYRICS_OVERLAY_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+  const dismissLyricsOverlay = useCallback(() => {
+    setLyricsOverlay(false);
+    localStorage.setItem(LYRICS_OVERLAY_KEY, "false");
+    setShowLyricsPanel(false);
+    localStorage.setItem(LYRICS_PANEL_KEY, "false");
   }, []);
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);
@@ -323,6 +339,8 @@ const AppContent = () => {
                 showAlbumGrid={showAlbumGrid}
                 showTrackList={showTrackList}
                 showArtworkCarousel={showArtworkCarousel}
+                lyricsOverlay={lyricsOverlay && showLyricsPanel}
+                onLyricsOverlayDismiss={dismissLyricsOverlay}
               />
             </ErrorBoundary>
           </div>
@@ -404,13 +422,20 @@ const AppContent = () => {
             </div>
           )}
         </div>
-        {topTab === "library" && showLyricsPanel && playbackState.currentTrack && (
-          <div className="w-[280px] shrink-0 border-l border-border">
-            <ErrorBoundary name="Lyrics" compact>
-              <LyricsPanel track={playbackState.currentTrack} />
-            </ErrorBoundary>
-          </div>
-        )}
+        {topTab === "library" &&
+          showLyricsPanel &&
+          !(lyricsOverlay && showArtworkCarousel) &&
+          playbackState.currentTrack && (
+            <div style={{ width: lyricsPanelResize.width }} className="relative shrink-0 border-l border-border">
+              <div
+                onMouseDown={lyricsPanelResize.onDragStart}
+                className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors z-10"
+              />
+              <ErrorBoundary name="Lyrics" compact>
+                <LyricsPanel track={playbackState.currentTrack} />
+              </ErrorBoundary>
+            </div>
+          )}
         {queueOpen && (
           <ErrorBoundary name="Queue">
             <QueuePanel onClose={() => setQueueOpen(false)} />
@@ -440,6 +465,8 @@ const AppContent = () => {
           onToggleTrackList={toggleTrackList}
           showArtworkCarousel={showArtworkCarousel}
           onToggleArtworkCarousel={toggleArtworkCarousel}
+          lyricsOverlay={lyricsOverlay}
+          onToggleLyricsOverlay={toggleLyricsOverlay}
         />
       </ErrorBoundary>
 

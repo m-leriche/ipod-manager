@@ -51,6 +51,8 @@ export const LibraryPlayer = ({
   showAlbumGrid = false,
   showTrackList = true,
   showArtworkCarousel = false,
+  lyricsOverlay = false,
+  onLyricsOverlayDismiss,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -62,6 +64,8 @@ export const LibraryPlayer = ({
   showAlbumGrid?: boolean;
   showTrackList?: boolean;
   showArtworkCarousel?: boolean;
+  lyricsOverlay?: boolean;
+  onLyricsOverlayDismiss?: () => void;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
@@ -766,6 +770,8 @@ export const LibraryPlayer = ({
                       setAlbumSortMode(mode);
                       localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
                     }}
+                    lyricsOverlay={lyricsOverlay}
+                    onLyricsOverlayDismiss={onLyricsOverlayDismiss}
                   />
                 </div>
                 {showTrackList && (

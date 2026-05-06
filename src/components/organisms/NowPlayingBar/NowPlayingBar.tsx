@@ -31,6 +31,8 @@ interface NowPlayingBarProps {
   onToggleTrackList?: () => void;
   showArtworkCarousel?: boolean;
   onToggleArtworkCarousel?: () => void;
+  lyricsOverlay?: boolean;
+  onToggleLyricsOverlay?: () => void;
 }
 
 export const NowPlayingBar = ({
@@ -54,6 +56,8 @@ export const NowPlayingBar = ({
   onToggleTrackList,
   showArtworkCarousel,
   onToggleArtworkCarousel,
+  lyricsOverlay,
+  onToggleLyricsOverlay,
 }: NowPlayingBarProps) => {
   const {
     state,
@@ -249,6 +253,12 @@ export const NowPlayingBar = ({
               strokeLinejoin="round"
               d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
             />
+          </PanelToggle>
+        )}
+        {!miniPlayer && showLyricsPanel && showArtworkCarousel && onToggleLyricsOverlay && (
+          <PanelToggle active={lyricsOverlay} onClick={onToggleLyricsOverlay} title="Lyrics overlay">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path strokeLinecap="round" d="M7 10h10M7 14h6" />
           </PanelToggle>
         )}
         {!miniPlayer && onToggleInfoPanel && (

@@ -223,6 +223,7 @@ pub fn run() {
             commands::remove_library_folder,
             commands::get_library_folders,
             commands::refresh_library,
+            commands::background_rescan,
             commands::get_library_tracks,
             commands::get_library_browser_data,
             commands::get_library_artists,

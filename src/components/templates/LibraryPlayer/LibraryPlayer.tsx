@@ -118,6 +118,7 @@ export const LibraryPlayer = ({
 
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
 
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
   const [smartPlaylistEditing, setSmartPlaylistEditing] = useState<SmartPlaylist | null>(null);
@@ -260,6 +261,26 @@ export const LibraryPlayer = ({
     }
   }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly, playTrack]);
 
+  // ── Background incremental rescan ──────────────────────────────
+
+  const backgroundRescan = useCallback(async () => {
+    setIsBackgroundScanning(true);
+    try {
+      const result = await invoke<{ changed: number; removed: number; total_scanned: number }>("background_rescan");
+      if (result.changed > 0 || result.removed > 0) {
+        await fetchBrowserData();
+        const parts: string[] = [];
+        if (result.changed > 0) parts.push(`${result.changed} updated`);
+        if (result.removed > 0) parts.push(`${result.removed} removed`);
+        toast.success(`Library updated — ${parts.join(", ")}`);
+      }
+    } catch {
+      // Background scan is non-critical — fail silently
+    } finally {
+      setIsBackgroundScanning(false);
+    }
+  }, [fetchBrowserData, toast]);
+
   // ── Initial load ──────────────────────────────────────────────
 
   const checkLibrary = useCallback(async () => {
@@ -282,7 +303,8 @@ export const LibraryPlayer = ({
           sortDirection: localStorage.getItem(SORT_DIR_KEY) || "asc",
         };
         setDataLoaded(true);
-        // Background revalidation happens via the useEffect that watches dataLoaded
+        // Background incremental rescan to pick up changes since last session
+        backgroundRescan();
         return;
       }
     }
@@ -300,7 +322,7 @@ export const LibraryPlayer = ({
     } catch {
       setHasLibrary(false);
     }
-  }, [fetchBrowserData]);
+  }, [fetchBrowserData, backgroundRescan]);
 
   useEffect(() => {
     checkLibrary();
@@ -715,6 +737,12 @@ export const LibraryPlayer = ({
             To Sync
           </button>
           <div className="flex-1" />
+          {isBackgroundScanning && (
+            <span className="text-[10px] text-text-tertiary flex items-center gap-1.5 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              Updating…
+            </span>
+          )}
           <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
         </div>
 

@@ -27,8 +27,8 @@ pub use queries::{
     get_albums, get_artists, get_browser_data, get_genres, get_tracks, search_tracks,
 };
 pub use reorganize::reorganize_library_file;
+pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
 pub(crate) use scan::{read_track_for_library, upsert_track};
-pub use scan::{rescan_all_folders, scan_folder};
 pub use settings::{
     delete_setting, get_library_location, get_setting, set_library_location, set_setting,
 };

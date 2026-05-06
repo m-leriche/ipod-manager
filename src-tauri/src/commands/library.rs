@@ -314,6 +314,25 @@ pub async fn refresh_library(
 }
 
 #[tauri::command]
+pub async fn background_rescan(
+    db: State<'_, LibraryDb>,
+    cancel: State<'_, SyncCancel>,
+) -> Result<library::BackgroundScanResult, AppError> {
+    let flag = cancel.new_flag();
+    let conn_arc = db.conn_arc();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::background_rescan_all_folders(&conn, &flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn get_library_tracks(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,

@@ -43,7 +43,7 @@ test.describe("Settings Modal", () => {
     await expect(page.getByRole("button", { name: /Dark/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Windows 95/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Winamp/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Terminal/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Spotify/ })).toBeVisible();
   });
 
   test("closes on Escape key", async ({ page }) => {

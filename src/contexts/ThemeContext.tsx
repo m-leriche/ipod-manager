@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
-export type ThemeName = "dark" | "win95" | "classic" | "winamp" | "gameboy" | "aqua" | "msdos" | "terminal";
+export type ThemeName = "dark" | "win95" | "classic" | "winamp" | "aqua" | "spotify";
 
 interface ThemeContextValue {
   theme: ThemeName;
@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const getStoredTheme = (): ThemeName => {
   const stored = localStorage.getItem(STORAGE_KEY);
-  const valid: ThemeName[] = ["dark", "win95", "classic", "winamp", "gameboy", "aqua", "msdos", "terminal"];
+  const valid: ThemeName[] = ["dark", "win95", "classic", "winamp", "aqua", "spotify"];
   if (valid.includes(stored as ThemeName)) return stored as ThemeName;
   return "dark";
 };

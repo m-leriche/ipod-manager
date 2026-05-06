@@ -318,7 +318,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
           if ((e.target as HTMLElement).closest("table")) return;
           openContextMenu(e, "empty");
         }}
-        {...dnd.containerHandlers}
+        data-pane-id={paneId ?? undefined}
       >
         {/* Toolbar */}
         <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-border shrink-0">
@@ -424,7 +424,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                   const rowSelected = isSelected(fullPath);
                   const rowCut = isCut(fullPath);
                   const isFolderDropTarget = e.is_dir && dnd.dropTargetFolder === fullPath;
-                  const folderDnd = e.is_dir && paneId ? dnd.folderHandlers(fullPath) : undefined;
                   const isExpanded = e.is_dir && expandedFolders.has(fullPath);
                   const isTopLevel = depth === 0;
 
@@ -433,13 +432,15 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                   return (
                     <tr
                       key={fullPath}
-                      draggable={!!paneId}
-                      onDragStart={(ev) => dnd.rowDragStart(ev, fullPath)}
-                      {...(folderDnd ?? {})}
+                      data-drop-folder={e.is_dir ? fullPath : undefined}
                       className={`transition-colors group cursor-default ${
                         isFolderDropTarget ? "bg-accent/15" : rowSelected ? "" : "hover:bg-bg-hover/50"
                       } ${rowCut ? "opacity-50" : ""}`}
-                      onClick={(ev) => handleClick(fullPath, { metaKey: ev.metaKey, shiftKey: ev.shiftKey })}
+                      onMouseDown={(ev) => dnd.rowMouseDown(ev, fullPath)}
+                      onClick={(ev) => {
+                        if (dnd.wasDragging.current) return;
+                        handleClick(fullPath, { metaKey: ev.metaKey, shiftKey: ev.shiftKey });
+                      }}
                       onDoubleClick={e.is_dir ? () => load(fullPath) : undefined}
                       onContextMenu={(ev) => openContextMenu(ev, "entry", e, fullPath)}
                     >

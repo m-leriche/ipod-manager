@@ -196,23 +196,22 @@ describe("FileExplorer", () => {
     });
   });
 
-  it("makes rows draggable when paneId is provided", async () => {
+  it("sets data-pane-id on container when paneId is provided", async () => {
     mockInvoke.mockResolvedValue(FILES);
-    render(<FileExplorer rootPath="/test" rootLabel="Test" paneId="left" />);
+    const { container } = render(<FileExplorer rootPath="/test" rootLabel="Test" paneId="left" />);
 
     await waitFor(() => screen.getByText("song.mp3"));
-    const rows = screen.getAllByRole("row").filter((r) => r.getAttribute("draggable") === "true");
-    // All entry rows (4) should be draggable
-    expect(rows.length).toBe(4);
+    const paneEl = container.querySelector("[data-pane-id='left']");
+    expect(paneEl).toBeInTheDocument();
   });
 
-  it("does not make rows draggable without paneId", async () => {
+  it("does not set data-pane-id without paneId", async () => {
     mockInvoke.mockResolvedValue(FILES);
-    render(<FileExplorer rootPath="/test" rootLabel="Test" />);
+    const { container } = render(<FileExplorer rootPath="/test" rootLabel="Test" />);
 
     await waitFor(() => screen.getByText("song.mp3"));
-    const rows = screen.getAllByRole("row").filter((r) => r.getAttribute("draggable") === "true");
-    expect(rows.length).toBe(0);
+    const paneEl = container.querySelector("[data-pane-id]");
+    expect(paneEl).not.toBeInTheDocument();
   });
 });
 

@@ -20,12 +20,6 @@ export interface FileExplorerHandle {
   reload: () => void;
 }
 
-export interface DragTransferData {
-  paneId: string;
-  paths: string[];
-  sourceDir: string;
-}
-
 export interface ClipboardState {
   paths: string[];
   operation: "copy" | "cut";

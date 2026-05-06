@@ -168,7 +168,7 @@ npm test
 ## Feature TODOs
 
 - [ ] Batch find-and-replace in metadata tags
-- [ ] Fix drag-and-drop between file explorer panes — HTML5 DnD `drop` event never fires in Tauri's WKWebView (macOS) when `dragDropEnabled: true`. Current workaround attempts using `dragend` + module-level state don't work. May need a mouse-event-based custom drag system or disabling Tauri's native drag-drop for the file explorer webview.
+- [x] ~~Fix drag-and-drop between file explorer panes~~ — Replaced HTML5 DnD with custom mouse-event-based drag system (`useDragAndDrop.ts`) that bypasses Tauri's WKWebView interception.
 
 ## Code Style
 

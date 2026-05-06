@@ -1,30 +1,59 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { DragTransferData } from "./types";
 import { joinPath } from "./helpers";
-
-// ── Module-level shared state ────────────────────────────────────
-// Both panes live in the same page. Tauri's native drag-drop handler
-// (dragDropEnabled: true) consumes the HTML5 `drop` event on macOS
-// WKWebView, so we bypass it entirely. Data flows through module vars
-// and the operation is triggered by `dragend` on the source element.
-let activeDragPaneId: string | null = null;
-let activeDragData: DragTransferData | null = null;
-let pendingDrop: {
-  targetDir: string;
-  onDrop: (operations: CopyOperation[], isMove: boolean) => Promise<void>;
-} | null = null;
-let lastDragOverTime = 0;
 
 interface CopyOperation {
   source_path: string;
   dest_path: string;
 }
 
-const buildOps = (data: DragTransferData, targetDir: string): CopyOperation[] =>
-  data.paths.map((srcPath) => {
+const buildOps = (paths: string[], targetDir: string): CopyOperation[] =>
+  paths.map((srcPath) => {
     const fileName = srcPath.split("/").pop() ?? srcPath;
     return { source_path: srcPath, dest_path: joinPath(targetDir, fileName) };
   });
+
+// ── Module-level pane registry ────────────────────────────────────
+// Both panes register their state setters so the drag source can
+// update visual feedback on the target pane during a mouse-based drag.
+// This replaces the broken HTML5 DnD approach — Tauri's native
+// drag-drop handler (dragDropEnabled: true) consumes the HTML5 `drop`
+// event on macOS WKWebView, so we use mousedown/mousemove/mouseup instead.
+
+interface PaneEntry {
+  setIsDragOver: (v: boolean) => void;
+  setDropTargetFolder: (v: string | null) => void;
+  getPath: () => string;
+  getOnDrop: () => (ops: CopyOperation[], isMove: boolean) => Promise<void>;
+}
+
+const paneRegistry = new Map<string, PaneEntry>();
+
+// ── Drag overlay ──────────────────────────────────────────────────
+
+let dragOverlay: HTMLDivElement | null = null;
+
+const createOverlay = (count: number) => {
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:fixed;z-index:9999;pointer-events:none;padding:4px 10px;border-radius:8px;background:rgba(40,40,40,0.92);color:#fff;font-size:12px;font-weight:500;white-space:nowrap;backdrop-filter:blur(4px);";
+  el.textContent = `Copy ${count === 1 ? "1 item" : `${count} items`}`;
+  document.body.appendChild(el);
+  dragOverlay = el;
+};
+
+const updateOverlay = (x: number, y: number, altKey: boolean, count: number) => {
+  if (!dragOverlay) return;
+  dragOverlay.style.left = `${x + 14}px`;
+  dragOverlay.style.top = `${y + 14}px`;
+  dragOverlay.textContent = `${altKey ? "Move" : "Copy"} ${count === 1 ? "1 item" : `${count} items`}`;
+};
+
+const removeOverlay = () => {
+  dragOverlay?.remove();
+  dragOverlay = null;
+};
+
+// ── Hook ──────────────────────────────────────────────────────────
 
 interface UseDragAndDropConfig {
   paneId?: string;
@@ -37,217 +66,132 @@ export const useDragAndDrop = ({ paneId, currentPath, selected, onDrop }: UseDra
   const enabled = !!paneId;
   const [isDragOver, setIsDragOver] = useState(false);
   const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null);
-  const enterCount = useRef(0);
-  const folderEnterCount = useRef(0);
+  const wasDraggingRef = useRef(false);
 
-  // Keep a ref to onDrop so the dragend listener always uses the latest
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
   const currentPathRef = useRef(currentPath);
   currentPathRef.current = currentPath;
 
-  // dragend fires on the source AFTER the drag ends — use it to trigger the copy
-  // since Tauri's native handler may consume the `drop` event.
-  // We use lastDragOverTime to detect if the cursor was over a valid target
-  // when the drag ended — dragleave fires before dragend when the native handler
-  // consumes the drop, so we can't rely on pendingDrop surviving.
+  // Register this pane in the module-level registry so other panes
+  // can update our visual state and invoke our drop callback.
   useEffect(() => {
-    const handleDragEnd = (event: DragEvent) => {
-      const data = activeDragData;
-      const drop = pendingDrop;
-      const recentlyOverTarget = Date.now() - lastDragOverTime < 300;
-
-      // Clean up module state
-      activeDragPaneId = null;
-      activeDragData = null;
-      pendingDrop = null;
-      lastDragOverTime = 0;
-
-      if (!data || !drop) return;
-      // Only execute if cursor was recently over a valid target
-      if (!recentlyOverTarget) return;
-
-      const operations = buildOps(data, drop.targetDir);
-      drop.onDrop(operations, event.altKey).catch((err) => console.error("Drop failed:", err));
+    if (!paneId) return;
+    paneRegistry.set(paneId, {
+      setIsDragOver,
+      setDropTargetFolder,
+      getPath: () => currentPathRef.current,
+      getOnDrop: () => onDropRef.current,
+    });
+    return () => {
+      paneRegistry.delete(paneId);
     };
-    document.addEventListener("dragend", handleDragEnd);
-    return () => document.removeEventListener("dragend", handleDragEnd);
-  }, []);
+  }, [paneId]);
 
-  const rowDragStart = useCallback(
-    (e: React.DragEvent, entryPath: string) => {
-      if (!enabled || !paneId) return;
+  const rowMouseDown = useCallback(
+    (e: React.MouseEvent, entryPath: string) => {
+      if (!enabled || !paneId || e.button !== 0) return;
 
+      const startX = e.clientX;
+      const startY = e.clientY;
       const paths = selected.has(entryPath) ? [...selected] : [entryPath];
+      let dragging = false;
 
-      activeDragPaneId = paneId;
-      activeDragData = { paneId, paths, sourceDir: currentPath };
-      pendingDrop = null;
-
-      e.dataTransfer.effectAllowed = "copyMove";
-      e.dataTransfer.setData("text/plain", paths.join("\n"));
-
-      if (paths.length > 1) {
-        const badge = document.createElement("div");
-        badge.textContent = `${paths.length} items`;
-        badge.style.cssText =
-          "position:fixed;top:-100px;left:-100px;padding:4px 10px;border-radius:8px;background:#333;color:#fff;font-size:12px;font-weight:500;white-space:nowrap;";
-        document.body.appendChild(badge);
-        e.dataTransfer.setDragImage(badge, 0, 0);
-        requestAnimationFrame(() => badge.remove());
-      }
-    },
-    [enabled, paneId, currentPath, selected],
-  );
-
-  const isValidDrop = useCallback(
-    () => enabled && activeDragPaneId !== null && activeDragPaneId !== paneId,
-    [enabled, paneId],
-  );
-
-  // ── Container handlers ─────────────────────────────────────────
-
-  const containerDragEnter = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      if (!isValidDrop()) return;
-      enterCount.current++;
-      setIsDragOver(true);
-    },
-    [isValidDrop],
-  );
-
-  const containerDragOver = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      if (!isValidDrop()) return;
-      e.dataTransfer.dropEffect = e.altKey ? "move" : "copy";
-      // Track this pane as the pending drop target
-      pendingDrop = { targetDir: currentPathRef.current, onDrop: onDropRef.current };
-      lastDragOverTime = Date.now();
-    },
-    [isValidDrop],
-  );
-
-  const containerDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    enterCount.current--;
-    if (enterCount.current <= 0) {
-      enterCount.current = 0;
-      setIsDragOver(false);
-      setDropTargetFolder(null);
-      // Don't clear pendingDrop here — dragleave fires before dragend when
-      // Tauri's native handler consumes the drop event. The dragend handler
-      // uses lastDragOverTime to check if drop was recent.
-    }
-  }, []);
-
-  const containerDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      enterCount.current = 0;
-      setIsDragOver(false);
-      setDropTargetFolder(null);
-
-      // If the drop event fires (not consumed by Tauri), handle it here
-      // and clear pendingDrop so dragend doesn't duplicate.
-      const data = activeDragData;
-      if (!isValidDrop() || !data) {
-        pendingDrop = null;
-        return;
-      }
-      if (data.paneId === paneId) {
-        pendingDrop = null;
-        return;
-      }
-
-      const operations = buildOps(data, currentPath);
-      activeDragData = null;
-      activeDragPaneId = null;
-      pendingDrop = null;
-      lastDragOverTime = 0;
-
-      try {
-        await onDrop(operations, e.altKey);
-      } catch (err) {
-        console.error("Drop failed:", err);
-      }
-    },
-    [isValidDrop, paneId, currentPath, onDrop],
-  );
-
-  const containerHandlers = {
-    onDragEnter: containerDragEnter,
-    onDragOver: containerDragOver,
-    onDragLeave: containerDragLeave,
-    onDrop: containerDrop,
-  };
-
-  // ── Folder row handlers ────────────────────────────────────────
-
-  const folderHandlers = useCallback(
-    (folderPath: string) => {
-      return {
-        onDragEnter: (e: React.DragEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isValidDrop()) return;
-          folderEnterCount.current++;
-          setDropTargetFolder(folderPath);
-        },
-        onDragOver: (e: React.DragEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isValidDrop()) return;
-          e.dataTransfer.dropEffect = e.altKey ? "move" : "copy";
-          // Track this folder as the pending drop target
-          pendingDrop = { targetDir: folderPath, onDrop: onDropRef.current };
-          lastDragOverTime = Date.now();
-        },
-        onDragLeave: (e: React.DragEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          folderEnterCount.current--;
-          if (folderEnterCount.current <= 0) {
-            folderEnterCount.current = 0;
-            setDropTargetFolder(null);
-          }
-        },
-        onDrop: async (e: React.DragEvent) => {
-          e.preventDefault();
-          e.stopPropagation();
-          folderEnterCount.current = 0;
-          enterCount.current = 0;
-          setIsDragOver(false);
-          setDropTargetFolder(null);
-
-          // Same as container: handle here if event fires, clear to prevent duplicate
-          const data = activeDragData;
-          if (!isValidDrop() || !data) {
-            pendingDrop = null;
-            return;
-          }
-          if (data.paneId === paneId) {
-            pendingDrop = null;
-            return;
-          }
-
-          const operations = buildOps(data, folderPath);
-          activeDragData = null;
-          activeDragPaneId = null;
-          pendingDrop = null;
-          lastDragOverTime = 0;
-
-          try {
-            await onDrop(operations, e.altKey);
-          } catch (err) {
-            console.error("Folder drop failed:", err);
-          }
-        },
+      const findTarget = (cx: number, cy: number) => {
+        const el = document.elementFromPoint?.(cx, cy);
+        if (!el) return null;
+        const paneEl = el.closest("[data-pane-id]");
+        const targetPaneId = paneEl?.getAttribute("data-pane-id");
+        if (!targetPaneId || targetPaneId === paneId) return null;
+        const folderEl = el.closest("[data-drop-folder]");
+        const folderPath = folderEl?.getAttribute("data-drop-folder") ?? null;
+        return { paneId: targetPaneId, folderPath };
       };
+
+      const clearHighlights = () => {
+        for (const [id, entry] of paneRegistry) {
+          if (id === paneId) continue;
+          entry.setIsDragOver(false);
+          entry.setDropTargetFolder(null);
+        }
+      };
+
+      const cleanup = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.removeEventListener("keydown", onKeyDown);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+        removeOverlay();
+        clearHighlights();
+      };
+
+      const onMove = (me: MouseEvent) => {
+        if (!dragging) {
+          if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) < 5) return;
+          dragging = true;
+          wasDraggingRef.current = true;
+          createOverlay(paths.length);
+          document.body.style.userSelect = "none";
+          document.body.style.cursor = "grabbing";
+        }
+
+        updateOverlay(me.clientX, me.clientY, me.altKey, paths.length);
+
+        // Update drop target highlights on other panes
+        const target = findTarget(me.clientX, me.clientY);
+        for (const [id, entry] of paneRegistry) {
+          if (id === paneId) continue;
+          if (target && id === target.paneId) {
+            entry.setIsDragOver(true);
+            entry.setDropTargetFolder(target.folderPath);
+          } else {
+            entry.setIsDragOver(false);
+            entry.setDropTargetFolder(null);
+          }
+        }
+      };
+
+      const onUp = (ue: MouseEvent) => {
+        cleanup();
+
+        if (!dragging) {
+          wasDraggingRef.current = false;
+          return;
+        }
+
+        const target = findTarget(ue.clientX, ue.clientY);
+        if (target) {
+          const targetEntry = paneRegistry.get(target.paneId);
+          if (targetEntry) {
+            const targetDir = target.folderPath || targetEntry.getPath();
+            const ops = buildOps(paths, targetDir);
+            targetEntry.getOnDrop()(ops, ue.altKey).catch((err) => console.error("Drop failed:", err));
+          }
+        }
+
+        // Reset after any pending click events fire
+        requestAnimationFrame(() => {
+          wasDraggingRef.current = false;
+        });
+      };
+
+      const onKeyDown = (ke: KeyboardEvent) => {
+        if (ke.key === "Escape") {
+          cleanup();
+          dragging = false;
+          requestAnimationFrame(() => {
+            wasDraggingRef.current = false;
+          });
+        }
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.addEventListener("keydown", onKeyDown);
     },
-    [isValidDrop, paneId, onDrop],
+    [enabled, paneId, selected],
   );
 
-  return { rowDragStart, containerHandlers, isDragOver, dropTargetFolder, folderHandlers };
+  return { rowMouseDown, isDragOver, dropTargetFolder, wasDragging: wasDraggingRef };
 };

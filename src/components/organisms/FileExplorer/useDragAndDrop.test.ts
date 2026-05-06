@@ -69,9 +69,7 @@ describe("useDragAndDrop", () => {
   it("rowMouseDown uses all selected files when entry is in selection", () => {
     const onDrop = vi.fn();
     const selected = new Set(["/test/file1.txt", "/test/file2.txt"]);
-    const { result } = renderHook(() =>
-      useDragAndDrop({ paneId: "left", currentPath: "/test", selected, onDrop }),
-    );
+    const { result } = renderHook(() => useDragAndDrop({ paneId: "left", currentPath: "/test", selected, onDrop }));
     const e = makeMouseEvent();
     act(() => result.current.rowMouseDown(e, "/test/file1.txt"));
     // Drag beyond threshold

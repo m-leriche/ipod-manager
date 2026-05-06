@@ -166,7 +166,9 @@ export const useDragAndDrop = ({ paneId, currentPath, selected, onDrop }: UseDra
           if (targetEntry) {
             const targetDir = target.folderPath || targetEntry.getPath();
             const ops = buildOps(paths, targetDir);
-            targetEntry.getOnDrop()(ops, ue.altKey).catch((err) => console.error("Drop failed:", err));
+            targetEntry
+              .getOnDrop()(ops, ue.altKey)
+              .catch((err) => console.error("Drop failed:", err));
           }
         }
 

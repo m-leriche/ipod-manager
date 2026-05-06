@@ -1099,339 +1099,6 @@ html[data-theme="winamp"] ::-webkit-scrollbar-button {
 }
 
 /* ══════════════════════════════════════════════════════
-   GAME BOY THEME — Original DMG-01 handheld
-   Gray plastic body with recessed olive-green LCD screen.
-   Content areas = LCD, chrome = gray plastic hardware.
-   ══════════════════════════════════════════════════════ */
-
-html[data-theme="gameboy"] {
-  /* Hardware gray for outer chrome, LCD green for content */
-  --color-bg-primary: #c0baa7;
-  --color-bg-secondary: #b4ae9b;
-  --color-bg-card: #8b956d;
-  --color-bg-elevated: #a8a291;
-  --color-bg-hover: #a09a87;
-
-  --color-text-primary: #1a3320;
-  --color-text-secondary: #2d5a35;
-  --color-text-tertiary: #5a7a50;
-
-  --color-accent: #2d5a35;
-  --color-accent-hover: #1a3320;
-  --color-success: #2d5a35;
-  --color-success-dim: #2d5a3522;
-  --color-warning: #5a7a50;
-  --color-danger: #1a3320;
-
-  --color-border: #8a846e;
-  --color-border-subtle: #9e9882;
-  --color-border-active: #1a3320;
-
-  --font-sans: "Courier New", "Courier", monospace;
-}
-
-/* ─── Tighter spacing ─── */
-html[data-theme="gameboy"] .p-5 {
-  padding: 0.875rem;
-}
-html[data-theme="gameboy"] .p-6 {
-  padding: 1rem;
-}
-html[data-theme="gameboy"] .px-5 {
-  padding-left: 0.875rem;
-  padding-right: 0.875rem;
-}
-html[data-theme="gameboy"] .px-6 {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-html[data-theme="gameboy"] .px-8 {
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-}
-html[data-theme="gameboy"] .py-4 {
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-}
-html[data-theme="gameboy"] .gap-6 {
-  gap: 0.75rem;
-}
-html[data-theme="gameboy"] .gap-3 {
-  gap: 0.5rem;
-}
-html[data-theme="gameboy"] .mb-5 {
-  margin-bottom: 0.875rem;
-}
-html[data-theme="gameboy"] .mb-4 {
-  margin-bottom: 0.75rem;
-}
-
-/* ─── Zero radius ─── */
-html[data-theme="gameboy"] .rounded-2xl {
-  border-radius: 0px;
-}
-html[data-theme="gameboy"] .rounded-xl {
-  border-radius: 0px;
-}
-html[data-theme="gameboy"] .rounded-lg {
-  border-radius: 0px;
-}
-html[data-theme="gameboy"] .rounded-md {
-  border-radius: 0px;
-}
-
-/* ─── 2px borders (chunky pixel feel) ─── */
-html[data-theme="gameboy"] .border {
-  border-width: 2px;
-}
-html[data-theme="gameboy"] .border-b {
-  border-bottom-width: 2px;
-}
-html[data-theme="gameboy"] .border-t {
-  border-top-width: 2px;
-}
-html[data-theme="gameboy"] .border-r {
-  border-right-width: 2px;
-}
-
-/* ─── Main background: gray plastic body ─── */
-html[data-theme="gameboy"] .bg-bg-primary {
-  background: #c0baa7;
-}
-
-/* ─── Raised panels: gray plastic chrome ─── */
-html[data-theme="gameboy"] .bg-bg-secondary.border {
-  border: 2px solid;
-  border-color: #d2ccba #8a846e #8a846e #d2ccba;
-  box-shadow:
-    inset 1px 1px 0 #d8d2c0,
-    inset -1px -1px 0 #7e7862;
-  background: #b4ae9b;
-}
-
-/* ─── LCD screen areas: green with visible pixel grid ─── */
-html[data-theme="gameboy"] div.bg-bg-card.border {
-  border: 3px solid;
-  border-color: #5a5440 #c0baa7 #c0baa7 #5a5440;
-  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.25);
-  background: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px), #9aa86a;
-  background-size: 3px 3px;
-}
-
-/* ─── Track table: THE green LCD screen ─── */
-html[data-theme="gameboy"] thead {
-  background: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px), #8b956d !important;
-  background-size: 3px 3px !important;
-}
-html[data-theme="gameboy"] thead th {
-  color: #1a3320 !important;
-  font-weight: 800 !important;
-  border-bottom-color: #6a7450 !important;
-}
-html[data-theme="gameboy"] tbody {
-  background: radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px), #9aa86a;
-  background-size: 3px 3px;
-}
-html[data-theme="gameboy"] tbody tr:nth-child(even) {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-html[data-theme="gameboy"] tbody tr:nth-child(odd) {
-  background-color: transparent;
-}
-html[data-theme="gameboy"] tbody tr:hover {
-  background-color: rgba(0, 0, 0, 0.1) !important;
-}
-html[data-theme="gameboy"] tbody td {
-  color: #1a3320;
-}
-
-/* ─── Edge panels: gray plastic hardware ─── */
-html[data-theme="gameboy"] .border-t.bg-bg-secondary {
-  background: #b4ae9b;
-  border-top: 2px solid;
-  border-top-color: #d2ccba;
-}
-html[data-theme="gameboy"] .border-r.bg-bg-secondary {
-  background: #b4ae9b;
-  border-right: 2px solid;
-  border-right-color: #8a846e;
-}
-
-/* ─── Title bar: dark indigo strip like the real DMG label ─── */
-html[data-theme="gameboy"] header,
-html[data-theme="gameboy"] .retro-titlebar {
-  background: linear-gradient(180deg, #3b3073 0%, #2d2460 100%);
-  border-bottom: 3px solid #1a1540;
-  color: #d0d0e0;
-}
-html[data-theme="gameboy"] header h1 {
-  color: #d0d0e0;
-  text-transform: uppercase;
-  letter-spacing: 0.25em;
-  font-weight: 900;
-  font-style: italic;
-}
-html[data-theme="gameboy"] header .text-text-secondary,
-html[data-theme="gameboy"] header .text-text-tertiary {
-  color: #a0a0c0;
-}
-
-/* ─── No shadows ─── */
-html[data-theme="gameboy"] .shadow-xl {
-  box-shadow: none;
-}
-html[data-theme="gameboy"] .shadow-2xl {
-  box-shadow: none;
-}
-
-/* ─── Buttons: raised gray plastic with pixel shadow ─── */
-html[data-theme="gameboy"] button.bg-text-primary {
-  background: linear-gradient(180deg, #a8a291 0%, #908a78 100%);
-  color: #1a3320;
-  border: 2px solid;
-  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
-  box-shadow: 2px 2px 0 #5a5440;
-  font-weight: 800;
-  text-shadow: none;
-}
-html[data-theme="gameboy"] button.bg-text-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #b4ae9b 0%, #9e9882 100%);
-  opacity: 1;
-}
-html[data-theme="gameboy"] button.bg-text-primary:active:not(:disabled) {
-  background: #8a846e;
-  border-color: #6e6a58 #c0baa7 #c0baa7 #6e6a58;
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-
-/* ─── Secondary buttons: gray plastic ─── */
-html[data-theme="gameboy"] button.bg-bg-card {
-  border: 2px solid;
-  border-color: #c0baa7 #8a846e #8a846e #c0baa7;
-  box-shadow: 2px 2px 0 #6e6a58;
-  background: #b4ae9b;
-}
-html[data-theme="gameboy"] button.bg-bg-card:active:not(:disabled) {
-  border-color: #8a846e #c0baa7 #c0baa7 #8a846e;
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-
-/* ─── Play button: round plastic A/B button feel ─── */
-html[data-theme="gameboy"] button.rounded-full.bg-text-primary {
-  background: linear-gradient(180deg, #8b2050 0%, #6a1840 100%);
-  color: #d0b0c0;
-  border: 2px solid;
-  border-color: #a83060 #4a1030 #4a1030 #a83060;
-  box-shadow: 2px 2px 0 #3a0820;
-}
-html[data-theme="gameboy"] button.rounded-full.bg-text-primary:active {
-  background: #5a1438;
-  border-color: #4a1030 #a83060 #a83060 #4a1030;
-  box-shadow: none;
-  transform: translate(1px, 1px);
-}
-
-/* ─── Inputs: sunken LCD input ─── */
-html[data-theme="gameboy"] input {
-  border: 2px solid;
-  border-color: #5a5440 #c0baa7 #c0baa7 #5a5440;
-  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2);
-  background: #9aa86a;
-  color: #1a3320;
-}
-
-/* ─── Selected row: inverted LCD ─── */
-html[data-theme="gameboy"] tbody td.\!bg-accent {
-  background: #2d5a35 !important;
-  color: #9aa86a !important;
-}
-html[data-theme="gameboy"] tbody td.\!bg-accent .\!text-white,
-html[data-theme="gameboy"] tbody td.\!bg-accent .text-xs {
-  color: #9aa86a !important;
-}
-
-/* ─── Column browser: LCD screen ─── */
-html[data-theme="gameboy"] .bg-accent.text-white {
-  background: #2d5a35 !important;
-  color: #9aa86a !important;
-}
-
-/* ─── Column browser header: gray plastic bar ─── */
-html[data-theme="gameboy"] .border-b.border-border.bg-bg-secondary {
-  background: #b4ae9b;
-  border-bottom-color: #8a846e;
-}
-
-/* ─── Progress bars: chunky pixel blocks ─── */
-html[data-theme="gameboy"] .overflow-hidden.rounded-full > .rounded-full {
-  border-radius: 0px;
-  background: #2d5a35;
-  background-image: repeating-linear-gradient(90deg, #2d5a35, #2d5a35 6px, #9aa86a 6px, #9aa86a 8px);
-}
-
-/* ─── Seek bar ─── */
-html[data-theme="gameboy"] .bg-text-primary.rounded-full {
-  background: #1a3320 !important;
-  border-radius: 0 !important;
-}
-html[data-theme="gameboy"] .bg-bg-card.rounded-full {
-  background: #8b956d !important;
-  border-radius: 0 !important;
-  border: 1px solid #6a7450;
-}
-
-/* ─── Sidebar active: inverted selection ─── */
-html[data-theme="gameboy"] .border-r.bg-bg-secondary button.bg-bg-card {
-  background: #3b3073;
-  color: #d0d0e0;
-  border: 2px solid #1a1540;
-  box-shadow: none;
-}
-
-/* ─── Disabled ─── */
-html[data-theme="gameboy"] button:disabled {
-  opacity: 0.35;
-}
-
-/* ─── Dividers ─── */
-html[data-theme="gameboy"] .border-border-subtle {
-  border-color: #9e9882;
-}
-
-/* ─── Modals: gray plastic ─── */
-html[data-theme="gameboy"] .bg-bg-secondary.border.rounded-2xl {
-  background: #b4ae9b;
-  border: 3px solid;
-  border-color: #d2ccba #6e6a58 #6e6a58 #d2ccba;
-}
-
-/* ─── Scrollbar ─── */
-html[data-theme="gameboy"] ::-webkit-scrollbar {
-  width: 12px;
-}
-html[data-theme="gameboy"] ::-webkit-scrollbar-track {
-  background: #b4ae9b;
-  border-left: 2px solid #8a846e;
-}
-html[data-theme="gameboy"] ::-webkit-scrollbar-thumb {
-  background: #9e9882;
-  border: 2px solid;
-  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
-}
-html[data-theme="gameboy"] ::-webkit-scrollbar-thumb:hover {
-  background: #8a846e;
-}
-html[data-theme="gameboy"] ::-webkit-scrollbar-button {
-  display: block;
-  height: 12px;
-  background: #b4ae9b;
-  border: 2px solid;
-  border-color: #c0baa7 #6e6a58 #6e6a58 #c0baa7;
-}
-
-/* ══════════════════════════════════════════════════════
    AQUA THEME — Mac OS X 10.0–10.4 Tiger era
    Translucent blue gel buttons, pinstripes, brushed metal,
    candy-colored UI with soft shadows and lickable controls
@@ -1788,803 +1455,382 @@ html[data-theme="aqua"] ::-webkit-scrollbar-thumb:hover {
 }
 
 /* ══════════════════════════════════════════════════════
-   MS-DOS THEME — C:\> command prompt
-   Pure black, light gray text, white for emphasis.
-   Text on void like a real DOS terminal. CRT scanlines.
+   SPOTIFY THEME — Music streaming app
+   Dark surfaces, green accent, clean flat design,
+   card-based layout, pill-shaped buttons, minimal borders
    ══════════════════════════════════════════════════════ */
 
-html[data-theme="msdos"] {
-  --color-bg-primary: #000000;
+/* ─── Color variables ─── */
+html[data-theme="spotify"] {
+  --color-bg-primary: #121212;
   --color-bg-secondary: #000000;
-  --color-bg-card: #000000;
-  --color-bg-elevated: #0a0a0a;
-  --color-bg-hover: #1a1a1a;
+  --color-bg-card: #181818;
+  --color-bg-elevated: #282828;
+  --color-bg-hover: #2a2a2a;
 
-  --color-text-primary: #aaaaaa;
-  --color-text-secondary: #888888;
-  --color-text-tertiary: #555555;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b3b3b3;
+  --color-text-tertiary: #6a6a6a;
 
-  --color-accent: #ffffff;
-  --color-accent-hover: #ffffff;
-  --color-success: #aaaaaa;
-  --color-success-dim: #aaaaaa22;
-  --color-warning: #aaaaaa;
-  --color-danger: #ffffff;
+  --color-accent: #1db954;
+  --color-accent-hover: #1ed760;
+  --color-success: #1db954;
+  --color-success-dim: #1db95422;
+  --color-warning: #f59b23;
+  --color-danger: #e91429;
 
-  --color-border: #333333;
-  --color-border-subtle: #1a1a1a;
-  --color-border-active: #aaaaaa;
+  --color-border: #ffffff0a;
+  --color-border-subtle: #ffffff06;
+  --color-border-active: #ffffff1a;
 
-  --font-sans: "Consolas", "Courier New", "Courier", monospace;
-}
-
-/* ─── Spacing ─── */
-html[data-theme="msdos"] .p-5 {
-  padding: 0.875rem;
-}
-html[data-theme="msdos"] .p-6 {
-  padding: 1rem;
-}
-html[data-theme="msdos"] .px-5 {
-  padding-left: 0.875rem;
-  padding-right: 0.875rem;
-}
-html[data-theme="msdos"] .px-6 {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-html[data-theme="msdos"] .px-8 {
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-}
-html[data-theme="msdos"] .py-4 {
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-}
-html[data-theme="msdos"] .gap-6 {
-  gap: 0.75rem;
-}
-html[data-theme="msdos"] .gap-3 {
-  gap: 0.5rem;
-}
-html[data-theme="msdos"] .mb-5 {
-  margin-bottom: 0.875rem;
-}
-html[data-theme="msdos"] .mb-4 {
-  margin-bottom: 0.75rem;
+  --font-sans: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ─── Zero radius ─── */
-html[data-theme="msdos"] .rounded-2xl {
-  border-radius: 0px;
+/* ─── Borders: near-invisible, Spotify relies on bg shifts ─── */
+html[data-theme="spotify"] .border {
+  border-color: transparent;
 }
-html[data-theme="msdos"] .rounded-xl {
-  border-radius: 0px;
+html[data-theme="spotify"] .border-b {
+  border-color: transparent;
 }
-html[data-theme="msdos"] .rounded-lg {
-  border-radius: 0px;
+html[data-theme="spotify"] .border-t {
+  border-color: transparent;
 }
-html[data-theme="msdos"] .rounded-md {
-  border-radius: 0px;
-}
-
-/* ─── 1px borders ─── */
-html[data-theme="msdos"] .border {
-  border-width: 1px;
-}
-html[data-theme="msdos"] .border-b {
-  border-bottom-width: 1px;
-}
-html[data-theme="msdos"] .border-t {
-  border-top-width: 1px;
-}
-html[data-theme="msdos"] .border-r {
-  border-right-width: 1px;
+html[data-theme="spotify"] .border-r {
+  border-color: #ffffff08;
 }
 
-/* ─── CRT scanlines on pure black ─── */
-html[data-theme="msdos"] .bg-bg-primary {
-  background:
-    repeating-linear-gradient(180deg, transparent 0px, rgba(170, 170, 170, 0.02) 1px, transparent 3px), #000000;
+/* ─── Border radii: Spotify's rounded card language ─── */
+html[data-theme="spotify"] .rounded-2xl {
+  border-radius: 8px;
+}
+html[data-theme="spotify"] .rounded-xl {
+  border-radius: 8px;
+}
+html[data-theme="spotify"] .rounded-lg {
+  border-radius: 6px;
+}
+html[data-theme="spotify"] .rounded-md {
+  border-radius: 4px;
 }
 
-/* ─── Panels: nearly invisible, text on void ─── */
-html[data-theme="msdos"] .bg-bg-secondary.border {
-  border: 1px solid #33333300;
-  background: transparent;
-  box-shadow: none;
+/* ─── Main surface ─── */
+html[data-theme="spotify"] .bg-bg-primary {
+  background: #121212;
 }
 
-/* ─── Content areas: black ─── */
-html[data-theme="msdos"] div.bg-bg-card.border {
-  border: 1px solid #33333340;
+/* ─── Sidebar ─── */
+html[data-theme="spotify"] .bg-bg-secondary.border {
   background: #000000;
-  box-shadow: none;
+  border-color: transparent;
 }
 
-/* ─── Edge panels: black ─── */
-html[data-theme="msdos"] .border-t.bg-bg-secondary {
-  background: #000000;
-  border-top: 1px solid #33333340;
-}
-html[data-theme="msdos"] .border-r.bg-bg-secondary {
-  background: #000000;
-  border-right: 1px solid #33333340;
+/* ─── Cards: slightly elevated surfaces ─── */
+html[data-theme="spotify"] div.bg-bg-card.border {
+  background: #181818;
+  border-color: transparent;
+  border-radius: 8px;
 }
 
-/* ─── Title bar: just text on black ─── */
-html[data-theme="msdos"] header,
-html[data-theme="msdos"] .retro-titlebar {
-  background: #000000;
-  border-bottom: 1px solid #33333340;
-  color: #aaaaaa;
+/* ─── Edge panels: bottom now-playing bar ─── */
+html[data-theme="spotify"] .border-t.bg-bg-secondary {
+  background: #181818;
+  border-top: 1px solid #282828;
 }
-html[data-theme="msdos"] header h1 {
+
+/* ─── Edge panels: sidebar ─── */
+html[data-theme="spotify"] .border-r.bg-bg-secondary {
+  background: #000000;
+  border-right: 1px solid #ffffff08;
+}
+
+/* ─── Title bar / header ─── */
+html[data-theme="spotify"] header,
+html[data-theme="spotify"] .retro-titlebar {
+  background: #000000;
+  border-bottom: none;
+}
+html[data-theme="spotify"] header h1 {
   color: #ffffff;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
-html[data-theme="msdos"] header .text-text-secondary,
-html[data-theme="msdos"] header .text-text-tertiary,
-html[data-theme="msdos"] .retro-titlebar .text-text-primary,
-html[data-theme="msdos"] .retro-titlebar .text-text-tertiary {
-  color: #888888;
-}
-
-/* ─── No shadows ─── */
-html[data-theme="msdos"] .shadow-xl {
-  box-shadow: none;
-}
-html[data-theme="msdos"] .shadow-2xl {
-  box-shadow: none;
+html[data-theme="spotify"] header .text-text-secondary,
+html[data-theme="spotify"] header .text-text-tertiary,
+html[data-theme="spotify"] .retro-titlebar .text-text-primary,
+html[data-theme="spotify"] .retro-titlebar .text-text-tertiary {
+  color: #b3b3b3;
 }
 
-/* ─── Buttons: reverse-video (white on gray) ─── */
-html[data-theme="msdos"] button.bg-text-primary {
-  background: #aaaaaa;
+/* ─── Shadows: subtle elevation ─── */
+html[data-theme="spotify"] .shadow-xl {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+html[data-theme="spotify"] .shadow-2xl {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+
+/* ─── Primary buttons: Spotify green pill ─── */
+html[data-theme="spotify"] button.bg-text-primary {
+  background: #1db954;
   color: #000000;
   border: none;
-  box-shadow: none;
+  border-radius: 500px;
   font-weight: 700;
-  text-shadow: none;
+  letter-spacing: 0.02em;
+  box-shadow: none;
 }
-html[data-theme="msdos"] button.bg-text-primary:hover:not(:disabled) {
-  background: #ffffff;
-  color: #000000;
+html[data-theme="spotify"] button.bg-text-primary:hover:not(:disabled) {
+  background: #1ed760;
+  transform: scale(1.04);
   opacity: 1;
 }
-html[data-theme="msdos"] button.bg-text-primary:active:not(:disabled) {
-  background: #555555;
-  color: #000000;
+html[data-theme="spotify"] button.bg-text-primary:active:not(:disabled) {
+  background: #1aa34a;
+  transform: scale(1);
 }
 
-/* ─── Secondary buttons: gray border ─── */
-html[data-theme="msdos"] button.bg-bg-card {
-  border: 1px solid #555555;
-  background: transparent;
-  color: #aaaaaa;
+/* ─── Secondary buttons ─── */
+html[data-theme="spotify"] button.bg-bg-card {
+  background: #282828;
+  border: 1px solid #ffffff1a;
+  border-radius: 500px;
 }
-html[data-theme="msdos"] button.bg-bg-card:hover:not(:disabled) {
-  border-color: #aaaaaa;
-  color: #ffffff;
+html[data-theme="spotify"] button.bg-bg-card:hover:not(:disabled) {
+  background: #333333;
+  border-color: #ffffff33;
 }
-html[data-theme="msdos"] button.bg-bg-card:active:not(:disabled) {
-  background: #aaaaaa;
-  color: #000000;
+html[data-theme="spotify"] button.bg-bg-card:active:not(:disabled) {
+  background: #222222;
 }
 
-/* ─── Play button: reverse-video block ─── */
-html[data-theme="msdos"] button.rounded-full.bg-text-primary {
-  background: #aaaaaa;
+/* ─── Playback button: large green circle ─── */
+html[data-theme="spotify"] button.rounded-full.bg-text-primary {
+  background: #1db954;
   color: #000000;
   border: none;
-}
-html[data-theme="msdos"] button.rounded-full.bg-text-primary:hover {
-  background: #ffffff;
-}
-html[data-theme="msdos"] button.rounded-full.bg-text-primary:active {
-  background: #555555;
-}
-
-/* ─── Secondary playback ─── */
-html[data-theme="msdos"] button.rounded-full.text-text-secondary {
-  color: #555555;
-}
-html[data-theme="msdos"] button.rounded-full.text-text-secondary:hover {
-  color: #aaaaaa;
-}
-
-/* ─── Inputs: black, gray border ─── */
-html[data-theme="msdos"] input {
-  border: 1px solid #555555;
-  background: #000000;
-  color: #aaaaaa;
   box-shadow: none;
 }
-html[data-theme="msdos"] input::placeholder {
-  color: #333333;
+html[data-theme="spotify"] button.rounded-full.bg-text-primary:hover {
+  background: #1ed760;
+  transform: scale(1.06);
 }
-html[data-theme="msdos"] input:focus {
-  border-color: #aaaaaa;
+html[data-theme="spotify"] button.rounded-full.bg-text-primary:active {
+  background: #1aa34a;
+  transform: scale(1);
 }
 
-/* ─── Track table: file listing on black ─── */
-html[data-theme="msdos"] thead {
+/* ─── Secondary playback buttons ─── */
+html[data-theme="spotify"] button.rounded-full.text-text-secondary {
+  color: #b3b3b3;
+}
+html[data-theme="spotify"] button.rounded-full.text-text-secondary:hover {
+  color: #ffffff;
+}
+
+/* ─── Inputs: subtle dark fields ─── */
+html[data-theme="spotify"] input {
+  background: #282828;
+  border: none;
+  border-radius: 500px;
+  color: #ffffff;
+  caret-color: #1db954;
+}
+html[data-theme="spotify"] input::placeholder {
+  color: #6a6a6a;
+}
+html[data-theme="spotify"] input:focus {
+  background: #333333;
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ─── Track table: Spotify playlist style ─── */
+html[data-theme="spotify"] thead {
   background: transparent !important;
 }
-html[data-theme="msdos"] thead th {
-  color: #ffffff !important;
-  font-weight: 700 !important;
-  border-bottom-color: #33333340 !important;
-}
-html[data-theme="msdos"] tbody {
-  background: #000000;
-}
-html[data-theme="msdos"] tbody tr:nth-child(even) {
-  background-color: transparent;
-}
-html[data-theme="msdos"] tbody tr:nth-child(odd) {
-  background-color: transparent;
-}
-html[data-theme="msdos"] tbody td {
-  color: #aaaaaa;
-}
-html[data-theme="msdos"] tbody tr:hover {
-  background-color: #1a1a1a !important;
-}
-
-/* ─── Selected row: reverse-video white bar ─── */
-html[data-theme="msdos"] tbody td.\!bg-accent {
-  background: #aaaaaa !important;
-  color: #000000 !important;
-}
-html[data-theme="msdos"] tbody td.\!bg-accent .\!text-white,
-html[data-theme="msdos"] tbody td.\!bg-accent .text-xs,
-html[data-theme="msdos"] tbody td.\!bg-accent .text-text-tertiary,
-html[data-theme="msdos"] tbody td.\!bg-accent .text-text-secondary {
-  color: #000000 !important;
-}
-
-/* ─── Currently playing: bright white ─── */
-html[data-theme="msdos"] .text-accent {
-  color: #ffffff !important;
-}
-
-/* ─── Column browser selected: reverse-video ─── */
-html[data-theme="msdos"] .bg-accent.text-white {
-  background: #aaaaaa !important;
-  color: #000000 !important;
-}
-
-/* ─── Column browser header ─── */
-html[data-theme="msdos"] .border-b.border-border.bg-bg-secondary {
-  background: transparent;
-  border-bottom-color: #33333340;
-}
-html[data-theme="msdos"] .border-b.border-border.bg-bg-secondary span {
-  color: #ffffff;
-  font-weight: 700;
-}
-
-/* ─── Progress bars: block chars █ ─── */
-html[data-theme="msdos"] .overflow-hidden.rounded-full > .rounded-full {
-  border-radius: 0px;
-  background: #aaaaaa;
-  background-image: repeating-linear-gradient(90deg, #aaaaaa, #aaaaaa 3px, #000000 3px, #000000 4px);
-}
-
-/* ─── Seek bar ─── */
-html[data-theme="msdos"] .bg-text-primary.rounded-full {
-  background: #aaaaaa !important;
-  border-radius: 0 !important;
-}
-html[data-theme="msdos"] .bg-bg-card.rounded-full {
-  background: #1a1a1a !important;
-  border-radius: 0 !important;
-  border: none;
-}
-
-/* ─── Sidebar active: reverse-video ─── */
-html[data-theme="msdos"] .border-r.bg-bg-secondary button.bg-bg-card {
-  background: #aaaaaa;
-  color: #000000;
-  border: none;
-  box-shadow: none;
-}
-
-/* ─── Sidebar items ─── */
-html[data-theme="msdos"] .border-r.bg-bg-secondary button {
-  color: #888888;
-}
-html[data-theme="msdos"] .border-r.bg-bg-secondary button:hover {
-  color: #aaaaaa;
-  background: #1a1a1a;
-}
-
-/* ─── Disabled ─── */
-html[data-theme="msdos"] button:disabled {
-  color: #333333 !important;
-}
-
-/* ─── Dividers: barely visible ─── */
-html[data-theme="msdos"] .border-border-subtle {
-  border-color: #1a1a1a;
-}
-
-/* ─── Modals ─── */
-html[data-theme="msdos"] .bg-bg-secondary.border.rounded-2xl {
-  background: #000000;
-  border: 1px solid #555555;
-}
-
-/* ─── Context menu ─── */
-html[data-theme="msdos"] .bg-bg-card.border.shadow-lg {
-  background: #000000;
-  border: 1px solid #555555;
-  box-shadow: none;
-}
-html[data-theme="msdos"] .bg-bg-card.border.shadow-lg button {
-  color: #aaaaaa;
-}
-html[data-theme="msdos"] .bg-bg-card.border.shadow-lg button:hover {
-  background: #aaaaaa !important;
-  color: #000000 !important;
-}
-
-/* ─── EQ accents ─── */
-html[data-theme="msdos"] .bg-accent {
-  background-color: #aaaaaa;
-}
-
-/* ─── CRT vignette ─── */
-html[data-theme="msdos"]::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
-}
-
-/* ─── Scrollbar: near-invisible ─── */
-html[data-theme="msdos"] ::-webkit-scrollbar {
-  width: 6px;
-}
-html[data-theme="msdos"] ::-webkit-scrollbar-track {
-  background: transparent;
-}
-html[data-theme="msdos"] ::-webkit-scrollbar-thumb {
-  background: #33333380;
-  border-radius: 3px;
-}
-html[data-theme="msdos"] ::-webkit-scrollbar-thumb:hover {
-  background: #55555580;
-}
-
-/* ══════════════════════════════════════════════════════
-   TERMINAL THEME — Amber phosphor CRT monitor
-   Text floating on void. Borders nearly invisible.
-   Dramatic amber glow, visible scanlines, CRT vignette.
-   ══════════════════════════════════════════════════════ */
-
-html[data-theme="terminal"] {
-  --color-bg-primary: #080500;
-  --color-bg-secondary: #080500;
-  --color-bg-card: #060300;
-  --color-bg-elevated: #0c0800;
-  --color-bg-hover: #1a1000;
-
-  --color-text-primary: #ffb830;
-  --color-text-secondary: #cc9020;
-  --color-text-tertiary: #664810;
-
-  --color-accent: #ffb830;
-  --color-accent-hover: #ffd060;
-  --color-success: #ffb830;
-  --color-success-dim: #ffb83018;
-  --color-warning: #ff8800;
-  --color-danger: #ff4400;
-
-  --color-border: #1a1000;
-  --color-border-subtle: #100a00;
-  --color-border-active: #ffb83044;
-
-  --font-sans: "Consolas", "Monaco", "Lucida Console", "Courier New", monospace;
-}
-
-/* ─── Spacing ─── */
-html[data-theme="terminal"] .p-5 {
-  padding: 0.875rem;
-}
-html[data-theme="terminal"] .p-6 {
-  padding: 1rem;
-}
-html[data-theme="terminal"] .px-5 {
-  padding-left: 0.875rem;
-  padding-right: 0.875rem;
-}
-html[data-theme="terminal"] .px-6 {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-html[data-theme="terminal"] .px-8 {
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-}
-html[data-theme="terminal"] .py-4 {
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-}
-html[data-theme="terminal"] .gap-6 {
-  gap: 0.75rem;
-}
-html[data-theme="terminal"] .gap-3 {
-  gap: 0.5rem;
-}
-html[data-theme="terminal"] .mb-5 {
-  margin-bottom: 0.875rem;
-}
-html[data-theme="terminal"] .mb-4 {
-  margin-bottom: 0.75rem;
-}
-
-/* ─── Zero radius ─── */
-html[data-theme="terminal"] .rounded-2xl {
-  border-radius: 0px;
-}
-html[data-theme="terminal"] .rounded-xl {
-  border-radius: 0px;
-}
-html[data-theme="terminal"] .rounded-lg {
-  border-radius: 0px;
-}
-html[data-theme="terminal"] .rounded-md {
-  border-radius: 0px;
-}
-
-/* ─── Near-invisible borders (terminal = no chrome) ─── */
-html[data-theme="terminal"] .border {
-  border-width: 1px;
-}
-html[data-theme="terminal"] .border-b {
-  border-bottom-width: 1px;
-}
-html[data-theme="terminal"] .border-t {
-  border-top-width: 1px;
-}
-html[data-theme="terminal"] .border-r {
-  border-right-width: 1px;
-}
-
-/* ─── CRT scanlines + vignette on background ─── */
-html[data-theme="terminal"] .bg-bg-primary {
-  background:
-    repeating-linear-gradient(180deg, transparent 0px, rgba(255, 184, 48, 0.03) 1px, transparent 3px),
-    radial-gradient(ellipse at center, #0a0700 0%, #030200 100%);
-}
-
-/* ─── Panels: nearly invisible — just void ─── */
-html[data-theme="terminal"] .bg-bg-secondary.border {
-  border: 1px solid #1a100005;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* ─── Content areas: slightly visible container ─── */
-html[data-theme="terminal"] div.bg-bg-card.border {
-  border: 1px solid #ffb83010;
-  background: rgba(6, 3, 0, 0.5);
-  box-shadow: none;
-}
-
-/* ─── Edge panels: fade into void ─── */
-html[data-theme="terminal"] .border-t.bg-bg-secondary {
-  background: #080500;
-  border-top: 1px solid #ffb83015;
-}
-html[data-theme="terminal"] .border-r.bg-bg-secondary {
-  background: #080500;
-  border-right: 1px solid #ffb83010;
-}
-
-/* ─── Title bar: amber text on void ─── */
-html[data-theme="terminal"] header,
-html[data-theme="terminal"] .retro-titlebar {
-  background: #080500;
-  border-bottom: 1px solid #ffb83015;
-  color: #ffb830;
-}
-html[data-theme="terminal"] header h1 {
-  color: #ffb830;
-  text-shadow:
-    0 0 10px #ffb83066,
-    0 0 30px #ffb83022,
-    0 0 3px #ffb83088;
+html[data-theme="spotify"] thead th {
+  color: #b3b3b3 !important;
+  font-weight: 400;
+  font-size: 0.7rem;
   letter-spacing: 0.1em;
-  font-weight: 700;
+  text-transform: uppercase;
+  border-bottom: 1px solid #282828 !important;
 }
-html[data-theme="terminal"] header .text-text-secondary,
-html[data-theme="terminal"] header .text-text-tertiary,
-html[data-theme="terminal"] .retro-titlebar .text-text-primary,
-html[data-theme="terminal"] .retro-titlebar .text-text-tertiary {
-  color: #cc9020;
-  text-shadow: 0 0 6px #ffb83033;
-}
-
-/* ─── No shadows ─── */
-html[data-theme="terminal"] .shadow-xl {
-  box-shadow: none;
-}
-html[data-theme="terminal"] .shadow-2xl {
-  box-shadow: none;
-}
-
-/* ─── Buttons: glowing amber outline on void ─── */
-html[data-theme="terminal"] button.bg-text-primary {
-  background: transparent;
-  color: #ffb830;
-  border: 1px solid #ffb83066;
-  box-shadow:
-    0 0 6px #ffb83022,
-    inset 0 0 6px #ffb83008;
-  font-weight: 700;
-  text-shadow: 0 0 6px #ffb83044;
-}
-html[data-theme="terminal"] button.bg-text-primary:hover:not(:disabled) {
-  background: #ffb83010;
-  color: #ffd060;
-  border-color: #ffb830aa;
-  box-shadow:
-    0 0 12px #ffb83033,
-    inset 0 0 10px #ffb83010;
-  opacity: 1;
-}
-html[data-theme="terminal"] button.bg-text-primary:active:not(:disabled) {
-  background: #ffb830;
-  color: #080500;
-  text-shadow: none;
-  box-shadow: 0 0 20px #ffb83066;
-}
-
-/* ─── Secondary buttons: ghost ─── */
-html[data-theme="terminal"] button.bg-bg-card {
-  border: 1px solid #ffb83015;
+html[data-theme="spotify"] tbody {
   background: transparent;
 }
-html[data-theme="terminal"] button.bg-bg-card:hover:not(:disabled) {
-  border-color: #ffb83044;
-  background: #ffb83008;
-  color: #ffb830;
-}
-html[data-theme="terminal"] button.bg-bg-card:active:not(:disabled) {
-  background: #ffb83020;
-}
-
-/* ─── Play button: glowing amber ring ─── */
-html[data-theme="terminal"] button.rounded-full.bg-text-primary {
-  background: transparent;
-  color: #ffb830;
-  border: 1px solid #ffb830aa;
-  box-shadow:
-    0 0 12px #ffb83044,
-    inset 0 0 12px #ffb83015;
-}
-html[data-theme="terminal"] button.rounded-full.bg-text-primary:hover {
-  box-shadow:
-    0 0 20px #ffb83066,
-    inset 0 0 16px #ffb83022;
-}
-html[data-theme="terminal"] button.rounded-full.bg-text-primary:active {
-  background: #ffb830;
-  color: #080500;
-  box-shadow: 0 0 30px #ffb83088;
-}
-
-/* ─── Secondary playback: amber glow on hover ─── */
-html[data-theme="terminal"] button.rounded-full.text-text-secondary:hover {
-  color: #ffb830;
-  text-shadow: 0 0 8px #ffb83055;
-}
-
-/* ─── Inputs: near-invisible field ─── */
-html[data-theme="terminal"] input {
-  border: 1px solid #ffb83020;
-  background: #060300;
-  color: #ffb830;
-  caret-color: #ffb830;
-  box-shadow: none;
-  text-shadow: 0 0 2px #ffb83033;
-}
-html[data-theme="terminal"] input::placeholder {
-  color: #402800;
-}
-html[data-theme="terminal"] input:focus {
-  border-color: #ffb83055;
-  box-shadow: 0 0 8px #ffb83015;
-}
-
-/* ─── Track table: text listing floating on void ─── */
-html[data-theme="terminal"] thead {
-  background: transparent !important;
-}
-html[data-theme="terminal"] thead th {
-  color: #ffb830 !important;
-  text-shadow: 0 0 6px #ffb83033;
-  border-bottom-color: #ffb83015 !important;
-  font-weight: 700 !important;
-}
-html[data-theme="terminal"] tbody {
-  background: transparent;
-}
-html[data-theme="terminal"] tbody tr:nth-child(even) {
-  background-color: rgba(255, 184, 48, 0.02);
-}
-html[data-theme="terminal"] tbody tr:nth-child(odd) {
+html[data-theme="spotify"] tbody tr:nth-child(even) {
   background-color: transparent;
 }
-html[data-theme="terminal"] tbody tr:hover {
-  background-color: rgba(255, 184, 48, 0.06) !important;
+html[data-theme="spotify"] tbody tr:nth-child(odd) {
+  background-color: transparent;
 }
-html[data-theme="terminal"] tbody td {
-  color: #cc9020;
-  text-shadow: 0 0 2px #ffb83015;
+html[data-theme="spotify"] tbody tr:hover {
+  background-color: #ffffff0f !important;
 }
-
-/* ─── Selected row: bright amber glow bar ─── */
-html[data-theme="terminal"] tbody td.\!bg-accent {
-  background: rgba(255, 184, 48, 0.15) !important;
-  color: #ffb830 !important;
-  text-shadow: 0 0 8px #ffb83055;
-}
-html[data-theme="terminal"] tbody td.\!bg-accent .\!text-white,
-html[data-theme="terminal"] tbody td.\!bg-accent .text-xs,
-html[data-theme="terminal"] tbody td.\!bg-accent .text-text-tertiary,
-html[data-theme="terminal"] tbody td.\!bg-accent .text-text-secondary {
-  color: #ffb830 !important;
+html[data-theme="spotify"] tbody td {
+  color: #b3b3b3;
+  border-bottom: none;
 }
 
-/* ─── Currently playing track: bright glow ─── */
-html[data-theme="terminal"] .text-accent {
-  color: #ffb830 !important;
-  text-shadow:
-    0 0 10px #ffb83055,
-    0 0 3px #ffb83077;
+/* ─── Selected track row ─── */
+html[data-theme="spotify"] tbody td.\!bg-accent {
+  background: #1db95433 !important;
+  color: #1db954 !important;
+}
+html[data-theme="spotify"] tbody td.\!bg-accent .\!text-white,
+html[data-theme="spotify"] tbody td.\!bg-accent .text-xs,
+html[data-theme="spotify"] tbody td.\!bg-accent .text-text-tertiary,
+html[data-theme="spotify"] tbody td.\!bg-accent .text-text-secondary {
+  color: #1db954 !important;
 }
 
-/* ─── Column browser selected ─── */
-html[data-theme="terminal"] .bg-accent.text-white {
-  background: rgba(255, 184, 48, 0.15) !important;
-  color: #ffb830 !important;
-  text-shadow: 0 0 8px #ffb83055;
+/* ─── Currently playing track: green text ─── */
+html[data-theme="spotify"] .text-accent {
+  color: #1db954 !important;
 }
 
-/* ─── Column browser headers: barely there ─── */
-html[data-theme="terminal"] .border-b.border-border.bg-bg-secondary {
-  background: transparent;
-  border-bottom-color: #ffb83015;
-}
-html[data-theme="terminal"] .border-b.border-border.bg-bg-secondary span {
-  color: #ffb830;
-  text-shadow: 0 0 6px #ffb83033;
+/* ─── Active accent areas ─── */
+html[data-theme="spotify"] .bg-accent {
+  background-color: #1db954;
 }
 
-/* ─── Progress bars: solid amber glow ─── */
-html[data-theme="terminal"] .overflow-hidden.rounded-full > .rounded-full {
-  border-radius: 0px;
-  background: #cc9020;
-  box-shadow: 0 0 8px #ffb83033;
+/* ─── Column browser headers ─── */
+html[data-theme="spotify"] .border-b.border-border.bg-bg-secondary {
+  background: #000000;
+  border-bottom-color: #ffffff0a;
+}
+html[data-theme="spotify"] .border-b.border-border.bg-bg-secondary span {
+  color: #b3b3b3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
 }
 
-/* ─── Seek bar ─── */
-html[data-theme="terminal"] .bg-text-primary.rounded-full {
-  background: #ffb830 !important;
-  border-radius: 0 !important;
-  box-shadow: 0 0 6px #ffb83044;
+/* ─── Column browser selected item ─── */
+html[data-theme="spotify"] .bg-accent.text-white {
+  background: #1db954 !important;
+  color: #000000 !important;
+  font-weight: 700;
 }
-html[data-theme="terminal"] .bg-text-primary.rounded-full.w-3 {
-  background: #ffb830 !important;
-  border-radius: 0 !important;
-  box-shadow: 0 0 10px #ffb83066;
+
+/* ─── Seek bar: thin green progress ─── */
+html[data-theme="spotify"] .bg-text-primary.rounded-full {
+  background: #1db954 !important;
+  height: 4px;
 }
-html[data-theme="terminal"] .bg-bg-card.rounded-full {
-  background: #1a1000 !important;
-  border-radius: 0 !important;
+/* Seek bar thumb: green dot */
+html[data-theme="spotify"] .bg-text-primary.rounded-full.w-3 {
+  background: #ffffff !important;
+  width: 12px !important;
+  height: 12px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+html[data-theme="spotify"] .group:hover .bg-text-primary.rounded-full.w-3 {
+  opacity: 1;
+}
+/* Seek bar track background */
+html[data-theme="spotify"] .bg-bg-card.rounded-full {
+  background: #4d4d4d !important;
+  height: 4px;
+}
+
+/* ─── Progress bars ─── */
+html[data-theme="spotify"] .overflow-hidden.rounded-full > .rounded-full {
+  background: #1db954;
+  border-radius: 500px;
+}
+
+/* ─── Sidebar buttons ─── */
+html[data-theme="spotify"] .border-r.bg-bg-secondary button {
+  color: #b3b3b3;
+  border-radius: 4px;
+}
+html[data-theme="spotify"] .border-r.bg-bg-secondary button:hover {
+  color: #ffffff;
+  background: #ffffff0f;
+}
+
+/* ─── Sidebar active item ─── */
+html[data-theme="spotify"] .border-r.bg-bg-secondary button.bg-bg-card {
+  background: #282828;
+  color: #ffffff;
   border: none;
+  font-weight: 700;
 }
 
-/* ─── Sidebar items: dim text, glow on hover ─── */
-html[data-theme="terminal"] .border-r.bg-bg-secondary button {
-  color: #cc9020;
-}
-html[data-theme="terminal"] .border-r.bg-bg-secondary button:hover {
-  color: #ffb830;
-  text-shadow: 0 0 6px #ffb83033;
+/* ─── Disabled buttons ─── */
+html[data-theme="spotify"] button:disabled {
+  color: #535353 !important;
+  opacity: 0.7;
 }
 
-/* ─── Sidebar active: glowing text ─── */
-html[data-theme="terminal"] .border-r.bg-bg-secondary button.bg-bg-card {
-  background: rgba(255, 184, 48, 0.08);
-  color: #ffb830;
-  border: 1px solid #ffb83030;
-  box-shadow: none;
-  text-shadow: 0 0 8px #ffb83044;
-}
-
-/* ─── Disabled ─── */
-html[data-theme="terminal"] button:disabled {
-  color: #302000 !important;
-  text-shadow: none;
-  opacity: 0.4;
-}
-
-/* ─── Dividers: nearly invisible ─── */
-html[data-theme="terminal"] .border-border-subtle {
-  border-color: #100a00;
+/* ─── Subtle dividers ─── */
+html[data-theme="spotify"] .border-border-subtle {
+  border-color: #ffffff08;
 }
 
 /* ─── Context menu ─── */
-html[data-theme="terminal"] .bg-bg-card.border.shadow-lg {
-  background: #060300;
-  border: 1px solid #ffb83020;
-  box-shadow: 0 0 20px rgba(255, 184, 48, 0.06);
+html[data-theme="spotify"] .bg-bg-card.border.shadow-lg {
+  background: #282828;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3), 0 6px 8px rgba(0, 0, 0, 0.2);
 }
-html[data-theme="terminal"] .bg-bg-card.border.shadow-lg button:hover {
-  background: rgba(255, 184, 48, 0.12) !important;
-  color: #ffb830 !important;
-  text-shadow: 0 0 6px #ffb83044;
+html[data-theme="spotify"] .bg-bg-card.border.shadow-lg button {
+  border-radius: 2px;
+}
+html[data-theme="spotify"] .bg-bg-card.border.shadow-lg button:hover {
+  background: #3e3e3e !important;
+  color: #ffffff !important;
 }
 
 /* ─── Modals ─── */
-html[data-theme="terminal"] .bg-bg-secondary.border.rounded-2xl {
-  background: #080500;
-  border: 1px solid #ffb83020;
+html[data-theme="spotify"] .bg-bg-secondary.border.rounded-2xl {
+  background: #282828;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
 }
 
-/* ─── EQ slider: amber knobs ─── */
-html[data-theme="terminal"] .bg-text-secondary.group-hover\:bg-text-primary {
-  background: #cc9020 !important;
-  box-shadow: 0 0 4px #ffb83033;
+/* ─── EQ slider thumb ─── */
+html[data-theme="spotify"] .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #ffffff !important;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
-html[data-theme="terminal"] .group:hover .bg-text-secondary.group-hover\:bg-text-primary {
-  background: #ffb830 !important;
-  box-shadow: 0 0 8px #ffb83055;
-}
-
-/* ─── Amber glow on accent elements ─── */
-html[data-theme="terminal"] .bg-accent {
-  background-color: #ffb830;
-  box-shadow: 0 0 6px #ffb83066;
+html[data-theme="spotify"] .group:hover .bg-text-secondary.group-hover\:bg-text-primary {
+  background: #ffffff !important;
 }
 
-/* ─── Now-playing text glow ─── */
-html[data-theme="terminal"] .text-text-primary.truncate {
-  text-shadow: 0 0 6px #ffb83033;
+/* ─── Now-playing text ─── */
+html[data-theme="spotify"] .text-text-primary.truncate {
+  font-weight: 600;
 }
 
-/* ─── CRT vignette overlay ─── */
-html[data-theme="terminal"]::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.45) 100%);
+/* ─── Time display ─── */
+html[data-theme="spotify"] .tabular-nums.text-text-tertiary {
+  color: #b3b3b3;
+  font-size: 0.65rem;
 }
 
-/* ─── Scrollbar: barely visible ─── */
-html[data-theme="terminal"] ::-webkit-scrollbar {
-  width: 6px;
+/* ─── Scrollbar: Spotify-style thin and subtle ─── */
+html[data-theme="spotify"] ::-webkit-scrollbar {
+  width: 8px;
 }
-html[data-theme="terminal"] ::-webkit-scrollbar-track {
+html[data-theme="spotify"] ::-webkit-scrollbar-track {
   background: transparent;
 }
-html[data-theme="terminal"] ::-webkit-scrollbar-thumb {
-  background: #ffb83020;
-  border-radius: 3px;
+html[data-theme="spotify"] ::-webkit-scrollbar-thumb {
+  background: #ffffff33;
+  border-radius: 4px;
 }
-html[data-theme="terminal"] ::-webkit-scrollbar-thumb:hover {
-  background: #ffb83040;
+html[data-theme="spotify"] ::-webkit-scrollbar-thumb:hover {
+  background: #ffffff55;
 }
 
 /* ─── Scrollbar: classic theme ─── */

@@ -21,10 +21,8 @@ const THEMES: { id: ThemeName; label: string; description: string; preview: [str
   },
   { id: "classic", label: "Classic", description: "Vintage Mac + iPod", preview: ["#F2F0ED", "#D9D7D4", "#000000"] },
   { id: "winamp", label: "Winamp", description: "Classic media player", preview: ["#232323", "#2A2A2A", "#00FF00"] },
-  { id: "gameboy", label: "Game Boy", description: "Handheld LCD", preview: ["#C0BAA7", "#9AA86A", "#3B3073"] },
   { id: "aqua", label: "Aqua", description: "Mac OS X era", preview: ["#E8E8E8", "#C8C8C8", "#3498DB"] },
-  { id: "msdos", label: "MS-DOS", description: "Command prompt", preview: ["#000000", "#000000", "#AAAAAA"] },
-  { id: "terminal", label: "Terminal", description: "Amber phosphor CRT", preview: ["#080500", "#060300", "#FFB830"] },
+  { id: "spotify", label: "Spotify", description: "Music streaming", preview: ["#121212", "#1DB954", "#FFFFFF"] },
 ];
 
 export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps) => {

@@ -2,6 +2,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
+import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
+import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/helpers";
 import type { ArtworkCarouselProps, AlbumArtProps } from "./types";
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
@@ -125,8 +127,10 @@ export const ArtworkCarousel = ({
   const prevTimeRef = useRef(0);
 
   const sortedAlbums = useMemo(() => sortAlbums(albums, sortMode), [albums, sortMode]);
+  const letterMap = useMemo(() => buildLetterMap(sortedAlbums, sortMode), [sortedAlbums, sortMode]);
   const centeredIndex = findCenteredIndex(sortedAlbums, selectedAlbum, currentTrack?.album);
   const centeredAlbum = sortedAlbums[centeredIndex];
+  const activeLetter = centeredAlbum ? getAlbumLetter(centeredAlbum, sortMode) : undefined;
 
   // Initialize position on first render
   if (posRef.current === null) posRef.current = centeredIndex;
@@ -219,6 +223,15 @@ export const ArtworkCarousel = ({
     [navigate],
   );
 
+  const handleLetterSelect = useCallback(
+    (_letter: string, albumIndex: number) => {
+      if (albumIndex >= 0 && albumIndex < sortedAlbums.length) {
+        onSelectAlbum(sortedAlbums[albumIndex].name);
+      }
+    },
+    [sortedAlbums, onSelectAlbum],
+  );
+
   // Ambient background art URL for center album
   const ambientArtUrl = useMemo(() => {
     if (!centeredAlbum?.folder_path) return null;
@@ -299,6 +312,16 @@ export const ArtworkCarousel = ({
         })}
 
         <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+      </div>
+
+      {/* Alphabet scroller */}
+      <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center">
+        <AlphabetScroller
+          letterMap={letterMap}
+          activeLetter={activeLetter}
+          onLetterSelect={handleLetterSelect}
+          variant="dark"
+        />
       </div>
 
       {/* Album info bar */}

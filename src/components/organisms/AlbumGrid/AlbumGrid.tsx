@@ -2,6 +2,8 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
+import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
+import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/helpers";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumGridProps, AlbumSortMode } from "./types";
@@ -69,6 +71,38 @@ export const AlbumGrid = ({
     overscan: 3,
   });
 
+  const letterMap = useMemo(() => buildLetterMap(sortedAlbums, sortMode), [sortedAlbums, sortMode]);
+
+  const [activeLetter, setActiveLetter] = useState<string | undefined>();
+
+  // Track active letter from scroll position
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || sortedAlbums.length === 0) return;
+
+    const updateActiveLetter = () => {
+      const scrollTop = el.scrollTop;
+      const rowHeight = CELL_HEIGHT + GAP;
+      const topRow = Math.floor(scrollTop / rowHeight);
+      const topAlbumIndex = Math.min(topRow * lanes, sortedAlbums.length - 1);
+      if (topAlbumIndex >= 0) {
+        setActiveLetter(getAlbumLetter(sortedAlbums[topAlbumIndex], sortMode));
+      }
+    };
+
+    updateActiveLetter();
+    el.addEventListener("scroll", updateActiveLetter, { passive: true });
+    return () => el.removeEventListener("scroll", updateActiveLetter);
+  }, [sortedAlbums, sortMode, lanes]);
+
+  const handleLetterSelect = useCallback(
+    (_letter: string, albumIndex: number) => {
+      const rowIndex = Math.floor(albumIndex / lanes);
+      virtualizer.scrollToIndex(rowIndex, { align: "start" });
+    },
+    [lanes, virtualizer],
+  );
+
   const handleClick = useCallback(
     (albumName: string) => {
       onSelectAlbum(selectedAlbum === albumName ? null : albumName);
@@ -129,62 +163,67 @@ export const AlbumGrid = ({
         <span className="text-[10px] text-text-tertiary tabular-nums">{albums.length} albums</span>
       </div>
 
-      {/* Scrollable grid */}
-      <div
-        ref={containerRef}
-        key={sortedAlbums.length}
-        className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 view-enter"
-      >
+      {/* Scrollable grid + alphabet scroller */}
+      <div className="flex-1 flex min-h-0">
         <div
-          className="relative"
-          style={{
-            height: virtualizer.getTotalSize() + PADDING * 2,
-          }}
+          ref={containerRef}
+          key={sortedAlbums.length}
+          className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 view-enter"
         >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const startIndex = virtualRow.index * lanes;
-            const rowAlbums = sortedAlbums.slice(startIndex, startIndex + lanes);
+          <div
+            className="relative"
+            style={{
+              height: virtualizer.getTotalSize() + PADDING * 2,
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const startIndex = virtualRow.index * lanes;
+              const rowAlbums = sortedAlbums.slice(startIndex, startIndex + lanes);
 
-            return (
-              <div
-                key={virtualRow.key}
-                className="absolute left-0 right-0"
-                style={{
-                  top: virtualRow.start + PADDING,
-                  height: CELL_HEIGHT,
-                  display: "grid",
-                  gridTemplateColumns: `repeat(${lanes}, 1fr)`,
-                  gap: GAP,
-                  paddingLeft: PADDING,
-                  paddingRight: PADDING,
-                }}
-              >
-                {rowAlbums.map((album) => (
-                  <button
-                    key={`${album.artist}-${album.name}`}
-                    onClick={() => handleClick(album.name)}
-                    onDoubleClick={() => handleDoubleClick(album.name)}
-                    onContextMenu={(e) => handleContextMenu(e, album)}
-                    className={`flex flex-col items-center text-center transition-all duration-150 rounded-xl p-2 min-w-0 ${
-                      selectedAlbum === album.name
-                        ? "bg-accent/10 ring-1 ring-accent"
-                        : "hover:bg-bg-card/50 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/20"
-                    }`}
-                  >
-                    <AlbumArtwork folderPath={album.folder_path} size="lg" className="rounded-lg" />
-                    <div className="mt-2 w-full min-w-0">
-                      <div className="text-[11px] font-medium text-text-primary truncate">{album.name}</div>
-                      <div className="text-[10px] text-text-tertiary truncate">{album.artist}</div>
-                      <div className="text-[10px] text-text-tertiary/60 mt-0.5">
-                        {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
-                        {album.year && ` · ${album.year}`}
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="absolute left-0 right-0"
+                  style={{
+                    top: virtualRow.start + PADDING,
+                    height: CELL_HEIGHT,
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${lanes}, 1fr)`,
+                    gap: GAP,
+                    paddingLeft: PADDING,
+                    paddingRight: PADDING,
+                  }}
+                >
+                  {rowAlbums.map((album) => (
+                    <button
+                      key={`${album.artist}-${album.name}`}
+                      onClick={() => handleClick(album.name)}
+                      onDoubleClick={() => handleDoubleClick(album.name)}
+                      onContextMenu={(e) => handleContextMenu(e, album)}
+                      className={`flex flex-col items-center text-center transition-all duration-150 rounded-xl p-2 min-w-0 ${
+                        selectedAlbum === album.name
+                          ? "bg-accent/10 ring-1 ring-accent"
+                          : "hover:bg-bg-card/50 hover:scale-[1.03] hover:shadow-lg hover:shadow-black/20"
+                      }`}
+                    >
+                      <AlbumArtwork folderPath={album.folder_path} size="lg" className="rounded-lg" />
+                      <div className="mt-2 w-full min-w-0">
+                        <div className="text-[11px] font-medium text-text-primary truncate">{album.name}</div>
+                        <div className="text-[10px] text-text-tertiary truncate">{album.artist}</div>
+                        <div className="text-[10px] text-text-tertiary/60 mt-0.5">
+                          {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
+                          {album.year && ` · ${album.year}`}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            );
-          })}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center">
+          <AlphabetScroller letterMap={letterMap} activeLetter={activeLetter} onLetterSelect={handleLetterSelect} />
         </div>
       </div>
 

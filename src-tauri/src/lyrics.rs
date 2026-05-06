@@ -180,7 +180,7 @@ pub fn save_lyrics(
     synced_lyrics: Option<&str>,
 ) -> Result<(), String> {
     conn.execute(
-        "UPDATE tracks SET lyrics = ?1, synced_lyrics = ?2 WHERE id = ?3",
+        "UPDATE tracks SET lyrics = ?1, synced_lyrics = ?2, lyrics_not_found = 0 WHERE id = ?3",
         params![lyrics, synced_lyrics, track_id],
     )
     .map_err(|e| format!("Failed to save lyrics: {}", e))?;
@@ -277,6 +277,7 @@ pub struct LyricsFetchResult {
     pub fetched: usize,
     pub already_had: usize,
     pub not_found: usize,
+    pub skipped_not_found: usize,
     pub cancelled: bool,
 }
 
@@ -291,6 +292,25 @@ struct TrackRow {
     file_path: String,
 }
 
+/// Count how many tracks are marked as lyrics_not_found.
+pub fn count_lyrics_not_found(conn: &Connection) -> usize {
+    conn.query_row(
+        "SELECT COUNT(*) FROM tracks WHERE lyrics_not_found = 1",
+        params![],
+        |row| row.get::<_, usize>(0),
+    )
+    .unwrap_or(0)
+}
+
+/// Reset lyrics_not_found flag so those tracks can be retried.
+pub fn reset_lyrics_not_found(conn: &Connection) -> Result<usize, String> {
+    conn.execute(
+        "UPDATE tracks SET lyrics_not_found = 0 WHERE lyrics_not_found = 1",
+        params![],
+    )
+    .map_err(|e| format!("Failed to reset lyrics_not_found: {}", e))
+}
+
 /// Fetch lyrics for all tracks in the library that don't have any yet.
 pub fn fetch_library_lyrics(
     conn: &Connection,
@@ -299,11 +319,12 @@ pub fn fetch_library_lyrics(
 ) -> LyricsFetchResult {
     use std::sync::atomic::Ordering;
 
-    // Query tracks missing both plain and synced lyrics
+    // Query tracks missing lyrics, skipping those already marked as not found
     let tracks = match conn.prepare(
         "SELECT id, title, artist, album, duration_secs, file_name, file_path
          FROM tracks
          WHERE lyrics IS NULL AND synced_lyrics IS NULL
+           AND lyrics_not_found = 0
            AND (artist IS NOT NULL OR title IS NOT NULL)",
     ) {
         Ok(mut stmt) => stmt
@@ -325,6 +346,7 @@ pub fn fetch_library_lyrics(
     };
 
     let total = tracks.len();
+    let skipped_not_found = count_lyrics_not_found(conn);
     let mut fetched = 0;
     let mut not_found = 0;
 
@@ -335,6 +357,7 @@ pub fn fetch_library_lyrics(
                 fetched,
                 already_had: 0,
                 not_found,
+                skipped_not_found,
                 cancelled: true,
             };
         }
@@ -378,6 +401,10 @@ pub fn fetch_library_lyrics(
                 fetched += 1;
             }
             Err(_) => {
+                let _ = conn.execute(
+                    "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
+                    params![track.id],
+                );
                 not_found += 1;
             }
         }
@@ -398,6 +425,7 @@ pub fn fetch_library_lyrics(
         fetched,
         already_had: 0,
         not_found,
+        skipped_not_found,
         cancelled: false,
     }
 }

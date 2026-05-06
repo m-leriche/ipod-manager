@@ -281,6 +281,8 @@ pub fn run() {
             commands::write_lyrics_to_file,
             commands::fetch_library_lyrics,
             commands::cancel_lyrics_fetch,
+            commands::reset_lyrics_not_found,
+            commands::count_lyrics_not_found,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

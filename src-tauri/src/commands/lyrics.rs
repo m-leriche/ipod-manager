@@ -116,3 +116,23 @@ pub fn cancel_lyrics_fetch(cancel: State<'_, LyricsCancel>) -> Result<(), AppErr
     cancel.cancel();
     Ok(())
 }
+
+#[tauri::command]
+pub async fn reset_lyrics_not_found(db: State<'_, LibraryDb>) -> Result<usize, AppError> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+
+    lyrics::reset_lyrics_not_found(&conn).map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn count_lyrics_not_found(db: State<'_, LibraryDb>) -> Result<usize, AppError> {
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("DB lock failed: {}", e))?;
+
+    Ok(lyrics::count_lyrics_not_found(&conn))
+}

@@ -381,6 +381,7 @@ export const LibraryPlayer = ({
           title: track.title || track.file_name,
           album: track.album,
           durationSecs: track.duration_secs || null,
+          filePath: track.file_path,
         });
         toast.success(`Lyrics fetched for "${track.title || track.file_name}"`);
       } catch {

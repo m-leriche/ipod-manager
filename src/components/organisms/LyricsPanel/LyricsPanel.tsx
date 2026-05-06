@@ -54,6 +54,7 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
         title: track.title || track.file_name,
         album: track.album,
         durationSecs: track.duration_secs || null,
+        filePath: track.file_path,
       });
       setLyrics(result);
     } catch (e) {

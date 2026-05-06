@@ -31,7 +31,7 @@ test.describe("Navigation", () => {
     await page.getByRole("button", { name: "Tools" }).click();
 
     // Default tool tab is File Manager
-    await expect(page.getByText("Select or create a profile to get started")).toBeVisible();
+    await expect(page.getByText("Choose a folder to explore")).toBeVisible();
 
     // Switch to Metadata
     await page.getByRole("button", { name: "Metadata" }).click();

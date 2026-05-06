@@ -9,7 +9,7 @@ test.describe("File Sync (Sync mode)", () => {
   });
 
   test("shows empty state when no profile selected", async ({ page }) => {
-    await expect(page.getByText("Select or create a profile to get started")).toBeVisible();
+    await expect(page.getByText("Choose a folder to explore")).toBeVisible();
   });
 
   test("loads saved sync profile and switches to sync mode", async ({ page, tauriMocks }) => {

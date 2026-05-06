@@ -15,24 +15,10 @@ interface NowPlayingBarProps {
   queueOpen?: boolean;
   onToggleMiniPlayer?: () => void;
   miniPlayer?: boolean;
-  showColumnBrowser?: boolean;
   showInfoPanel?: boolean;
   showStatsPanel?: boolean;
-  showPlaylistSidebar?: boolean;
-  showLyricsPanel?: boolean;
-  onToggleColumnBrowser?: () => void;
   onToggleInfoPanel?: () => void;
   onToggleStatsPanel?: () => void;
-  onTogglePlaylistSidebar?: () => void;
-  onToggleLyricsPanel?: () => void;
-  showAlbumGrid?: boolean;
-  onToggleAlbumGrid?: () => void;
-  showTrackList?: boolean;
-  onToggleTrackList?: () => void;
-  showArtworkCarousel?: boolean;
-  onToggleArtworkCarousel?: () => void;
-  lyricsOverlay?: boolean;
-  onToggleLyricsOverlay?: () => void;
 }
 
 export const NowPlayingBar = ({
@@ -40,24 +26,10 @@ export const NowPlayingBar = ({
   queueOpen,
   onToggleMiniPlayer,
   miniPlayer,
-  showColumnBrowser,
   showInfoPanel,
   showStatsPanel,
-  showPlaylistSidebar,
-  showLyricsPanel,
-  onToggleColumnBrowser,
   onToggleInfoPanel,
   onToggleStatsPanel,
-  onTogglePlaylistSidebar,
-  onToggleLyricsPanel,
-  showAlbumGrid,
-  onToggleAlbumGrid,
-  showTrackList,
-  onToggleTrackList,
-  showArtworkCarousel,
-  onToggleArtworkCarousel,
-  lyricsOverlay,
-  onToggleLyricsOverlay,
 }: NowPlayingBarProps) => {
   const {
     state,
@@ -210,57 +182,6 @@ export const NowPlayingBar = ({
 
       {/* Right — Panel toggles + Volume + Queue toggle */}
       <div className="shrink-0 flex items-center justify-end gap-1">
-        {!miniPlayer && onTogglePlaylistSidebar && (
-          <PanelToggle active={showPlaylistSidebar} onClick={onTogglePlaylistSidebar} title="Playlists">
-            <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
-          </PanelToggle>
-        )}
-        {!miniPlayer && onToggleColumnBrowser && (
-          <PanelToggle
-            active={showColumnBrowser && !showAlbumGrid}
-            onClick={onToggleColumnBrowser}
-            title="Column browser"
-          >
-            <rect x="3" y="3" width="5" height="18" rx="1" />
-            <rect x="10" y="3" width="5" height="18" rx="1" />
-            <rect x="17" y="3" width="5" height="18" rx="1" />
-          </PanelToggle>
-        )}
-        {!miniPlayer && onToggleAlbumGrid && (
-          <PanelToggle active={showAlbumGrid} onClick={onToggleAlbumGrid} title="Album grid">
-            <rect x="3" y="3" width="8" height="8" rx="1" />
-            <rect x="13" y="3" width="8" height="8" rx="1" />
-            <rect x="3" y="13" width="8" height="8" rx="1" />
-            <rect x="13" y="13" width="8" height="8" rx="1" />
-          </PanelToggle>
-        )}
-        {!miniPlayer && onToggleArtworkCarousel && (
-          <PanelToggle active={showArtworkCarousel} onClick={onToggleArtworkCarousel} title="Cover flow">
-            <path d="M2 8l4-1v10l-4-1V8z" />
-            <rect x="8" y="4" width="8" height="16" rx="1" />
-            <path d="M22 8l-4-1v10l4-1V8z" />
-          </PanelToggle>
-        )}
-        {!miniPlayer && (showAlbumGrid || showArtworkCarousel) && onToggleTrackList && (
-          <PanelToggle active={showTrackList} onClick={onToggleTrackList} title="Track list">
-            <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </PanelToggle>
-        )}
-        {!miniPlayer && onToggleLyricsPanel && (
-          <PanelToggle active={showLyricsPanel} onClick={onToggleLyricsPanel} title="Lyrics">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
-            />
-          </PanelToggle>
-        )}
-        {!miniPlayer && showLyricsPanel && showArtworkCarousel && onToggleLyricsOverlay && (
-          <PanelToggle active={lyricsOverlay} onClick={onToggleLyricsOverlay} title="Lyrics overlay">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path strokeLinecap="round" d="M7 10h10M7 14h6" />
-          </PanelToggle>
-        )}
         {!miniPlayer && onToggleInfoPanel && (
           <PanelToggle active={showInfoPanel} onClick={onToggleInfoPanel} title="Info panel">
             <circle cx="12" cy="12" r="9" />

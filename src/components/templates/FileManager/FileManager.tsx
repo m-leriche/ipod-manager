@@ -11,11 +11,11 @@ import type { FileManagerMode } from "./types";
 export const FileManager = () => {
   const [profileStore, setProfileStore] = useState<FileManagerProfileStore>({ profiles: [] });
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
-  const [localProfile, setLocalProfile] = useState<FileManagerProfile | null>(null);
+  const [localProfile, setLocalProfile] = useState<FileManagerProfile>(emptyFileManagerProfile("", "browse"));
   const [showFilters, setShowFilters] = useState(false);
 
   // Derive mode from the local profile — single source of truth
-  const mode: FileManagerMode = localProfile?.mode ?? "browse";
+  const mode: FileManagerMode = localProfile.mode;
 
   const savedProfile = useMemo(
     () => profileStore.profiles.find((p) => p.name === activeProfileName) ?? null,
@@ -23,7 +23,7 @@ export const FileManager = () => {
   );
 
   const isDirty = useMemo(() => {
-    if (!localProfile || !savedProfile) return false;
+    if (!savedProfile) return false;
     return (
       localProfile.left_path !== savedProfile.left_path ||
       localProfile.right_path !== savedProfile.right_path ||
@@ -53,12 +53,10 @@ export const FileManager = () => {
       .catch(() => {});
   }, []);
 
-  // Sync local profile when switching profiles or store changes
+  // Sync local profile when a saved profile is active
   useEffect(() => {
     if (savedProfile) {
       setLocalProfile({ ...savedProfile });
-    } else {
-      setLocalProfile(null);
     }
   }, [savedProfile]);
 
@@ -68,12 +66,15 @@ export const FileManager = () => {
     const profileName = name || null;
     setActiveProfileName(profileName);
     setShowFilters(false);
+    if (!profileName) {
+      setLocalProfile(emptyFileManagerProfile("", mode));
+    }
     save({ ...profileStore, active_profile: profileName });
   };
 
   const createProfile = (name: string) => {
     if (profileStore.profiles.some((p) => p.name === name)) return;
-    const newProfile = emptyFileManagerProfile(name, mode);
+    const newProfile = { ...localProfile, name };
     save({ profiles: [...profileStore.profiles, newProfile], active_profile: name });
     setActiveProfileName(name);
   };
@@ -83,7 +84,7 @@ export const FileManager = () => {
     save({ profiles: profileStore.profiles.filter((p) => p.name !== name), active_profile: newActive });
     if (activeProfileName === name) {
       setActiveProfileName(null);
-      setLocalProfile(null);
+      setLocalProfile(emptyFileManagerProfile("", "browse"));
       setShowFilters(false);
     }
   };
@@ -95,7 +96,7 @@ export const FileManager = () => {
     });
     if (activeProfileName === oldName) {
       setActiveProfileName(newName);
-      if (localProfile) setLocalProfile({ ...localProfile, name: newName });
+      setLocalProfile({ ...localProfile, name: newName });
     }
   };
 
@@ -109,7 +110,7 @@ export const FileManager = () => {
   };
 
   const saveProfile = () => {
-    if (!localProfile) return;
+    if (!activeProfileName) return;
     save({
       profiles: profileStore.profiles.map((p) => (p.name === localProfile.name ? { ...localProfile } : p)),
       active_profile: activeProfileName,
@@ -125,7 +126,6 @@ export const FileManager = () => {
   // ── Local profile mutations ─────────────────────────────────────
 
   const updateLocal = (patch: Partial<FileManagerProfile>) => {
-    if (!localProfile) return;
     setLocalProfile({ ...localProfile, ...patch });
   };
 
@@ -135,7 +135,7 @@ export const FileManager = () => {
 
   // ── Render ──────────────────────────────────────────────────────
 
-  const exclusions = localProfile?.exclusions ?? [];
+  const exclusions = localProfile.exclusions;
 
   const modeToggle = (
     <div className="flex gap-0.5 bg-bg-primary/50 rounded-lg p-0.5">
@@ -161,7 +161,7 @@ export const FileManager = () => {
           <div className="flex-1 min-w-0">
             <ProfileSelector
               profiles={profileStore.profiles}
-              activeProfile={localProfile}
+              activeProfile={activeProfileName ? localProfile : null}
               onSwitch={switchProfile}
               onCreate={createProfile}
               onDelete={deleteProfile}
@@ -186,12 +186,7 @@ export const FileManager = () => {
         />
       )}
 
-      {/* No profile selected */}
-      {!localProfile ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-text-tertiary text-xs">Select or create a profile to get started</p>
-        </div>
-      ) : mode === "browse" ? (
+      {mode === "browse" ? (
         <BrowseExplorer
           leftPath={localProfile.left_path}
           rightPath={localProfile.right_path}

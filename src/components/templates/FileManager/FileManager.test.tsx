@@ -98,14 +98,15 @@ describe("FileManager", () => {
   it("renders profile bar and mode toggle", async () => {
     render(<FileManager />);
     await waitFor(() => expect(screen.getByText("Profile")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Browse" })).toBeInTheDocument();
+    const browseButtons = screen.getAllByRole("button", { name: "Browse" });
+    expect(browseButtons.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: "Sync" })).toBeInTheDocument();
   });
 
-  it("shows empty state when no profile is selected", async () => {
+  it("shows browse explorer when no profile is selected", async () => {
     render(<FileManager />);
     await waitFor(() => {
-      expect(screen.getByText("Select or create a profile to get started")).toBeInTheDocument();
+      expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     });
   });
 
@@ -263,9 +264,9 @@ describe("FileManager", () => {
       );
     });
 
-    // Should show empty state
+    // Should show browse explorer (no profile required)
     await waitFor(() => {
-      expect(screen.getByText("Select or create a profile to get started")).toBeInTheDocument();
+      expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     });
   });
 
@@ -346,7 +347,7 @@ describe("FileManager", () => {
     });
   });
 
-  it("deselects profile and shows empty state", async () => {
+  it("deselects profile and shows browse explorer", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
     render(<FileManager />);
@@ -358,7 +359,7 @@ describe("FileManager", () => {
     await user.selectOptions(select, "");
 
     await waitFor(() => {
-      expect(screen.getByText("Select or create a profile to get started")).toBeInTheDocument();
+      expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     });
   });
 
@@ -462,9 +463,9 @@ describe("FileManager", () => {
 
     render(<FileManager />);
 
-    // Should still render empty state without crashing
+    // Should still render browse explorer without crashing
     await waitFor(() => {
-      expect(screen.getByText("Select or create a profile to get started")).toBeInTheDocument();
+      expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     });
   });
 });

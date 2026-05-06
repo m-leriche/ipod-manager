@@ -38,20 +38,12 @@
     opacity: 0;
     transform: translateY(4px);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
     transform: translateX(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -78,7 +70,7 @@
 
 /* ── View / tab transition ────────────────────────────────── */
 .view-enter {
-  animation: view-fade-in 0.18s ease-out both;
+  animation: view-fade-in 0.18s ease-out;
 }
 
 @keyframes view-fade-in {
@@ -86,18 +78,14 @@
     opacity: 0;
     transform: translateY(4px);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ── Panel slide transitions ──────────────────────────────── */
 .panel-slide-left {
-  animation: slide-in-left 0.18s ease-out both;
+  animation: slide-in-left 0.18s ease-out;
 }
 .panel-slide-right {
-  animation: slide-in-right 0.18s ease-out both;
+  animation: slide-in-right 0.18s ease-out;
 }
 
 @keyframes slide-in-left {
@@ -105,19 +93,11 @@
     opacity: 0;
     transform: translateX(-12px);
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 @keyframes slide-in-right {
   from {
     opacity: 0;
     transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
   }
 }
 

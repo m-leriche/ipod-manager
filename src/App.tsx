@@ -338,8 +338,16 @@ const AppContent = () => {
                 showAlbumGrid={showAlbumGrid}
                 showTrackList={showTrackList}
                 showArtworkCarousel={showArtworkCarousel}
+                showLyricsPanel={showLyricsPanel}
                 lyricsOverlay={lyricsOverlay && showLyricsPanel}
                 onLyricsOverlayDismiss={dismissLyricsOverlay}
+                onToggleColumnBrowser={toggleColumnBrowser}
+                onTogglePlaylistSidebar={togglePlaylistSidebar}
+                onToggleAlbumGrid={toggleAlbumGrid}
+                onToggleArtworkCarousel={toggleArtworkCarousel}
+                onToggleTrackList={toggleTrackList}
+                onToggleLyricsPanel={toggleLyricsPanel}
+                onToggleLyricsOverlay={toggleLyricsOverlay}
               />
             </ErrorBoundary>
           </div>
@@ -440,24 +448,10 @@ const AppContent = () => {
           queueOpen={queueOpen}
           onToggleMiniPlayer={toggleMiniPlayer}
           miniPlayer={miniPlayer}
-          showColumnBrowser={showColumnBrowser}
           showInfoPanel={showInfoPanel}
           showStatsPanel={showStatsPanel}
-          showPlaylistSidebar={showPlaylistSidebar}
-          showLyricsPanel={showLyricsPanel}
-          onToggleColumnBrowser={toggleColumnBrowser}
           onToggleInfoPanel={toggleInfoPanel}
           onToggleStatsPanel={toggleStatsPanel}
-          onTogglePlaylistSidebar={togglePlaylistSidebar}
-          onToggleLyricsPanel={toggleLyricsPanel}
-          showAlbumGrid={showAlbumGrid}
-          onToggleAlbumGrid={toggleAlbumGrid}
-          showTrackList={showTrackList}
-          onToggleTrackList={toggleTrackList}
-          showArtworkCarousel={showArtworkCarousel}
-          onToggleArtworkCarousel={toggleArtworkCarousel}
-          lyricsOverlay={lyricsOverlay}
-          onToggleLyricsOverlay={toggleLyricsOverlay}
         />
       </ErrorBoundary>
 

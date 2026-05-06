@@ -43,7 +43,7 @@ describe("BrowseExplorer", () => {
 
   it("shows folder picker prompt when no folder selected", () => {
     render(<BrowseExplorer {...props()} />);
-    expect(screen.getByText("Choose a folder to explore its contents")).toBeInTheDocument();
+    expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Browse" })).toBeInTheDocument();
   });
 

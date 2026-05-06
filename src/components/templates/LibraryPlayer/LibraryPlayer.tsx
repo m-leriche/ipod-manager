@@ -51,8 +51,16 @@ export const LibraryPlayer = ({
   showAlbumGrid = false,
   showTrackList = true,
   showArtworkCarousel = false,
+  showLyricsPanel = false,
   lyricsOverlay = false,
   onLyricsOverlayDismiss,
+  onToggleColumnBrowser,
+  onTogglePlaylistSidebar,
+  onToggleAlbumGrid,
+  onToggleArtworkCarousel,
+  onToggleTrackList,
+  onToggleLyricsPanel,
+  onToggleLyricsOverlay,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -64,8 +72,16 @@ export const LibraryPlayer = ({
   showAlbumGrid?: boolean;
   showTrackList?: boolean;
   showArtworkCarousel?: boolean;
+  showLyricsPanel?: boolean;
   lyricsOverlay?: boolean;
   onLyricsOverlayDismiss?: () => void;
+  onToggleColumnBrowser?: () => void;
+  onTogglePlaylistSidebar?: () => void;
+  onToggleAlbumGrid?: () => void;
+  onToggleArtworkCarousel?: () => void;
+  onToggleTrackList?: () => void;
+  onToggleLyricsPanel?: () => void;
+  onToggleLyricsOverlay?: () => void;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
@@ -748,6 +764,54 @@ export const LibraryPlayer = ({
             </span>
           )}
           <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-0.5">
+            {onTogglePlaylistSidebar && (
+              <ViewToggle active={showPlaylistSidebar} onClick={onTogglePlaylistSidebar} title="Playlists">
+                <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
+              </ViewToggle>
+            )}
+            {onToggleColumnBrowser && (
+              <ViewToggle
+                active={showColumnBrowser && !showAlbumGrid}
+                onClick={onToggleColumnBrowser}
+                title="Column browser"
+              >
+                <rect x="3" y="3" width="5" height="18" rx="1" />
+                <rect x="10" y="3" width="5" height="18" rx="1" />
+                <rect x="17" y="3" width="5" height="18" rx="1" />
+              </ViewToggle>
+            )}
+            {onToggleAlbumGrid && (
+              <ViewToggle active={showAlbumGrid} onClick={onToggleAlbumGrid} title="Album grid">
+                <rect x="3" y="3" width="8" height="8" rx="1" />
+                <rect x="13" y="3" width="8" height="8" rx="1" />
+                <rect x="3" y="13" width="8" height="8" rx="1" />
+                <rect x="13" y="13" width="8" height="8" rx="1" />
+              </ViewToggle>
+            )}
+            {onToggleArtworkCarousel && (
+              <ViewToggle active={showArtworkCarousel} onClick={onToggleArtworkCarousel} title="Cover flow">
+                <path d="M2 8l4-1v10l-4-1V8z" />
+                <rect x="8" y="4" width="8" height="16" rx="1" />
+                <path d="M22 8l-4-1v10l4-1V8z" />
+              </ViewToggle>
+            )}
+            {(showAlbumGrid || showArtworkCarousel) && onToggleTrackList && (
+              <ViewToggle active={showTrackList} onClick={onToggleTrackList} title="Track list">
+                <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </ViewToggle>
+            )}
+            {onToggleLyricsPanel && (
+              <LyricsToggle
+                showLyricsPanel={showLyricsPanel}
+                lyricsOverlay={lyricsOverlay}
+                showArtworkCarousel={showArtworkCarousel}
+                onToggleLyricsPanel={onToggleLyricsPanel}
+                onToggleLyricsOverlay={onToggleLyricsOverlay}
+              />
+            )}
+          </div>
         </div>
 
         {/* Column browser or album grid (toggleable, hidden when viewing playlist or smart playlist) */}
@@ -915,5 +979,108 @@ export const LibraryPlayer = ({
         />
       )}
     </div>
+  );
+};
+
+const ViewToggle = ({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <button
+    onClick={onClick}
+    className={`p-1.5 rounded transition-colors ${
+      active ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
+    }`}
+    title={title}
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
+      {children}
+    </svg>
+  </button>
+);
+
+/**
+ * Lyrics button with 3-state cycling in cover flow mode:
+ *   off → sidebar lyrics → overlay lyrics → off
+ * In all other modes it's a simple on/off for sidebar lyrics.
+ */
+const LyricsToggle = ({
+  showLyricsPanel,
+  lyricsOverlay,
+  showArtworkCarousel,
+  onToggleLyricsPanel,
+  onToggleLyricsOverlay,
+}: {
+  showLyricsPanel: boolean;
+  lyricsOverlay: boolean;
+  showArtworkCarousel: boolean;
+  onToggleLyricsPanel: () => void;
+  onToggleLyricsOverlay?: () => void;
+}) => {
+  const inCoverFlow = showArtworkCarousel && !!onToggleLyricsOverlay;
+
+  const handleClick = () => {
+    if (!inCoverFlow) {
+      // Simple on/off in non-coverflow modes
+      onToggleLyricsPanel();
+      return;
+    }
+    // 3-state cycle: off → overlay → sidebar → off
+    if (!showLyricsPanel) {
+      // off → overlay on (both lyrics + overlay)
+      onToggleLyricsPanel();
+      onToggleLyricsOverlay!();
+    } else if (lyricsOverlay) {
+      // overlay on → sidebar only (turn off overlay)
+      onToggleLyricsOverlay!();
+    } else {
+      // sidebar on → everything off
+      onToggleLyricsPanel();
+    }
+  };
+
+  const isOverlay = showLyricsPanel && lyricsOverlay && inCoverFlow;
+  const isSidebar = showLyricsPanel && !isOverlay;
+
+  const title = isOverlay
+    ? "Lyrics overlay (click for sidebar)"
+    : isSidebar && inCoverFlow
+      ? "Lyrics sidebar (click to turn off)"
+      : "Lyrics";
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`p-1.5 rounded transition-colors ${
+        isOverlay
+          ? "text-accent bg-accent/20 ring-1 ring-accent/40"
+          : showLyricsPanel
+            ? "text-accent bg-accent/10"
+            : "text-text-tertiary hover:text-text-secondary"
+      }`}
+      title={title}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
+        {isOverlay ? (
+          <>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path strokeLinecap="round" d="M7 10h10M7 14h6" />
+          </>
+        ) : (
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
+          />
+        )}
+      </svg>
+    </button>
   );
 };

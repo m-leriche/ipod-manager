@@ -219,12 +219,25 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 - [ ] **Resizable column browser** — Drag the divider between browser and track table.
 - [ ] **Column browser context menus** — "Play all by artist", "Add to queue", etc.
 - [ ] **Scroll position preservation** — Maintain scroll position when switching between column browser selections.
-- [ ] **Inline metadata editing** — Edit tags directly in the track table.
+- [ ] **Remember column browser selections** — Persist genre/artist/album selections in localStorage (widths and sort prefs already persisted).
+- [ ] **Inline metadata editing** — Edit tags directly in the track table without switching to Metadata tab.
 - [ ] **Unified search** — Dedicated results view with advanced query syntax (backend exists, frontend incomplete).
+- [ ] **Alphabet scroll on album grid** — Vertical hovering alphabet scroll to quickly jump to albums by letter.
+- [ ] **Drag-to-reorder playlist tracks** — Reorder tracks within playlist detail view.
 
 ### Infrastructure
 - [ ] **Swift disk helper binary** — Replace `diskutil` text parsing in `disk.rs` with a small Swift CLI tool (`crate-disk-helper`) that uses `DiskArbitration.framework`. Gives event-driven USB detection (no polling), typed disk properties (no text parsing), and native mount/unmount without `sudo` password piping. Ship as a helper binary alongside the `.app` bundle. The Swift tool outputs JSON to stdout, Rust deserializes with serde — replaces ~580 lines of brittle parsing with ~150 lines of Swift.
 - [ ] **tauri-specta typed bridge** — Add `specta` + `tauri-specta` to auto-generate TypeScript types and invoke wrappers from Rust command signatures. Eliminates manual type duplication across `src/types/*.ts` and Rust structs (~74 invoke calls, ~8 type files maintained in parallel). Add `#[derive(specta::Type)]` to all bridge types, register commands with specta builder, replace raw `invoke()` calls with generated typed wrappers, delete manual TS type files.
+- [ ] **Sudo timeout** — Add timeout to sudo operations in `disk.rs` to prevent indefinite hangs.
+- [ ] **YouTube URL validation** — Use `url` crate instead of `starts_with("http")` for proper validation.
+
+### Quality
+- [ ] Add aria-labels to all icon-only buttons (play, stop, expand, close, etc.)
+- [ ] Use semantic HTML for dialogs (`role="dialog"`) and menus (`role="menuitem"`)
+- [ ] Extract remaining inline prop interfaces to `types.ts` files
+- [ ] Unify settings persistence — consolidate scattered localStorage, SQLite, and hardcoded values into a single config system
+- [ ] Add retry/resume for failed long-running operations (sync, album art repair, etc.)
+- [ ] Undo support for destructive actions — at minimum, metadata edits should store previous values for rollback
 
 ### Features
 - [ ] **Batch find-and-replace** in metadata tags

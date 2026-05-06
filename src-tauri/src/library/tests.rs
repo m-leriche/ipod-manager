@@ -38,7 +38,9 @@ fn test_db() -> Connection {
             created_at INTEGER NOT NULL DEFAULT 0,
             play_count INTEGER NOT NULL DEFAULT 0,
             flagged INTEGER NOT NULL DEFAULT 0,
-            rating INTEGER NOT NULL DEFAULT 0
+            rating INTEGER NOT NULL DEFAULT 0,
+            lyrics TEXT,
+            synced_lyrics TEXT
         );
         CREATE TABLE IF NOT EXISTS library_folders (
             id INTEGER PRIMARY KEY,
@@ -77,6 +79,7 @@ fn make_track_data(overrides: TrackDataOverrides) -> TrackData {
         format: "MP3".to_string(),
         file_size: 5_000_000,
         play_count: None,
+        lyrics: None,
     }
 }
 

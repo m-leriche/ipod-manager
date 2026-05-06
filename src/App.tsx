@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize, PhysicalSize } from "@tauri-apps/api/dpi";
 import { cancelSync } from "./utils/cancelSync";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
-import { PlaybackProvider } from "./contexts/PlaybackContext";
+import { PlaybackProvider, usePlayback } from "./contexts/PlaybackContext";
 import { EqualizerProvider } from "./contexts/EqualizerContext";
 import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -13,6 +13,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
+import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
@@ -27,6 +28,7 @@ import { AudioConverter } from "./components/templates/AudioConverter/AudioConve
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
+import { LyricsPanel } from "./components/organisms/LyricsPanel/LyricsPanel";
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
 import { KeyboardShortcutsDialog } from "./components/atoms/KeyboardShortcutsDialog/KeyboardShortcutsDialog";
 import type { LibraryScanProgress, LibraryTrack } from "./types/library";
@@ -43,15 +45,17 @@ const App = () => (
         <ProgressProvider>
           <ArtCacheProvider>
             <BackgroundArtRepairProvider>
-              <EqualizerProvider>
-                <PlaybackProvider>
-                  <PlaylistProvider>
-                    <AppContent />
-                    <ProgressModal />
-                    <ToastContainer />
-                  </PlaylistProvider>
-                </PlaybackProvider>
-              </EqualizerProvider>
+              <BackgroundLyricsProvider>
+                <EqualizerProvider>
+                  <PlaybackProvider>
+                    <PlaylistProvider>
+                      <AppContent />
+                      <ProgressModal />
+                      <ToastContainer />
+                    </PlaylistProvider>
+                  </PlaybackProvider>
+                </EqualizerProvider>
+              </BackgroundLyricsProvider>
             </BackgroundArtRepairProvider>
           </ArtCacheProvider>
         </ProgressProvider>
@@ -67,8 +71,10 @@ const STATS_PANEL_KEY = "crate-show-stats-panel";
 const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
 const ALBUM_GRID_KEY = "crate-show-album-grid";
 const TRACK_LIST_KEY = "crate-show-track-list";
+const LYRICS_PANEL_KEY = "crate-show-lyrics-panel";
 
 const AppContent = () => {
+  const { state: playbackState } = usePlayback();
   const [topTab, setTopTab] = useState<TopTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("browse");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -89,6 +95,7 @@ const AppContent = () => {
   );
   const [showAlbumGrid, setShowAlbumGrid] = useState(() => localStorage.getItem(ALBUM_GRID_KEY) === "true");
   const [showTrackList, setShowTrackList] = useState(() => localStorage.getItem(TRACK_LIST_KEY) !== "false");
+  const [showLyricsPanel, setShowLyricsPanel] = useState(() => localStorage.getItem(LYRICS_PANEL_KEY) === "true");
 
   const toggleColumnBrowser = useCallback(() => {
     // If album grid is active, switch to column browser
@@ -140,6 +147,12 @@ const AppContent = () => {
   const toggleTrackList = useCallback(() => {
     setShowTrackList((prev) => {
       localStorage.setItem(TRACK_LIST_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+  const toggleLyricsPanel = useCallback(() => {
+    setShowLyricsPanel((prev) => {
+      localStorage.setItem(LYRICS_PANEL_KEY, String(!prev));
       return !prev;
     });
   }, []);
@@ -338,6 +351,11 @@ const AppContent = () => {
             </div>
           )}
         </div>
+        {showLyricsPanel && playbackState.currentTrack && (
+          <div className="w-[280px] shrink-0 border-l border-border">
+            <LyricsPanel track={playbackState.currentTrack} />
+          </div>
+        )}
         {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
       </main>
 
@@ -350,10 +368,12 @@ const AppContent = () => {
         showInfoPanel={showInfoPanel}
         showStatsPanel={showStatsPanel}
         showPlaylistSidebar={showPlaylistSidebar}
+        showLyricsPanel={showLyricsPanel}
         onToggleColumnBrowser={toggleColumnBrowser}
         onToggleInfoPanel={toggleInfoPanel}
         onToggleStatsPanel={toggleStatsPanel}
         onTogglePlaylistSidebar={togglePlaylistSidebar}
+        onToggleLyricsPanel={toggleLyricsPanel}
         showAlbumGrid={showAlbumGrid}
         onToggleAlbumGrid={toggleAlbumGrid}
         showTrackList={showTrackList}

@@ -6,6 +6,7 @@ import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
+import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import { pickFile } from "../../../utils/pickPath";
@@ -30,6 +31,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   const { width, onDragStart } = useResizableWidth();
   const { bumpArtCache } = useArtCache();
   const { state: artRepairState, startRepair } = useBackgroundArtRepair();
+  const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -178,6 +180,15 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
                   setArtContextMenu(null);
                 },
                 disabled: artRepairState.active,
+              },
+              { type: "separator" },
+              {
+                label: "Fetch Lyrics for Entire Library",
+                onClick: () => {
+                  startLyricsFetch();
+                  setArtContextMenu(null);
+                },
+                disabled: lyricsState.active,
               },
             ]}
             onClose={() => setArtContextMenu(null)}

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ComparisonView } from "../ComparisonView/ComparisonView";
 import { SplitComparisonView } from "../SplitComparisonView/SplitComparisonView";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
-import { FilterPanel } from "../../organisms/FilterPanel/FilterPanel";
 import { pickFolder } from "../../../utils/pickPath";
 import type { SyncManagerProps } from "./types";
 
@@ -16,15 +15,10 @@ export const SyncManager = ({
 }: SyncManagerProps) => {
   const [comparing, setComparing] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "split">("split");
-  const [showFilters, setShowFilters] = useState(false);
 
   const addExclusion = (path: string) => {
     if (exclusions.includes(path)) return;
     onExclusionsChange([...exclusions, path]);
-  };
-
-  const removeExclusion = (path: string) => {
-    onExclusionsChange(exclusions.filter((e) => e !== path));
   };
 
   const browse = async (setter: (path: string) => void, title: string) => {
@@ -82,8 +76,6 @@ export const SyncManager = ({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-      {showFilters && exclusions.length > 0 && <FilterPanel exclusions={exclusions} onRemove={removeExclusion} />}
-
       <FolderPicker
         label="Source"
         path={sourcePath}
@@ -95,19 +87,7 @@ export const SyncManager = ({
         onBrowse={() => browse(onTargetPathChange, "Select target folder")}
       />
 
-      <div className="flex items-center gap-2 justify-end shrink-0">
-        {exclusions.length > 0 && (
-          <button
-            onClick={() => setShowFilters((v) => !v)}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
-              showFilters
-                ? "bg-accent/10 border-accent/30 text-accent"
-                : "bg-bg-card border-border text-text-tertiary hover:text-text-secondary hover:border-border-active"
-            }`}
-          >
-            Filters ({exclusions.length})
-          </button>
-        )}
+      <div className="flex justify-end shrink-0">
         <button
           disabled={!sourcePath || !targetPath}
           onClick={() => setComparing(true)}

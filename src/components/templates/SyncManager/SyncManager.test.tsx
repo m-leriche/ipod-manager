@@ -113,59 +113,6 @@ describe("SyncManager", () => {
     expect(onSourcePathChange).not.toHaveBeenCalled();
   });
 
-  // ── Exclusion filters ─────────────────────────────────────────
-
-  it("shows filters button when exclusions exist", () => {
-    render(<SyncManager {...props({ sourcePath: "/src", targetPath: "/tgt", exclusions: ["node_modules"] })} />);
-    expect(screen.getByRole("button", { name: /Filters/i })).toBeInTheDocument();
-  });
-
-  it("shows exclusion count in filters button", () => {
-    render(<SyncManager {...props({ sourcePath: "/src", targetPath: "/tgt", exclusions: ["a", "b", "c"] })} />);
-    expect(screen.getByRole("button", { name: "Filters (3)" })).toBeInTheDocument();
-  });
-
-  it("does not show filters button when no exclusions", () => {
-    render(<SyncManager {...props({ sourcePath: "/src", targetPath: "/tgt" })} />);
-    expect(screen.queryByRole("button", { name: /Filters/i })).not.toBeInTheDocument();
-  });
-
-  it("shows filter panel when toggled", async () => {
-    const user = userEvent.setup();
-    render(<SyncManager {...props({ sourcePath: "/src", targetPath: "/tgt", exclusions: ["node_modules"] })} />);
-
-    await user.click(screen.getByRole("button", { name: /Filters/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText("node_modules")).toBeInTheDocument();
-    });
-  });
-
-  it("calls onExclusionsChange when removing an exclusion", async () => {
-    const onExclusionsChange = vi.fn();
-    const user = userEvent.setup();
-
-    render(
-      <SyncManager
-        {...props({
-          sourcePath: "/src",
-          targetPath: "/tgt",
-          exclusions: ["node_modules", ".git"],
-          onExclusionsChange,
-        })}
-      />,
-    );
-
-    // Open filter panel
-    await user.click(screen.getByRole("button", { name: /Filters/i }));
-    await waitFor(() => expect(screen.getByText("node_modules")).toBeInTheDocument());
-
-    // Click remove on node_modules
-    await user.click(screen.getByRole("button", { name: "Remove filter node_modules" }));
-
-    expect(onExclusionsChange).toHaveBeenCalledWith([".git"]);
-  });
-
   // ── Compare transition ────────────────────────────────────────
 
   it("transitions to comparison view when Compare is clicked", async () => {

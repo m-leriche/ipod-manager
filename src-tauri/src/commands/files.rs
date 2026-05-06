@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
-use crate::profiles::{self, BrowseProfileStore, FileManagerProfileStore, ProfileStore};
+use crate::profiles::{self, FileManagerProfileStore};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -121,26 +121,6 @@ pub async fn move_files(
             .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
-}
-
-#[tauri::command]
-pub fn get_profiles(app: AppHandle) -> Result<ProfileStore, AppError> {
-    profiles::load_profiles(&app).map_err(Into::into)
-}
-
-#[tauri::command]
-pub fn save_profiles(store: ProfileStore, app: AppHandle) -> Result<(), AppError> {
-    profiles::save_profiles(&app, &store).map_err(Into::into)
-}
-
-#[tauri::command]
-pub fn get_browse_profiles(app: AppHandle) -> Result<BrowseProfileStore, AppError> {
-    profiles::load_browse_profiles(&app).map_err(Into::into)
-}
-
-#[tauri::command]
-pub fn save_browse_profiles(store: BrowseProfileStore, app: AppHandle) -> Result<(), AppError> {
-    profiles::save_browse_profiles(&app, &store).map_err(Into::into)
 }
 
 #[tauri::command]

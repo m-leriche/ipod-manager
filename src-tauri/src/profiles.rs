@@ -38,16 +38,6 @@ pub fn load_profiles(app: &AppHandle) -> Result<ProfileStore, String> {
     serde_json::from_str(&data).map_err(|e| format!("Failed to parse profiles: {}", e))
 }
 
-pub fn save_profiles(app: &AppHandle, store: &ProfileStore) -> Result<(), String> {
-    let path = profiles_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create data dir: {}", e))?;
-    }
-    let data = serde_json::to_string_pretty(store)
-        .map_err(|e| format!("Failed to serialize profiles: {}", e))?;
-    fs::write(&path, data).map_err(|e| format!("Failed to write profiles: {}", e))
-}
-
 // ── Browse profiles ──────────────────────────────────────────────
 
 fn default_layout() -> String {
@@ -92,27 +82,21 @@ pub fn load_browse_profiles(app: &AppHandle) -> Result<BrowseProfileStore, Strin
     serde_json::from_str(&data).map_err(|e| format!("Failed to parse browse profiles: {}", e))
 }
 
-pub fn save_browse_profiles(app: &AppHandle, store: &BrowseProfileStore) -> Result<(), String> {
-    let path = browse_profiles_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create data dir: {}", e))?;
-    }
-    let data = serde_json::to_string_pretty(store)
-        .map_err(|e| format!("Failed to serialize browse profiles: {}", e))?;
-    fs::write(&path, data).map_err(|e| format!("Failed to write browse profiles: {}", e))
-}
-
 // ── Unified file manager profiles ─────────────────────────────────
 
-fn default_mode() -> String {
-    "browse".to_string()
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FileManagerMode {
+    #[default]
+    Browse,
+    Sync,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileManagerProfile {
     pub name: String,
-    #[serde(default = "default_mode")]
-    pub mode: String,
+    #[serde(default)]
+    pub mode: FileManagerMode,
     #[serde(default)]
     pub left_path: Option<String>,
     #[serde(default)]
@@ -153,13 +137,15 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
 
     // Migrate from old profile files
     let mut profiles = Vec::new();
+    let mut used_names = std::collections::HashSet::new();
     let mut active: Option<String> = None;
 
     let sync_store = load_profiles(app).unwrap_or_default();
     for p in sync_store.profiles {
+        used_names.insert(p.name.clone());
         profiles.push(FileManagerProfile {
             name: p.name,
-            mode: "sync".to_string(),
+            mode: FileManagerMode::Sync,
             left_path: p.source_path,
             right_path: p.target_path,
             dual_pane: false,
@@ -167,15 +153,23 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
             exclusions: p.exclusions,
         });
     }
+    // Prefer sync active profile if available
     if let Some(ref name) = sync_store.active_profile {
         active = Some(name.clone());
     }
 
     let browse_store = load_browse_profiles(app).unwrap_or_default();
     for p in browse_store.profiles {
+        // Deduplicate names — if a sync profile already has this name, suffix it
+        let name = if used_names.contains(&p.name) {
+            format!("{} (browse)", p.name)
+        } else {
+            p.name
+        };
+        used_names.insert(name.clone());
         profiles.push(FileManagerProfile {
-            name: p.name,
-            mode: "browse".to_string(),
+            name,
+            mode: FileManagerMode::Browse,
             left_path: p.left_path,
             right_path: p.right_path,
             dual_pane: p.dual_pane,
@@ -183,7 +177,7 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
             exclusions: Vec::new(),
         });
     }
-    // Prefer browse active if no sync active
+    // Fall back to browse active if no sync active was set
     if active.is_none() {
         if let Some(ref name) = browse_store.active_profile {
             active = Some(name.clone());
@@ -197,7 +191,9 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
 
     // Write the migrated store so we don't re-migrate next time
     if !store.profiles.is_empty() {
-        let _ = save_file_manager_profiles(app, &store);
+        if let Err(e) = save_file_manager_profiles(app, &store) {
+            eprintln!("Warning: failed to write migrated profiles: {e}");
+        }
     }
 
     Ok(store)

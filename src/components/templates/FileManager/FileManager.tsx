@@ -7,14 +7,15 @@ import { SyncManager } from "../SyncManager/SyncManager";
 import { emptyFileManagerProfile } from "./helpers";
 import type { FileManagerProfile, FileManagerProfileStore } from "../../../types/profiles";
 import type { FileManagerMode } from "./types";
-import type { PaneLayout } from "../BrowseExplorer/types";
 
 export const FileManager = () => {
   const [profileStore, setProfileStore] = useState<FileManagerProfileStore>({ profiles: [] });
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
   const [localProfile, setLocalProfile] = useState<FileManagerProfile | null>(null);
-  const [mode, setMode] = useState<FileManagerMode>("browse");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Derive mode from the local profile — single source of truth
+  const mode: FileManagerMode = localProfile?.mode ?? "browse";
 
   const savedProfile = useMemo(
     () => profileStore.profiles.find((p) => p.name === activeProfileName) ?? null,
@@ -56,7 +57,6 @@ export const FileManager = () => {
   useEffect(() => {
     if (savedProfile) {
       setLocalProfile({ ...savedProfile });
-      setMode((savedProfile.mode as FileManagerMode) ?? "browse");
     } else {
       setLocalProfile(null);
     }
@@ -106,7 +106,6 @@ export const FileManager = () => {
     save({ profiles: [...profileStore.profiles, copy], active_profile: newName });
     setActiveProfileName(newName);
     setLocalProfile({ ...copy });
-    setMode((copy.mode as FileManagerMode) ?? "browse");
   };
 
   const saveProfile = () => {
@@ -120,7 +119,6 @@ export const FileManager = () => {
   const discardChanges = () => {
     if (savedProfile) {
       setLocalProfile({ ...savedProfile });
-      setMode((savedProfile.mode as FileManagerMode) ?? "browse");
     }
   };
 
@@ -132,7 +130,6 @@ export const FileManager = () => {
   };
 
   const handleModeChange = (newMode: FileManagerMode) => {
-    setMode(newMode);
     updateLocal({ mode: newMode });
   };
 
@@ -199,7 +196,7 @@ export const FileManager = () => {
           leftPath={localProfile.left_path}
           rightPath={localProfile.right_path}
           dualPane={localProfile.dual_pane}
-          layout={(localProfile.layout as PaneLayout) ?? "horizontal"}
+          layout={localProfile.layout ?? "horizontal"}
           onLeftPathChange={(path) => updateLocal({ left_path: path })}
           onRightPathChange={(path) => updateLocal({ right_path: path })}
           onDualPaneChange={(v) => updateLocal({ dual_pane: v })}

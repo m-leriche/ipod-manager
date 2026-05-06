@@ -87,6 +87,13 @@ pub struct LibraryScanProgress {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct BackgroundScanResult {
+    pub changed: usize,
+    pub removed: usize,
+    pub total_scanned: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ImportResult {
     pub total_files: usize,
     pub copied: usize,

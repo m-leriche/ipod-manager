@@ -32,7 +32,7 @@ describe("ArtworkCarousel", () => {
   it("renders centered album info", () => {
     render(<ArtworkCarousel albums={albums} selectedAlbum="Gamma" onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />);
     expect(screen.getByText("Gamma")).toBeInTheDocument();
-    expect(screen.getByText("Artist")).toBeInTheDocument();
+    expect(screen.getByText("Artist · 2024")).toBeInTheDocument();
   });
 
   it("calls onSelectAlbum when clicking a side album", () => {

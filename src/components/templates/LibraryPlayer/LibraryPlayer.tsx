@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, startTransition } fr
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
+import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
 import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { useResizableHeight } from "../../organisms/AlbumGrid/useResizableHeight";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
@@ -49,6 +50,7 @@ export const LibraryPlayer = ({
   showPlaylistSidebar,
   showAlbumGrid = false,
   showTrackList = true,
+  showArtworkCarousel = false,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -59,6 +61,7 @@ export const LibraryPlayer = ({
   showPlaylistSidebar: boolean;
   showAlbumGrid?: boolean;
   showTrackList?: boolean;
+  showArtworkCarousel?: boolean;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
@@ -66,6 +69,12 @@ export const LibraryPlayer = ({
   const { state: artRepairState, startRepair: startArtRepair } = useBackgroundArtRepair();
   const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
   const gridResize = useResizableHeight();
+  const carouselResize = useResizableHeight({
+    storageKey: "crate-carousel-height",
+    defaultFraction: 0.55,
+    minFraction: 0.3,
+    maxFraction: 0.75,
+  });
   const browserResize = useResizableHeight({
     storageKey: "crate-browser-height",
     defaultFraction: 0.35,
@@ -712,7 +721,33 @@ export const LibraryPlayer = ({
         {/* Column browser or album grid (toggleable, hidden when viewing playlist or smart playlist) */}
         {activePlaylistId === null && activeSmartPlaylistId === null && (
           <>
-            {showAlbumGrid ? (
+            {showArtworkCarousel ? (
+              <>
+                <div
+                  ref={carouselResize.containerRef}
+                  style={{ height: `${carouselResize.fraction * 100}%` }}
+                  className="shrink-0 min-h-0 view-enter"
+                >
+                  <ArtworkCarousel
+                    albums={albumList}
+                    selectedAlbum={selectedAlbums.size === 1 ? [...selectedAlbums][0] : null}
+                    onSelectAlbum={(name) => handleSelectAlbum(name ? new Set([name]) : new Set())}
+                    onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
+                    sortMode={albumSortMode}
+                    onSortModeChange={(mode) => {
+                      setAlbumSortMode(mode);
+                      localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
+                    }}
+                  />
+                </div>
+                <div
+                  onMouseDown={carouselResize.onDragStart}
+                  className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                >
+                  <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+                </div>
+              </>
+            ) : showAlbumGrid ? (
               <>
                 <div
                   ref={gridResize.containerRef}
@@ -782,7 +817,7 @@ export const LibraryPlayer = ({
         )}
 
         {/* Track table (hidden when album grid is active with track list toggled off) */}
-        {(!showAlbumGrid || showTrackList) && (
+        {(!showAlbumGrid || showTrackList || showArtworkCarousel) && (
           <TrackTable
             tracks={displayedTracks}
             sortBy={sortBy}

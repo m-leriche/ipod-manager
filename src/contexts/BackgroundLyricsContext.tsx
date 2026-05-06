@@ -14,6 +14,7 @@ interface LyricsFetchResult {
   fetched: number;
   already_had: number;
   not_found: number;
+  skipped_not_found: number;
   cancelled: boolean;
 }
 
@@ -69,6 +70,7 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
         fetched: 0,
         already_had: 0,
         not_found: 0,
+        skipped_not_found: 0,
         cancelled: false,
       });
     } finally {
@@ -84,20 +86,34 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
 
   const dismissResult = useCallback(() => setResult(null), []);
 
+  const showRetryOption = (r: LyricsFetchResult): boolean =>
+    r.skipped_not_found > 0 || r.not_found > 0;
+
+  const handleRetryNotFound = useCallback(async () => {
+    await invoke("reset_lyrics_not_found");
+    setResult(null);
+    startFetch();
+  }, [startFetch]);
+
   const formatResultMessage = (r: LyricsFetchResult): string => {
     if (r.cancelled) {
       const parts = ["Lyrics fetch was cancelled."];
       if (r.fetched > 0) parts.push(`${r.fetched} track${r.fetched !== 1 ? "s" : ""} fetched before cancellation.`);
+      if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped.`);
       return parts.join(" ");
     }
-    if (r.total === 0) {
+    if (r.total === 0 && r.skipped_not_found === 0) {
       return "All tracks in your library already have lyrics.";
+    }
+    if (r.total === 0 && r.skipped_not_found > 0) {
+      return `All remaining tracks already have lyrics. ${r.skipped_not_found} track${r.skipped_not_found !== 1 ? "s were" : " was"} previously not found and skipped.`;
     }
     const parts: string[] = [];
     if (r.fetched > 0) parts.push(`${r.fetched} found`);
     if (r.not_found > 0) parts.push(`${r.not_found} not found`);
+    if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped`);
     if (parts.length === 0) return "No tracks needed lyrics.";
-    return `Lyrics fetch complete \u2014 ${parts.join(", ")}.`;
+    return `Lyrics fetch complete — ${parts.join(", ")}.`;
   };
 
   return (
@@ -108,9 +124,10 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
           title={result.cancelled ? "Fetch Cancelled" : "Lyrics Fetch"}
           message={formatResultMessage(result)}
           confirmLabel="OK"
-          hideCancel
+          hideCancel={!showRetryOption(result)}
+          cancelLabel="Retry Unfound"
           onConfirm={dismissResult}
-          onCancel={dismissResult}
+          onCancel={handleRetryNotFound}
         />
       )}
     </BackgroundLyricsContext.Provider>

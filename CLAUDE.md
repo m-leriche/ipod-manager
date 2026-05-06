@@ -144,17 +144,8 @@ npm test
 
 ## Library Player TODOs
 
-- [ ] Refine playback engine — handle unsupported formats gracefully, persist queue across restarts
-- [ ] Improve library loading — show skeleton/shimmer while scanning, background incremental re-scan on app launch
-- [ ] Scroll position preservation when switching between column browser selections
-- [ ] Lazy-load album artwork in column browser and grid views (batch load visible items)
-- [ ] Waveform preview in now-playing bar
-- [ ] Drag-to-reorder queue panel
-- [ ] Keyboard navigation in column browser (arrow keys to move selection, enter to confirm)
-- [ ] Resizable column browser height (drag the divider between browser and track table)
-- [ ] Remember column widths, sort preferences, and column browser selections in localStorage
-- [ ] Right-click context menus in column browser (play all by artist, etc.)
-- [ ] Status bar with total library stats (tracks, duration, size)
+- [ ] Waveform preview in now-playing bar (exists in MiniPlayer, missing from main NowPlayingBar)
+- [ ] Remember column browser selections (genre/artist/album) in localStorage (widths and sort prefs already persisted)
 - [ ] Inline metadata editing in the track table — edit tags directly without switching to Metadata tab
 - [ ] Vertical hovering alphabet scroll on album art view to quickly jump to albums by letter
 - [ ] Drag-to-reorder tracks within playlist detail view
@@ -176,10 +167,8 @@ npm test
 
 ## Feature TODOs
 
-- [ ] Playlist export (M3U/PLS) for portability beyond iPod
-- [ ] "Recently Added" default smart playlist
 - [ ] Batch find-and-replace in metadata tags
-- [ ] Gapless playback support
+- [ ] Fix scrolling for file explorer — users cannot currently scroll open folders
 
 ## Code Style
 

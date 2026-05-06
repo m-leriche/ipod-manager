@@ -692,7 +692,7 @@ export const LibraryPlayer = ({
           onSmartPlaylistCreate={() => setSmartPlaylistCreating(true)}
         />
       )}
-      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0 bg-bg-primary">
         {/* Library offline banner */}
         {!libraryAvailable && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border-b border-yellow-500/20 shrink-0">
@@ -815,7 +815,7 @@ export const LibraryPlayer = ({
                   <div
                     ref={browserResize.containerRef}
                     style={{ height: `${browserResize.fraction * 100}%` }}
-                    className="shrink-0 min-h-0 view-enter"
+                    className="shrink-0 min-h-0 view-enter bg-bg-primary"
                   >
                     <ColumnBrowser
                       genres={genreList}
@@ -836,7 +836,8 @@ export const LibraryPlayer = ({
                   </div>
                   <div
                     onMouseDown={browserResize.onDragStart}
-                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 transition-colors"
+                    style={{ background: "var(--color-bg-primary)" }}
                   >
                     <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
                   </div>

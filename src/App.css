@@ -1519,6 +1519,15 @@ html[data-theme="spotify"] .bg-bg-primary {
   background: #121212;
 }
 
+/* ─── Play button: green circle ─── */
+html[data-theme="spotify"] button.bg-text-primary.rounded-full {
+  background: #1db954 !important;
+  color: #000000 !important;
+}
+html[data-theme="spotify"] button.bg-text-primary.rounded-full:hover {
+  background: #1ed760 !important;
+}
+
 /* ─── Sidebar ─── */
 html[data-theme="spotify"] .bg-bg-secondary.border {
   background: #000000;
@@ -1648,7 +1657,7 @@ html[data-theme="spotify"] input:focus {
 
 /* ─── Track table: Spotify playlist style ─── */
 html[data-theme="spotify"] thead {
-  background: transparent !important;
+  background: #121212 !important;
 }
 html[data-theme="spotify"] thead th {
   color: #b3b3b3 !important;
@@ -1678,13 +1687,16 @@ html[data-theme="spotify"] tbody td {
 /* ─── Selected track row ─── */
 html[data-theme="spotify"] tbody td.\!bg-accent {
   background: #1db95433 !important;
-  color: #1db954 !important;
 }
-html[data-theme="spotify"] tbody td.\!bg-accent .\!text-white,
-html[data-theme="spotify"] tbody td.\!bg-accent .text-xs,
+html[data-theme="spotify"] tbody td.\!bg-accent .\!text-white {
+  color: #ffffff !important;
+}
+html[data-theme="spotify"] tbody td.\!bg-accent .text-xs {
+  color: #ffffff !important;
+}
 html[data-theme="spotify"] tbody td.\!bg-accent .text-text-tertiary,
 html[data-theme="spotify"] tbody td.\!bg-accent .text-text-secondary {
-  color: #1db954 !important;
+  color: #b3b3b3 !important;
 }
 
 /* ─── Currently playing track: green text ─── */
@@ -1717,12 +1729,12 @@ html[data-theme="spotify"] .bg-accent.text-white {
 }
 
 /* ─── Seek bar: thin green progress ─── */
-html[data-theme="spotify"] .bg-text-primary.rounded-full {
+html[data-theme="spotify"] div.bg-text-primary.rounded-full {
   background: #1db954 !important;
   height: 4px;
 }
 /* Seek bar thumb: green dot */
-html[data-theme="spotify"] .bg-text-primary.rounded-full.w-3 {
+html[data-theme="spotify"] div.bg-text-primary.rounded-full.w-3 {
   background: #ffffff !important;
   width: 12px !important;
   height: 12px !important;
@@ -1779,7 +1791,9 @@ html[data-theme="spotify"] .bg-bg-card.border.shadow-lg {
   background: #282828;
   border: none;
   border-radius: 4px;
-  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3), 0 6px 8px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 16px 24px rgba(0, 0, 0, 0.3),
+    0 6px 8px rgba(0, 0, 0, 0.2);
 }
 html[data-theme="spotify"] .bg-bg-card.border.shadow-lg button {
   border-radius: 2px;

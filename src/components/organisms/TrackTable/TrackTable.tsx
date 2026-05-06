@@ -480,7 +480,7 @@ export const TrackTable = memo(function TrackTable({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 min-h-0 overflow-auto outline-none view-enter"
+      className="flex-1 min-h-0 overflow-auto outline-none view-enter bg-bg-primary"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onDragStartCapture={() => {
@@ -488,7 +488,7 @@ export const TrackTable = memo(function TrackTable({
         dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
       }}
     >
-      <table className="table-fixed" style={{ width: totalWidth }}>
+      <table className="table-fixed border-collapse" style={{ width: totalWidth }}>
         <colgroup>
           {orderedColumns.map((col, i) => (
             <col key={col.key} style={{ width: widths[i] }} />

@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
@@ -33,6 +34,7 @@ interface BrowserItem {
   key?: string;
   label: string;
   count: number;
+  folderPath?: string;
 }
 
 export const ColumnBrowser = memo(function ColumnBrowser({
@@ -62,12 +64,18 @@ export const ColumnBrowser = memo(function ColumnBrowser({
     [artists],
   );
   const albumItems = useMemo<BrowserItem[]>(
-    () => albums.map((a) => ({ key: `${a.artist}::${a.name}`, label: a.name, count: a.track_count })),
+    () =>
+      albums.map((a) => ({
+        key: `${a.artist}::${a.name}`,
+        label: a.name,
+        count: a.track_count,
+        folderPath: a.folder_path,
+      })),
     [albums],
   );
 
   return (
-    <div ref={containerRef} className="flex border-b border-border h-full">
+    <div ref={containerRef} className="flex border-b border-border h-full bg-bg-primary overflow-hidden">
       <BrowserColumn
         title="Genres"
         columnType="genre"
@@ -109,6 +117,7 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         onPlayAll={onPlayAll}
         onAddAllToQueue={onAddAllToQueue}
         onAddAllToPlaylist={onAddAllToPlaylist}
+        showArt
         playlists={playlists}
         widthPercent={`${widths[2] * 100}%`}
         isLast
@@ -132,10 +141,13 @@ interface BrowserColumnProps {
   widthPercent: string;
   onResizeStart?: (e: React.MouseEvent) => void;
   isLast?: boolean;
+  showArt?: boolean;
 }
 
 const ITEM_HEIGHT = 27;
 const ALL_BTN_HEIGHT = 27;
+
+const ART_ITEM_HEIGHT = 32;
 
 const BrowserColumn = memo(function BrowserColumn({
   title,
@@ -152,7 +164,9 @@ const BrowserColumn = memo(function BrowserColumn({
   widthPercent,
   onResizeStart,
   isLast,
+  showArt,
 }: BrowserColumnProps) {
+  const itemHeight = showArt ? ART_ITEM_HEIGHT : ITEM_HEIGHT;
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScrollRef = useRef(0);
   const prevSelectedSizeRef = useRef(selected.size);
@@ -175,7 +189,7 @@ const BrowserColumn = memo(function BrowserColumn({
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ITEM_HEIGHT,
+    estimateSize: () => itemHeight,
     overscan: 10,
     scrollMargin: ALL_BTN_HEIGHT,
   });
@@ -365,6 +379,7 @@ const BrowserColumn = memo(function BrowserColumn({
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualItems.map((virtualItem) => {
             const item = items[virtualItem.index];
+            const isSelected = selected.has(item.label);
             return (
               <button
                 key={item.key ?? item.label}
@@ -379,11 +394,14 @@ const BrowserColumn = memo(function BrowserColumn({
                 onClick={(e) => handleItemClick(virtualItem.index, e)}
                 onDoubleClick={onPlay}
                 onContextMenu={(e) => handleContextMenu(e, item.label)}
-                className={`text-left px-3 py-[5px] text-[11px] truncate transition-colors ${
-                  selected.has(item.label) ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
-                }`}
+                className={`text-left px-3 text-[11px] truncate transition-colors flex items-center gap-2 ${
+                  showArt ? "py-[3px]" : "py-[5px]"
+                } ${isSelected ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"}`}
               >
-                {item.label}
+                {showArt && item.folderPath && (
+                  <AlbumArtwork folderPath={item.folderPath} size="sm" className="!w-6 !h-6 !rounded" />
+                )}
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}

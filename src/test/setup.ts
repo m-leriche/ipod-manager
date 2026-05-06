@@ -5,6 +5,17 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// Mock IntersectionObserver (used by useLazyImage for lazy-loading artwork)
+(globalThis as Record<string, unknown>).IntersectionObserver = class {
+  callback: IntersectionObserverCallback;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mock ProgressContext — provides a no-op implementation for all components
 vi.mock("../contexts/ProgressContext", () => ({
   useProgress: () => ({

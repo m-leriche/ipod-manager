@@ -29,6 +29,8 @@ interface NowPlayingBarProps {
   onToggleAlbumGrid?: () => void;
   showTrackList?: boolean;
   onToggleTrackList?: () => void;
+  showArtworkCarousel?: boolean;
+  onToggleArtworkCarousel?: () => void;
 }
 
 export const NowPlayingBar = ({
@@ -50,6 +52,8 @@ export const NowPlayingBar = ({
   onToggleAlbumGrid,
   showTrackList,
   onToggleTrackList,
+  showArtworkCarousel,
+  onToggleArtworkCarousel,
 }: NowPlayingBarProps) => {
   const {
     state,
@@ -224,6 +228,13 @@ export const NowPlayingBar = ({
             <rect x="13" y="3" width="8" height="8" rx="1" />
             <rect x="3" y="13" width="8" height="8" rx="1" />
             <rect x="13" y="13" width="8" height="8" rx="1" />
+          </PanelToggle>
+        )}
+        {!miniPlayer && onToggleArtworkCarousel && (
+          <PanelToggle active={showArtworkCarousel} onClick={onToggleArtworkCarousel} title="Cover flow">
+            <path d="M2 8l4-1v10l-4-1V8z" />
+            <rect x="8" y="4" width="8" height="16" rx="1" />
+            <path d="M22 8l-4-1v10l4-1V8z" />
           </PanelToggle>
         )}
         {!miniPlayer && showAlbumGrid && onToggleTrackList && (

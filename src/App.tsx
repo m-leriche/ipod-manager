@@ -72,6 +72,7 @@ const PLAYLIST_SIDEBAR_KEY = "crate-show-playlist-sidebar";
 const ALBUM_GRID_KEY = "crate-show-album-grid";
 const TRACK_LIST_KEY = "crate-show-track-list";
 const LYRICS_PANEL_KEY = "crate-show-lyrics-panel";
+const ARTWORK_CAROUSEL_KEY = "crate-show-artwork-carousel";
 
 const AppContent = () => {
   const { state: playbackState } = usePlayback();
@@ -96,12 +97,17 @@ const AppContent = () => {
   const [showAlbumGrid, setShowAlbumGrid] = useState(() => localStorage.getItem(ALBUM_GRID_KEY) === "true");
   const [showTrackList, setShowTrackList] = useState(() => localStorage.getItem(TRACK_LIST_KEY) !== "false");
   const [showLyricsPanel, setShowLyricsPanel] = useState(() => localStorage.getItem(LYRICS_PANEL_KEY) === "true");
+  const [showArtworkCarousel, setShowArtworkCarousel] = useState(
+    () => localStorage.getItem(ARTWORK_CAROUSEL_KEY) === "true",
+  );
 
   const toggleColumnBrowser = useCallback(() => {
-    // If album grid is active, switch to column browser
-    if (showAlbumGrid) {
+    // If another browser mode is active, switch to column browser
+    if (showAlbumGrid || showArtworkCarousel) {
       setShowAlbumGrid(false);
       localStorage.setItem(ALBUM_GRID_KEY, "false");
+      setShowArtworkCarousel(false);
+      localStorage.setItem(ARTWORK_CAROUSEL_KEY, "false");
       setShowColumnBrowser(true);
       localStorage.setItem(COLUMN_BROWSER_KEY, "true");
       return;
@@ -110,7 +116,7 @@ const AppContent = () => {
       localStorage.setItem(COLUMN_BROWSER_KEY, String(!prev));
       return !prev;
     });
-  }, [showAlbumGrid]);
+  }, [showAlbumGrid, showArtworkCarousel]);
   const toggleInfoPanel = useCallback(() => {
     setShowInfoPanel((prev) => {
       localStorage.setItem(INFO_PANEL_KEY, String(!prev));
@@ -133,10 +139,11 @@ const AppContent = () => {
     setShowAlbumGrid((prev) => {
       const next = !prev;
       localStorage.setItem(ALBUM_GRID_KEY, String(next));
-      // When turning on album grid, turn off column browser; when turning off, restore column browser
       if (next) {
         setShowColumnBrowser(false);
         localStorage.setItem(COLUMN_BROWSER_KEY, "false");
+        setShowArtworkCarousel(false);
+        localStorage.setItem(ARTWORK_CAROUSEL_KEY, "false");
       } else {
         setShowColumnBrowser(true);
         localStorage.setItem(COLUMN_BROWSER_KEY, "true");
@@ -148,6 +155,22 @@ const AppContent = () => {
     setShowTrackList((prev) => {
       localStorage.setItem(TRACK_LIST_KEY, String(!prev));
       return !prev;
+    });
+  }, []);
+  const toggleArtworkCarousel = useCallback(() => {
+    setShowArtworkCarousel((prev) => {
+      const next = !prev;
+      localStorage.setItem(ARTWORK_CAROUSEL_KEY, String(next));
+      if (next) {
+        setShowColumnBrowser(false);
+        localStorage.setItem(COLUMN_BROWSER_KEY, "false");
+        setShowAlbumGrid(false);
+        localStorage.setItem(ALBUM_GRID_KEY, "false");
+      } else {
+        setShowColumnBrowser(true);
+        localStorage.setItem(COLUMN_BROWSER_KEY, "true");
+      }
+      return next;
     });
   }, []);
   const toggleLyricsPanel = useCallback(() => {
@@ -297,6 +320,7 @@ const AppContent = () => {
               showPlaylistSidebar={showPlaylistSidebar}
               showAlbumGrid={showAlbumGrid}
               showTrackList={showTrackList}
+              showArtworkCarousel={showArtworkCarousel}
             />
           </div>
           {topTab === "tools" && (
@@ -378,6 +402,8 @@ const AppContent = () => {
         onToggleAlbumGrid={toggleAlbumGrid}
         showTrackList={showTrackList}
         onToggleTrackList={toggleTrackList}
+        showArtworkCarousel={showArtworkCarousel}
+        onToggleArtworkCarousel={toggleArtworkCarousel}
       />
 
       {settingsOpen && (

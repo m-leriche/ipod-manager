@@ -1,25 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
-import type { FileEntry } from "./types";
 
-export const useFileSelection = (entries: FileEntry[]) => {
+export const useFileSelection = (orderedIds: string[], resetKey: unknown) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClicked, setLastClicked] = useState<string | null>(null);
 
-  // Reset selection when entries change (navigated to new directory)
+  // Reset selection when navigating to a new directory
   useEffect(() => {
     setSelected(new Set());
     setLastClicked(null);
-  }, [entries]);
+  }, [resetKey]);
 
   const handleClick = useCallback(
-    (name: string, e: { metaKey: boolean; shiftKey: boolean }) => {
+    (id: string, e: { metaKey: boolean; shiftKey: boolean }) => {
       setSelected((prev) => {
         if (e.shiftKey && lastClicked) {
-          const names = entries.map((entry) => entry.name);
-          const start = names.indexOf(lastClicked);
-          const end = names.indexOf(name);
+          const start = orderedIds.indexOf(lastClicked);
+          const end = orderedIds.indexOf(id);
           if (start >= 0 && end >= 0) {
-            const range = names.slice(Math.min(start, end), Math.max(start, end) + 1);
+            const range = orderedIds.slice(Math.min(start, end), Math.max(start, end) + 1);
             const next = e.metaKey ? new Set(prev) : new Set<string>();
             range.forEach((n) => next.add(n));
             return next;
@@ -28,27 +26,27 @@ export const useFileSelection = (entries: FileEntry[]) => {
 
         if (e.metaKey) {
           const next = new Set(prev);
-          if (next.has(name)) next.delete(name);
-          else next.add(name);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
           return next;
         }
 
-        return new Set([name]);
+        return new Set([id]);
       });
-      setLastClicked(name);
+      setLastClicked(id);
     },
-    [entries, lastClicked],
+    [orderedIds, lastClicked],
   );
 
   const selectAll = useCallback(() => {
-    setSelected(new Set(entries.map((e) => e.name)));
-  }, [entries]);
+    setSelected(new Set(orderedIds));
+  }, [orderedIds]);
 
   const clearSelection = useCallback(() => {
     setSelected(new Set());
   }, []);
 
-  const isSelected = useCallback((name: string) => selected.has(name), [selected]);
+  const isSelected = useCallback((id: string) => selected.has(id), [selected]);
 
   return { selected, handleClick, selectAll, clearSelection, isSelected };
 };

@@ -373,7 +373,7 @@ const AppContent = () => {
                     Converter
                   </ToolTabButton>
                 </div>
-                <div key={toolTab} className="flex-1 min-h-0 view-enter">
+                <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
                   {toolTab === "ipod" && (
                     <ErrorBoundary name="iPod Summary">
                       <IpodSummary

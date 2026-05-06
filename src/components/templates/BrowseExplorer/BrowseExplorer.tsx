@@ -15,7 +15,8 @@ export const BrowseExplorer = () => {
   const [dualPane, setDualPane] = useState(false);
   const [layout, setLayout] = useState<PaneLayout>("horizontal");
 
-  // Profile system — optional persistence layer
+  // Profile system — optional persistence layer, hidden by default
+  const [showProfiles, setShowProfiles] = useState(false);
   const [profileStore, setProfileStore] = useState<BrowseProfileStore>({ profiles: [] });
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ export const BrowseExplorer = () => {
         setProfileStore(store);
         const active = store.profiles.find((p) => p.name === store.active_profile);
         if (active) {
+          setShowProfiles(true);
           setActiveProfileName(active.name);
           setLeftPath(active.left_path ?? null);
           setRightPath(active.right_path ?? null);
@@ -164,7 +166,7 @@ export const BrowseExplorer = () => {
 
   const activeProfile = activeProfileName ? { name: activeProfileName } : null;
 
-  const profileBar = (
+  const profileBar = showProfiles ? (
     <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
       <ProfileSelector
         profiles={profileStore.profiles}
@@ -179,6 +181,20 @@ export const BrowseExplorer = () => {
         onDiscard={discardChanges}
       />
     </div>
+  ) : null;
+
+  const profileToggle = (
+    <button
+      onClick={() => setShowProfiles((v) => !v)}
+      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
+        showProfiles
+          ? "bg-accent/10 border-accent/30 text-accent"
+          : "bg-bg-card border-border text-text-tertiary hover:text-text-secondary hover:border-border-active"
+      }`}
+      title={showProfiles ? "Hide profiles" : "Show profiles"}
+    >
+      Profiles{activeProfileName ? `: ${activeProfileName}` : ""}
+    </button>
   );
 
   // No left folder selected — show initial prompt
@@ -188,6 +204,7 @@ export const BrowseExplorer = () => {
         {profileBar}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-sm">
+            <div className="mb-4">{profileToggle}</div>
             <p className="text-text-tertiary text-xs mb-4">Choose a folder to explore its contents</p>
             <div className="mb-4">
               <FolderPicker label="Folder" path={null} onBrowse={browseLeft} />
@@ -200,6 +217,7 @@ export const BrowseExplorer = () => {
 
   const splitButtons = (
     <div className="flex gap-1 shrink-0">
+      {profileToggle}
       <button
         onClick={() => setDualPane((v) => !v)}
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
@@ -227,7 +245,7 @@ export const BrowseExplorer = () => {
     return (
       <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
         {profileBar}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 min-h-0">
           <div className="flex-1 min-w-0">
             <FolderPicker label="Folder" path={leftPath} onBrowse={browseLeft} />
           </div>

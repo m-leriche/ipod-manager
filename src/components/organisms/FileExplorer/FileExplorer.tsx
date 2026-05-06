@@ -49,11 +49,44 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [filter, setFilter] = useState("");
 
+    // Inline tree expansion — expand folders without navigating
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+    const [subEntries, setSubEntries] = useState<Map<string, FileEntry[]>>(new Map());
+    const subEntriesRef = useRef(subEntries);
+    subEntriesRef.current = subEntries;
+
     const containerRef = useRef<HTMLDivElement>(null);
     const pathRef = useRef(path);
     pathRef.current = path;
 
-    const { selected, handleClick, selectAll, clearSelection, isSelected } = useFileSelection(entries);
+    // ── Filtered entries + flat row IDs (needed before selection hook) ──
+    const filteredEntries = useMemo(() => {
+      if (!filter) return entries;
+      const lower = filter.toLowerCase();
+      return entries.filter((e) => e.name.toLowerCase().includes(lower));
+    }, [entries, filter]);
+
+    type FlatRow = { entry: FileEntry; parentPath: string; depth: number };
+    const flatRows = useMemo(() => {
+      const build = (items: FileEntry[], parentPath: string, depth: number): FlatRow[] => {
+        const rows: FlatRow[] = [];
+        for (const item of items) {
+          rows.push({ entry: item, parentPath, depth });
+          if (item.is_dir) {
+            const fp = joinPath(parentPath, item.name);
+            if (expandedFolders.has(fp) && subEntries.has(fp)) {
+              rows.push(...build(subEntries.get(fp)!, fp, depth + 1));
+            }
+          }
+        }
+        return rows;
+      };
+      return build(filteredEntries, path, 0);
+    }, [filteredEntries, path, expandedFolders, subEntries]);
+
+    const flatRowIds = useMemo(() => flatRows.map((r) => joinPath(r.parentPath, r.entry.name)), [flatRows]);
+
+    const { selected, handleClick, selectAll, clearSelection, isSelected } = useFileSelection(flatRowIds, path);
     const { clipboard, copy, cut, clear: clearClipboard, isCut } = useClipboard();
     const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
 
@@ -63,6 +96,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
       setRenamingEntry(null);
       setCreatingFolder(false);
       setFilter("");
+      setExpandedFolders(new Set());
+      setSubEntries(new Map());
       try {
         const r = await invoke<FileEntry[]>("list_directory", { path: p });
         setEntries(r);
@@ -119,8 +154,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     const dnd = useDragAndDrop({ paneId, currentPath: path, selected, onDrop: handleDrop });
 
-    const into = useCallback((name: string) => load(joinPath(path, name)), [load, path]);
-
     const up = () => {
       if (!allowParentNavigation && path === rootPath) return;
       if (path === "/") return;
@@ -128,9 +161,27 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
       load(!allowParentNavigation && !parent.startsWith(rootPath) ? rootPath : parent);
     };
 
+    // ── Inline tree expansion ────────────────────────────────────
+    const toggleExpand = useCallback(async (folderPath: string) => {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderPath)) next.delete(folderPath);
+        else next.add(folderPath);
+        return next;
+      });
+      if (!subEntriesRef.current.has(folderPath)) {
+        try {
+          const children = await invoke<FileEntry[]>("list_directory", { path: folderPath });
+          setSubEntries((prev) => new Map(prev).set(folderPath, children));
+        } catch {
+          /* ignore load failures for sub-entries */
+        }
+      }
+    }, []);
+
     // ── Clipboard actions ──────────────────────────────────────────
 
-    const selectedPaths = useMemo(() => [...selected].map((name) => joinPath(path, name)), [selected, path]);
+    const selectedPaths = useMemo(() => [...selected], [selected]);
 
     const handleCopy = useCallback(() => {
       if (selected.size > 0) copy(selectedPaths, path);
@@ -147,12 +198,16 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     }, [clipboard, handlePaste, clearClipboard]);
 
     const handleDeleteAction = useCallback(() => {
-      if (selected.size > 0 && allowDelete) handleDelete([...selected]);
-    }, [selected, allowDelete, handleDelete]);
+      if (selected.size > 0 && allowDelete) handleDelete(selectedPaths);
+    }, [selected, allowDelete, handleDelete, selectedPaths]);
 
     const handleRenameAction = useCallback(() => {
-      if (selected.size === 1) setRenamingEntry([...selected][0]);
-    }, [selected]);
+      if (selected.size !== 1) return;
+      const selectedPath = [...selected][0];
+      const parent = selectedPath.substring(0, selectedPath.lastIndexOf("/"));
+      if (parent !== path) return;
+      setRenamingEntry(selectedPath.split("/").pop()!);
+    }, [selected, path]);
 
     const handleNewFolder = useCallback(() => {
       setCreatingFolder(true);
@@ -160,14 +215,16 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     const handleEnter = useCallback(() => {
       if (selected.size !== 1) return;
-      const name = [...selected][0];
-      const entry = entries.find((e) => e.name === name);
-      if (entry?.is_dir) {
-        into(name);
+      const selectedPath = [...selected][0];
+      const row = flatRows.find((r) => joinPath(r.parentPath, r.entry.name) === selectedPath);
+      if (!row) return;
+      if (row.entry.is_dir) {
+        load(selectedPath);
       } else {
-        setRenamingEntry(name);
+        const parent = selectedPath.substring(0, selectedPath.lastIndexOf("/"));
+        if (parent === path) setRenamingEntry(row.entry.name);
       }
-    }, [selected, entries, into]);
+    }, [selected, flatRows, path, load]);
 
     // ── Keyboard shortcuts ─────────────────────────────────────────
 
@@ -198,10 +255,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     // ── Context menu ───────────────────────────────────────────────
 
-    const openContextMenu = (e: React.MouseEvent, target: "entry" | "empty", entry?: FileEntry) => {
+    const openContextMenu = (e: React.MouseEvent, target: "entry" | "empty", entry?: FileEntry, entryPath?: string) => {
       e.preventDefault();
-      if (target === "entry" && entry && !isSelected(entry.name)) {
-        handleClick(entry.name, { metaKey: false, shiftKey: false });
+      if (target === "entry" && entry && entryPath && !isSelected(entryPath)) {
+        handleClick(entryPath, { metaKey: false, shiftKey: false });
       }
       if (target === "empty") {
         clearSelection();
@@ -238,12 +295,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
     // ── Navigation ─────────────────────────────────────────────────
 
-    const filteredEntries = useMemo(() => {
-      if (!filter) return entries;
-      const lower = filter.toLowerCase();
-      return entries.filter((e) => e.name.toLowerCase().includes(lower));
-    }, [entries, filter]);
-
     const canUp = allowParentNavigation ? path !== "/" : path !== rootPath;
     const above = !path.startsWith(rootPath);
     const rel = path.startsWith(rootPath) ? path.slice(rootPath.length) : path;
@@ -263,6 +314,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         tabIndex={-1}
         className={`flex-1 min-w-0 min-h-0 bg-bg-secondary border rounded-2xl flex flex-col transition-colors outline-none ${folderSelected ? "border-success/40" : dnd.isDragOver ? "border-accent/40 ring-2 ring-accent/40 bg-accent/5" : "border-border"}`}
         onContextMenu={(e) => {
+          e.preventDefault();
           if ((e.target as HTMLElement).closest("table")) return;
           openContextMenu(e, "empty");
         }}
@@ -333,7 +385,13 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         )}
 
         {!loading && !error && (filteredEntries.length > 0 || creatingFolder) && (
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div
+            className="flex-1 overflow-y-auto overflow-x-hidden"
+            onMouseDown={(e) => {
+              // Prevent text selection on shift-click and right-click without breaking drag
+              if (e.shiftKey || e.button === 2) e.preventDefault();
+            }}
+          >
             <table className="w-full border-collapse table-fixed">
               <thead className="sticky top-0 z-10">
                 <tr>
@@ -361,28 +419,51 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                   </tr>
                 )}
 
-                {filteredEntries.map((e) => {
-                  const rowSelected = isSelected(e.name);
-                  const rowCut = isCut(joinPath(path, e.name));
-                  const isFolderDropTarget = e.is_dir && dnd.dropTargetFolder === joinPath(path, e.name);
-                  const folderDnd = e.is_dir && paneId ? dnd.folderHandlers(e) : undefined;
+                {flatRows.map(({ entry: e, parentPath: rowPath, depth }) => {
+                  const fullPath = joinPath(rowPath, e.name);
+                  const rowSelected = isSelected(fullPath);
+                  const rowCut = isCut(fullPath);
+                  const isFolderDropTarget = e.is_dir && dnd.dropTargetFolder === fullPath;
+                  const folderDnd = e.is_dir && paneId ? dnd.folderHandlers(fullPath) : undefined;
+                  const isExpanded = e.is_dir && expandedFolders.has(fullPath);
+                  const isTopLevel = depth === 0;
+
+                  const selectedCell = rowSelected ? "!bg-accent !text-white" : "";
 
                   return (
                     <tr
-                      key={e.name}
+                      key={fullPath}
                       draggable={!!paneId}
-                      onDragStart={(ev) => dnd.rowDragStart(ev, e)}
-                      {...folderDnd}
+                      onDragStart={(ev) => dnd.rowDragStart(ev, fullPath)}
+                      {...(folderDnd ?? {})}
                       className={`transition-colors group cursor-default ${
-                        isFolderDropTarget ? "bg-accent/15" : rowSelected ? "bg-accent/10" : "hover:bg-bg-hover/50"
+                        isFolderDropTarget ? "bg-accent/15" : rowSelected ? "" : "hover:bg-bg-hover/50"
                       } ${rowCut ? "opacity-50" : ""}`}
-                      onClick={(ev) => handleClick(e.name, { metaKey: ev.metaKey, shiftKey: ev.shiftKey })}
-                      onDoubleClick={() => e.is_dir && into(e.name)}
-                      onContextMenu={(ev) => openContextMenu(ev, "entry", e)}
+                      onClick={(ev) => handleClick(fullPath, { metaKey: ev.metaKey, shiftKey: ev.shiftKey })}
+                      onDoubleClick={e.is_dir ? () => load(fullPath) : undefined}
+                      onContextMenu={(ev) => openContextMenu(ev, "entry", e, fullPath)}
                     >
-                      <td className="px-3 py-[7px] text-xs border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap">
-                        <span className="mr-1.5 text-xs align-middle opacity-60">{icon(e)}</span>
-                        {renamingEntry === e.name ? (
+                      <td
+                        className={`py-[7px] pr-3 text-xs border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap ${selectedCell}`}
+                        style={{ paddingLeft: `${12 + depth * 20}px` }}
+                      >
+                        {e.is_dir ? (
+                          <span
+                            className={`inline-block w-4 text-[10px] cursor-pointer select-none align-middle ${rowSelected ? "text-white/70 hover:text-white" : "text-text-tertiary hover:text-text-secondary"}`}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              toggleExpand(fullPath);
+                            }}
+                          >
+                            {isExpanded ? "\u25BE" : "\u25B8"}
+                          </span>
+                        ) : (
+                          <span className="inline-block w-4 align-middle" />
+                        )}
+                        <span className={`mr-1.5 text-xs align-middle ${rowSelected ? "opacity-90" : "opacity-60"}`}>
+                          {icon(e)}
+                        </span>
+                        {isTopLevel && renamingEntry === e.name ? (
                           <InlineRenameInput
                             initialName={e.name}
                             isDir={e.is_dir}
@@ -394,22 +475,28 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                           />
                         ) : e.is_dir ? (
                           <span
-                            className="cursor-pointer text-text-primary hover:text-accent transition-colors align-middle"
+                            className={`cursor-pointer transition-colors align-middle ${rowSelected ? "text-white hover:text-white/80" : "text-text-primary hover:text-accent"}`}
                             onClick={(ev) => {
                               ev.stopPropagation();
-                              into(e.name);
+                              load(fullPath);
                             }}
                           >
                             {e.name}
                           </span>
                         ) : (
-                          <span className="text-text-secondary align-middle">{e.name}</span>
+                          <span className={`align-middle ${rowSelected ? "text-white" : "text-text-secondary"}`}>
+                            {e.name}
+                          </span>
                         )}
                       </td>
-                      <td className="px-3 py-[7px] text-xs text-text-tertiary border-b border-border-subtle">
+                      <td
+                        className={`px-3 py-[7px] text-xs border-b border-border-subtle ${selectedCell || "text-text-tertiary"}`}
+                      >
                         {fmtSize(e.size)}
                       </td>
-                      <td className="px-3 py-[7px] text-xs text-text-tertiary border-b border-border-subtle">
+                      <td
+                        className={`px-3 py-[7px] text-xs border-b border-border-subtle ${selectedCell || "text-text-tertiary"}`}
+                      >
                         {fmtDate(e.modified)}
                       </td>
                     </tr>

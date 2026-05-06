@@ -22,8 +22,7 @@ test.describe("Navigation", () => {
     await page.getByRole("button", { name: "Tools" }).click();
 
     await expect(page.getByRole("button", { name: "iPod" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "File Explorer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "File Sync" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "File Manager" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Metadata" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Audio Extractor" })).toBeVisible();
   });
@@ -31,12 +30,8 @@ test.describe("Navigation", () => {
   test("switches between tool sub-tabs", async ({ page }) => {
     await page.getByRole("button", { name: "Tools" }).click();
 
-    // Default tool tab is File Explorer (browse)
-    await expect(page.getByText("Choose a folder to explore its contents")).toBeVisible();
-
-    // Switch to File Sync
-    await page.getByRole("button", { name: "File Sync" }).click();
-    await expect(page.getByRole("button", { name: "File Sync" })).toBeVisible();
+    // Default tool tab is File Manager
+    await expect(page.getByText("Select or create a profile to get started")).toBeVisible();
 
     // Switch to Metadata
     await page.getByRole("button", { name: "Metadata" }).click();
@@ -53,7 +48,7 @@ test.describe("Navigation", () => {
 
   test("can switch back to Library from Tools", async ({ page }) => {
     await page.getByRole("button", { name: "Tools" }).click();
-    await expect(page.getByRole("button", { name: "File Explorer" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "File Manager" })).toBeVisible();
 
     await page.getByRole("button", { name: "Library", exact: true }).click();
     await expect(page.getByText("Add your music library")).toBeVisible();

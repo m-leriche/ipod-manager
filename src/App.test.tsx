@@ -10,8 +10,7 @@ beforeEach(() => {
   mockInvoke.mockReset();
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === "detect_ipod") return null;
-    if (cmd === "get_profiles") return { profiles: [] };
-    if (cmd === "get_browse_profiles") return { profiles: [] };
+    if (cmd === "get_file_manager_profiles") return { profiles: [] };
     if (cmd === "get_library_location") return null;
     if (cmd === "get_library_browser_data") return { tracks: [], genres: [], artists: [], albums: [] };
     if (cmd === "get_library_tracks") return [];
@@ -43,15 +42,14 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Tools" }));
-    expect(screen.getByRole("button", { name: "File Explorer" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "File Sync" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "File Manager" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Metadata" })).toBeInTheDocument();
   });
 
-  it("shows File Explorer content within Tools tab", async () => {
+  it("shows File Manager content within Tools tab", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Tools" }));
-    expect(await screen.findByText("Choose a folder to explore its contents")).toBeInTheDocument();
+    expect(await screen.findByText("Select or create a profile to get started")).toBeInTheDocument();
   });
 });

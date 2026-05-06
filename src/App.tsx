@@ -19,8 +19,7 @@ import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowD
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
-import { BrowseExplorer } from "./components/templates/BrowseExplorer/BrowseExplorer";
-import { SyncManager } from "./components/templates/SyncManager/SyncManager";
+import { FileManager } from "./components/templates/FileManager/FileManager";
 import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtractor";
 import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
 import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
@@ -38,7 +37,7 @@ import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 
 type TopTab = "library" | "tools";
-type ToolTab = "ipod" | "browse" | "sync" | "metadata" | "audio" | "duplicates" | "convert";
+type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert";
 
 const App = () => (
   <ThemeProvider>
@@ -80,7 +79,7 @@ const LYRICS_OVERLAY_KEY = "crate-lyrics-overlay";
 const AppContent = () => {
   const { state: playbackState } = usePlayback();
   const [topTab, setTopTab] = useState<TopTab>("library");
-  const [toolTab, setToolTab] = useState<ToolTab>("browse");
+  const [toolTab, setToolTab] = useState<ToolTab>("files");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -354,11 +353,8 @@ const AppContent = () => {
                   <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
                     iPod
                   </ToolTabButton>
-                  <ToolTabButton active={toolTab === "browse"} onClick={() => setToolTab("browse")}>
-                    File Explorer
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "sync"} onClick={() => setToolTab("sync")}>
-                    File Sync
+                  <ToolTabButton active={toolTab === "files"} onClick={() => setToolTab("files")}>
+                    File Manager
                   </ToolTabButton>
                   <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
                     Metadata
@@ -384,14 +380,9 @@ const AppContent = () => {
                       />
                     </ErrorBoundary>
                   )}
-                  {toolTab === "browse" && (
-                    <ErrorBoundary name="File Explorer">
-                      <BrowseExplorer />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "sync" && (
-                    <ErrorBoundary name="File Sync">
-                      <SyncManager />
+                  {toolTab === "files" && (
+                    <ErrorBoundary name="File Manager">
+                      <FileManager />
                     </ErrorBoundary>
                   )}
                   {toolTab === "metadata" && (

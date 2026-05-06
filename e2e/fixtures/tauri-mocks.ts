@@ -55,10 +55,8 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   delete_duplicate_tracks: 0,
 
   // Profiles
-  get_profiles: { profiles: [] },
-  save_profiles: null,
-  get_browse_profiles: { profiles: [] },
-  save_browse_profiles: null,
+  get_file_manager_profiles: { profiles: [] },
+  save_file_manager_profiles: null,
 
   // File operations
   list_directory: [],

@@ -238,3 +238,17 @@ export const MOCK_BROWSE_PROFILES = {
     },
   ],
 };
+
+export const MOCK_FILE_MANAGER_SYNC_PROFILES = {
+  profiles: [
+    {
+      name: "iPod Sync",
+      mode: "sync",
+      left_path: "/music",
+      right_path: "/Volumes/IPOD/Music",
+      dual_pane: false,
+      layout: "horizontal",
+      exclusions: [".DS_Store"],
+    },
+  ],
+};

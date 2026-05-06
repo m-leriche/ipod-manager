@@ -1,210 +1,39 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useRef } from "react";
 import { pickFolder } from "../../../utils/pickPath";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { FileExplorer } from "../../organisms/FileExplorer/FileExplorer";
-import { ProfileSelector } from "../../organisms/ProfileSelector/ProfileSelector";
 import type { FileExplorerHandle } from "../../organisms/FileExplorer/types";
-import type { BrowseProfile, BrowseProfileStore } from "../../../types/profiles";
-import type { PaneLayout } from "./types";
+import type { BrowseExplorerProps } from "./types";
 
-export const BrowseExplorer = () => {
-  // Core explorer state — works without profiles
-  const [leftPath, setLeftPath] = useState<string | null>(null);
-  const [rightPath, setRightPath] = useState<string | null>(null);
-  const [dualPane, setDualPane] = useState(false);
-  const [layout, setLayout] = useState<PaneLayout>("horizontal");
-
-  // Profile system — optional persistence layer, hidden by default
-  const [showProfiles, setShowProfiles] = useState(false);
-  const [profileStore, setProfileStore] = useState<BrowseProfileStore>({ profiles: [] });
-  const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
-
+export const BrowseExplorer = ({
+  leftPath,
+  rightPath,
+  dualPane,
+  layout,
+  onLeftPathChange,
+  onRightPathChange,
+  onDualPaneChange,
+  onLayoutChange,
+}: BrowseExplorerProps) => {
   const leftRef = useRef<FileExplorerHandle>(null);
   const rightRef = useRef<FileExplorerHandle>(null);
 
-  const savedProfile = useMemo(
-    () => profileStore.profiles.find((p) => p.name === activeProfileName) ?? null,
-    [profileStore, activeProfileName],
-  );
-
-  const isDirty = useMemo(() => {
-    if (!savedProfile) return false;
-    return (
-      leftPath !== (savedProfile.left_path ?? null) ||
-      rightPath !== (savedProfile.right_path ?? null) ||
-      dualPane !== savedProfile.dual_pane ||
-      layout !== savedProfile.layout
-    );
-  }, [savedProfile, leftPath, rightPath, dualPane, layout]);
-
-  // Single save function — all writes go through here to avoid races
-  const save = useCallback((store: BrowseProfileStore) => {
-    setProfileStore(store);
-    invoke("save_browse_profiles", { store }).catch((e) => console.error("Failed to save browse profiles:", e));
-  }, []);
-
-  // Load profiles and restore last active profile on mount
-  useEffect(() => {
-    invoke<BrowseProfileStore>("get_browse_profiles")
-      .then((store) => {
-        setProfileStore(store);
-        const active = store.profiles.find((p) => p.name === store.active_profile);
-        if (active) {
-          setShowProfiles(true);
-          setActiveProfileName(active.name);
-          setLeftPath(active.left_path ?? null);
-          setRightPath(active.right_path ?? null);
-          setDualPane(active.dual_pane);
-          setLayout((active.layout as PaneLayout) ?? "horizontal");
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const switchProfile = (name: string) => {
-    const profileName = name || null;
-    setActiveProfileName(profileName);
-    const profile = profileStore.profiles.find((p) => p.name === name);
-    if (profile) {
-      setLeftPath(profile.left_path ?? null);
-      setRightPath(profile.right_path ?? null);
-      setDualPane(profile.dual_pane);
-      setLayout((profile.layout as PaneLayout) ?? "horizontal");
-    } else {
-      setLeftPath(null);
-      setRightPath(null);
-      setDualPane(false);
-      setLayout("horizontal");
-    }
-    save({ ...profileStore, active_profile: profileName });
-  };
-
-  const createProfile = (name: string) => {
-    if (profileStore.profiles.some((p) => p.name === name)) return;
-    const newProfile: BrowseProfile = {
-      name,
-      left_path: null,
-      right_path: null,
-      dual_pane: false,
-      layout: "horizontal",
-    };
-    save({ profiles: [...profileStore.profiles, newProfile], active_profile: name });
-    setActiveProfileName(name);
-    setLeftPath(null);
-    setRightPath(null);
-    setDualPane(false);
-    setLayout("horizontal");
-  };
-
-  const deleteProfile = (name: string) => {
-    const newActive = activeProfileName === name ? null : activeProfileName;
-    save({ profiles: profileStore.profiles.filter((p) => p.name !== name), active_profile: newActive });
-    if (activeProfileName === name) {
-      setActiveProfileName(null);
-      setLeftPath(null);
-      setRightPath(null);
-      setDualPane(false);
-      setLayout("horizontal");
-    }
-  };
-
-  const saveProfile = () => {
-    if (!activeProfileName) return;
-    const updated: BrowseProfile = {
-      name: activeProfileName,
-      left_path: leftPath,
-      right_path: rightPath,
-      dual_pane: dualPane,
-      layout,
-    };
-    save({
-      profiles: profileStore.profiles.map((p) => (p.name === activeProfileName ? updated : p)),
-      active_profile: activeProfileName,
-    });
-  };
-
-  const renameProfile = (oldName: string, newName: string) => {
-    save({
-      profiles: profileStore.profiles.map((p) => (p.name === oldName ? { ...p, name: newName } : p)),
-      active_profile: activeProfileName === oldName ? newName : activeProfileName,
-    });
-    if (activeProfileName === oldName) setActiveProfileName(newName);
-  };
-
-  const duplicateProfile = (sourceName: string, newName: string) => {
-    const source = profileStore.profiles.find((p) => p.name === sourceName);
-    if (!source) return;
-    const copy: BrowseProfile = { ...source, name: newName };
-    save({ profiles: [...profileStore.profiles, copy], active_profile: newName });
-    setActiveProfileName(newName);
-    setLeftPath(copy.left_path ?? null);
-    setRightPath(copy.right_path ?? null);
-    setDualPane(copy.dual_pane);
-    setLayout((copy.layout as PaneLayout) ?? "horizontal");
-  };
-
-  const discardChanges = () => {
-    if (!savedProfile) return;
-    setLeftPath(savedProfile.left_path ?? null);
-    setRightPath(savedProfile.right_path ?? null);
-    setDualPane(savedProfile.dual_pane);
-    setLayout((savedProfile.layout as PaneLayout) ?? "horizontal");
-  };
-
   const browseLeft = async () => {
     const path = await pickFolder("Select folder to explore");
-    if (path) setLeftPath(path);
+    if (path) onLeftPathChange(path);
   };
 
   const browseRight = async () => {
     const path = await pickFolder("Select folder to explore");
-    if (path) setRightPath(path);
+    if (path) onRightPathChange(path);
   };
-
-  // ── Render ───────────────────────────────────────────────────────
-
-  const activeProfile = activeProfileName ? { name: activeProfileName } : null;
-
-  const profileBar = showProfiles ? (
-    <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
-      <ProfileSelector
-        profiles={profileStore.profiles}
-        activeProfile={activeProfile}
-        onSwitch={switchProfile}
-        onCreate={createProfile}
-        onDelete={deleteProfile}
-        onRename={renameProfile}
-        onDuplicate={duplicateProfile}
-        isDirty={isDirty}
-        onSave={saveProfile}
-        onDiscard={discardChanges}
-      />
-    </div>
-  ) : null;
-
-  const profileToggle = (
-    <button
-      onClick={() => setShowProfiles((v) => !v)}
-      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
-        showProfiles
-          ? "bg-accent/10 border-accent/30 text-accent"
-          : "bg-bg-card border-border text-text-tertiary hover:text-text-secondary hover:border-border-active"
-      }`}
-      title={showProfiles ? "Hide profiles" : "Show profiles"}
-    >
-      Profiles{activeProfileName ? `: ${activeProfileName}` : ""}
-    </button>
-  );
 
   // No left folder selected — show initial prompt
   if (!leftPath) {
     return (
       <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-        {profileBar}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-sm">
-            <div className="mb-4">{profileToggle}</div>
             <p className="text-text-tertiary text-xs mb-4">Choose a folder to explore its contents</p>
             <div className="mb-4">
               <FolderPicker label="Folder" path={null} onBrowse={browseLeft} />
@@ -217,9 +46,8 @@ export const BrowseExplorer = () => {
 
   const splitButtons = (
     <div className="flex gap-1 shrink-0">
-      {profileToggle}
       <button
-        onClick={() => setDualPane((v) => !v)}
+        onClick={() => onDualPaneChange(!dualPane)}
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
           dualPane
             ? "bg-accent/10 border-accent/30 text-accent"
@@ -231,7 +59,7 @@ export const BrowseExplorer = () => {
       </button>
       {dualPane && (
         <button
-          onClick={() => setLayout((l) => (l === "horizontal" ? "vertical" : "horizontal"))}
+          onClick={() => onLayoutChange(layout === "horizontal" ? "vertical" : "horizontal")}
           className="px-2.5 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-[11px] font-medium hover:text-text-secondary hover:border-border-active transition-all"
           title={layout === "horizontal" ? "Stack vertically" : "Side by side"}
         >
@@ -244,7 +72,6 @@ export const BrowseExplorer = () => {
   if (!dualPane) {
     return (
       <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-        {profileBar}
         <div className="flex items-center gap-2 shrink-0 min-h-0">
           <div className="flex-1 min-w-0">
             <FolderPicker label="Folder" path={leftPath} onBrowse={browseLeft} />
@@ -263,7 +90,6 @@ export const BrowseExplorer = () => {
 
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-      {profileBar}
       <div
         className={
           layout === "horizontal"

@@ -1,150 +1,24 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { pickFolder } from "../../../utils/pickPath";
+import { useState } from "react";
 import { ComparisonView } from "../ComparisonView/ComparisonView";
 import { SplitComparisonView } from "../SplitComparisonView/SplitComparisonView";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
-import { ProfileSelector } from "../../organisms/ProfileSelector/ProfileSelector";
-import { FilterPanel } from "../../organisms/FilterPanel/FilterPanel";
-import type { Profile, ProfileStore } from "../../../types/profiles";
-import { emptyProfile } from "./helpers";
+import { pickFolder } from "../../../utils/pickPath";
+import type { SyncManagerProps } from "./types";
 
-export const SyncManager = () => {
+export const SyncManager = ({
+  sourcePath,
+  targetPath,
+  exclusions,
+  onSourcePathChange,
+  onTargetPathChange,
+  onExclusionsChange,
+}: SyncManagerProps) => {
   const [comparing, setComparing] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "split">("split");
-  const [profileStore, setProfileStore] = useState<ProfileStore>({ profiles: [] });
-  const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Local working copy of the active profile (may have unsaved changes)
-  const [localProfile, setLocalProfile] = useState<Profile | null>(null);
-
-  // The saved version of the active profile (from the store)
-  const savedProfile = useMemo(
-    () => profileStore.profiles.find((p) => p.name === activeProfileName) ?? null,
-    [profileStore, activeProfileName],
-  );
-
-  // Dirty check: compare local working copy against saved version
-  const isDirty = useMemo(() => {
-    if (!localProfile || !savedProfile) return false;
-    return (
-      localProfile.source_path !== savedProfile.source_path ||
-      localProfile.target_path !== savedProfile.target_path ||
-      JSON.stringify(localProfile.exclusions) !== JSON.stringify(savedProfile.exclusions)
-    );
-  }, [localProfile, savedProfile]);
-
-  const sourceFolder = localProfile?.source_path ?? null;
-  const targetFolder = localProfile?.target_path ?? null;
-  const exclusions = localProfile?.exclusions ?? [];
-
-  const save = useCallback((store: ProfileStore) => {
-    setProfileStore(store);
-    invoke("save_profiles", { store }).catch((e) => console.error("Failed to save profiles:", e));
-  }, []);
-
-  useEffect(() => {
-    invoke<ProfileStore>("get_profiles")
-      .then((store) => {
-        setProfileStore(store);
-        if (store.active_profile) {
-          setActiveProfileName(store.active_profile);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // Sync local profile when switching profiles or store changes
-  useEffect(() => {
-    if (savedProfile) {
-      setLocalProfile({ ...savedProfile });
-    } else {
-      setLocalProfile(null);
-    }
-  }, [savedProfile]);
-
-  const switchProfile = (name: string) => {
-    const profileName = name || null;
-    setActiveProfileName(profileName);
-    setShowFilters(false);
-    setComparing(false);
-    save({ ...profileStore, active_profile: profileName });
-  };
-
-  const createProfile = (name: string) => {
-    if (profileStore.profiles.some((p) => p.name === name)) return;
-    const newProfile = emptyProfile(name);
-    save({ profiles: [...profileStore.profiles, newProfile], active_profile: name });
-    setActiveProfileName(name);
-  };
-
-  const deleteProfile = (name: string) => {
-    const newActive = activeProfileName === name ? null : activeProfileName;
-    save({ profiles: profileStore.profiles.filter((p) => p.name !== name), active_profile: newActive });
-    if (activeProfileName === name) {
-      setActiveProfileName(null);
-      setLocalProfile(null);
-      setShowFilters(false);
-      setComparing(false);
-    }
-  };
-
-  // Local mutations (unsaved until user clicks Save)
-  const setSourcePath = (path: string) => {
-    if (!localProfile) return;
-    setLocalProfile({ ...localProfile, source_path: path });
-  };
-
-  const setTargetPath = (path: string) => {
-    if (!localProfile) return;
-    setLocalProfile({ ...localProfile, target_path: path });
-  };
 
   const addExclusion = (path: string) => {
-    if (!localProfile || localProfile.exclusions.includes(path)) return;
-    setLocalProfile({ ...localProfile, exclusions: [...localProfile.exclusions, path] });
-  };
-
-  const removeExclusion = (path: string) => {
-    if (!localProfile) return;
-    setLocalProfile({
-      ...localProfile,
-      exclusions: localProfile.exclusions.filter((e) => e !== path),
-    });
-  };
-
-  const saveProfile = () => {
-    if (!localProfile) return;
-    save({
-      profiles: profileStore.profiles.map((p) => (p.name === localProfile.name ? { ...localProfile } : p)),
-      active_profile: activeProfileName,
-    });
-  };
-
-  const discardChanges = () => {
-    if (savedProfile) setLocalProfile({ ...savedProfile });
-  };
-
-  const renameProfile = (oldName: string, newName: string) => {
-    save({
-      profiles: profileStore.profiles.map((p) => (p.name === oldName ? { ...p, name: newName } : p)),
-      active_profile: activeProfileName === oldName ? newName : activeProfileName,
-    });
-    if (activeProfileName === oldName) {
-      setActiveProfileName(newName);
-      if (localProfile) setLocalProfile({ ...localProfile, name: newName });
-    }
-  };
-
-  const duplicateProfile = (sourceName: string, newName: string) => {
-    const source = profileStore.profiles.find((p) => p.name === sourceName);
-    if (!source) return;
-    const copy = { ...source, name: newName };
-    save({ profiles: [...profileStore.profiles, copy], active_profile: newName });
-    setActiveProfileName(newName);
-    setLocalProfile({ ...copy });
-    setComparing(false);
+    if (exclusions.includes(path)) return;
+    onExclusionsChange([...exclusions, path]);
   };
 
   const browse = async (setter: (path: string) => void, title: string) => {
@@ -152,99 +26,76 @@ export const SyncManager = () => {
     if (path) setter(path);
   };
 
+  if (comparing && sourcePath && targetPath) {
+    return (
+      <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+        {/* View mode toggle */}
+        <div className="flex gap-1 shrink-0">
+          <button
+            onClick={() => setViewMode("tree")}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+              viewMode === "tree"
+                ? "bg-bg-card text-text-primary border-border-active"
+                : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
+            }`}
+          >
+            Tree
+          </button>
+          <button
+            onClick={() => setViewMode("split")}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+              viewMode === "split"
+                ? "bg-bg-card text-text-primary border-border-active"
+                : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
+            }`}
+          >
+            Split
+          </button>
+        </div>
+
+        {viewMode === "tree" ? (
+          <ComparisonView
+            sourcePath={sourcePath}
+            targetPath={targetPath}
+            exclusions={exclusions}
+            onAddExclusion={addExclusion}
+            onBack={() => setComparing(false)}
+          />
+        ) : (
+          <SplitComparisonView
+            sourcePath={sourcePath}
+            targetPath={targetPath}
+            exclusions={exclusions}
+            onAddExclusion={addExclusion}
+            onBack={() => setComparing(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-      {/* Profile bar — always visible */}
-      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
-        <ProfileSelector
-          profiles={profileStore.profiles}
-          activeProfile={localProfile}
-          onSwitch={switchProfile}
-          onCreate={createProfile}
-          onDelete={deleteProfile}
-          onRename={renameProfile}
-          onDuplicate={duplicateProfile}
-          onToggleFilters={() => setShowFilters(!showFilters)}
-          filterCount={exclusions.length}
-          isDirty={isDirty}
-          onSave={saveProfile}
-          onDiscard={discardChanges}
-        />
+      <FolderPicker
+        label="Source"
+        path={sourcePath}
+        onBrowse={() => browse(onSourcePathChange, "Select source folder")}
+      />
+      <FolderPicker
+        label="Target"
+        path={targetPath}
+        onBrowse={() => browse(onTargetPathChange, "Select target folder")}
+      />
+
+      <div className="flex justify-end shrink-0">
+        <button
+          disabled={!sourcePath || !targetPath}
+          onClick={() => setComparing(true)}
+          className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+        >
+          Compare Folders
+        </button>
       </div>
-
-      {showFilters && localProfile && <FilterPanel exclusions={localProfile.exclusions} onRemove={removeExclusion} />}
-
-      {!localProfile ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-text-tertiary text-xs">Select or create a profile to start syncing folders</p>
-        </div>
-      ) : comparing && sourceFolder && targetFolder ? (
-        <>
-          {/* View mode toggle */}
-          <div className="flex gap-1 shrink-0">
-            <button
-              onClick={() => setViewMode("tree")}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
-                viewMode === "tree"
-                  ? "bg-bg-card text-text-primary border-border-active"
-                  : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
-              }`}
-            >
-              Tree
-            </button>
-            <button
-              onClick={() => setViewMode("split")}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
-                viewMode === "split"
-                  ? "bg-bg-card text-text-primary border-border-active"
-                  : "bg-transparent text-text-tertiary border-transparent hover:text-text-secondary"
-              }`}
-            >
-              Split
-            </button>
-          </div>
-
-          {viewMode === "tree" ? (
-            <ComparisonView
-              sourcePath={sourceFolder}
-              targetPath={targetFolder}
-              exclusions={exclusions}
-              onAddExclusion={addExclusion}
-              onBack={() => setComparing(false)}
-            />
-          ) : (
-            <SplitComparisonView
-              sourcePath={sourceFolder}
-              targetPath={targetFolder}
-              exclusions={exclusions}
-              onAddExclusion={addExclusion}
-              onBack={() => setComparing(false)}
-            />
-          )}
-        </>
-      ) : (
-        <>
-          <FolderPicker
-            label="Source"
-            path={sourceFolder}
-            onBrowse={() => browse(setSourcePath, "Select source folder")}
-          />
-          <FolderPicker
-            label="Target"
-            path={targetFolder}
-            onBrowse={() => browse(setTargetPath, "Select target folder")}
-          />
-          <div className="flex justify-end shrink-0">
-            <button
-              disabled={!sourceFolder || !targetFolder}
-              onClick={() => setComparing(true)}
-              className="px-5 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
-            >
-              Compare Folders
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 };

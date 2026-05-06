@@ -4,188 +4,199 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { BrowseExplorer } from "./BrowseExplorer";
+import type { BrowseExplorerProps } from "./types";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
+
+const defaultProps: BrowseExplorerProps = {
+  leftPath: null,
+  rightPath: null,
+  dualPane: false,
+  layout: "horizontal",
+  onLeftPathChange: vi.fn(),
+  onRightPathChange: vi.fn(),
+  onDualPaneChange: vi.fn(),
+  onLayoutChange: vi.fn(),
+};
+
+const props = (overrides: Partial<BrowseExplorerProps> = {}): BrowseExplorerProps => ({
+  ...defaultProps,
+  onLeftPathChange: vi.fn(),
+  onRightPathChange: vi.fn(),
+  onDualPaneChange: vi.fn(),
+  onLayoutChange: vi.fn(),
+  ...overrides,
+});
 
 beforeEach(() => {
   mockInvoke.mockReset();
   mockOpen.mockReset();
   mockInvoke.mockImplementation(async (cmd) => {
-    if (cmd === "get_browse_profiles") return { profiles: [] };
-    if (cmd === "save_browse_profiles") return undefined;
     if (cmd === "list_directory") return [];
     return undefined;
   });
 });
 
 describe("BrowseExplorer", () => {
-  it("shows folder picker prompt when no folder selected", async () => {
-    render(<BrowseExplorer />);
-    expect(await screen.findByText("Choose a folder to explore its contents")).toBeInTheDocument();
+  // ── Empty state ───────────────────────────────────────────────
+
+  it("shows folder picker prompt when no folder selected", () => {
+    render(<BrowseExplorer {...props()} />);
+    expect(screen.getByText("Choose a folder to explore its contents")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Browse" })).toBeInTheDocument();
   });
 
-  it("shows FileExplorer after selecting a folder", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
+  it("does not show Split button in empty state", () => {
+    render(<BrowseExplorer {...props()} />);
+    expect(screen.queryByRole("button", { name: "Split" })).not.toBeInTheDocument();
+  });
+
+  // ── Single pane mode ──────────────────────────────────────────
+
+  it("shows FileExplorer when leftPath is set", async () => {
     mockInvoke.mockImplementation(async (cmd) => {
-      if (cmd === "get_browse_profiles") return { profiles: [] };
       if (cmd === "list_directory") return [{ name: "Music", is_dir: true, size: 0, modified: 1700000000 }];
       return undefined;
     });
 
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
+    render(<BrowseExplorer {...props({ leftPath: "/Volumes/IPOD" })} />);
 
     await waitFor(() => {
       expect(screen.getByText("Music")).toBeInTheDocument();
     });
   });
 
-  it("shows the selected path in the folder picker", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
-
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("/Volumes/IPOD")).toBeInTheDocument();
-    });
+  it("shows the path in the folder picker", () => {
+    render(<BrowseExplorer {...props({ leftPath: "/Volumes/IPOD" })} />);
+    expect(screen.getByText("/Volumes/IPOD")).toBeInTheDocument();
   });
 
-  it("shows split pane toggle button after folder selected", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
-
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
-    });
+  it("shows Split button when leftPath is set", () => {
+    render(<BrowseExplorer {...props({ leftPath: "/Volumes/IPOD" })} />);
+    expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
   });
 
-  it("shows second pane when split is toggled on", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
-
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Split" }));
-    await user.click(screen.getByRole("button", { name: "Split" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Choose a folder for the second pane")).toBeInTheDocument();
-    });
-  });
-
-  it("returns to single pane when split is toggled off", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
-
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Split" }));
-    await user.click(screen.getByRole("button", { name: "Split" }));
-    await waitFor(() => screen.getByText("Choose a folder for the second pane"));
-
-    await user.click(screen.getByRole("button", { name: "Split" }));
-    await waitFor(() => {
-      expect(screen.queryByText("Choose a folder for the second pane")).not.toBeInTheDocument();
-    });
-  });
-
-  it("shows layout toggle only in dual pane mode", async () => {
-    const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
-
-    render(<BrowseExplorer />);
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-
-    await waitFor(() => screen.getByRole("button", { name: "Split" }));
+  it("does not show layout toggle in single pane mode", () => {
+    render(<BrowseExplorer {...props({ leftPath: "/test" })} />);
     expect(screen.queryByTitle("Stack vertically")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Split" }));
-    await waitFor(() => {
-      expect(screen.getByTitle("Stack vertically")).toBeInTheDocument();
-    });
   });
 
-  it("shows profile selector when toggled open", async () => {
+  // ── Browsing folders ──────────────────────────────────────────
+
+  it("calls onLeftPathChange when browsing for a folder", async () => {
+    const onLeftPathChange = vi.fn();
     const user = userEvent.setup();
-    render(<BrowseExplorer />);
+    mockOpen.mockResolvedValue("/Volumes/IPOD");
 
-    // Profiles panel is hidden by default, toggle button is visible
-    const toggle = await screen.findByRole("button", { name: "Profiles" });
-    expect(toggle).toBeInTheDocument();
+    render(<BrowseExplorer {...props({ onLeftPathChange })} />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
 
-    await user.click(toggle);
     await waitFor(() => {
-      expect(screen.getByText("Profile")).toBeInTheDocument();
+      expect(onLeftPathChange).toHaveBeenCalledWith("/Volumes/IPOD");
     });
   });
 
-  it("loads saved profile state when switching to a profile", async () => {
+  it("does not call callback when dialog is cancelled", async () => {
+    const onLeftPathChange = vi.fn();
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue(null);
+
+    render(<BrowseExplorer {...props({ onLeftPathChange })} />);
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => {
+      expect(mockOpen).toHaveBeenCalled();
+    });
+    expect(onLeftPathChange).not.toHaveBeenCalled();
+  });
+
+  it("calls onRightPathChange when browsing for right folder", async () => {
+    const onRightPathChange = vi.fn();
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/other/folder");
+
+    render(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true, onRightPathChange })} />);
+
+    // The second "Browse..." button in the right pane placeholder
+    const browseBtn = screen.getByRole("button", { name: "Browse..." });
+    await user.click(browseBtn);
+
+    await waitFor(() => {
+      expect(onRightPathChange).toHaveBeenCalledWith("/other/folder");
+    });
+  });
+
+  // ── Dual pane mode ────────────────────────────────────────────
+
+  it("calls onDualPaneChange when split is toggled", async () => {
+    const onDualPaneChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(<BrowseExplorer {...props({ leftPath: "/test", onDualPaneChange })} />);
+    await user.click(screen.getByRole("button", { name: "Split" }));
+
+    expect(onDualPaneChange).toHaveBeenCalledWith(true);
+  });
+
+  it("shows second pane prompt in dual pane mode without right path", () => {
+    render(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true })} />);
+    expect(screen.getByText("Choose a folder for the second pane")).toBeInTheDocument();
+  });
+
+  it("renders two file explorers when both paths are set in dual mode", async () => {
     mockInvoke.mockImplementation(async (cmd) => {
-      if (cmd === "get_browse_profiles")
-        return {
-          profiles: [
-            { name: "My Setup", left_path: "/Users/test", right_path: null, dual_pane: false, layout: "horizontal" },
-          ],
-        };
-      if (cmd === "list_directory") return [];
+      if (cmd === "list_directory") return [{ name: "file.txt", is_dir: false, size: 100, modified: 1700000000 }];
       return undefined;
     });
 
-    const user = userEvent.setup();
-    render(<BrowseExplorer />);
+    render(<BrowseExplorer {...props({ leftPath: "/left", rightPath: "/right", dualPane: true })} />);
 
-    // Open the profiles panel first
-    const toggle = await screen.findByRole("button", { name: "Profiles" });
-    await user.click(toggle);
-
-    // Select the profile from the dropdown
-    const select = await screen.findByRole("combobox");
-    await user.selectOptions(select, "My Setup");
-
+    // Both panes should have the file entry
     await waitFor(() => {
-      expect(screen.getByText("/Users/test")).toBeInTheDocument();
+      const files = screen.getAllByText("file.txt");
+      expect(files.length).toBe(2);
     });
   });
 
-  it("creates a new profile with reset state", async () => {
+  it("shows layout toggle only in dual pane mode", () => {
+    const { rerender } = render(<BrowseExplorer {...props({ leftPath: "/test" })} />);
+    expect(screen.queryByTitle("Stack vertically")).not.toBeInTheDocument();
+
+    rerender(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true })} />);
+    expect(screen.getByTitle("Stack vertically")).toBeInTheDocument();
+  });
+
+  it("calls onLayoutChange when layout button is clicked", async () => {
+    const onLayoutChange = vi.fn();
     const user = userEvent.setup();
-    mockOpen.mockResolvedValue("/Volumes/IPOD");
 
-    render(<BrowseExplorer />);
+    render(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true, onLayoutChange })} />);
+    await user.click(screen.getByTitle("Stack vertically"));
 
-    // First pick a folder
-    await waitFor(() => screen.getByRole("button", { name: "Browse" }));
-    await user.click(screen.getByRole("button", { name: "Browse" }));
-    await waitFor(() => screen.getByText("/Volumes/IPOD"));
+    expect(onLayoutChange).toHaveBeenCalledWith("vertical");
+  });
 
-    // Open the profiles panel first
-    await user.click(screen.getByRole("button", { name: "Profiles" }));
+  it("shows Side by side title when layout is vertical", async () => {
+    const onLayoutChange = vi.fn();
+    const user = userEvent.setup();
 
-    // Create a profile — should reset explorer state
-    await user.click(screen.getByTitle("Create profile"));
-    const input = screen.getByPlaceholderText("Profile name");
-    await user.type(input, "Test");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    render(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true, layout: "vertical", onLayoutChange })} />);
 
-    // Explorer should be reset to empty
-    await waitFor(() => {
-      expect(screen.getByText("Choose a folder to explore its contents")).toBeInTheDocument();
-    });
+    const btn = screen.getByTitle("Side by side");
+    expect(btn).toBeInTheDocument();
+    await user.click(btn);
+
+    expect(onLayoutChange).toHaveBeenCalledWith("horizontal");
+  });
+
+  it("calls onDualPaneChange(false) when Split toggled off", async () => {
+    const onDualPaneChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(<BrowseExplorer {...props({ leftPath: "/test", dualPane: true, onDualPaneChange })} />);
+    await user.click(screen.getByRole("button", { name: "Split" }));
+
+    expect(onDualPaneChange).toHaveBeenCalledWith(false);
   });
 });

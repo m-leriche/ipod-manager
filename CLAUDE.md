@@ -165,6 +165,11 @@ npm test
 - [ ] Add retry/resume for failed long-running operations (sync, album art repair, etc.)
 - [ ] Undo support for destructive actions — at minimum, metadata edits should store previous values for rollback
 
+## Infrastructure TODOs
+
+- [ ] **Swift disk helper binary** — Replace `diskutil` text parsing in `disk.rs` with a small Swift CLI tool (`crate-disk-helper`) that uses `DiskArbitration.framework`. Gives event-driven USB detection (no polling), typed disk properties (no text parsing), and native mount/unmount without `sudo` password piping. Ship as a helper binary alongside the `.app` bundle. The Swift tool outputs JSON to stdout, Rust deserializes with serde — replaces ~580 lines of brittle parsing with ~150 lines of Swift.
+- [ ] **tauri-specta typed bridge** — Add `specta` + `tauri-specta` to auto-generate TypeScript types and invoke wrappers from Rust command signatures. Eliminates manual type duplication across `src/types/*.ts` and Rust structs (~74 invoke calls, ~8 type files maintained in parallel). Add `#[derive(specta::Type)]` to all bridge types, register commands with specta builder, replace raw `invoke()` calls with generated typed wrappers, delete manual TS type files.
+
 ## Feature TODOs
 
 - [ ] Batch find-and-replace in metadata tags

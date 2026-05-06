@@ -725,8 +725,8 @@ export const LibraryPlayer = ({
               <>
                 <div
                   ref={carouselResize.containerRef}
-                  style={{ height: `${carouselResize.fraction * 100}%` }}
-                  className="shrink-0 min-h-0 view-enter"
+                  style={showTrackList ? { height: `${carouselResize.fraction * 100}%` } : undefined}
+                  className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
                   <ArtworkCarousel
                     albums={albumList}
@@ -740,12 +740,14 @@ export const LibraryPlayer = ({
                     }}
                   />
                 </div>
-                <div
-                  onMouseDown={carouselResize.onDragStart}
-                  className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
-                >
-                  <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
-                </div>
+                {showTrackList && (
+                  <div
+                    onMouseDown={carouselResize.onDragStart}
+                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+                  >
+                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+                  </div>
+                )}
               </>
             ) : showAlbumGrid ? (
               <>
@@ -816,8 +818,8 @@ export const LibraryPlayer = ({
           </>
         )}
 
-        {/* Track table (hidden when album grid is active with track list toggled off) */}
-        {(!showAlbumGrid || showTrackList || showArtworkCarousel) && (
+        {/* Track table (hidden when album grid or carousel is active with track list toggled off) */}
+        {(!(showAlbumGrid || showArtworkCarousel) || showTrackList) && (
           <TrackTable
             tracks={displayedTracks}
             sortBy={sortBy}

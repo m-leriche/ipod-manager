@@ -10,9 +10,7 @@ export interface ArtworkCarouselProps {
   onSortModeChange?: (mode: AlbumSortMode) => void;
 }
 
-export interface CarouselItemProps {
+export interface AlbumArtProps {
   album: AlbumSummary;
-  offset: number;
-  onClick: () => void;
-  onDoubleClick: () => void;
+  isCenter: boolean;
 }

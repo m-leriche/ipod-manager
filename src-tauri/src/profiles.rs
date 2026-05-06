@@ -102,6 +102,120 @@ pub fn save_browse_profiles(app: &AppHandle, store: &BrowseProfileStore) -> Resu
     fs::write(&path, data).map_err(|e| format!("Failed to write browse profiles: {}", e))
 }
 
+// ── Unified file manager profiles ─────────────────────────────────
+
+fn default_mode() -> String {
+    "browse".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FileManagerProfile {
+    pub name: String,
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    #[serde(default)]
+    pub left_path: Option<String>,
+    #[serde(default)]
+    pub right_path: Option<String>,
+    #[serde(default)]
+    pub dual_pane: bool,
+    #[serde(default = "default_layout")]
+    pub layout: String,
+    #[serde(default)]
+    pub exclusions: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct FileManagerProfileStore {
+    pub profiles: Vec<FileManagerProfile>,
+    #[serde(default)]
+    pub active_profile: Option<String>,
+}
+
+fn file_manager_profiles_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    Ok(dir.join("file_manager_profiles.json"))
+}
+
+/// Load unified profiles. If the new file doesn't exist, migrate from
+/// the old `profiles.json` (sync) and `browse_profiles.json` (browse).
+pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileStore, String> {
+    let path = file_manager_profiles_path(app)?;
+    if path.exists() {
+        let data = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read file manager profiles: {}", e))?;
+        return serde_json::from_str(&data)
+            .map_err(|e| format!("Failed to parse file manager profiles: {}", e));
+    }
+
+    // Migrate from old profile files
+    let mut profiles = Vec::new();
+    let mut active: Option<String> = None;
+
+    let sync_store = load_profiles(app).unwrap_or_default();
+    for p in sync_store.profiles {
+        profiles.push(FileManagerProfile {
+            name: p.name,
+            mode: "sync".to_string(),
+            left_path: p.source_path,
+            right_path: p.target_path,
+            dual_pane: false,
+            layout: default_layout(),
+            exclusions: p.exclusions,
+        });
+    }
+    if let Some(ref name) = sync_store.active_profile {
+        active = Some(name.clone());
+    }
+
+    let browse_store = load_browse_profiles(app).unwrap_or_default();
+    for p in browse_store.profiles {
+        profiles.push(FileManagerProfile {
+            name: p.name,
+            mode: "browse".to_string(),
+            left_path: p.left_path,
+            right_path: p.right_path,
+            dual_pane: p.dual_pane,
+            layout: p.layout,
+            exclusions: Vec::new(),
+        });
+    }
+    // Prefer browse active if no sync active
+    if active.is_none() {
+        if let Some(ref name) = browse_store.active_profile {
+            active = Some(name.clone());
+        }
+    }
+
+    let store = FileManagerProfileStore {
+        profiles,
+        active_profile: active,
+    };
+
+    // Write the migrated store so we don't re-migrate next time
+    if !store.profiles.is_empty() {
+        let _ = save_file_manager_profiles(app, &store);
+    }
+
+    Ok(store)
+}
+
+pub fn save_file_manager_profiles(
+    app: &AppHandle,
+    store: &FileManagerProfileStore,
+) -> Result<(), String> {
+    let path = file_manager_profiles_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create data dir: {}", e))?;
+    }
+    let data = serde_json::to_string_pretty(store)
+        .map_err(|e| format!("Failed to serialize file manager profiles: {}", e))?;
+    fs::write(&path, data).map_err(|e| format!("Failed to write file manager profiles: {}", e))
+}
+
 /// Check if a relative path should be excluded.
 /// Exclusion "Podcasts" matches "Podcasts/ep.mp3" but not "Podcasts2/song.mp3".
 pub fn is_excluded(path: &str, exclusions: &[String]) -> bool {

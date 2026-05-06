@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
-use crate::profiles::{self, BrowseProfileStore, ProfileStore};
+use crate::profiles::{self, BrowseProfileStore, FileManagerProfileStore, ProfileStore};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -141,4 +141,17 @@ pub fn get_browse_profiles(app: AppHandle) -> Result<BrowseProfileStore, AppErro
 #[tauri::command]
 pub fn save_browse_profiles(store: BrowseProfileStore, app: AppHandle) -> Result<(), AppError> {
     profiles::save_browse_profiles(&app, &store).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn get_file_manager_profiles(app: AppHandle) -> Result<FileManagerProfileStore, AppError> {
+    profiles::load_file_manager_profiles(&app).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn save_file_manager_profiles(
+    store: FileManagerProfileStore,
+    app: AppHandle,
+) -> Result<(), AppError> {
+    profiles::save_file_manager_profiles(&app, &store).map_err(Into::into)
 }

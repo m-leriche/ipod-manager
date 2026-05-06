@@ -163,20 +163,25 @@ pub async fn fix_library_album_art(
     let conn_arc = db.conn_arc();
 
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<_, AppError> {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+        // Lock briefly to query folders, then release before the long-running repair
+        let folders = {
+            let conn = conn_arc
+                .lock()
+                .map_err(|e| format!("DB lock failed: {}", e))?;
 
-        let mut stmt = conn
-            .prepare("SELECT DISTINCT folder_path FROM tracks")
-            .map_err(|e| format!("Query failed: {}", e))?;
+            let mut stmt = conn
+                .prepare("SELECT DISTINCT folder_path FROM tracks")
+                .map_err(|e| format!("Query failed: {}", e))?;
 
-        let folders: Vec<String> = stmt
-            .query_map(params![], |row| row.get(0))
-            .map_err(|e| format!("Query failed: {}", e))?
-            .filter_map(|r| r.ok())
-            .filter(|path: &String| !albumart::has_cover(Path::new(path)))
-            .collect();
+            let folders: Vec<String> = stmt
+                .query_map(params![], |row| row.get(0))
+                .map_err(|e| format!("Query failed: {}", e))?
+                .filter_map(|r| r.ok())
+                .filter(|path: &String| !albumart::has_cover(Path::new(path)))
+                .collect();
+
+            folders
+        }; // lock released here
 
         if folders.is_empty() {
             return Ok(albumart::AlbumArtResult {

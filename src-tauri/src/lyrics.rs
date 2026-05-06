@@ -312,41 +312,62 @@ pub fn reset_lyrics_not_found(conn: &Connection) -> Result<usize, String> {
 }
 
 /// Fetch lyrics for all tracks in the library that don't have any yet.
+///
+/// Takes an `Arc<Mutex<Connection>>` so the DB lock is only held briefly for
+/// each query/update, never during HTTP requests or file I/O.
 pub fn fetch_library_lyrics(
-    conn: &Connection,
+    conn_arc: &std::sync::Arc<std::sync::Mutex<Connection>>,
     app: &tauri::AppHandle,
     cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> LyricsFetchResult {
     use std::sync::atomic::Ordering;
 
-    // Query tracks missing lyrics, skipping those already marked as not found
-    let tracks = match conn.prepare(
-        "SELECT id, title, artist, album, duration_secs, file_name, file_path
-         FROM tracks
-         WHERE lyrics IS NULL AND synced_lyrics IS NULL
-           AND lyrics_not_found = 0
-           AND (artist IS NOT NULL OR title IS NOT NULL)",
-    ) {
-        Ok(mut stmt) => stmt
-            .query_map(params![], |row| {
-                Ok(TrackRow {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    artist: row.get(2)?,
-                    album: row.get(3)?,
-                    duration_secs: row.get(4)?,
-                    file_name: row.get(5)?,
-                    file_path: row.get(6)?,
+    // Lock briefly to query tracks and count, then release
+    let (tracks, skipped_not_found) = {
+        let conn = match conn_arc.lock() {
+            Ok(c) => c,
+            Err(_) => {
+                return LyricsFetchResult {
+                    total: 0,
+                    fetched: 0,
+                    already_had: 0,
+                    not_found: 0,
+                    skipped_not_found: 0,
+                    cancelled: false,
+                }
+            }
+        };
+
+        let tracks = match conn.prepare(
+            "SELECT id, title, artist, album, duration_secs, file_name, file_path
+             FROM tracks
+             WHERE lyrics IS NULL AND synced_lyrics IS NULL
+               AND lyrics_not_found = 0
+               AND (artist IS NOT NULL OR title IS NOT NULL)",
+        ) {
+            Ok(mut stmt) => stmt
+                .query_map(params![], |row| {
+                    Ok(TrackRow {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        artist: row.get(2)?,
+                        album: row.get(3)?,
+                        duration_secs: row.get(4)?,
+                        file_name: row.get(5)?,
+                        file_path: row.get(6)?,
+                    })
                 })
-            })
-            .ok()
-            .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
-            .unwrap_or_default(),
-        Err(_) => Vec::new(),
-    };
+                .ok()
+                .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+                .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
+
+        let skipped = count_lyrics_not_found(&conn);
+        (tracks, skipped)
+    }; // lock released here
 
     let total = tracks.len();
-    let skipped_not_found = count_lyrics_not_found(conn);
     let mut fetched = 0;
     let mut not_found = 0;
 
@@ -381,6 +402,7 @@ pub fn fetch_library_lyrics(
             _ => continue,
         };
 
+        // HTTP request happens here — no DB lock held
         match fetch_lyrics(
             artist,
             title,
@@ -388,23 +410,29 @@ pub fn fetch_library_lyrics(
             Some(track.duration_secs),
         ) {
             Ok(result) => {
-                let _ = save_lyrics(
-                    conn,
-                    track.id,
-                    result.plain_lyrics.as_deref(),
-                    result.synced_lyrics.as_deref(),
-                );
-                // Embed plain lyrics in audio file tags
+                // Brief lock to save result
+                if let Ok(conn) = conn_arc.lock() {
+                    let _ = save_lyrics(
+                        &conn,
+                        track.id,
+                        result.plain_lyrics.as_deref(),
+                        result.synced_lyrics.as_deref(),
+                    );
+                }
+                // File I/O — no lock needed
                 if let Some(ref plain) = result.plain_lyrics {
                     let _ = write_lyrics_to_file(&track.file_path, plain);
                 }
                 fetched += 1;
             }
             Err(_) => {
-                let _ = conn.execute(
-                    "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
-                    params![track.id],
-                );
+                // Brief lock to mark as not found
+                if let Ok(conn) = conn_arc.lock() {
+                    let _ = conn.execute(
+                        "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
+                        params![track.id],
+                    );
+                }
                 not_found += 1;
             }
         }

@@ -343,7 +343,8 @@ pub fn fetch_library_lyrics(
              FROM tracks
              WHERE lyrics IS NULL AND synced_lyrics IS NULL
                AND lyrics_not_found = 0
-               AND (artist IS NOT NULL OR title IS NOT NULL)",
+               AND artist IS NOT NULL AND artist != ''
+               AND title IS NOT NULL AND title != ''",
         ) {
             Ok(mut stmt) => stmt
                 .query_map(params![], |row| {
@@ -393,14 +394,9 @@ pub fn fetch_library_lyrics(
             },
         );
 
-        let artist = match &track.artist {
-            Some(a) if !a.is_empty() => a.as_str(),
-            _ => continue,
-        };
-        let title = match &track.title {
-            Some(t) if !t.is_empty() => t.as_str(),
-            _ => continue,
-        };
+        // artist and title are guaranteed non-empty by the SQL query
+        let artist = track.artist.as_deref().unwrap_or("");
+        let title = track.title.as_deref().unwrap_or("");
 
         // HTTP request happens here — no DB lock held
         match fetch_lyrics(
@@ -412,12 +408,14 @@ pub fn fetch_library_lyrics(
             Ok(result) => {
                 // Brief lock to save result
                 if let Ok(conn) = conn_arc.lock() {
-                    let _ = save_lyrics(
+                    if let Err(e) = save_lyrics(
                         &conn,
                         track.id,
                         result.plain_lyrics.as_deref(),
                         result.synced_lyrics.as_deref(),
-                    );
+                    ) {
+                        log::warn!("Failed to save lyrics for track {}: {}", track.id, e);
+                    }
                 }
                 // File I/O — no lock needed
                 if let Some(ref plain) = result.plain_lyrics {

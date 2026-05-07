@@ -323,7 +323,7 @@ pub fn fetch_library_lyrics(
     use std::sync::atomic::Ordering;
 
     // Lock briefly to query tracks and count, then release
-    let (tracks, skipped_not_found) = {
+    let (tracks, skipped_not_found, already_have_lyrics) = {
         let conn = match conn_arc.lock() {
             Ok(c) => c,
             Err(_) => {
@@ -364,16 +364,36 @@ pub fn fetch_library_lyrics(
             Err(_) => Vec::new(),
         };
 
+        // Count tracks that already have lyrics (progress from prior runs)
+        let already_have_lyrics: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tracks WHERE lyrics IS NOT NULL OR synced_lyrics IS NOT NULL",
+                params![],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
         let skipped = count_lyrics_not_found(&conn);
-        (tracks, skipped)
+        (tracks, skipped, already_have_lyrics)
     }; // lock released here
 
     let total = tracks.len();
     let mut fetched = 0;
     let mut not_found = 0;
 
+    log::info!(
+        "Lyrics fetch starting: {} to fetch, {} already have lyrics, {} previously not found",
+        total,
+        already_have_lyrics,
+        skipped_not_found,
+    );
+
     for (i, track) in tracks.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
+            log::info!(
+                "Lyrics fetch cancelled at {}/{}: {} fetched, {} not found",
+                i, total, fetched, not_found,
+            );
             return LyricsFetchResult {
                 total,
                 fetched,
@@ -435,6 +455,11 @@ pub fn fetch_library_lyrics(
             }
         }
     }
+
+    log::info!(
+        "Lyrics fetch complete: {} fetched, {} not found out of {} total",
+        fetched, not_found, total,
+    );
 
     // Final progress event
     let _ = app.emit(

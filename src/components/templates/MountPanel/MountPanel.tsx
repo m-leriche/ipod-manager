@@ -10,7 +10,6 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
   const [status, setStatus] = useState<Status>("detecting");
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
-  const [password, setPassword] = useState("");
 
   const pollIPod = useCallback(async () => {
     try {
@@ -65,15 +64,10 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
 
   const handleMount = async () => {
     if (!diskInfo) return;
-    if (!password) {
-      setMessage({ text: "Enter your macOS password to mount", type: "info" });
-      return;
-    }
     setStatus("mounting");
     setMessage({ text: "Mounting iPod...", type: "info" });
     try {
-      await invoke("mount_ipod", { identifier: diskInfo.identifier, password });
-      setPassword("");
+      await invoke("mount_ipod", { identifier: diskInfo.identifier });
       setMessage({ text: "Mounted at /Volumes/IPOD", type: "success" });
       await detectIPod();
     } catch (err) {
@@ -93,10 +87,6 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
       setMessage({ text: `Unmount failed: ${err}`, type: "error" });
       setStatus("mounted");
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && status === "found" && password) handleMount();
   };
 
   const statusLabel = () => {
@@ -187,21 +177,9 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
         )}
       </div>
 
-      {status === "found" && (
-        <input
-          type="password"
-          placeholder="macOS password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          className="w-full mb-3.5 px-3.5 py-2.5 bg-bg-card border border-border rounded-xl text-text-primary text-xs outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
-        />
-      )}
-
       <div className="flex gap-2.5">
         <button
-          disabled={status !== "found" || !password}
+          disabled={status !== "found"}
           onClick={handleMount}
           className="flex-1 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
         >

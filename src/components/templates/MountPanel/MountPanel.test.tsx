@@ -72,25 +72,38 @@ describe("MountPanel", () => {
     });
   });
 
-  it("shows password input when iPod is connected but not mounted", async () => {
+  it("enables Mount button when iPod is connected but not mounted", async () => {
     mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
     render(<MountPanel />);
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("macOS password")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
     });
   });
 
-  it("enables Mount button only when password is entered", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
+  it("disables Mount button when iPod is already mounted", async () => {
+    mockInvoke.mockResolvedValue(DISK_INFO);
     render(<MountPanel />);
-
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Mount" })).toBeDisabled();
     });
+  });
 
-    await user.type(screen.getByPlaceholderText("macOS password"), "secret");
-    expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
+  it("calls mount_ipod without password", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    mockInvoke
+      .mockResolvedValueOnce({ ...DISK_INFO, mounted: false, mount_point: null }) // detect
+      .mockResolvedValueOnce(undefined) // mount
+      .mockResolvedValue(DISK_INFO); // re-detect
+
+    render(<MountPanel />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Mount" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("mount_ipod", { identifier: "disk5s1" });
+    });
   });
 
   it("enables Eject button only when iPod is mounted", async () => {

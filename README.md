@@ -160,7 +160,7 @@ src-tauri/src/
 │   ├── detection.rs                     #   Issue detection + comparison
 │   ├── lookup.rs                        #   MusicBrainz API lookups
 │   └── matching.rs                      #   Release matching logic
-├── disk.rs                              # iPod detection, mount/unmount
+├── disk.rs                              # iPod detection heuristics, helper binary bridge
 ├── albumart.rs                          # Album art scanning + MusicBrainz
 ├── metadata.rs                          # Audio tag reading/writing via lofty
 ├── musicbrainz.rs                       # Shared MusicBrainz API client
@@ -199,15 +199,7 @@ Each component has its own folder with co-located test, types, and helper files.
 
 ## How Mounting Works
 
-The app replicates the manual terminal workflow:
-
-```bash
-sudo diskutil unmount /dev/disk6s1
-sudo mkdir -p /Volumes/IPOD
-sudo mount -t msdos /dev/disk6s1 /Volumes/IPOD
-```
-
-The Rust backend runs these via `sudo -S`, piping your password through stdin. Your password is never stored — it's cleared from memory immediately after the mount command completes.
+The app uses a bundled Swift helper binary (`crate-disk-helper`) that talks to macOS's `DiskArbitration.framework`. Detection uses `DADiskCopyDescription` for typed disk properties (no text parsing). Mount and unmount use `DADiskMount`/`DADiskUnmount`, which go through the system's disk arbitration daemon — no sudo or password required for external USB drives.
 
 ## TODO
 
@@ -226,7 +218,7 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 - [ ] **Drag-to-reorder playlist tracks** — Reorder tracks within playlist detail view.
 
 ### Infrastructure
-- [ ] **Swift disk helper binary** — Replace `diskutil` text parsing in `disk.rs` with a small Swift CLI tool (`crate-disk-helper`) that uses `DiskArbitration.framework`. Gives event-driven USB detection (no polling), typed disk properties (no text parsing), and native mount/unmount without `sudo` password piping. Ship as a helper binary alongside the `.app` bundle. The Swift tool outputs JSON to stdout, Rust deserializes with serde — replaces ~580 lines of brittle parsing with ~150 lines of Swift.
+- [x] **Swift disk helper binary** — Replace `diskutil` text parsing in `disk.rs` with a small Swift CLI tool (`crate-disk-helper`) that uses `DiskArbitration.framework`. Gives event-driven USB detection (no polling), typed disk properties (no text parsing), and native mount/unmount without `sudo` password piping. Ship as a helper binary alongside the `.app` bundle. The Swift tool outputs JSON to stdout, Rust deserializes with serde — replaces ~580 lines of brittle parsing with ~150 lines of Swift.
 - [ ] **tauri-specta typed bridge** — Add `specta` + `tauri-specta` to auto-generate TypeScript types and invoke wrappers from Rust command signatures. Eliminates manual type duplication across `src/types/*.ts` and Rust structs (~74 invoke calls, ~8 type files maintained in parallel). Add `#[derive(specta::Type)]` to all bridge types, register commands with specta builder, replace raw `invoke()` calls with generated typed wrappers, delete manual TS type files.
 - [ ] **Sudo timeout** — Add timeout to sudo operations in `disk.rs` to prevent indefinite hangs.
 - [ ] **YouTube URL validation** — Use `url` crate instead of `starts_with("http")` for proper validation.

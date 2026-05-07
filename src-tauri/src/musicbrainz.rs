@@ -185,6 +185,138 @@ pub fn fetch_cover_art(mbid: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+// ── Artist search ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MbArtistSearchResult {
+    pub id: String,
+    pub name: String,
+    pub disambiguation: Option<String>,
+    pub score: u32,
+}
+
+/// Search MusicBrainz for an artist by name.
+/// Returns up to 5 candidates sorted by relevance score.
+pub fn search_artists(name: &str) -> Result<Vec<MbArtistSearchResult>, String> {
+    rate_limit();
+
+    let query = format!("artist:\"{}\"", name.replace('"', "\\\""));
+
+    let resp = ureq::get(&format!("{}/artist/", BASE_URL))
+        .query("query", &query)
+        .query("fmt", "json")
+        .query("limit", "5")
+        .set("User-Agent", USER_AGENT)
+        .call()
+        .map_err(|e| format!("Artist search failed: {}", e))?;
+
+    let body: serde_json::Value = {
+        let text = resp
+            .into_string()
+            .map_err(|e| format!("Read failed: {}", e))?;
+        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
+    };
+
+    let artists = body["artists"]
+        .as_array()
+        .ok_or_else(|| "No artist results from MusicBrainz".to_string())?;
+
+    let mut results = Vec::new();
+    for artist in artists {
+        let Some(id) = artist["id"].as_str() else {
+            continue;
+        };
+        results.push(MbArtistSearchResult {
+            id: id.to_string(),
+            name: artist["name"].as_str().unwrap_or("").to_string(),
+            disambiguation: artist["disambiguation"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string()),
+            score: artist["score"].as_u64().unwrap_or(0) as u32,
+        });
+    }
+
+    Ok(results)
+}
+
+// ── Release-group browse ───────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MbReleaseGroup {
+    pub id: String,
+    pub title: String,
+    pub primary_type: Option<String>,
+    pub first_release_date: Option<String>,
+}
+
+/// Fetch release-groups (albums/EPs/singles) for an artist MBID.
+/// Returns all official release-groups sorted by first-release-date descending.
+pub fn fetch_artist_release_groups(artist_mbid: &str) -> Result<Vec<MbReleaseGroup>, String> {
+    let mut all = Vec::new();
+    let mut offset: usize = 0;
+    let limit: usize = 100;
+
+    loop {
+        rate_limit();
+
+        let resp = ureq::get(&format!("{}/release-group", BASE_URL))
+            .query("artist", artist_mbid)
+            .query("type", "album|ep|single")
+            .query("fmt", "json")
+            .query("limit", &limit.to_string())
+            .query("offset", &offset.to_string())
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|e| format!("Release-group fetch failed: {}", e))?;
+
+        let body: serde_json::Value = {
+            let text = resp
+                .into_string()
+                .map_err(|e| format!("Read failed: {}", e))?;
+            serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
+        };
+
+        let groups = match body["release-groups"].as_array() {
+            Some(g) => g,
+            None => break,
+        };
+
+        if groups.is_empty() {
+            break;
+        }
+
+        for rg in groups {
+            let Some(id) = rg["id"].as_str() else {
+                continue;
+            };
+            all.push(MbReleaseGroup {
+                id: id.to_string(),
+                title: rg["title"].as_str().unwrap_or("").to_string(),
+                primary_type: rg["primary-type"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string()),
+                first_release_date: rg["first-release-date"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string()),
+            });
+        }
+
+        let total = body["release-group-count"].as_u64().unwrap_or(0) as usize;
+        offset += limit;
+        if offset >= total {
+            break;
+        }
+    }
+
+    // Sort by date descending (newest first), None dates last
+    all.sort_by(|a, b| b.first_release_date.cmp(&a.first_release_date));
+
+    Ok(all)
+}
+
 // ── Name normalization ──────────────────────────────────────────
 
 /// Known noise words that appear inside parentheses/brackets and hurt search.

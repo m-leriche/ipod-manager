@@ -14,6 +14,7 @@ import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
 import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
+import { NewReleasesProvider, useNewReleases } from "./contexts/NewReleasesContext";
 import { ErrorBoundary } from "./components/atoms/ErrorBoundary/ErrorBoundary";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
@@ -31,6 +32,7 @@ import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
 import { LyricsPanel } from "./components/organisms/LyricsPanel/LyricsPanel";
 import { useResizableWidth as useLyricsPanelWidth } from "./components/organisms/LyricsPanel/useResizableWidth";
 import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
+import { NewReleasesModal } from "./components/templates/NewReleasesModal/NewReleasesModal";
 import { KeyboardShortcutsDialog } from "./components/atoms/KeyboardShortcutsDialog/KeyboardShortcutsDialog";
 import type { LibraryScanProgress, LibraryTrack } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
@@ -47,15 +49,17 @@ const App = () => (
           <ArtCacheProvider>
             <BackgroundArtRepairProvider>
               <BackgroundLyricsProvider>
-                <EqualizerProvider>
-                  <PlaybackProvider>
-                    <PlaylistProvider>
-                      <AppContent />
-                      <ProgressModal />
-                      <ToastContainer />
-                    </PlaylistProvider>
-                  </PlaybackProvider>
-                </EqualizerProvider>
+                <NewReleasesProvider>
+                  <EqualizerProvider>
+                    <PlaybackProvider>
+                      <PlaylistProvider>
+                        <AppContent />
+                        <ProgressModal />
+                        <ToastContainer />
+                      </PlaylistProvider>
+                    </PlaybackProvider>
+                  </EqualizerProvider>
+                </NewReleasesProvider>
               </BackgroundLyricsProvider>
             </BackgroundArtRepairProvider>
           </ArtCacheProvider>
@@ -82,6 +86,8 @@ const AppContent = () => {
   const [toolTab, setToolTab] = useState<ToolTab>("files");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [newReleasesOpen, setNewReleasesOpen] = useState(false);
+  const { newReleaseCount } = useNewReleases();
   const [queueOpen, setQueueOpen] = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
   const savedSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -306,6 +312,24 @@ const AppContent = () => {
         </div>
         <div className="flex-1" />
         <button
+          onClick={() => setNewReleasesOpen(true)}
+          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.228a2.25 2.25 0 00-.798-1.716l-.005-.004M9 9v10.114a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553V9z"
+            />
+          </svg>
+          New Releases
+          {newReleaseCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[9px] font-bold flex items-center justify-center">
+              {newReleaseCount}
+            </span>
+          )}
+        </button>
+        <button
           onClick={handleRescan}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
         >
@@ -464,6 +488,7 @@ const AppContent = () => {
         </ErrorBoundary>
       )}
       {shortcutsOpen && <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {newReleasesOpen && <NewReleasesModal onClose={() => setNewReleasesOpen(false)} />}
     </div>
   );
 };

@@ -181,6 +181,36 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Failed to create scrobble_queue table: {}", e))?;
 
+    // Artist release watchlist tables
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS watched_artists (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            mb_artist_id TEXT,
+            mb_artist_name TEXT,
+            match_status TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL DEFAULT 0,
+            last_checked_at INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS discovered_releases (
+            id INTEGER PRIMARY KEY,
+            watched_artist_id INTEGER NOT NULL,
+            mb_release_group_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            artist_name TEXT NOT NULL,
+            release_type TEXT,
+            first_release_date TEXT,
+            discovered_at INTEGER NOT NULL DEFAULT 0,
+            dismissed INTEGER NOT NULL DEFAULT 0,
+            in_library INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(watched_artist_id) REFERENCES watched_artists(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_discovered_releases_artist ON discovered_releases(watched_artist_id);",
+    )
+    .map_err(|e| format!("Failed to create artist releases tables: {}", e))?;
+
     // Seed built-in smart playlists
     let now = now_epoch();
     let seed_sql = "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)";

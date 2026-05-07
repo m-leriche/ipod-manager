@@ -150,6 +150,27 @@ vi.mock("../contexts/LastfmContext", () => ({
   LastfmProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock NewReleasesContext
+vi.mock("../contexts/NewReleasesContext", () => ({
+  useNewReleases: () => ({
+    checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" },
+    releases: [],
+    watchedArtists: [],
+    newReleaseCount: 0,
+    startCheck: vi.fn(),
+    cancelCheck: vi.fn(),
+    watchArtist: vi.fn(),
+    unwatchArtist: vi.fn(),
+    isWatched: vi.fn(() => false),
+    dismissRelease: vi.fn(),
+    refreshReleases: vi.fn(),
+    refreshWatchedArtists: vi.fn(),
+    lastResult: null,
+    clearResult: vi.fn(),
+  }),
+  NewReleasesProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({

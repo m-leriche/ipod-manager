@@ -1,3 +1,4 @@
+mod artist_releases;
 mod audio;
 mod files;
 mod ipod;
@@ -9,6 +10,7 @@ mod metadata;
 mod playlists;
 mod system;
 
+pub use artist_releases::*;
 pub use audio::*;
 pub use files::*;
 pub use ipod::*;

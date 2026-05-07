@@ -6,6 +6,7 @@ import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnBrowserWidths } from "./useColumnBrowserWidths";
+import { useNewReleases } from "../../../contexts/NewReleasesContext";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
 export interface ColumnContextMenuAction {
@@ -54,6 +55,7 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   playlists,
 }: ColumnBrowserProps) {
   const { widths, containerRef, onDragStart } = useColumnBrowserWidths();
+  const { watchArtist, unwatchArtist, isWatched, watchedArtists } = useNewReleases();
 
   const genreItems = useMemo<BrowserItem[]>(
     () => genres.map((g) => ({ label: g.name, count: g.track_count })),
@@ -105,6 +107,12 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         playlists={playlists}
         widthPercent={`${widths[1] * 100}%`}
         onResizeStart={(e) => onDragStart(1, e)}
+        onWatchArtist={watchArtist}
+        onUnwatchArtist={(name: string) => {
+          const artist = watchedArtists.find((a) => a.name === name);
+          if (artist) unwatchArtist(artist.id);
+        }}
+        isItemWatched={isWatched}
       />
       <BrowserColumn
         title="Albums"
@@ -142,6 +150,9 @@ interface BrowserColumnProps {
   onResizeStart?: (e: React.MouseEvent) => void;
   isLast?: boolean;
   showArt?: boolean;
+  onWatchArtist?: (name: string) => void;
+  onUnwatchArtist?: (name: string) => void;
+  isItemWatched?: (name: string) => boolean;
 }
 
 const ITEM_HEIGHT = 27;
@@ -165,6 +176,9 @@ const BrowserColumn = memo(function BrowserColumn({
   onResizeStart,
   isLast,
   showArt,
+  onWatchArtist,
+  onUnwatchArtist,
+  isItemWatched,
 }: BrowserColumnProps) {
   const itemHeight = showArt ? ART_ITEM_HEIGHT : ITEM_HEIGHT;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -310,6 +324,7 @@ const BrowserColumn = memo(function BrowserColumn({
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) return [];
     const action: ColumnContextMenuAction = { column: columnType, value: contextMenu.value };
+    const watched = isItemWatched?.(contextMenu.value) ?? false;
     return [
       ...(onPlayAll
         ? [
@@ -348,8 +363,33 @@ const BrowserColumn = memo(function BrowserColumn({
             },
           ]
         : []),
+      ...(onWatchArtist && onUnwatchArtist
+        ? [
+            {
+              label: watched ? "Stop Watching Releases" : "Watch for New Releases",
+              onClick: () => {
+                if (watched) {
+                  onUnwatchArtist(contextMenu.value);
+                } else {
+                  onWatchArtist(contextMenu.value);
+                }
+                setContextMenu(null);
+              },
+            },
+          ]
+        : []),
     ];
-  }, [contextMenu, columnType, onPlayAll, onAddAllToQueue, onAddAllToPlaylist, playlists]);
+  }, [
+    contextMenu,
+    columnType,
+    onPlayAll,
+    onAddAllToQueue,
+    onAddAllToPlaylist,
+    playlists,
+    onWatchArtist,
+    onUnwatchArtist,
+    isItemWatched,
+  ]);
 
   const virtualItems = virtualizer.getVirtualItems();
 

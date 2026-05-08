@@ -5,8 +5,39 @@ import { invoke } from "@tauri-apps/api/core";
 import { LibraryHealthDashboard } from "./LibraryHealthDashboard";
 import { issuePercentage, issueSeverity } from "./helpers";
 import type { HealthReport, HealthIssue } from "./types";
+import type { LibraryTrack } from "../../../types/library";
 
 const mockInvoke = vi.mocked(invoke);
+
+const MOCK_TRACKS: LibraryTrack[] = [
+  {
+    id: 1,
+    file_path: "/music/track_1.flac",
+    file_name: "track_1.flac",
+    folder_path: "/music",
+    title: null,
+    artist: "Artist A",
+    album: "Album A",
+    album_artist: null,
+    sort_artist: null,
+    sort_album_artist: null,
+    track_number: 1,
+    track_total: null,
+    disc_number: null,
+    disc_total: null,
+    year: 2020,
+    genre: "Rock",
+    duration_secs: 240,
+    sample_rate: 44100,
+    bitrate_kbps: 900,
+    format: "FLAC",
+    file_size: 30000000,
+    created_at: 0,
+    play_count: 0,
+    flagged: false,
+    rating: 0,
+  },
+];
 
 const MOCK_REPORT: HealthReport = {
   total_tracks: 1000,
@@ -158,6 +189,84 @@ describe("LibraryHealthDashboard", () => {
     await waitFor(() => {
       expect(screen.getByText(/library is healthy/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe("drill-down", () => {
+  it("opens detail modal when issue card is clicked", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title — 5 tracks")).toBeInTheDocument();
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("get_health_issue_tracks", { issueId: "missing_title" });
+  });
+
+  it("shows track data in the modal", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Artist A")).toBeInTheDocument();
+  });
+
+  it("closes modal on backdrop click", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title — 5 tracks")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("modal-backdrop"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Missing title — 5 tracks")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not open modal for zero-count issues", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(MOCK_REPORT);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Low bitrate (< 128 kbps)")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Low bitrate (< 128 kbps)"));
+
+    // Modal should NOT open — only the initial get_library_health call should have been made
+    expect(screen.queryByText(/— 0 tracks/)).not.toBeInTheDocument();
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 });
 

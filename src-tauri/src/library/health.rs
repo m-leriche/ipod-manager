@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 use serde::Serialize;
 
+use super::types::LibraryTrack;
+
 // ── Types ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -16,7 +18,7 @@ pub struct HealthIssue {
     pub count: usize,
 }
 
-// ── Query ───────────────────────────────────────────────────────
+// ── Queries ─────────────────────────────────────────────────────
 
 pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
     let total_tracks: usize = conn
@@ -31,20 +33,25 @@ pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
     }
 
     let issues = vec![
-        query_issue(conn, "missing_title", "Missing title", MISSING_TITLE_SQL)?,
-        query_issue(conn, "missing_artist", "Missing artist", MISSING_ARTIST_SQL)?,
-        query_issue(conn, "missing_album", "Missing album", MISSING_ALBUM_SQL)?,
-        query_issue(conn, "missing_genre", "Missing genre", MISSING_GENRE_SQL)?,
-        query_issue(conn, "missing_year", "Missing year", MISSING_YEAR_SQL)?,
-        query_issue(conn, "unrated", "Unrated", UNRATED_SQL)?,
+        query_issue(conn, "missing_title", "Missing title", MISSING_TITLE_WHERE)?,
+        query_issue(
+            conn,
+            "missing_artist",
+            "Missing artist",
+            MISSING_ARTIST_WHERE,
+        )?,
+        query_issue(conn, "missing_album", "Missing album", MISSING_ALBUM_WHERE)?,
+        query_issue(conn, "missing_genre", "Missing genre", MISSING_GENRE_WHERE)?,
+        query_issue(conn, "missing_year", "Missing year", MISSING_YEAR_WHERE)?,
+        query_issue(conn, "unrated", "Unrated", UNRATED_WHERE)?,
         query_issue(
             conn,
             "low_bitrate",
             "Low bitrate (< 128 kbps)",
-            LOW_BITRATE_SQL,
+            LOW_BITRATE_WHERE,
         )?,
-        query_issue(conn, "flagged", "Flagged for review", FLAGGED_SQL)?,
-        query_issue(conn, "never_played", "Never played", NEVER_PLAYED_SQL)?,
+        query_issue(conn, "flagged", "Flagged for review", FLAGGED_WHERE)?,
+        query_issue(conn, "never_played", "Never played", NEVER_PLAYED_WHERE)?,
     ];
 
     Ok(HealthReport {
@@ -53,36 +60,97 @@ pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
     })
 }
 
-// ── SQL constants ───────────────────────────────────────────────
+pub fn get_health_issue_tracks(
+    conn: &Connection,
+    issue_id: &str,
+) -> Result<Vec<LibraryTrack>, String> {
+    let where_clause = issue_where_clause(issue_id)?;
+    let sql = format!(
+        "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
+                sort_artist, sort_album_artist, track_number, track_total, disc_number, disc_total,
+                year, genre, duration_secs, sample_rate, bitrate_kbps, format, file_size,
+                created_at, play_count, flagged, rating
+         FROM tracks WHERE {} ORDER BY file_path",
+        where_clause
+    );
 
-const MISSING_TITLE_SQL: &str =
-    "SELECT COUNT(*) FROM tracks WHERE title IS NULL OR TRIM(title) = ''";
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("DB error: {}", e))?;
 
-const MISSING_ARTIST_SQL: &str =
-    "SELECT COUNT(*) FROM tracks WHERE artist IS NULL OR TRIM(artist) = ''";
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(LibraryTrack {
+                id: r.get(0)?,
+                file_path: r.get(1)?,
+                file_name: r.get(2)?,
+                folder_path: r.get(3)?,
+                title: r.get(4)?,
+                artist: r.get(5)?,
+                album: r.get(6)?,
+                album_artist: r.get(7)?,
+                sort_artist: r.get(8)?,
+                sort_album_artist: r.get(9)?,
+                track_number: r.get(10)?,
+                track_total: r.get(11)?,
+                disc_number: r.get(12)?,
+                disc_total: r.get(13)?,
+                year: r.get(14)?,
+                genre: r.get(15)?,
+                duration_secs: r.get(16)?,
+                sample_rate: r.get(17)?,
+                bitrate_kbps: r.get(18)?,
+                format: r.get(19)?,
+                file_size: r.get::<_, i64>(20).map(|v| v as u64)?,
+                created_at: r.get(21)?,
+                play_count: r.get::<_, i64>(22).map(|v| v as u32)?,
+                flagged: r.get(23)?,
+                rating: r.get::<_, i64>(24).map(|v| v as u8)?,
+            })
+        })
+        .map_err(|e| format!("DB error: {}", e))?;
 
-const MISSING_ALBUM_SQL: &str =
-    "SELECT COUNT(*) FROM tracks WHERE album IS NULL OR TRIM(album) = ''";
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))
+}
 
-const MISSING_GENRE_SQL: &str =
-    "SELECT COUNT(*) FROM tracks WHERE genre IS NULL OR TRIM(genre) = ''";
+// ── WHERE clause constants ──────────────────────────────────────
 
-const MISSING_YEAR_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE year IS NULL OR year = 0";
+const MISSING_TITLE_WHERE: &str = "title IS NULL OR TRIM(title) = ''";
+const MISSING_ARTIST_WHERE: &str = "artist IS NULL OR TRIM(artist) = ''";
+const MISSING_ALBUM_WHERE: &str = "album IS NULL OR TRIM(album) = ''";
+const MISSING_GENRE_WHERE: &str = "genre IS NULL OR TRIM(genre) = ''";
+const MISSING_YEAR_WHERE: &str = "year IS NULL OR year = 0";
+const UNRATED_WHERE: &str = "rating = 0";
+const LOW_BITRATE_WHERE: &str =
+    "bitrate_kbps IS NOT NULL AND bitrate_kbps > 0 AND bitrate_kbps < 128";
+const FLAGGED_WHERE: &str = "flagged = 1";
+const NEVER_PLAYED_WHERE: &str = "play_count = 0";
 
-const UNRATED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE rating = 0";
-
-const LOW_BITRATE_SQL: &str =
-    "SELECT COUNT(*) FROM tracks WHERE bitrate_kbps IS NOT NULL AND bitrate_kbps > 0 AND bitrate_kbps < 128";
-
-const FLAGGED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE flagged = 1";
-
-const NEVER_PLAYED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE play_count = 0";
+fn issue_where_clause(issue_id: &str) -> Result<&'static str, String> {
+    match issue_id {
+        "missing_title" => Ok(MISSING_TITLE_WHERE),
+        "missing_artist" => Ok(MISSING_ARTIST_WHERE),
+        "missing_album" => Ok(MISSING_ALBUM_WHERE),
+        "missing_genre" => Ok(MISSING_GENRE_WHERE),
+        "missing_year" => Ok(MISSING_YEAR_WHERE),
+        "unrated" => Ok(UNRATED_WHERE),
+        "low_bitrate" => Ok(LOW_BITRATE_WHERE),
+        "flagged" => Ok(FLAGGED_WHERE),
+        "never_played" => Ok(NEVER_PLAYED_WHERE),
+        _ => Err(format!("Unknown health issue: {}", issue_id)),
+    }
+}
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-fn query_issue(conn: &Connection, id: &str, label: &str, sql: &str) -> Result<HealthIssue, String> {
+fn query_issue(
+    conn: &Connection,
+    id: &str,
+    label: &str,
+    where_clause: &str,
+) -> Result<HealthIssue, String> {
+    let sql = format!("SELECT COUNT(*) FROM tracks WHERE {}", where_clause);
     let count: usize = conn
-        .query_row(sql, [], |r| r.get(0))
+        .query_row(&sql, [], |r| r.get(0))
         .map_err(|e| format!("DB error: {}", e))?;
 
     Ok(HealthIssue {
@@ -358,5 +426,47 @@ mod tests {
 
         let report = get_library_health(&conn).unwrap();
         assert_eq!(report.issues.len(), report_issues_len);
+    }
+
+    #[test]
+    fn drill_down_returns_matching_tracks() {
+        let conn = setup_db();
+        insert_track(
+            &conn,
+            1,
+            None,
+            Some("A"),
+            Some("B"),
+            Some("G"),
+            Some(2020),
+            Some(320),
+            false,
+            4,
+            5,
+        );
+        insert_track(
+            &conn,
+            2,
+            Some("Song"),
+            Some("A"),
+            Some("B"),
+            Some("G"),
+            Some(2020),
+            Some(320),
+            false,
+            4,
+            5,
+        );
+
+        let tracks = get_health_issue_tracks(&conn, "missing_title").unwrap();
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id, 1);
+    }
+
+    #[test]
+    fn drill_down_unknown_issue_returns_error() {
+        let conn = setup_db();
+        let result = get_health_issue_tracks(&conn, "nonexistent");
+        assert!(result.is_err());
     }
 }

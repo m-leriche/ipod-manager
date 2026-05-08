@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { HealthReport, Phase } from "./types";
+import type { HealthReport, HealthIssue, Phase } from "./types";
 import { issuePercentage, issueSeverity } from "./helpers";
+import { HealthDetailModal } from "./HealthDetailModal";
 
 export const LibraryHealthDashboard = () => {
   const [phase, setPhase] = useState<Phase>("idle");
   const [report, setReport] = useState<HealthReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeIssue, setActiveIssue] = useState<HealthIssue | null>(null);
 
   const load = useCallback(async () => {
     setPhase("loading");
@@ -74,16 +76,18 @@ export const LibraryHealthDashboard = () => {
         <div className="grid grid-cols-3 gap-3">
           {report.issues.map((issue) => {
             const severity = issueSeverity(issue, report.total_tracks);
+            const clickable = issue.count > 0;
             return (
               <div
                 key={issue.id}
+                onClick={clickable ? () => setActiveIssue(issue) : undefined}
                 className={`bg-bg-card border rounded-xl px-4 py-3 ${
                   severity === "critical"
                     ? "border-danger/30"
                     : severity === "warning"
                       ? "border-warning/30"
                       : "border-border"
-                }`}
+                } ${clickable ? "cursor-pointer hover:border-border-active transition-all" : ""}`}
               >
                 <div className="flex items-baseline justify-between mb-1">
                   <span className="text-[11px] font-medium text-text-secondary">{issue.label}</span>
@@ -103,6 +107,8 @@ export const LibraryHealthDashboard = () => {
           })}
         </div>
       </div>
+
+      {activeIssue && <HealthDetailModal issue={activeIssue} onClose={() => setActiveIssue(null)} />}
     </div>
   );
 };

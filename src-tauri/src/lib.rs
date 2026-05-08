@@ -284,6 +284,7 @@ pub fn run() {
             commands::reset_lyrics_not_found,
             commands::count_lyrics_not_found,
             commands::get_library_health,
+            commands::get_health_issue_tracks,
             commands::export_library,
         ])
         .run(tauri::generate_context!())

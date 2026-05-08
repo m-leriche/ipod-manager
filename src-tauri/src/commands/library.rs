@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
 pub async fn scan_library_stats(
@@ -315,21 +315,33 @@ pub async fn refresh_library(
 
 #[tauri::command]
 pub async fn background_rescan(
+    app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<library::BackgroundScanResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
         library::background_rescan_all_folders(&conn, &flag)
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    if result.changed > 0 || result.removed > 0 {
+        let _ = app.emit(
+            "library-changed",
+            crate::watcher::LibraryChangeEvent {
+                added: result.changed,
+                removed: result.removed,
+            },
+        );
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -360,6 +372,40 @@ pub async fn get_library_browser_data(
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
         library::get_browser_data(&conn, &filter)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn get_library_browser_data_paginated(
+    filter: library::LibraryFilter,
+    db: State<'_, LibraryDb>,
+) -> Result<library::PaginatedBrowserData, AppError> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_browser_data_paginated(&conn, &filter)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn get_library_tracks_page(
+    filter: library::LibraryFilter,
+    db: State<'_, LibraryDb>,
+) -> Result<library::PaginatedTracks, AppError> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        library::get_tracks_paginated(&conn, &filter)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

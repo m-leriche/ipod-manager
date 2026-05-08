@@ -25,6 +25,7 @@ mod profiles;
 mod rockbox;
 mod sanitize;
 mod streaming;
+mod thumbnail;
 mod volume_monitor;
 mod watcher;
 mod youtube;
@@ -225,6 +226,8 @@ pub fn run() {
             commands::background_rescan,
             commands::get_library_tracks,
             commands::get_library_browser_data,
+            commands::get_library_browser_data_paginated,
+            commands::get_library_tracks_page,
             commands::get_library_artists,
             commands::get_library_albums,
             commands::get_library_genres,
@@ -267,6 +270,8 @@ pub fn run() {
             commands::fix_library_album_art,
             commands::upload_album_art,
             commands::cancel_art_repair,
+            commands::get_thumbnail,
+            commands::invalidate_thumbnail,
             commands::lastfm_get_token,
             commands::lastfm_get_session,
             commands::lastfm_disconnect,

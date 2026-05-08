@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useLazyImage } from "../../../hooks/useLazyImage";
@@ -10,6 +11,15 @@ const sizes = {
   xl: "w-[280px] h-[280px]",
   full: "w-full aspect-square",
 } as const;
+
+/** Map component size to backend thumbnail size. "full" uses raw cover.jpg. */
+const THUMB_SIZE_MAP: Record<string, string | null> = {
+  sm: "small",
+  md: "small",
+  lg: "medium",
+  xl: "large",
+  full: null,
+};
 
 interface AlbumArtworkProps {
   folderPath: string | null;
@@ -39,10 +49,15 @@ export const AlbumArtwork = ({
   const [loaded, setLoaded] = useState(false);
   const { ref, isVisible } = useLazyImage(lazy);
 
+  // Thumbnail state
+  const [thumbSrc, setThumbSrc] = useState<string | null>(null);
+  const thumbRequestRef = useRef(0);
+
   // Reset failed/loaded state when the folder changes or after a repair (cacheBust changes)
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
+    setThumbSrc(null);
   }, [folderPath, effectiveBust]);
 
   // Respond to per-folder art fix events (only re-render this artwork when its folder is fixed)
@@ -56,8 +71,28 @@ export const AlbumArtwork = ({
     return () => window.removeEventListener("album-art-fixed", handler);
   }, [folderPath]);
 
+  // Request a cached thumbnail when visible
+  const thumbSize = THUMB_SIZE_MAP[size] ?? null;
+  useEffect(() => {
+    if (!folderPath || !thumbSize || !isVisible) return;
+    const id = ++thumbRequestRef.current;
+    invoke<string | null>("get_thumbnail", { folderPath, size: thumbSize })
+      .then((path) => {
+        if (id !== thumbRequestRef.current) return;
+        if (path) {
+          setThumbSrc(convertFileSrc(path) + (effectiveBust ? `?v=${effectiveBust}` : ""));
+        }
+      })
+      .catch(() => {});
+  }, [folderPath, thumbSize, effectiveBust, isVisible]);
+
   const showFallback = !folderPath || failed;
   const showImage = !showFallback && isVisible;
+
+  // Use thumbnail if available, otherwise fall back to raw cover.jpg
+  const imgSrc =
+    thumbSrc ||
+    (folderPath ? convertFileSrc(folderPath + "/cover.jpg") + (effectiveBust ? `?v=${effectiveBust}` : "") : "");
 
   return (
     <div ref={ref} className={`${sizes[size]} shrink-0 rounded-lg overflow-hidden ${className}`}>
@@ -85,7 +120,7 @@ export const AlbumArtwork = ({
           )}
           {showImage && (
             <img
-              src={convertFileSrc(folderPath + "/cover.jpg") + (effectiveBust ? `?v=${effectiveBust}` : "")}
+              src={imgSrc}
               alt=""
               className={`w-full h-full object-cover transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setLoaded(true)}

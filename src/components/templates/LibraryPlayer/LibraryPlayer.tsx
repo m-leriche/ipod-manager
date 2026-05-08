@@ -26,6 +26,8 @@ import type {
   AlbumSummary,
   GenreSummary,
   BrowserData,
+  PaginatedBrowserData,
+  PaginatedTracks,
   LibraryFilter,
   SmartPlaylist,
 } from "../../../types/library";
@@ -33,6 +35,7 @@ import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 import { pickFile } from "../../../utils/pickPath";
 
+const PAGE_SIZE = 500;
 const FLAGGED_FILTER_KEY = "crate-flagged-filter";
 const SORT_BY_KEY = "crate-sort-by";
 const SORT_DIR_KEY = "crate-sort-direction";
@@ -136,6 +139,9 @@ export const LibraryPlayer = ({
   const [artistList, setArtistList] = useState<ArtistSummary[]>([]);
   const [albumList, setAlbumList] = useState<AlbumSummary[]>([]);
 
+  const [totalTrackCount, setTotalTrackCount] = useState(0);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
+
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
@@ -170,13 +176,15 @@ export const LibraryPlayer = ({
   const { activeSmartPlaylistId, activeSmartPlaylistTracks, createSmartPlaylist, updateSmartPlaylist } = usePlaylist();
 
   const displayedTracks = useMemo(() => {
-    const baseTracks =
-      activeSmartPlaylistId !== null
+    const isPlaylistView = activeSmartPlaylistId !== null || activePlaylistId !== null;
+    const baseTracks = isPlaylistView
+      ? activeSmartPlaylistId !== null
         ? activeSmartPlaylistTracks
-        : activePlaylistId !== null
-          ? activePlaylistTracks
-          : tracks;
-    if (!debouncedSearch) return baseTracks;
+        : activePlaylistTracks
+      : tracks;
+    // Library view: search is handled by the backend via filter, no client-side filtering needed
+    if (!debouncedSearch || !isPlaylistView) return baseTracks;
+    // Playlist views: apply client-side search since playlists aren't paginated
     const q = debouncedSearch.toLowerCase();
     return baseTracks.filter(
       (t) =>
@@ -248,33 +256,44 @@ export const LibraryPlayer = ({
       const filter: LibraryFilter = {
         sort_by: sortBy,
         sort_direction: sortDirection,
+        offset: 0,
+        limit: PAGE_SIZE,
         ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
         ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
         ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(flaggedOnly ? { flagged_only: true } : {}),
       };
-      const data = await invoke<BrowserData>("get_library_browser_data", { filter });
+      const data = await invoke<PaginatedBrowserData>("get_library_browser_data_paginated", { filter });
       if (id !== fetchIdRef.current) return;
       startTransition(() => {
-        setTracks(data.tracks);
+        setTracks(data.tracks.tracks);
+        setTotalTrackCount(data.tracks.total_count);
         setGenreList(data.genres);
         setArtistList(data.artists);
         setAlbumList(data.albums);
       });
       if (isUnfiltered) {
-        unfilteredCacheRef.current = { data, sortBy, sortDirection };
-        setCachedLibrary({ hasLibrary: true, browserData: data, cachedAt: Date.now() });
+        // Cache as BrowserData for backward-compatible IndexedDB cache
+        const browserData: BrowserData = {
+          tracks: data.tracks.tracks,
+          genres: data.genres,
+          artists: data.artists,
+          albums: data.albums,
+        };
+        unfilteredCacheRef.current = { data: browserData, sortBy, sortDirection };
+        setCachedLibrary({ hasLibrary: true, browserData, cachedAt: Date.now() });
       }
-      if (playAfterFetchRef.current && data.tracks.length > 0) {
+      if (playAfterFetchRef.current && data.tracks.tracks.length > 0) {
         playAfterFetchRef.current = false;
-        playTrack(data.tracks[0], data.tracks);
+        playTrack(data.tracks.tracks[0], data.tracks.tracks);
       }
     } catch (e) {
       if (id !== fetchIdRef.current) return;
       console.error("Failed to load library data:", e);
       playAfterFetchRef.current = false;
       setTracks([]);
+      setTotalTrackCount(0);
       setGenreList([]);
       setArtistList([]);
       setAlbumList([]);
@@ -288,7 +307,7 @@ export const LibraryPlayer = ({
     try {
       const result = await invoke<{ changed: number; removed: number; total_scanned: number }>("background_rescan");
       if (result.changed > 0 || result.removed > 0) {
-        await fetchBrowserData();
+        // The backend now emits "library-changed" which triggers App.tsx -> libraryRefreshRef -> fetchBrowserData
         const parts: string[] = [];
         if (result.changed > 0) parts.push(`${result.changed} updated`);
         if (result.removed > 0) parts.push(`${result.removed} removed`);
@@ -299,7 +318,50 @@ export const LibraryPlayer = ({
     } finally {
       setIsBackgroundScanning(false);
     }
-  }, [fetchBrowserData, toast]);
+  }, [toast]);
+
+  // ── Load more tracks (scroll pagination) ──────────────────────
+
+  const loadMoreTracks = useCallback(
+    async (startIndex: number) => {
+      if (isLoadingPage || startIndex >= totalTrackCount) return;
+      // Don't paginate playlist views
+      if (activePlaylistId !== null || activeSmartPlaylistId !== null) return;
+      setIsLoadingPage(true);
+      try {
+        const filter: LibraryFilter = {
+          sort_by: sortBy,
+          sort_direction: sortDirection,
+          offset: startIndex,
+          limit: PAGE_SIZE,
+          ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
+          ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
+          ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          ...(flaggedOnly ? { flagged_only: true } : {}),
+        };
+        const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
+        setTracks((prev) => [...prev, ...page.tracks]);
+      } catch (e) {
+        console.error("Failed to load tracks page:", e);
+      } finally {
+        setIsLoadingPage(false);
+      }
+    },
+    [
+      isLoadingPage,
+      totalTrackCount,
+      activePlaylistId,
+      activeSmartPlaylistId,
+      sortBy,
+      sortDirection,
+      selectedGenres,
+      selectedArtists,
+      selectedAlbums,
+      debouncedSearch,
+      flaggedOnly,
+    ],
+  );
 
   // ── Initial load ──────────────────────────────────────────────
 
@@ -763,7 +825,10 @@ export const LibraryPlayer = ({
               Updating…
             </span>
           )}
-          <span className="text-[10px] text-text-tertiary tabular-nums">{displayedTracks.length} tracks</span>
+          <span className="text-[10px] text-text-tertiary tabular-nums">
+            {activePlaylistId === null && activeSmartPlaylistId === null ? totalTrackCount : displayedTracks.length}{" "}
+            tracks
+          </span>
           <div className="w-px h-4 bg-border" />
           <div className="flex items-center gap-0.5">
             {onTogglePlaylistSidebar && (
@@ -921,6 +986,8 @@ export const LibraryPlayer = ({
         {(!(showAlbumGrid || showArtworkCarousel) || showTrackList) && (
           <TrackTable
             tracks={displayedTracks}
+            totalTrackCount={activePlaylistId === null && activeSmartPlaylistId === null ? totalTrackCount : undefined}
+            onLoadMore={activePlaylistId === null && activeSmartPlaylistId === null ? loadMoreTracks : undefined}
             sortBy={sortBy}
             sortDirection={sortDirection}
             onSort={handleSort}

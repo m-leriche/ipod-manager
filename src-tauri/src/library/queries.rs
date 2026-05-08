@@ -3,6 +3,7 @@ use rusqlite::Connection;
 
 use super::types::{
     AlbumSummary, ArtistSummary, BrowserData, GenreSummary, LibraryFilter, LibraryTrack,
+    PaginatedBrowserData, PaginatedTracks,
 };
 
 /// Generate a sort key that strips leading "The ", removes non-alphanumeric
@@ -55,9 +56,12 @@ fn push_in_condition(
     }
 }
 
-pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
+/// Build WHERE conditions from a LibraryFilter (shared by get_tracks and paginated variants).
+fn build_track_conditions(
+    filter: &LibraryFilter,
+) -> (String, Vec<Box<dyn rusqlite::types::ToSql>>) {
     let mut conditions = Vec::new();
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(ref artists) = filter.artist {
         if !artists.is_empty() {
@@ -65,18 +69,18 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
                 "COALESCE(album_artist, artist)",
                 artists,
                 &mut conditions,
-                &mut param_values,
+                &mut params,
             );
         }
     }
     if let Some(ref albums) = filter.album {
         if !albums.is_empty() {
-            push_in_condition("album", albums, &mut conditions, &mut param_values);
+            push_in_condition("album", albums, &mut conditions, &mut params);
         }
     }
     if let Some(ref genres) = filter.genre {
         if !genres.is_empty() {
-            push_in_condition("genre", genres, &mut conditions, &mut param_values);
+            push_in_condition("genre", genres, &mut conditions, &mut params);
         }
     }
     if let Some(ref search) = filter.search {
@@ -86,7 +90,7 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
             );
             let like = format!("%{}%", search);
             for _ in 0..5 {
-                param_values.push(Box::new(like.clone()));
+                params.push(Box::new(like.clone()));
             }
         }
     }
@@ -95,34 +99,36 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
     }
     if let Some(min) = filter.rating_min {
         conditions.push("rating >= ?".to_string());
-        param_values.push(Box::new(min as i64));
+        params.push(Box::new(min as i64));
     }
     if let Some(max) = filter.rating_max {
         conditions.push("rating <= ?".to_string());
-        param_values.push(Box::new(max as i64));
+        params.push(Box::new(max as i64));
     }
 
-    let where_clause = if conditions.is_empty() {
+    let wc = if conditions.is_empty() {
         String::new()
     } else {
         format!("WHERE {}", conditions.join(" AND "))
     };
 
+    (wc, params)
+}
+
+/// Build the ORDER BY clause from a LibraryFilter.
+fn build_order_by(filter: &LibraryFilter) -> String {
     let dir = match filter.sort_direction.as_deref() {
         Some("desc") => "DESC",
         _ => "ASC",
     };
 
-    // Helper fragments — sort_key() is a custom SQL scalar registered on the
-    // connection that mirrors the Rust sort_key(): strips "The ", removes
-    // non-alphanumeric chars, and lowercases.
     let sk_title = "sort_key(COALESCE(title, file_name))";
     let sk_artist = "sort_key(COALESCE(sort_artist, artist, ''))";
     let sk_album = "sort_key(COALESCE(album, ''))";
     let sk_genre = "sort_key(COALESCE(genre, ''))";
     let disc_track = "COALESCE(disc_number, 0), COALESCE(track_number, 0)";
 
-    let order_by = match filter.sort_by.as_deref() {
+    match filter.sort_by.as_deref() {
         Some("title") => format!("{sk_title} {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("artist") => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
         Some("album") => format!("{sk_album} {dir}, {disc_track}"),
@@ -140,15 +146,52 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         Some("flagged") => format!("flagged {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("rating") => format!("rating {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         _ => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
-    };
+    }
+}
+
+const SELECT_COLUMNS: &str =
+    "id, file_path, file_name, folder_path, title, artist, album, album_artist,
+     sort_artist, sort_album_artist, track_number, track_total, disc_number,
+     disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
+     file_size, created_at, play_count, flagged, rating";
+
+fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
+    Ok(LibraryTrack {
+        id: row.get(0)?,
+        file_path: row.get(1)?,
+        file_name: row.get(2)?,
+        folder_path: row.get(3)?,
+        title: row.get(4)?,
+        artist: row.get(5)?,
+        album: row.get(6)?,
+        album_artist: row.get(7)?,
+        sort_artist: row.get(8)?,
+        sort_album_artist: row.get(9)?,
+        track_number: row.get(10)?,
+        track_total: row.get(11)?,
+        disc_number: row.get(12)?,
+        disc_total: row.get(13)?,
+        year: row.get(14)?,
+        genre: row.get(15)?,
+        duration_secs: row.get(16)?,
+        sample_rate: row.get(17)?,
+        bitrate_kbps: row.get(18)?,
+        format: row.get(19)?,
+        file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
+        created_at: row.get(21)?,
+        play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
+        flagged: row.get(23)?,
+        rating: row.get::<_, i64>(24).map(|v| v as u8)?,
+    })
+}
+
+pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
+    let (where_clause, param_values) = build_track_conditions(filter);
+    let order_by = build_order_by(filter);
 
     let sql = format!(
-        "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
-                sort_artist, sort_album_artist, track_number, track_total, disc_number,
-                disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size, created_at, play_count, flagged, rating
-         FROM tracks {} ORDER BY {}",
-        where_clause, order_by
+        "SELECT {} FROM tracks {} ORDER BY {}",
+        SELECT_COLUMNS, where_clause, order_by
     );
 
     let mut stmt = conn
@@ -159,39 +202,60 @@ pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<Libra
         param_values.iter().map(|p| p.as_ref()).collect();
 
     let rows = stmt
-        .query_map(params_refs.as_slice(), |row| {
-            Ok(LibraryTrack {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                file_name: row.get(2)?,
-                folder_path: row.get(3)?,
-                title: row.get(4)?,
-                artist: row.get(5)?,
-                album: row.get(6)?,
-                album_artist: row.get(7)?,
-                sort_artist: row.get(8)?,
-                sort_album_artist: row.get(9)?,
-                track_number: row.get(10)?,
-                track_total: row.get(11)?,
-                disc_number: row.get(12)?,
-                disc_total: row.get(13)?,
-                year: row.get(14)?,
-                genre: row.get(15)?,
-                duration_secs: row.get(16)?,
-                sample_rate: row.get(17)?,
-                bitrate_kbps: row.get(18)?,
-                format: row.get(19)?,
-                file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
-                created_at: row.get(21)?,
-                play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-                flagged: row.get(23)?,
-                rating: row.get::<_, i64>(24).map(|v| v as u8)?,
-            })
-        })
+        .query_map(params_refs.as_slice(), row_to_track)
         .map_err(|e| format!("Query failed: {}", e))?;
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))
+}
+
+/// Return a page of tracks plus the total count matching the filter.
+pub fn get_tracks_paginated(
+    conn: &Connection,
+    filter: &LibraryFilter,
+) -> Result<PaginatedTracks, String> {
+    let (where_clause, param_values) = build_track_conditions(filter);
+    let order_by = build_order_by(filter);
+    let offset = filter.offset.unwrap_or(0);
+    let limit = filter.limit.unwrap_or(500);
+
+    // Total count with same WHERE clause
+    let count_sql = format!("SELECT COUNT(*) FROM tracks {}", where_clause);
+    let count_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
+    let total_count: usize = conn
+        .query_row(&count_sql, count_refs.as_slice(), |row| {
+            row.get::<_, i64>(0).map(|v| v as usize)
+        })
+        .map_err(|e| format!("Count query failed: {}", e))?;
+
+    // Fetch the page
+    let sql = format!(
+        "SELECT {} FROM tracks {} ORDER BY {} LIMIT {} OFFSET {}",
+        SELECT_COLUMNS, where_clause, order_by, limit, offset
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt
+        .query_map(params_refs.as_slice(), row_to_track)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let tracks = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))?;
+
+    Ok(PaginatedTracks {
+        tracks,
+        total_count,
+        offset,
+        limit,
+    })
 }
 
 pub fn get_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, String> {
@@ -315,6 +379,8 @@ pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<LibraryTrack>
         flagged_only: None,
         rating_min: None,
         rating_max: None,
+        offset: None,
+        limit: None,
     };
     get_tracks(conn, &filter)
 }
@@ -515,6 +581,147 @@ pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<Bro
 
     Ok(BrowserData {
         tracks,
+        genres,
+        artists,
+        albums,
+    })
+}
+
+/// Paginated variant: returns first page of tracks with total_count,
+/// plus full aggregate data for genres/artists/albums.
+pub fn get_browser_data_paginated(
+    conn: &Connection,
+    filter: &LibraryFilter,
+) -> Result<PaginatedBrowserData, String> {
+    let paginated_tracks = get_tracks_paginated(conn, filter)?;
+
+    // Aggregate queries reuse the same logic as get_browser_data
+    let genre = filter_strs(&filter.genre);
+    let artist = filter_strs(&filter.artist);
+    let album = filter_strs(&filter.album);
+    let search = filter.search.as_deref();
+    let flagged_only = filter.flagged_only;
+    let rating_min = filter.rating_min;
+    let rating_max = filter.rating_max;
+
+    // Genres: filtered by artist + album (NOT genre) + search
+    let genres = {
+        let (mut conds, params) = build_filter_conditions(
+            None,
+            artist,
+            album,
+            search,
+            flagged_only,
+            rating_min,
+            rating_max,
+        );
+        conds.insert(0, "genre IS NOT NULL AND genre != ''".to_string());
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT genre, COUNT(*) as track_count FROM tracks {} GROUP BY genre",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(GenreSummary {
+                    name: row.get(0)?,
+                    track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        results.sort_by_key(|a| sort_key(&a.name));
+        results
+    };
+
+    // Artists: filtered by genre + album (NOT artist) + search
+    let artists = {
+        let (mut conds, params) = build_filter_conditions(
+            genre,
+            None,
+            album,
+            search,
+            flagged_only,
+            rating_min,
+            rating_max,
+        );
+        conds.insert(
+            0,
+            "COALESCE(album_artist, artist) IS NOT NULL AND COALESCE(album_artist, artist) != ''"
+                .to_string(),
+        );
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT COALESCE(album_artist, artist) as display_artist, COUNT(*) as track_count, COUNT(DISTINCT album) as album_count FROM tracks {} GROUP BY display_artist",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(ArtistSummary {
+                    name: row.get(0)?,
+                    track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
+                    album_count: row.get::<_, i64>(2).map(|v| v as usize)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        results.sort_by_key(|a| sort_key(&a.name));
+        results
+    };
+
+    // Albums: filtered by genre + artist (NOT album) + search
+    let albums = {
+        let (mut conds, params) = build_filter_conditions(
+            genre,
+            artist,
+            None,
+            search,
+            flagged_only,
+            rating_min,
+            rating_max,
+        );
+        conds.insert(0, "album IS NOT NULL AND album != ''".to_string());
+        let wc = where_clause(&conds);
+        let sql = format!(
+            "SELECT album, COALESCE(album_artist, artist) as display_artist, MIN(year) as year, COUNT(*) as track_count, MIN(folder_path) as folder_path FROM tracks {} GROUP BY album, display_artist",
+            wc
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), |row| {
+                Ok(AlbumSummary {
+                    name: row.get(0)?,
+                    artist: row.get(1)?,
+                    year: row.get(2)?,
+                    track_count: row.get::<_, i64>(3).map(|v| v as usize)?,
+                    folder_path: row.get(4)?,
+                })
+            })
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let mut results: Vec<_> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        results.sort_by_key(|a| sort_key(&a.name));
+        results
+    };
+
+    Ok(PaginatedBrowserData {
+        tracks: paginated_tracks,
         genres,
         artists,
         albums,

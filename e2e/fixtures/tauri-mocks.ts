@@ -24,6 +24,15 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   delete_library_tracks: null,
   get_library_tracks: [],
   get_library_browser_data: { tracks: [], genres: [], artists: [], albums: [] },
+  get_library_browser_data_paginated: {
+    tracks: { tracks: [], total_count: 0, offset: 0, limit: 500 },
+    genres: [],
+    artists: [],
+    albums: [],
+  },
+  get_library_tracks_page: { tracks: [], total_count: 0, offset: 0, limit: 500 },
+  get_thumbnail: null,
+  invalidate_thumbnail: null,
   get_library_artists: [],
   get_library_albums: [],
   get_library_genres: [],
@@ -87,7 +96,14 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   fix_album_art: { fixed: 0, failed: 0, errors: [] },
 
   // Import
-  import_library: { tracks_updated: 0, tracks_skipped: 0, playlists_imported: 0, playlists_skipped: 0, smart_playlists_imported: 0, smart_playlists_skipped: 0 },
+  import_library: {
+    tracks_updated: 0,
+    tracks_skipped: 0,
+    playlists_imported: 0,
+    playlists_skipped: 0,
+    smart_playlists_imported: 0,
+    smart_playlists_skipped: 0,
+  },
 
   // Audio playback
   audio_play: null,

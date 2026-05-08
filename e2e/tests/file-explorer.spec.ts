@@ -15,7 +15,15 @@ test.describe("File Explorer (Browse mode)", () => {
   test("loads profiles on mount and shows in dropdown", async ({ page, tauriMocks }) => {
     const profiles = {
       profiles: [
-        { name: "My Music", mode: "browse", left_path: null, right_path: null, dual_pane: false, layout: "horizontal", exclusions: [] },
+        {
+          name: "My Music",
+          mode: "browse",
+          left_path: null,
+          right_path: null,
+          dual_pane: false,
+          layout: "horizontal",
+          exclusions: [],
+        },
       ],
       active_profile: "My Music",
     };
@@ -31,7 +39,15 @@ test.describe("File Explorer (Browse mode)", () => {
   test("shows file list when folder has contents", async ({ page, tauriMocks }) => {
     const profiles = {
       profiles: [
-        { name: "Test", mode: "browse", left_path: "/test/folder", right_path: null, dual_pane: false, layout: "horizontal", exclusions: [] },
+        {
+          name: "Test",
+          mode: "browse",
+          left_path: "/test/folder",
+          right_path: null,
+          dual_pane: false,
+          layout: "horizontal",
+          exclusions: [],
+        },
       ],
       active_profile: "Test",
     };
@@ -51,7 +67,15 @@ test.describe("File Explorer (Browse mode)", () => {
   test("shows Split button when folder is open", async ({ page, tauriMocks }) => {
     const profiles = {
       profiles: [
-        { name: "Test", mode: "browse", left_path: "/test", right_path: null, dual_pane: false, layout: "horizontal", exclusions: [] },
+        {
+          name: "Test",
+          mode: "browse",
+          left_path: "/test",
+          right_path: null,
+          dual_pane: false,
+          layout: "horizontal",
+          exclusions: [],
+        },
       ],
       active_profile: "Test",
     };

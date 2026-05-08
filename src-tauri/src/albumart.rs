@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const AUDIO_EXT: &[&str] = &[
     "mp3", "flac", "m4a", "ogg", "opus", "wav", "aiff", "wma", "aac",
@@ -435,6 +435,7 @@ pub fn fix_album_art(
         match extract_embedded(dir) {
             Ok(true) => {
                 fixed += 1;
+                invalidate_thumbnails(&app, folder_str);
                 let _ = app.emit("album-art-fixed", folder_str.clone());
                 continue;
             }
@@ -448,6 +449,7 @@ pub fn fix_album_art(
             (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir, &cancel_flag) {
                 Ok(()) => {
                     fixed += 1;
+                    invalidate_thumbnails(&app, folder_str);
                     let _ = app.emit("album-art-fixed", folder_str.clone());
                 }
                 Err(e) if e == "Cancelled" => {
@@ -511,6 +513,13 @@ pub fn save_uploaded_cover(folder: &str, image_path: &str) -> Result<(), String>
         .map_err(|e| format!("Failed to save cover.jpg: {}", e))?;
 
     Ok(())
+}
+
+/// Invalidate cached thumbnails for a folder after album art changes.
+fn invalidate_thumbnails(app: &AppHandle, folder_path: &str) {
+    if let Ok(cache_dir) = app.path().app_data_dir().map(|d| d.join("thumbnails")) {
+        crate::thumbnail::invalidate(&cache_dir, folder_path);
+    }
 }
 
 #[cfg(test)]

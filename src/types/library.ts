@@ -58,6 +58,20 @@ export interface BrowserData {
   albums: AlbumSummary[];
 }
 
+export interface PaginatedTracks {
+  tracks: LibraryTrack[];
+  total_count: number;
+  offset: number;
+  limit: number;
+}
+
+export interface PaginatedBrowserData {
+  tracks: PaginatedTracks;
+  genres: GenreSummary[];
+  artists: ArtistSummary[];
+  albums: AlbumSummary[];
+}
+
 export interface LibraryFilter {
   artist?: string[];
   album?: string[];
@@ -68,6 +82,8 @@ export interface LibraryFilter {
   flagged_only?: boolean;
   rating_min?: number;
   rating_max?: number;
+  offset?: number;
+  limit?: number;
 }
 
 export interface Playlist {

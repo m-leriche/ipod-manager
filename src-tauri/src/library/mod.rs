@@ -26,7 +26,8 @@ pub use delete::delete_tracks;
 pub use folders::{add_folder, get_folders, remove_folder};
 pub use import::import_to_library;
 pub use queries::{
-    get_albums, get_artists, get_browser_data, get_genres, get_tracks, search_tracks,
+    get_albums, get_artists, get_browser_data, get_browser_data_paginated, get_genres, get_tracks,
+    get_tracks_paginated, search_tracks,
 };
 pub use reorganize::reorganize_library_file;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
@@ -146,6 +147,8 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN rating INTEGER NOT NULL DEFAULT 0");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(rating)");
+    let _ = conn
+        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_modified_at ON tracks(modified_at)");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN lyrics TEXT");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
     let _ = conn

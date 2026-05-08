@@ -99,6 +99,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   audio_preload_next: null,
   audio_get_status: null,
   audio_set_eq: null,
+  audio_set_crossfade: null,
 
   // Media keys
   media_set_metadata: null,

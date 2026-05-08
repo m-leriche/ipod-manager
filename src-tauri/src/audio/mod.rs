@@ -1,3 +1,4 @@
+pub mod crossfade;
 pub mod decoder;
 pub mod engine;
 pub mod equalizer;
@@ -75,6 +76,10 @@ impl AudioEngine {
 
     pub fn set_speed(&self, speed: f64) {
         self.send(AudioCommand::SetSpeed { speed });
+    }
+
+    pub fn set_crossfade(&self, duration_secs: f64) {
+        self.send(AudioCommand::SetCrossfade { duration_secs });
     }
 
     pub fn get_status(&self) -> PlaybackStatus {

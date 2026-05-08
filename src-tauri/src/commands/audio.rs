@@ -67,6 +67,15 @@ pub fn audio_set_speed(speed: f64, engine: State<'_, AudioEngine>) -> Result<(),
     Ok(())
 }
 
+#[tauri::command]
+pub fn audio_set_crossfade(
+    duration_secs: f64,
+    engine: State<'_, AudioEngine>,
+) -> Result<(), AppError> {
+    engine.set_crossfade(duration_secs);
+    Ok(())
+}
+
 // ── Media key / Now Playing commands ─────────────────────────────
 
 #[tauri::command]

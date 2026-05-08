@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { usePlayback } from "../../../contexts/PlaybackContext";
 import { cancelSync } from "../../../utils/cancelSync";
 import { pickFolder } from "../../../utils/pickPath";
 import { useTheme } from "../../../contexts/ThemeContext";
@@ -30,6 +31,7 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   const [loading, setLoading] = useState(true);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { theme, setTheme } = useTheme();
+  const { state: playbackState, setCrossfade } = usePlayback();
 
   useEffect(() => {
     invoke<string | null>("get_library_location")
@@ -154,6 +156,33 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
                   <span className="text-[9px] text-text-tertiary">{t.description}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Crossfade */}
+          <div className="mt-6">
+            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-1">
+              Crossfade
+            </span>
+            <p className="text-[10px] text-text-tertiary mb-3">
+              Smoothly blend between tracks. Set to 0 for gapless playback with no overlap.
+            </p>
+
+            <div className="flex items-center gap-3 px-4 py-3 border border-border rounded-xl">
+              <span className="text-[11px] text-text-tertiary shrink-0 w-8 text-right">
+                {playbackState.crossfade === 0 ? "Off" : `${playbackState.crossfade}s`}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={12}
+                step={1}
+                value={playbackState.crossfade}
+                onChange={(e) => setCrossfade(Number(e.target.value))}
+                className="flex-1 accent-accent h-1"
+                data-testid="crossfade-slider"
+              />
+              <span className="text-[10px] text-text-tertiary shrink-0">12s</span>
             </div>
           </div>
 

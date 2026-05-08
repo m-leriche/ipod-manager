@@ -7,6 +7,7 @@ export interface PlaybackState {
   isPlaying: boolean;
   volume: number;
   speed: number;
+  crossfade: number;
   queue: LibraryTrack[];
   queueIndex: number;
   shuffle: boolean;
@@ -39,5 +40,6 @@ export interface PlaybackContextValue {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   setSpeed: (speed: number) => void;
+  setCrossfade: (seconds: number) => void;
   clearPlaybackError: () => void;
 }

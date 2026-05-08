@@ -181,10 +181,9 @@ fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
 
-        if let Some(track_data) = library::read_track_for_library(path) {
-            if library::upsert_track(&conn, &track_data, mtime, now).is_ok() {
-                add_count += 1;
-            }
+        let track_data = library::read_track_for_library(path);
+        if library::upsert_track(&conn, &track_data, mtime, now).is_ok() {
+            add_count += 1;
         }
     }
 

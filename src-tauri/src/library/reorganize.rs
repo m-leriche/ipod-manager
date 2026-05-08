@@ -64,10 +64,7 @@ pub fn reorganize_library_file(
         return Ok(None);
     }
 
-    let mut track_data = match read_track_for_library(src) {
-        Some(td) => td,
-        None => return Ok(None),
-    };
+    let mut track_data = read_track_for_library(src);
 
     let root = Path::new(library_root);
     let dest = compute_library_dest(root, &track_data);

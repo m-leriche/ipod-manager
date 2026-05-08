@@ -1,4 +1,5 @@
 use crate::audio_utils::collect_audio_files;
+use crate::ffprobe_meta;
 use lofty::prelude::{Accessor, AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::ItemKey;
@@ -72,9 +73,8 @@ pub fn scan_folder(
             continue;
         }
 
-        if let Some(track_data) = read_track_for_library(file_path) {
-            upsert_track(conn, &track_data, mtime, now)?;
-        }
+        let track_data = read_track_for_library(file_path);
+        upsert_track(conn, &track_data, mtime, now)?;
 
         scanned += 1;
     }
@@ -162,9 +162,8 @@ pub fn rescan_all_folders(
             continue;
         }
 
-        if let Some(track_data) = read_track_for_library(file_path) {
-            upsert_track(conn, &track_data, mtime, now)?;
-        }
+        let track_data = read_track_for_library(file_path);
+        upsert_track(conn, &track_data, mtime, now)?;
     }
 
     // Remove orphaned tracks for each folder
@@ -249,10 +248,9 @@ pub fn background_rescan_all_folders(
             continue;
         }
 
-        if let Some(track_data) = read_track_for_library(file_path) {
-            upsert_track(conn, &track_data, mtime, now)?;
-            changed += 1;
-        }
+        let track_data = read_track_for_library(file_path);
+        upsert_track(conn, &track_data, mtime, now)?;
+        changed += 1;
     }
 
     // Remove orphaned tracks
@@ -289,7 +287,7 @@ pub fn background_rescan_all_folders(
     })
 }
 
-pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
+pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
     let file_path = path.to_string_lossy().to_string();
     let file_name = path
         .file_name()
@@ -306,15 +304,53 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
         .unwrap_or_default();
     let file_size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
-    let probe = Probe::open(path).ok()?;
-    let tagged = probe.read().ok()?;
+    let tagged = Probe::open(path).ok().and_then(|p| p.read().ok());
 
-    let props = tagged.properties();
-    let duration_secs = props.duration().as_secs_f64();
-    let sample_rate = props.sample_rate();
-    let bitrate_kbps = props.audio_bitrate();
+    let (duration_secs, sample_rate, bitrate_kbps) = tagged
+        .as_ref()
+        .map(|t| {
+            let props = t.properties();
+            (
+                props.duration().as_secs_f64(),
+                props.sample_rate(),
+                props.audio_bitrate(),
+            )
+        })
+        .unwrap_or((0.0, None, None));
 
-    let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
+    let tag = tagged
+        .as_ref()
+        .and_then(|t| t.primary_tag().or_else(|| t.first_tag()));
+
+    // If lofty couldn't parse the file at all, fall back to ffprobe
+    if tagged.is_none() {
+        if let Some(meta) = ffprobe_meta::read_metadata(path) {
+            return TrackData {
+                file_path,
+                file_name,
+                folder_path,
+                title: meta.title,
+                artist: meta.artist,
+                album: meta.album,
+                album_artist: meta.album_artist,
+                sort_artist: meta.sort_artist,
+                sort_album_artist: meta.sort_album_artist,
+                track_number: meta.track,
+                track_total: meta.track_total,
+                disc_number: meta.disc,
+                disc_total: meta.disc_total,
+                year: meta.year,
+                genre: meta.genre,
+                duration_secs: meta.duration_secs,
+                sample_rate: meta.sample_rate,
+                bitrate_kbps: meta.bitrate_kbps,
+                format,
+                file_size,
+                play_count: None,
+                lyrics: None,
+            };
+        }
+    }
 
     let trim_tag = |s: &str| {
         let trimmed = s.trim();
@@ -387,7 +423,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
         )
     };
 
-    Some(TrackData {
+    TrackData {
         file_path,
         file_name,
         folder_path,
@@ -410,7 +446,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> Option<TrackData> {
         file_size,
         play_count,
         lyrics,
-    })
+    }
 }
 
 pub(crate) fn upsert_track(

@@ -7,6 +7,7 @@ mod commands;
 mod convert;
 mod disk;
 pub mod error;
+mod ffprobe_meta;
 mod files;
 mod ipod_info;
 mod lastfm;

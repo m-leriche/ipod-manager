@@ -14,7 +14,6 @@ pub struct HealthIssue {
     pub id: String,
     pub label: String,
     pub count: usize,
-    pub track_ids: Vec<i64>,
 }
 
 // ── Query ───────────────────────────────────────────────────────
@@ -25,7 +24,10 @@ pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
         .map_err(|e| format!("DB error: {}", e))?;
 
     if total_tracks == 0 {
-        return Err("No tracks in library".to_string());
+        return Ok(HealthReport {
+            total_tracks: 0,
+            issues: vec![],
+        });
     }
 
     let issues = vec![
@@ -53,41 +55,40 @@ pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
 
 // ── SQL constants ───────────────────────────────────────────────
 
-const MISSING_TITLE_SQL: &str = "SELECT id FROM tracks WHERE title IS NULL OR TRIM(title) = ''";
+const MISSING_TITLE_SQL: &str =
+    "SELECT COUNT(*) FROM tracks WHERE title IS NULL OR TRIM(title) = ''";
 
-const MISSING_ARTIST_SQL: &str = "SELECT id FROM tracks WHERE artist IS NULL OR TRIM(artist) = ''";
+const MISSING_ARTIST_SQL: &str =
+    "SELECT COUNT(*) FROM tracks WHERE artist IS NULL OR TRIM(artist) = ''";
 
-const MISSING_ALBUM_SQL: &str = "SELECT id FROM tracks WHERE album IS NULL OR TRIM(album) = ''";
+const MISSING_ALBUM_SQL: &str =
+    "SELECT COUNT(*) FROM tracks WHERE album IS NULL OR TRIM(album) = ''";
 
-const MISSING_GENRE_SQL: &str = "SELECT id FROM tracks WHERE genre IS NULL OR TRIM(genre) = ''";
+const MISSING_GENRE_SQL: &str =
+    "SELECT COUNT(*) FROM tracks WHERE genre IS NULL OR TRIM(genre) = ''";
 
-const MISSING_YEAR_SQL: &str = "SELECT id FROM tracks WHERE year IS NULL OR year = 0";
+const MISSING_YEAR_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE year IS NULL OR year = 0";
 
-const UNRATED_SQL: &str = "SELECT id FROM tracks WHERE rating = 0";
+const UNRATED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE rating = 0";
 
 const LOW_BITRATE_SQL: &str =
-    "SELECT id FROM tracks WHERE bitrate_kbps IS NOT NULL AND bitrate_kbps > 0 AND bitrate_kbps < 128";
+    "SELECT COUNT(*) FROM tracks WHERE bitrate_kbps IS NOT NULL AND bitrate_kbps > 0 AND bitrate_kbps < 128";
 
-const FLAGGED_SQL: &str = "SELECT id FROM tracks WHERE flagged = 1";
+const FLAGGED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE flagged = 1";
 
-const NEVER_PLAYED_SQL: &str = "SELECT id FROM tracks WHERE play_count = 0";
+const NEVER_PLAYED_SQL: &str = "SELECT COUNT(*) FROM tracks WHERE play_count = 0";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 fn query_issue(conn: &Connection, id: &str, label: &str, sql: &str) -> Result<HealthIssue, String> {
-    let mut stmt = conn.prepare(sql).map_err(|e| format!("DB error: {}", e))?;
-
-    let track_ids: Vec<i64> = stmt
-        .query_map([], |r| r.get(0))
-        .map_err(|e| format!("DB error: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+    let count: usize = conn
+        .query_row(sql, [], |r| r.get(0))
+        .map_err(|e| format!("DB error: {}", e))?;
 
     Ok(HealthIssue {
         id: id.to_string(),
         label: label.to_string(),
-        count: track_ids.len(),
-        track_ids,
+        count,
     })
 }
 
@@ -167,11 +168,11 @@ mod tests {
     }
 
     #[test]
-    fn empty_library_returns_error() {
+    fn empty_library_returns_empty_report() {
         let conn = setup_db();
-        let result = get_library_health(&conn);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "No tracks in library");
+        let report = get_library_health(&conn).unwrap();
+        assert_eq!(report.total_tracks, 0);
+        assert!(report.issues.is_empty());
     }
 
     #[test]
@@ -195,13 +196,11 @@ mod tests {
         assert_eq!(report.total_tracks, 1);
 
         for issue in &report.issues {
-            if issue.id != "never_played" && issue.id != "unrated" {
-                assert_eq!(
-                    issue.count, 0,
-                    "Expected 0 for issue '{}', got {}",
-                    issue.id, issue.count
-                );
-            }
+            assert_eq!(
+                issue.count, 0,
+                "Expected 0 for issue '{}', got {}",
+                issue.id, issue.count
+            );
         }
     }
 
@@ -231,7 +230,6 @@ mod tests {
         let find = |id: &str| report.issues.iter().find(|i| i.id == id).unwrap();
 
         assert_eq!(find("missing_title").count, 1);
-        assert_eq!(find("missing_title").track_ids, vec![1]);
         assert_eq!(find("missing_artist").count, 1);
         assert_eq!(find("missing_album").count, 1);
         assert_eq!(find("missing_genre").count, 1);
@@ -275,7 +273,6 @@ mod tests {
             .find(|i| i.id == "low_bitrate")
             .unwrap();
         assert_eq!(low.count, 1);
-        assert_eq!(low.track_ids, vec![1]);
     }
 
     #[test]
@@ -311,7 +308,6 @@ mod tests {
         let report = get_library_health(&conn).unwrap();
         let flagged = report.issues.iter().find(|i| i.id == "flagged").unwrap();
         assert_eq!(flagged.count, 1);
-        assert_eq!(flagged.track_ids, vec![1]);
     }
 
     #[test]

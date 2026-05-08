@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
@@ -9,7 +9,7 @@ use super::types::{Playlist, SmartPlaylist};
 
 // ── Types ───────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryExportData {
     pub exported_at: String,
     pub tracks: Vec<ExportTrack>,
@@ -17,7 +17,7 @@ pub struct LibraryExportData {
     pub smart_playlists: Vec<SmartPlaylist>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportTrack {
     pub file_path: String,
     pub file_name: String,
@@ -35,7 +35,7 @@ pub struct ExportTrack {
     pub flagged: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportPlaylist {
     pub name: String,
     pub tracks: Vec<String>,
@@ -76,7 +76,7 @@ pub fn export_library(conn: &Connection, output_path: &str) -> Result<ExportResu
     let smart = smart_playlists::get_smart_playlists(conn)?;
     let smart_playlist_count = smart.len();
 
-    let now = chrono_now();
+    let now = iso8601_now();
 
     let data = LibraryExportData {
         exported_at: now,
@@ -155,14 +155,42 @@ fn export_playlists(
     Ok(result)
 }
 
-fn chrono_now() -> String {
+fn iso8601_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    // Simple ISO-ish format without pulling in chrono crate
-    format!("{}", secs)
+
+    // Convert epoch seconds to ISO 8601 UTC without external crates
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    // Days since 1970-01-01 → year/month/day
+    let (year, month, day) = days_to_ymd(days);
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month, day, hours, minutes, seconds
+    )
+}
+
+fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
+    // Algorithm from http://howardhinnant.github.io/date_algorithms.html
+    days += 719468;
+    let era = days / 146097;
+    let doe = days - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
 }
 
 #[cfg(test)]
@@ -246,42 +274,53 @@ mod tests {
         .unwrap();
     }
 
+    fn temp_dir() -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir =
+            std::env::temp_dir().join(format!("crate_export_test_{}_{}", std::process::id(), id,));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn export_empty_library() {
+        let dir = temp_dir();
         let conn = setup_db();
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_export_empty.json");
+        let path = dir.join("export.json");
         let result = export_library(&conn, path.to_str().unwrap()).unwrap();
 
         assert_eq!(result.track_count, 0);
         assert_eq!(result.playlist_count, 0);
         assert_eq!(result.smart_playlist_count, 0);
-        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn export_tracks_roundtrip() {
+        let dir = temp_dir();
         let conn = setup_db();
         insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
         insert_track(&conn, 2, "/music/song2.flac", "Song 2", "Artist B");
 
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_export_tracks.json");
+        let path = dir.join("export.json");
         let result = export_library(&conn, path.to_str().unwrap()).unwrap();
 
         assert_eq!(result.track_count, 2);
         assert!(result.file_size > 0);
 
-        // Verify file content is valid JSON
+        // Verify file content deserializes back
         let content = fs::read_to_string(&path).unwrap();
-        let data: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(data["tracks"].as_array().unwrap().len(), 2);
+        let data: LibraryExportData = serde_json::from_str(&content).unwrap();
+        assert_eq!(data.tracks.len(), 2);
 
-        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn export_includes_playlists() {
+        let dir = temp_dir();
         let conn = setup_db();
         insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
 
@@ -296,23 +335,22 @@ mod tests {
         )
         .unwrap();
 
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_export_playlists.json");
+        let path = dir.join("export.json");
         let result = export_library(&conn, path.to_str().unwrap()).unwrap();
 
         assert_eq!(result.playlist_count, 1);
 
         let content = fs::read_to_string(&path).unwrap();
-        let data: serde_json::Value = serde_json::from_str(&content).unwrap();
-        let playlists = data["playlists"].as_array().unwrap();
-        assert_eq!(playlists[0]["name"], "My Playlist");
-        assert_eq!(playlists[0]["tracks"].as_array().unwrap().len(), 1);
+        let data: LibraryExportData = serde_json::from_str(&content).unwrap();
+        assert_eq!(data.playlists[0].name, "My Playlist");
+        assert_eq!(data.playlists[0].tracks.len(), 1);
 
-        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn export_includes_smart_playlists() {
+        let dir = temp_dir();
         let conn = setup_db();
         conn.execute(
             "INSERT INTO smart_playlists (id, name, rules_json, is_builtin, created_at, updated_at)
@@ -321,12 +359,11 @@ mod tests {
         )
         .unwrap();
 
-        let dir = std::env::temp_dir();
-        let path = dir.join("test_export_smart.json");
+        let path = dir.join("export.json");
         let result = export_library(&conn, path.to_str().unwrap()).unwrap();
 
         assert_eq!(result.smart_playlist_count, 1);
-        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

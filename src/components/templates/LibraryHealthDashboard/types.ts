@@ -2,7 +2,6 @@ export interface HealthIssue {
   id: string;
   label: string;
   count: number;
-  track_ids: number[];
 }
 
 export interface HealthReport {

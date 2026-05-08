@@ -11,31 +11,36 @@ const mockInvoke = vi.mocked(invoke);
 const MOCK_REPORT: HealthReport = {
   total_tracks: 1000,
   issues: [
-    { id: "missing_title", label: "Missing title", count: 5, track_ids: [1, 2, 3, 4, 5] },
-    { id: "missing_artist", label: "Missing artist", count: 3, track_ids: [1, 2, 3] },
-    { id: "missing_album", label: "Missing album", count: 2, track_ids: [1, 2] },
-    { id: "missing_genre", label: "Missing genre", count: 10, track_ids: Array.from({ length: 10 }, (_, i) => i + 1) },
-    { id: "missing_year", label: "Missing year", count: 20, track_ids: Array.from({ length: 20 }, (_, i) => i + 1) },
-    { id: "unrated", label: "Unrated", count: 500, track_ids: Array.from({ length: 500 }, (_, i) => i + 1) },
-    { id: "low_bitrate", label: "Low bitrate (< 128 kbps)", count: 0, track_ids: [] },
-    { id: "flagged", label: "Flagged for review", count: 8, track_ids: Array.from({ length: 8 }, (_, i) => i + 1) },
-    { id: "never_played", label: "Never played", count: 200, track_ids: Array.from({ length: 200 }, (_, i) => i + 1) },
+    { id: "missing_title", label: "Missing title", count: 5 },
+    { id: "missing_artist", label: "Missing artist", count: 3 },
+    { id: "missing_album", label: "Missing album", count: 2 },
+    { id: "missing_genre", label: "Missing genre", count: 10 },
+    { id: "missing_year", label: "Missing year", count: 20 },
+    { id: "unrated", label: "Unrated", count: 500 },
+    { id: "low_bitrate", label: "Low bitrate (< 128 kbps)", count: 0 },
+    { id: "flagged", label: "Flagged for review", count: 8 },
+    { id: "never_played", label: "Never played", count: 200 },
   ],
 };
 
 const CLEAN_REPORT: HealthReport = {
   total_tracks: 100,
   issues: [
-    { id: "missing_title", label: "Missing title", count: 0, track_ids: [] },
-    { id: "missing_artist", label: "Missing artist", count: 0, track_ids: [] },
-    { id: "missing_album", label: "Missing album", count: 0, track_ids: [] },
-    { id: "missing_genre", label: "Missing genre", count: 0, track_ids: [] },
-    { id: "missing_year", label: "Missing year", count: 0, track_ids: [] },
-    { id: "unrated", label: "Unrated", count: 0, track_ids: [] },
-    { id: "low_bitrate", label: "Low bitrate (< 128 kbps)", count: 0, track_ids: [] },
-    { id: "flagged", label: "Flagged for review", count: 0, track_ids: [] },
-    { id: "never_played", label: "Never played", count: 0, track_ids: [] },
+    { id: "missing_title", label: "Missing title", count: 0 },
+    { id: "missing_artist", label: "Missing artist", count: 0 },
+    { id: "missing_album", label: "Missing album", count: 0 },
+    { id: "missing_genre", label: "Missing genre", count: 0 },
+    { id: "missing_year", label: "Missing year", count: 0 },
+    { id: "unrated", label: "Unrated", count: 0 },
+    { id: "low_bitrate", label: "Low bitrate (< 128 kbps)", count: 0 },
+    { id: "flagged", label: "Flagged for review", count: 0 },
+    { id: "never_played", label: "Never played", count: 0 },
   ],
+};
+
+const EMPTY_REPORT: HealthReport = {
+  total_tracks: 0,
+  issues: [],
 };
 
 beforeEach(() => {
@@ -75,20 +80,30 @@ describe("LibraryHealthDashboard", () => {
     });
   });
 
-  it("shows error with retry on failure", async () => {
-    mockInvoke.mockRejectedValue("No tracks in library");
+  it("shows empty state for empty library", async () => {
+    mockInvoke.mockResolvedValue(EMPTY_REPORT);
 
     render(<LibraryHealthDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("No tracks in library")).toBeInTheDocument();
+      expect(screen.getByText("0 tracks")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error with retry on failure", async () => {
+    mockInvoke.mockRejectedValue("Database locked");
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Database locked")).toBeInTheDocument();
     });
     expect(screen.getByText("Retry")).toBeInTheDocument();
   });
 
   it("retries on button click", async () => {
     const user = userEvent.setup();
-    mockInvoke.mockRejectedValueOnce("No tracks in library").mockResolvedValueOnce(MOCK_REPORT);
+    mockInvoke.mockRejectedValueOnce("Database locked").mockResolvedValueOnce(MOCK_REPORT);
 
     render(<LibraryHealthDashboard />);
 
@@ -166,7 +181,6 @@ describe("helpers", () => {
       id,
       label: id,
       count,
-      track_ids: [],
     });
 
     it("returns ok for zero count", () => {

@@ -51,9 +51,7 @@ export const LibraryHealthDashboard = () => {
 
   if (!report) return null;
 
-  const hasIssues = report.issues.some((i) => i.count > 0 && i.id !== "never_played" && i.id !== "unrated");
-  const allClear =
-    !hasIssues && report.issues.every((i) => i.id === "never_played" || i.id === "unrated" || i.count === 0);
+  const allClear = !report.issues.some((i) => i.count > 0 && i.id !== "never_played" && i.id !== "unrated");
 
   return (
     <div className="flex-1 flex flex-col min-h-0">

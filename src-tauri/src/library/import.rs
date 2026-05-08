@@ -111,13 +111,7 @@ pub fn import_to_library(
             },
         );
 
-        let track_data = match read_track_for_library(src_path) {
-            Some(td) => td,
-            None => {
-                errors.push(format!("{}: Failed to read metadata", file_name));
-                continue;
-            }
-        };
+        let track_data = read_track_for_library(src_path);
 
         let dest_path = compute_library_dest(root, &track_data);
 

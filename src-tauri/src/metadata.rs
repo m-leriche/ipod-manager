@@ -1,4 +1,5 @@
 use crate::audio_utils::{collect_audio_files, is_audio};
+use crate::ffprobe_meta;
 use id3::TagLike;
 use lofty::config::WriteOptions;
 use lofty::prelude::{Accessor, TagExt, TaggedFileExt};
@@ -75,14 +76,30 @@ fn read_track(path: &Path) -> TrackMetadata {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let probe = match Probe::open(path) {
-        Ok(p) => p,
-        Err(_) => return empty_track(file_path, file_name),
-    };
-    let tagged = match probe.read() {
-        Ok(t) => t,
-        Err(_) => return empty_track(file_path, file_name),
-    };
+    let tagged = Probe::open(path).ok().and_then(|p| p.read().ok());
+
+    // If lofty can't parse the file, fall back to ffprobe
+    if tagged.is_none() {
+        if let Some(meta) = ffprobe_meta::read_metadata(path) {
+            return TrackMetadata {
+                file_path,
+                file_name,
+                title: meta.title,
+                artist: meta.artist,
+                album: meta.album,
+                album_artist: meta.album_artist,
+                sort_artist: meta.sort_artist,
+                sort_album_artist: meta.sort_album_artist,
+                track: meta.track,
+                track_total: meta.track_total,
+                year: meta.year,
+                genre: meta.genre,
+            };
+        }
+        return empty_track(file_path, file_name);
+    }
+
+    let tagged = tagged.expect("checked above");
     let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
         return empty_track(file_path, file_name);
     };
@@ -288,9 +305,102 @@ fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
         .unwrap_or(false);
 
     if is_mp3 {
-        apply_update_id3(path, update)
-    } else {
-        apply_update_lofty(path, update)
+        return apply_update_id3(path, update);
+    }
+
+    // Try lofty first; if it can't open the file, fall back to ffmpeg
+    match apply_update_lofty(path, update) {
+        Ok(()) => Ok(()),
+        Err(_) => apply_update_ffmpeg(path, update),
+    }
+}
+
+/// Write tags via ffmpeg for files that lofty cannot parse.
+fn apply_update_ffmpeg(path: &Path, update: &MetadataUpdate) -> Result<(), String> {
+    // First read existing metadata so we preserve fields not being updated
+    let existing = ffprobe_meta::read_metadata(path);
+
+    let mut tags: Vec<(&str, String)> = Vec::new();
+
+    // For each field: use the update value if provided, otherwise preserve existing
+    let resolve = |update_val: &Option<String>, existing_val: Option<String>| -> String {
+        match update_val {
+            Some(v) => v.clone(),
+            None => existing_val.unwrap_or_default(),
+        }
+    };
+
+    let ex = &existing;
+
+    tags.push((
+        "title",
+        resolve(&update.title, ex.as_ref().and_then(|m| m.title.clone())),
+    ));
+    tags.push((
+        "artist",
+        resolve(&update.artist, ex.as_ref().and_then(|m| m.artist.clone())),
+    ));
+    tags.push((
+        "album",
+        resolve(&update.album, ex.as_ref().and_then(|m| m.album.clone())),
+    ));
+    tags.push((
+        "album_artist",
+        resolve(
+            &update.album_artist,
+            ex.as_ref().and_then(|m| m.album_artist.clone()),
+        ),
+    ));
+    tags.push((
+        "genre",
+        resolve(&update.genre, ex.as_ref().and_then(|m| m.genre.clone())),
+    ));
+    tags.push((
+        "sort_artist",
+        resolve(
+            &update.sort_artist,
+            ex.as_ref().and_then(|m| m.sort_artist.clone()),
+        ),
+    ));
+    tags.push((
+        "sort_album_artist",
+        resolve(
+            &update.sort_album_artist,
+            ex.as_ref().and_then(|m| m.sort_album_artist.clone()),
+        ),
+    ));
+
+    // Track/disc as "N/Total" format
+    let track_str = format_number_pair(
+        update.track.or(ex.as_ref().and_then(|m| m.track)),
+        update
+            .track_total
+            .or(ex.as_ref().and_then(|m| m.track_total)),
+    );
+    tags.push(("track", track_str));
+
+    let disc_str = format_number_pair(
+        update.disc_number.or(ex.as_ref().and_then(|m| m.disc)),
+        update.disc_total.or(ex.as_ref().and_then(|m| m.disc_total)),
+    );
+    tags.push(("disc", disc_str));
+
+    let year_val = update
+        .year
+        .or(ex.as_ref().and_then(|m| m.year))
+        .map(|y| y.to_string())
+        .unwrap_or_default();
+    tags.push(("date", year_val));
+
+    let tag_refs: Vec<(&str, &str)> = tags.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    ffprobe_meta::write_metadata(path, &tag_refs)
+}
+
+fn format_number_pair(num: Option<u32>, total: Option<u32>) -> String {
+    match (num, total) {
+        (Some(n), Some(t)) => format!("{}/{}", n, t),
+        (Some(n), None) => n.to_string(),
+        _ => String::new(),
     }
 }
 

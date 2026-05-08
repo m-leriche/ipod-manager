@@ -5,7 +5,7 @@
 //
 // Commands:
 //   detect        — JSON array of external FAT32 disk candidates
-//   mount ID      — mount disk at /Volumes/IPOD (no sudo needed)
+//   mount ID      — mount disk at system-chosen path (no sudo needed)
 //   unmount [path] — unmount volume (defaults to /Volumes/IPOD)
 
 import DiskArbitration
@@ -200,6 +200,9 @@ func describeDAStatus(_ status: DAReturn) -> String {
     case 0xF8DA_0006: return "not found"
     case 0xF8DA_0007: return "not mounted"
     case 0xF8DA_0008: return "not permitted (operation denied)"
+    case 0xF8DA_0009: return "not privileged"
+    case 0xF8DA_000A: return "not ready"
+    case 0xF8DA_000B: return "not writable"
     case 0xF8DA_000C: return "unsupported filesystem"
     default: return "error code \(String(format: "0x%08X", code))"
     }
@@ -259,12 +262,13 @@ func mountDisk(identifier: String) -> String? {
     DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionDefault), onUnmountComplete, nil)
     waitForCallback(timeoutSeconds: 5)
 
-    // Step 2: Mount at /Volumes/IPOD.
+    // Step 2: Mount at system-chosen path (typically /Volumes/<VolumeName>).
+    // Passing nil lets macOS pick the mount point without requiring privileges.
+    // Specifying an explicit path triggers kDAReturnNotPrivileged on modern macOS.
     gCallbackDone = false
     gCallbackError = nil
-    let mountURL = URL(fileURLWithPath: "/Volumes/IPOD") as CFURL
     DADiskMount(
-        disk, mountURL, DADiskMountOptions(kDADiskMountOptionDefault), onMountComplete, nil)
+        disk, nil, DADiskMountOptions(kDADiskMountOptionDefault), onMountComplete, nil)
     waitForCallback(timeoutSeconds: 15)
 
     if !gCallbackDone {

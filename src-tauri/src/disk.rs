@@ -94,7 +94,8 @@ pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
     Ok(pick_ipod(candidates))
 }
 
-/// Mount the iPod at /Volumes/IPOD using DiskArbitration (no sudo required).
+/// Mount the iPod using DiskArbitration (no sudo required).
+/// macOS chooses the mount point (typically /Volumes/<VolumeName>).
 pub fn mount_ipod_disk(identifier: &str) -> Result<(), String> {
     let output = run_helper(&["mount", identifier])?;
 

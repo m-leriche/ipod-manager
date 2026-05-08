@@ -86,6 +86,9 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   scan_album_art: [],
   fix_album_art: { fixed: 0, failed: 0, errors: [] },
 
+  // Import
+  import_library: { tracks_updated: 0, tracks_skipped: 0, playlists_imported: 0, playlists_skipped: 0, smart_playlists_imported: 0, smart_playlists_skipped: 0 },
+
   // Audio playback
   audio_play: null,
   audio_pause: null,

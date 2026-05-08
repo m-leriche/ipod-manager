@@ -25,6 +25,8 @@ import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEd
 import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
 import { DuplicateDetector } from "./components/templates/DuplicateDetector/DuplicateDetector";
 import { AudioConverter } from "./components/templates/AudioConverter/AudioConverter";
+import { LibraryHealthDashboard } from "./components/templates/LibraryHealthDashboard/LibraryHealthDashboard";
+import { LibraryExport } from "./components/templates/LibraryExport/LibraryExport";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
@@ -37,7 +39,7 @@ import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 
 type TopTab = "library" | "tools";
-type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert";
+type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
 
 const App = () => (
   <ThemeProvider>
@@ -376,6 +378,12 @@ const AppContent = () => {
                   <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
                     Converter
                   </ToolTabButton>
+                  <ToolTabButton active={toolTab === "health"} onClick={() => setToolTab("health")}>
+                    Health
+                  </ToolTabButton>
+                  <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
+                    Export
+                  </ToolTabButton>
                 </div>
                 <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
                   {toolTab === "ipod" && (
@@ -414,6 +422,16 @@ const AppContent = () => {
                   {toolTab === "convert" && (
                     <ErrorBoundary name="Audio Converter">
                       <AudioConverter />
+                    </ErrorBoundary>
+                  )}
+                  {toolTab === "health" && (
+                    <ErrorBoundary name="Library Health">
+                      <LibraryHealthDashboard />
+                    </ErrorBoundary>
+                  )}
+                  {toolTab === "export" && (
+                    <ErrorBoundary name="Library Export">
+                      <LibraryExport />
                     </ErrorBoundary>
                   )}
                 </div>

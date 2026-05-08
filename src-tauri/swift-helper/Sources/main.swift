@@ -238,12 +238,14 @@ func mountDisk(identifier: String) -> String? {
     // This requires root, so we use osascript "with administrator privileges" which
     // triggers the native macOS auth dialog (supports Touch ID / Apple Watch).
     // This replaces the old approach of piping a password through stdin to sudo.
-    let shellCmd = "mkdir -p /Volumes/IPOD && mount -t msdos /dev/\(identifier) /Volumes/IPOD"
+    let shellCmd =
+        "cd / && /bin/mkdir -p /Volumes/IPOD && /sbin/mount -t msdos /dev/\(identifier) /Volumes/IPOD"
     let script = "do shell script \"\(shellCmd)\" with administrator privileges"
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
     process.arguments = ["-e", script]
+    process.currentDirectoryURL = URL(fileURLWithPath: "/")
     let errPipe = Pipe()
     process.standardError = errPipe
     process.standardOutput = FileHandle.nullDevice

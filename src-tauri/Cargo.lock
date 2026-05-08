@@ -123,6 +123,7 @@ dependencies = [
  "md5",
  "notify-debouncer-full",
  "percent-encoding",
+ "plist",
  "rayon",
  "ringbuf",
  "rusqlite",

@@ -96,7 +96,11 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && status === "found" && password) handleMount();
+    if (e.key === "Enter" && status === "found" && password) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleMount();
+    }
   };
 
   const statusLabel = () => {

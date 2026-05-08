@@ -54,7 +54,7 @@ React calls Rust via `invoke()` from `@tauri-apps/api/core`. Tauri commands are 
 ### Rust Backend Modules (src-tauri/src/)
 
 - **commands/** — Thin Tauri command handlers split by domain: `ipod.rs`, `files.rs`, `media.rs`, `metadata.rs`, `library.rs`, `playlists.rs`, `audio.rs`, `system.rs`. Each command delegates to domain modules. Entry point for all frontend `invoke()` calls.
-- **disk.rs** — macOS-specific iPod detection by parsing `diskutil list` output for FAT32 partitions. Mount/unmount via `sudo mount -t msdos` with password piped through stdin.
+- **disk.rs** — iPod detection via `diskutil` plist output (structured XML, not text parsing). Mount via `sudo mount -t msdos` with password piped through stdin. Unmount via `diskutil unmount`.
 - **files.rs** — Directory listing (`FileEntry`), recursive comparison (`CompareEntry` tree), copy/delete with progress events. `SyncCancel` (shared `Arc<AtomicBool>`) enables cancellation from the frontend.
 - **albumart.rs** — Scans folders for albums missing `cover.jpg`. Two-tier fix: (1) extract embedded art from audio tags via `lofty`, (2) fetch from MusicBrainz Cover Art Archive via `ureq`. Resizes to 600x600 via `image` crate.
 - **youtube.rs** — YouTube audio downloading via `yt-dlp`. Fetches video metadata, extracts audio to FLAC/MP3, and splits by chapters. Emits `youtube-progress` events.
@@ -77,7 +77,7 @@ Tailwind v4 with a custom dark theme defined as CSS variables in `src/App.css`. 
 
 - **Cancellation:** Long operations check a shared `SyncCancel` (`AtomicBool` in Tauri state). Frontend calls `cancel_sync` command to set the flag.
 - **Progress events:** Backend emits events like `albumart-progress`, `albumart-scan-progress`, `copy-progress`. Frontend subscribes via `listen()` and updates UI in real-time.
-- **macOS only:** Disk operations rely on `diskutil` and `mount` CLI tools. Not portable to other OSes.
+- **macOS only:** Disk operations rely on `diskutil` plist output and `mount` CLI tools. Not portable to other OSes.
 - **Testing:** Every component has a co-located test file in its folder (e.g., `ComponentName.test.tsx`). When creating a new component, always create a test alongside it. Tests use Vitest + React Testing Library with Tauri API mocks defined in `src/test/setup.ts`.
 - **E2E testing:** Playwright tests in `e2e/tests/` run against the Vite dev server with Tauri APIs mocked via `e2e/fixtures/tauri-mocks.ts`. The mock injects `window.__TAURI_INTERNALS__` before the app boots so all `invoke()` and `listen()` calls are intercepted. Use `tauriMocks.override()` before `page.goto()` to set command responses, or `tauriMocks.setResponses()` to update responses at runtime on the current page.
 

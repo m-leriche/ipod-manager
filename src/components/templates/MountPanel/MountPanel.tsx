@@ -68,14 +68,8 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
     setMessage({ text: "Mounting iPod...", type: "info" });
     try {
       await invoke("mount_ipod", { identifier: diskInfo.identifier });
-      const updated = await invoke<DiskInfo | null>("detect_ipod");
-      if (updated) {
-        setDiskInfo(updated);
-        setStatus("mounted");
-        setMessage({ text: `Mounted at ${updated.mount_point ?? "/Volumes/IPOD"}`, type: "success" });
-      } else {
-        await detectIPod();
-      }
+      setMessage({ text: "Mounted at /Volumes/IPOD", type: "success" });
+      await detectIPod();
     } catch (err) {
       setMessage({ text: `${err}`, type: "error" });
       setStatus("found");

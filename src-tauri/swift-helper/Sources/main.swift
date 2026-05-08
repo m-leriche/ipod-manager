@@ -5,7 +5,7 @@
 //
 // Commands:
 //   detect        — JSON array of external FAT32 disk candidates
-//   mount ID      — mount disk at system-chosen path (no sudo needed)
+//   mount ID      — mount disk at /Volumes/IPOD (prompts via native macOS auth dialog)
 //   unmount [path] — unmount volume (defaults to /Volumes/IPOD)
 
 import DiskArbitration
@@ -234,12 +234,16 @@ private func waitForCallback(timeoutSeconds: Double) {
 }
 
 func mountDisk(identifier: String) -> String? {
-    // Use diskutil mount instead of DADiskMount — DA requires privileges even with
-    // a nil path for certain device types (iPods, some USB drives). diskutil mount
-    // doesn't need sudo for external USB devices and handles all the plumbing.
+    // iPod FAT32 partitions need `mount -t msdos` — diskutil's auto-detection fails.
+    // This requires root, so we use osascript "with administrator privileges" which
+    // triggers the native macOS auth dialog (supports Touch ID / Apple Watch).
+    // This replaces the old approach of piping a password through stdin to sudo.
+    let shellCmd = "mkdir -p /Volumes/IPOD && mount -t msdos /dev/\(identifier) /Volumes/IPOD"
+    let script = "do shell script \"\(shellCmd)\" with administrator privileges"
+
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
-    process.arguments = ["mount", identifier]
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
     let errPipe = Pipe()
     process.standardError = errPipe
     process.standardOutput = FileHandle.nullDevice
@@ -248,14 +252,18 @@ func mountDisk(identifier: String) -> String? {
         try process.run()
         process.waitUntilExit()
     } catch {
-        return "Failed to run diskutil: \(error.localizedDescription)"
+        return "Failed to run mount: \(error.localizedDescription)"
     }
 
     guard process.terminationStatus == 0 else {
         let stderr = String(
             data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
         ) ?? "Unknown error"
-        return "Mount failed: \(stderr.trimmingCharacters(in: .whitespacesAndNewlines))"
+        let msg = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if msg.contains("-128") {
+            return "Mount cancelled by user"
+        }
+        return "Mount failed: \(msg)"
     }
 
     return nil

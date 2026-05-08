@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Stream, StreamConfig};
+use cpal::{Host, Stream, StreamConfig};
 use crossbeam_channel::Receiver;
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::HeapRb;
@@ -177,7 +177,7 @@ pub fn run<R: Runtime>(
                             let (prod, cons) = rb.split();
 
                             match create_output_stream(
-                                &device,
+                                &host,
                                 output_rate,
                                 output_channels,
                                 cons,
@@ -257,7 +257,7 @@ pub fn run<R: Runtime>(
                                 }
 
                                 match create_output_stream(
-                                    &device,
+                                    &host,
                                     output_rate,
                                     output_channels,
                                     cons,
@@ -485,13 +485,19 @@ fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
 /// Create a cpal output stream that reads from a ring buffer consumer.
 /// The output sample counter is incremented in the callback for accurate position tracking.
 fn create_output_stream(
-    device: &cpal::Device,
+    host: &Host,
     sample_rate: u32,
     channels: u16,
     mut consumer: ringbuf::HeapCons<f32>,
     volume: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
 ) -> Result<Stream, String> {
+    // Re-query the current default output device each time so audio follows
+    // macOS system routing (e.g. Bluetooth speaker selection changes)
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| "No audio output device found".to_string())?;
+
     let config = StreamConfig {
         channels,
         sample_rate: cpal::SampleRate(sample_rate),

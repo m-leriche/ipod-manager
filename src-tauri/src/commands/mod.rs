@@ -1,5 +1,6 @@
 mod audio;
 mod files;
+mod health;
 mod ipod;
 mod lastfm;
 mod library;
@@ -11,6 +12,7 @@ mod system;
 
 pub use audio::*;
 pub use files::*;
+pub use health::*;
 pub use ipod::*;
 pub use lastfm::*;
 pub use library::*;

@@ -1,6 +1,8 @@
 mod delete;
 pub mod duplicates;
+pub mod export;
 mod folders;
+pub mod health;
 mod import;
 pub mod playlists;
 mod queries;

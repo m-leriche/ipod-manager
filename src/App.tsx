@@ -49,6 +49,14 @@ const DuplicateDetector = lazy(() =>
 const AudioConverter = lazy(() =>
   import("./components/templates/AudioConverter/AudioConverter").then((m) => ({ default: m.AudioConverter })),
 );
+const LibraryHealthDashboard = lazy(() =>
+  import("./components/templates/LibraryHealthDashboard/LibraryHealthDashboard").then((m) => ({
+    default: m.LibraryHealthDashboard,
+  })),
+);
+const LibraryExport = lazy(() =>
+  import("./components/templates/LibraryExport/LibraryExport").then((m) => ({ default: m.LibraryExport })),
+);
 const SettingsModal = lazy(() =>
   import("./components/templates/SettingsModal/SettingsModal").then((m) => ({ default: m.SettingsModal })),
 );
@@ -59,7 +67,7 @@ const KeyboardShortcutsDialog = lazy(() =>
 );
 
 type TopTab = "library" | "tools";
-type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert";
+type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
 
 const App = () => (
   <ThemeProvider>
@@ -398,6 +406,12 @@ const AppContent = () => {
                   <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
                     Converter
                   </ToolTabButton>
+                  <ToolTabButton active={toolTab === "health"} onClick={() => setToolTab("health")}>
+                    Health
+                  </ToolTabButton>
+                  <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
+                    Export
+                  </ToolTabButton>
                 </div>
                 <Suspense fallback={null}>
                   <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
@@ -437,6 +451,16 @@ const AppContent = () => {
                     {toolTab === "convert" && (
                       <ErrorBoundary name="Audio Converter">
                         <AudioConverter />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "health" && (
+                      <ErrorBoundary name="Library Health">
+                        <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "export" && (
+                      <ErrorBoundary name="Library Export">
+                        <LibraryExport />
                       </ErrorBoundary>
                     )}
                   </div>

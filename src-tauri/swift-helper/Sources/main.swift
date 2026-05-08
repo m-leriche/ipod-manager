@@ -166,6 +166,14 @@ func getSpaceInfo(path: String) -> (total: UInt64?, free: UInt64?, used: UInt64?
     return (total, free, used)
 }
 
+/// Validate a BSD disk identifier (e.g., "disk5s2"). Must start with "disk" followed by
+/// only alphanumeric characters. Defense in depth — Rust validates too, but this binary
+/// could be invoked outside the Tauri app.
+func isValidDiskIdentifier(_ id: String) -> Bool {
+    guard id.hasPrefix("disk"), id.count > 4 else { return false }
+    return id.dropFirst(4).allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+}
+
 func formatBytes(_ bytes: UInt64) -> String {
     let gb = Double(bytes) / 1_000_000_000
     if gb >= 1000 {
@@ -222,6 +230,8 @@ private let onUnmountComplete: DADiskUnmountCallback = { _, dissenter, _ in
 }
 
 /// Wait for a DA callback to fire, with a timeout.
+/// The CFRunLoopRunInMode call is an opaque C function boundary that prevents the compiler
+/// from hoisting the gCallbackDone read out of the loop.
 private func waitForCallback(timeoutSeconds: Double) {
     let deadline = Date().addingTimeInterval(timeoutSeconds)
     while !gCallbackDone, Date() < deadline {
@@ -258,7 +268,7 @@ func mountDisk(identifier: String) -> String? {
     waitForCallback(timeoutSeconds: 15)
 
     if !gCallbackDone {
-        return "Mount timed out"
+        return "Mount timed out — the disk may be in an inconsistent state. Try ejecting and reconnecting."
     }
     return gCallbackError
 }
@@ -288,7 +298,7 @@ func unmountDisk(volumePath: String = "/Volumes/IPOD") -> String? {
     waitForCallback(timeoutSeconds: 15)
 
     if !gCallbackDone {
-        return "Unmount timed out"
+        return "Unmount timed out — another process may be using the volume"
     }
     return gCallbackError
 }
@@ -318,6 +328,10 @@ case "detect":
 case "mount":
     guard args.count >= 3 else {
         fputs("Usage: crate-disk-helper mount <identifier>\n", stderr)
+        exit(1)
+    }
+    guard isValidDiskIdentifier(args[2]) else {
+        fputs("Invalid disk identifier: \(args[2])\n", stderr)
         exit(1)
     }
     if let error = mountDisk(identifier: args[2]) {

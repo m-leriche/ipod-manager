@@ -107,6 +107,8 @@ pub fn mount_ipod_disk(identifier: &str) -> Result<(), String> {
 }
 
 /// Unmount the iPod from /Volumes/IPOD.
+/// The Swift helper accepts an optional volume path for flexibility (e.g., "/Volumes/IPOD 1"),
+/// but we default to /Volumes/IPOD since that's where mount always targets.
 pub fn unmount_ipod_disk() -> Result<(), String> {
     let output = run_helper(&["unmount"])?;
 

@@ -13,8 +13,10 @@ fn build_swift_helper() {
         return;
     }
 
-    // Recompile when any Swift source or the package manifest changes
-    println!("cargo:rerun-if-changed=swift-helper/Sources");
+    // Recompile when the Swift source or package manifest changes.
+    // Note: rerun-if-changed on a directory only fires when files are added/removed,
+    // not when existing files are modified — so we must list individual source files.
+    println!("cargo:rerun-if-changed=swift-helper/Sources/main.swift");
     println!("cargo:rerun-if-changed=swift-helper/Package.swift");
 
     let status = std::process::Command::new("swift")
@@ -26,7 +28,10 @@ fn build_swift_helper() {
         panic!("Swift helper compilation failed");
     }
 
-    let target = std::env::var("TARGET").unwrap_or_else(|_| "aarch64-apple-darwin".to_string());
+    let target = std::env::var("TARGET").unwrap_or_else(|_| {
+        println!("cargo:warning=TARGET env var not set — defaulting to aarch64-apple-darwin");
+        "aarch64-apple-darwin".to_string()
+    });
     let bin_dir = Path::new("binaries");
     std::fs::create_dir_all(bin_dir).expect("Cannot create binaries/ directory");
 

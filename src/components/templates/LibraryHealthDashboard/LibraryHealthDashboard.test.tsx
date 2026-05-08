@@ -9,34 +9,40 @@ import type { LibraryTrack } from "../../../types/library";
 
 const mockInvoke = vi.mocked(invoke);
 
-const MOCK_TRACKS: LibraryTrack[] = [
-  {
-    id: 1,
-    file_path: "/music/track_1.flac",
-    file_name: "track_1.flac",
-    folder_path: "/music",
-    title: null,
-    artist: "Artist A",
-    album: "Album A",
-    album_artist: null,
-    sort_artist: null,
-    sort_album_artist: null,
-    track_number: 1,
-    track_total: null,
-    disc_number: null,
-    disc_total: null,
-    year: 2020,
-    genre: "Rock",
-    duration_secs: 240,
-    sample_rate: 44100,
-    bitrate_kbps: 900,
-    format: "FLAC",
-    file_size: 30000000,
-    created_at: 0,
-    play_count: 0,
-    flagged: false,
-    rating: 0,
-  },
+const makeMockTrack = (id: number, fileName: string, artist: string): LibraryTrack => ({
+  id,
+  file_path: `/music/${fileName}`,
+  file_name: fileName,
+  folder_path: "/music",
+  title: null,
+  artist,
+  album: "Album A",
+  album_artist: null,
+  sort_artist: null,
+  sort_album_artist: null,
+  track_number: id,
+  track_total: null,
+  disc_number: null,
+  disc_total: null,
+  year: 2020,
+  genre: "Rock",
+  duration_secs: 240,
+  sample_rate: 44100,
+  bitrate_kbps: 900,
+  format: "FLAC",
+  file_size: 30000000,
+  created_at: 0,
+  play_count: 0,
+  flagged: false,
+  rating: 0,
+});
+
+const MOCK_TRACKS: LibraryTrack[] = [makeMockTrack(1, "track_1.flac", "Artist A")];
+
+const MOCK_TRACKS_MULTI: LibraryTrack[] = [
+  makeMockTrack(1, "track_1.flac", "Artist A"),
+  makeMockTrack(2, "track_2.flac", "Artist B"),
+  makeMockTrack(3, "track_3.flac", "Artist C"),
 ];
 
 const MOCK_REPORT: HealthReport = {
@@ -325,6 +331,56 @@ describe("drill-down", () => {
     await user.click(screen.getByText("Edit Metadata (1 track)"));
 
     expect(onRepair).toHaveBeenCalledWith(MOCK_TRACKS);
+  });
+
+  it("shift+click extends selection with range", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS_MULTI);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    // Click first track
+    await user.click(screen.getByText("track_1.flac"));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    // Shift+click third track — should select all three
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByText("track_3.flac"));
+    await user.keyboard("{/Shift}");
+
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+  });
+
+  it("does not show context menu when onRepairMetadata is not provided", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("track_1.flac") });
+
+    // No context menu should appear
+    expect(screen.queryByText(/Edit Metadata/)).not.toBeInTheDocument();
   });
 
   it("does not open modal for zero-count issues", async () => {

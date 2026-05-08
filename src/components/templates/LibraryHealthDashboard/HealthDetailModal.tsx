@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../../types/library";
 import type { HealthIssue } from "./types";
@@ -21,6 +21,8 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const lastClickedRef = useRef<number | null>(null);
+  const contextMenuRef = useRef(contextMenu);
+  contextMenuRef.current = contextMenu;
 
   useEffect(() => {
     const load = async () => {
@@ -37,7 +39,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (contextMenu) {
+        if (contextMenuRef.current) {
           setContextMenu(null);
         } else {
           onClose();
@@ -46,16 +48,20 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, contextMenu]);
+  }, [onClose]);
 
-  const sorted = tracks
-    ? [...tracks].sort((a, b) => {
-        const av = (a[sortKey] ?? "") as string;
-        const bv = (b[sortKey] ?? "") as string;
-        const cmp = av.localeCompare(bv, undefined, { sensitivity: "base" });
-        return sortDir === "asc" ? cmp : -cmp;
-      })
-    : [];
+  const sorted = useMemo(
+    () =>
+      tracks
+        ? [...tracks].sort((a, b) => {
+            const av = (a[sortKey] ?? "") as string;
+            const bv = (b[sortKey] ?? "") as string;
+            const cmp = av.localeCompare(bv, undefined, { sensitivity: "base" });
+            return sortDir === "asc" ? cmp : -cmp;
+          })
+        : [],
+    [tracks, sortKey, sortDir],
+  );
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -66,54 +72,47 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     }
   };
 
-  const handleRowClick = useCallback(
-    (trackId: number, e: React.MouseEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        // Toggle individual selection
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          if (next.has(trackId)) next.delete(trackId);
-          else next.add(trackId);
-          return next;
-        });
-      } else if (e.shiftKey && lastClickedRef.current !== null) {
-        // Range selection
-        const ids = sorted.map((t) => t.id);
-        const from = ids.indexOf(lastClickedRef.current);
-        const to = ids.indexOf(trackId);
-        if (from !== -1 && to !== -1) {
-          const start = Math.min(from, to);
-          const end = Math.max(from, to);
-          setSelectedIds(new Set(ids.slice(start, end + 1)));
-        }
-      } else {
-        setSelectedIds(new Set([trackId]));
+  const handleRowClick = (trackId: number, e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(trackId)) next.delete(trackId);
+        else next.add(trackId);
+        return next;
+      });
+    } else if (e.shiftKey && lastClickedRef.current !== null) {
+      const ids = sorted.map((t) => t.id);
+      const from = ids.indexOf(lastClickedRef.current);
+      const to = ids.indexOf(trackId);
+      if (from !== -1 && to !== -1) {
+        const start = Math.min(from, to);
+        const end = Math.max(from, to);
+        const range = new Set(ids.slice(start, end + 1));
+        setSelectedIds((prev) => new Set([...prev, ...range]));
       }
+    } else {
+      setSelectedIds(new Set([trackId]));
+    }
+    lastClickedRef.current = trackId;
+  };
+
+  const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!onRepairMetadata) return;
+    if (!selectedIds.has(trackId)) {
+      setSelectedIds(new Set([trackId]));
       lastClickedRef.current = trackId;
-    },
-    [sorted],
-  );
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
 
-  const handleContextMenu = useCallback(
-    (trackId: number, e: React.MouseEvent) => {
-      e.preventDefault();
-      // If right-clicking an unselected row, select it
-      if (!selectedIds.has(trackId)) {
-        setSelectedIds(new Set([trackId]));
-        lastClickedRef.current = trackId;
-      }
-      setContextMenu({ x: e.clientX, y: e.clientY });
-    },
-    [selectedIds],
-  );
-
-  const handleEditMetadata = useCallback(() => {
+  const handleEditMetadata = () => {
     if (!onRepairMetadata || !tracks) return;
     const selected = tracks.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) return;
     onRepairMetadata(selected);
     onClose();
-  }, [onRepairMetadata, tracks, selectedIds, onClose]);
+  };
 
   const arrow = (key: SortKey) => {
     if (key !== sortKey) return null;
@@ -204,7 +203,6 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
             {
               label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
               onClick: handleEditMetadata,
-              disabled: !onRepairMetadata || selectedCount === 0,
             },
           ]}
           onClose={() => setContextMenu(null)}

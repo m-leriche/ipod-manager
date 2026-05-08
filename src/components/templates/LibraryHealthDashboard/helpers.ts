@@ -7,14 +7,8 @@ export const issuePercentage = (count: number, total: number): string => {
 
 export const issueSeverity = (issue: HealthIssue, total: number): "ok" | "warning" | "critical" => {
   if (issue.count === 0) return "ok";
-  // "informational" issues that don't indicate problems
   if (issue.id === "never_played" || issue.id === "unrated") {
-    const pct = issue.count / total;
-    if (pct > 0.8) return "warning";
-    return "ok";
+    return issue.count / total > 0.8 ? "warning" : "ok";
   }
-  const pct = issue.count / total;
-  if (pct > 0.1) return "critical";
-  if (issue.count > 0) return "warning";
-  return "ok";
+  return issue.count / total > 0.1 ? "critical" : "warning";
 };

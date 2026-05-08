@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { LibraryTrack } from "../../../types/library";
 import type { HealthReport, HealthIssue, Phase } from "./types";
 import { issuePercentage, issueSeverity } from "./helpers";
 import { HealthDetailModal } from "./HealthDetailModal";
 
-export const LibraryHealthDashboard = () => {
+interface LibraryHealthDashboardProps {
+  onRepairMetadata?: (tracks: LibraryTrack[]) => void;
+}
+
+export const LibraryHealthDashboard = ({ onRepairMetadata }: LibraryHealthDashboardProps) => {
   const [phase, setPhase] = useState<Phase>("idle");
   const [report, setReport] = useState<HealthReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +113,13 @@ export const LibraryHealthDashboard = () => {
         </div>
       </div>
 
-      {activeIssue && <HealthDetailModal issue={activeIssue} onClose={() => setActiveIssue(null)} />}
+      {activeIssue && (
+        <HealthDetailModal
+          issue={activeIssue}
+          onClose={() => setActiveIssue(null)}
+          onRepairMetadata={onRepairMetadata}
+        />
+      )}
     </div>
   );
 };

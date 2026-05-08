@@ -1,21 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../../types/library";
 import type { HealthIssue } from "./types";
+import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
   onClose: () => void;
+  onRepairMetadata?: (tracks: LibraryTrack[]) => void;
 }
 
 type SortKey = "file_path" | "artist" | "album" | "title";
 type SortDir = "asc" | "desc";
 
-export const HealthDetailModal = ({ issue, onClose }: HealthDetailModalProps) => {
+export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDetailModalProps) => {
   const [tracks, setTracks] = useState<LibraryTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("file_path");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const lastClickedRef = useRef<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -31,11 +36,26 @@ export const HealthDetailModal = ({ issue, onClose }: HealthDetailModalProps) =>
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (contextMenu) {
+          setContextMenu(null);
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, contextMenu]);
+
+  const sorted = tracks
+    ? [...tracks].sort((a, b) => {
+        const av = (a[sortKey] ?? "") as string;
+        const bv = (b[sortKey] ?? "") as string;
+        const cmp = av.localeCompare(bv, undefined, { sensitivity: "base" });
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : [];
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -46,14 +66,54 @@ export const HealthDetailModal = ({ issue, onClose }: HealthDetailModalProps) =>
     }
   };
 
-  const sorted = tracks
-    ? [...tracks].sort((a, b) => {
-        const av = (a[sortKey] ?? "") as string;
-        const bv = (b[sortKey] ?? "") as string;
-        const cmp = av.localeCompare(bv, undefined, { sensitivity: "base" });
-        return sortDir === "asc" ? cmp : -cmp;
-      })
-    : [];
+  const handleRowClick = useCallback(
+    (trackId: number, e: React.MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        // Toggle individual selection
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(trackId)) next.delete(trackId);
+          else next.add(trackId);
+          return next;
+        });
+      } else if (e.shiftKey && lastClickedRef.current !== null) {
+        // Range selection
+        const ids = sorted.map((t) => t.id);
+        const from = ids.indexOf(lastClickedRef.current);
+        const to = ids.indexOf(trackId);
+        if (from !== -1 && to !== -1) {
+          const start = Math.min(from, to);
+          const end = Math.max(from, to);
+          setSelectedIds(new Set(ids.slice(start, end + 1)));
+        }
+      } else {
+        setSelectedIds(new Set([trackId]));
+      }
+      lastClickedRef.current = trackId;
+    },
+    [sorted],
+  );
+
+  const handleContextMenu = useCallback(
+    (trackId: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      // If right-clicking an unselected row, select it
+      if (!selectedIds.has(trackId)) {
+        setSelectedIds(new Set([trackId]));
+        lastClickedRef.current = trackId;
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    [selectedIds],
+  );
+
+  const handleEditMetadata = useCallback(() => {
+    if (!onRepairMetadata || !tracks) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+    onRepairMetadata(selected);
+    onClose();
+  }, [onRepairMetadata, tracks, selectedIds, onClose]);
 
   const arrow = (key: SortKey) => {
     if (key !== sortKey) return null;
@@ -66,6 +126,8 @@ export const HealthDetailModal = ({ issue, onClose }: HealthDetailModalProps) =>
     { key: "album", label: "Album" },
     { key: "title", label: "Title" },
   ];
+
+  const selectedCount = selectedIds.size;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -103,25 +165,51 @@ export const HealthDetailModal = ({ issue, onClose }: HealthDetailModalProps) =>
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((track) => (
-                  <tr key={track.id} className="border-t border-border-subtle hover:bg-bg-hover transition-colors">
-                    <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
-                      {track.file_name}
-                    </td>
-                    <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.artist || "—"}</td>
-                    <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.album || "—"}</td>
-                    <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.title || "—"}</td>
-                  </tr>
-                ))}
+                {sorted.map((track) => {
+                  const isSelected = selectedIds.has(track.id);
+                  return (
+                    <tr
+                      key={track.id}
+                      onClick={(e) => handleRowClick(track.id, e)}
+                      onContextMenu={(e) => handleContextMenu(track.id, e)}
+                      className={`border-t border-border-subtle cursor-default select-none transition-colors ${
+                        isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
+                      }`}
+                    >
+                      <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
+                        {track.file_name}
+                      </td>
+                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.artist || "—"}</td>
+                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.album || "—"}</td>
+                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.title || "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-border shrink-0">
+        <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
           <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
+          {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
         </div>
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+              onClick: handleEditMetadata,
+              disabled: !onRepairMetadata || selectedCount === 0,
+            },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

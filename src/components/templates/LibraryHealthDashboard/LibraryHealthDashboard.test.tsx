@@ -252,6 +252,81 @@ describe("drill-down", () => {
     });
   });
 
+  it("shows selection count when tracks are clicked", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("track_1.flac"));
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
+  it("shows context menu on right-click with Edit Metadata option", async () => {
+    const user = userEvent.setup();
+    const onRepair = vi.fn();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard onRepairMetadata={onRepair} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    // Right-click the track row
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("track_1.flac") });
+
+    await waitFor(() => {
+      expect(screen.getByText("Edit Metadata (1 track)")).toBeInTheDocument();
+    });
+  });
+
+  it("calls onRepairMetadata with selected tracks when Edit Metadata is clicked", async () => {
+    const user = userEvent.setup();
+    const onRepair = vi.fn();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard onRepairMetadata={onRepair} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    // Right-click to open context menu
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("track_1.flac") });
+
+    await waitFor(() => {
+      expect(screen.getByText("Edit Metadata (1 track)")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Edit Metadata (1 track)"));
+
+    expect(onRepair).toHaveBeenCalledWith(MOCK_TRACKS);
+  });
+
   it("does not open modal for zero-count issues", async () => {
     const user = userEvent.setup();
     mockInvoke.mockResolvedValue(MOCK_REPORT);

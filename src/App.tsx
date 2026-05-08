@@ -455,7 +455,7 @@ const AppContent = () => {
                     )}
                     {toolTab === "health" && (
                       <ErrorBoundary name="Library Health">
-                        <LibraryHealthDashboard />
+                        <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
                       </ErrorBoundary>
                     )}
                     {toolTab === "export" && (

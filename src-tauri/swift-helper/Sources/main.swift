@@ -214,15 +214,6 @@ func describeDAStatus(_ status: DAReturn) -> String {
 private var gCallbackError: String?
 private var gCallbackDone = false
 
-private let onMountComplete: DADiskMountCallback = { _, dissenter, _ in
-    if let dissenter = dissenter {
-        let status = DADissenterGetStatus(dissenter)
-        gCallbackError = "Mount failed: \(describeDAStatus(status))"
-    }
-    gCallbackDone = true
-    CFRunLoopStop(CFRunLoopGetMain())
-}
-
 private let onUnmountComplete: DADiskUnmountCallback = { _, dissenter, _ in
     if let dissenter = dissenter {
         let status = DADissenterGetStatus(dissenter)
@@ -243,38 +234,31 @@ private func waitForCallback(timeoutSeconds: Double) {
 }
 
 func mountDisk(identifier: String) -> String? {
-    guard let session = DASessionCreate(kCFAllocatorDefault) else {
-        return "Cannot create DiskArbitration session"
-    }
-    DASessionScheduleWithRunLoop(session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-    defer {
-        DASessionUnscheduleFromRunLoop(
-            session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+    // Use diskutil mount instead of DADiskMount — DA requires privileges even with
+    // a nil path for certain device types (iPods, some USB drives). diskutil mount
+    // doesn't need sudo for external USB devices and handles all the plumbing.
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
+    process.arguments = ["mount", identifier]
+    let errPipe = Pipe()
+    process.standardError = errPipe
+    process.standardOutput = FileHandle.nullDevice
+
+    do {
+        try process.run()
+        process.waitUntilExit()
+    } catch {
+        return "Failed to run diskutil: \(error.localizedDescription)"
     }
 
-    guard let disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, identifier) else {
-        return "Cannot find disk \(identifier)"
+    guard process.terminationStatus == 0 else {
+        let stderr = String(
+            data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+        ) ?? "Unknown error"
+        return "Mount failed: \(stderr.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
 
-    // Step 1: Unmount from any current mount point (best-effort, ignore errors).
-    gCallbackDone = false
-    gCallbackError = nil
-    DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionDefault), onUnmountComplete, nil)
-    waitForCallback(timeoutSeconds: 5)
-
-    // Step 2: Mount at system-chosen path (typically /Volumes/<VolumeName>).
-    // Passing nil lets macOS pick the mount point without requiring privileges.
-    // Specifying an explicit path triggers kDAReturnNotPrivileged on modern macOS.
-    gCallbackDone = false
-    gCallbackError = nil
-    DADiskMount(
-        disk, nil, DADiskMountOptions(kDADiskMountOptionDefault), onMountComplete, nil)
-    waitForCallback(timeoutSeconds: 15)
-
-    if !gCallbackDone {
-        return "Mount timed out — the disk may be in an inconsistent state. Try ejecting and reconnecting."
-    }
-    return gCallbackError
+    return nil
 }
 
 func unmountDisk(volumePath: String = "/Volumes/IPOD") -> String? {

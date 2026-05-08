@@ -178,6 +178,24 @@ func formatBytes(_ bytes: UInt64) -> String {
 
 // MARK: - Mount / Unmount via DiskArbitration
 
+/// Map common DAReturn status codes to human-readable messages.
+/// DAReturn is Int32; DA error codes use the high bits, so we compare as UInt32.
+func describeDAStatus(_ status: DAReturn) -> String {
+    let code = UInt32(bitPattern: status)
+    switch code {
+    case 0xF8DA_0001: return "not permitted"
+    case 0xF8DA_0002: return "device is busy"
+    case 0xF8DA_0003: return "bad argument"
+    case 0xF8DA_0004: return "device is locked"
+    case 0xF8DA_0005: return "already mounted"
+    case 0xF8DA_0006: return "not found"
+    case 0xF8DA_0007: return "not mounted"
+    case 0xF8DA_0008: return "not permitted (operation denied)"
+    case 0xF8DA_000C: return "unsupported filesystem"
+    default: return "error code \(String(format: "0x%08X", code))"
+    }
+}
+
 // File-level globals for C-compatible DA callbacks (cannot capture local state).
 private var gCallbackError: String?
 private var gCallbackDone = false
@@ -185,7 +203,7 @@ private var gCallbackDone = false
 private let onMountComplete: DADiskMountCallback = { _, dissenter, _ in
     if let dissenter = dissenter {
         let status = DADissenterGetStatus(dissenter)
-        gCallbackError = "Mount rejected (status \(status))"
+        gCallbackError = "Mount failed: \(describeDAStatus(status))"
     }
     gCallbackDone = true
     CFRunLoopStop(CFRunLoopGetMain())
@@ -194,7 +212,7 @@ private let onMountComplete: DADiskMountCallback = { _, dissenter, _ in
 private let onUnmountComplete: DADiskUnmountCallback = { _, dissenter, _ in
     if let dissenter = dissenter {
         let status = DADissenterGetStatus(dissenter)
-        gCallbackError = "Unmount rejected (status \(status))"
+        gCallbackError = "Unmount failed: \(describeDAStatus(status))"
     }
     gCallbackDone = true
     CFRunLoopStop(CFRunLoopGetMain())

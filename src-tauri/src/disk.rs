@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskInfo {
     pub identifier: String,
@@ -27,7 +25,7 @@ pub struct DiskInfo {
 fn helper_path() -> Result<PathBuf, String> {
     let triple = target_triple();
 
-    // Production: next to the running executable
+    // Production (and dev after Tauri copies the sidecar): next to the running executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let path = dir.join(format!("crate-disk-helper-{triple}"));
@@ -37,12 +35,16 @@ fn helper_path() -> Result<PathBuf, String> {
         }
     }
 
-    // Development: in binaries/ relative to the crate manifest
-    let dev_path = PathBuf::from(MANIFEST_DIR)
-        .join("binaries")
-        .join(format!("crate-disk-helper-{triple}"));
-    if dev_path.exists() {
-        return Ok(dev_path);
+    // Development fallback: in binaries/ relative to the crate manifest.
+    // Only compiled into debug builds to avoid leaking the build path into release binaries.
+    #[cfg(debug_assertions)]
+    {
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(format!("crate-disk-helper-{triple}"));
+        if dev_path.exists() {
+            return Ok(dev_path);
+        }
     }
 
     Err("crate-disk-helper not found — run `swift build -c release` in swift-helper/".into())

@@ -12,8 +12,8 @@ fn build_swift_helper() {
         return;
     }
 
-    // Recompile when Swift sources change
-    println!("cargo:rerun-if-changed=swift-helper/Sources/main.swift");
+    // Recompile when any Swift source or the package manifest changes
+    println!("cargo:rerun-if-changed=swift-helper/Sources");
     println!("cargo:rerun-if-changed=swift-helper/Package.swift");
 
     let status = std::process::Command::new("swift")

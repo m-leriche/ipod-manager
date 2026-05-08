@@ -69,6 +69,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Refs for event handlers (so listeners always call the latest version)
   const onTrackEndedRef = useRef<() => void>(() => {});
   const onGaplessTransitionRef = useRef<() => void>(() => {});
+  const getNextIndexRef = useRef<() => number | null>(() => null);
   const onMediaToggleRef = useRef<() => void>(() => {});
   const onMediaNextRef = useRef<() => void>(() => {});
   const onMediaPreviousRef = useRef<() => void>(() => {});
@@ -158,6 +159,24 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
           const newDur = duration > 0 ? duration : prev.duration;
           return { currentTime: position, duration: newDur };
         });
+
+        // Time-based preload: check if we're close enough to EOF to need
+        // the next track ready. Runs at engine event rate (~20Hz) instead
+        // of on every interpolated time tick.
+        if (duration > 0) {
+          const s = stateRef.current;
+          if (s.isPlaying && s.repeat !== "one" && timePreloadedForRef.current !== s.queueIndex) {
+            const threshold = Math.max(s.crossfade + 5, 10);
+            const remaining = duration - position;
+            if (remaining <= threshold && remaining > 0) {
+              timePreloadedForRef.current = s.queueIndex;
+              const nextIdx = getNextIndexRef.current();
+              if (nextIdx !== null && s.queue[nextIdx]) {
+                invoke("audio_preload_next", { path: s.queue[nextIdx].file_path }).catch(() => {});
+              }
+            }
+          }
+        }
       }),
     );
 
@@ -427,8 +446,13 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;
   onGaplessTransitionRef.current = handleGaplessTransition;
+  getNextIndexRef.current = getNextIndex;
 
   // ── Preload next track for gapless playback ──────────────────
+
+  // Tracks the queue index for which a time-based preload was issued.
+  // When queue index changes, the preload is implicitly stale.
+  const timePreloadedForRef = useRef(-1);
 
   // Immediate preload: fire whenever queue position or settings change
   useEffect(() => {
@@ -447,40 +471,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       invoke("audio_preload_next", { path: state.queue[nextIdx].file_path }).catch(() => {});
     }
   }, [state.queueIndex, state.queue, state.shuffle, state.repeat, state.isPlaying, getNextIndex]);
-
-  // Time-based preload: ensure next track is preloaded before crossfade starts.
-  // When crossfade is enabled, the engine needs the preloaded decoder ready
-  // crossfade-duration + buffer seconds before EOF. Re-issue preload if it
-  // might be stale (e.g. queue was modified after the initial preload).
-  const preloadIssuedRef = useRef(false);
-
-  useEffect(() => {
-    // Reset the guard whenever queue or index changes — the immediate effect above
-    // handles that preload, but we want the time-based one to also fire later.
-    preloadIssuedRef.current = false;
-  }, [state.queueIndex, state.queue]);
-
-  useEffect(() => {
-    if (!state.isPlaying || state.repeat === "one") return;
-    if (preloadIssuedRef.current) return;
-
-    const cf = stateRef.current.crossfade;
-    const dur = timeRef.current.duration;
-    const pos = timeRef.current.currentTime;
-    if (dur <= 0) return;
-
-    // Preload threshold: crossfade duration + 5s buffer (min 10s before end)
-    const threshold = Math.max(cf + 5, 10);
-    const remaining = dur - pos;
-
-    if (remaining <= threshold && remaining > 0) {
-      preloadIssuedRef.current = true;
-      const nextIdx = getNextIndex();
-      if (nextIdx !== null && stateRef.current.queue[nextIdx]) {
-        invoke("audio_preload_next", { path: stateRef.current.queue[nextIdx].file_path }).catch(() => {});
-      }
-    }
-  }, [time.currentTime, state.isPlaying, state.repeat, getNextIndex]);
 
   // ── Update macOS Now Playing metadata when track changes ─────
 

@@ -169,7 +169,7 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
             </p>
 
             <div className="flex items-center gap-3 px-4 py-3 border border-border rounded-xl">
-              <span className="text-[11px] text-text-tertiary shrink-0 w-6 text-right">
+              <span className="text-[11px] text-text-tertiary shrink-0 w-8 text-right">
                 {playbackState.crossfade === 0 ? "Off" : `${playbackState.crossfade}s`}
               </span>
               <input

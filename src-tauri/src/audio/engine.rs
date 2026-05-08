@@ -123,8 +123,6 @@ pub fn run<R: Runtime>(
     let mut crossfade: Option<CrossfadeState> = None;
     // Crossfade duration setting (0 = pure gapless, no overlap)
     let mut crossfade_duration_secs: f64 = 0.0;
-    // Reusable buffer for old track samples during crossfade
-    let mut old_track_buf: Vec<f32> = Vec::new();
 
     // Position event timer
     let mut last_position_event = std::time::Instant::now();
@@ -362,22 +360,23 @@ pub fn run<R: Runtime>(
                 }
                 leftover.drain(..i);
 
-                // Check if we should start crossfade before decoding
-                let dur = shared.get_duration();
-                let remaining = dur - source_pos_secs;
-                if crossfade_duration_secs > 0.0
-                    && remaining <= crossfade_duration_secs
-                    && remaining > 0.0
-                    && preloaded.is_some()
-                    && crossfade.is_none()
-                {
-                    begin_crossfade = true;
-                }
-
                 // Decode new packets while there's space
-                if leftover.is_empty() && !begin_crossfade {
+                let dur = shared.get_duration();
+                if leftover.is_empty() {
                     let mut filled = 0;
                     while prod.vacant_len() > 4096 && filled < 32768 {
+                        // Check crossfade trigger using up-to-date source_pos_secs
+                        let remaining = dur - source_pos_secs;
+                        if crossfade_duration_secs > 0.0
+                            && remaining <= crossfade_duration_secs
+                            && remaining > 0.0
+                            && preloaded.is_some()
+                            && crossfade.is_none()
+                        {
+                            begin_crossfade = true;
+                            break;
+                        }
+
                         match dec.next_samples() {
                             Ok(Some(samples)) => {
                                 // Track source position from decoded frames
@@ -400,18 +399,16 @@ pub fn run<R: Runtime>(
 
                                 // If crossfading, mix in old track samples
                                 if let Some(ref mut cf) = crossfade {
-                                    decode_old_track(
-                                        cf,
-                                        &mut old_track_buf,
-                                        out_samples.len(),
-                                        output_channels,
-                                    );
+                                    decode_old_track(cf, out_samples.len(), output_channels);
                                     mix_crossfade(
                                         &mut out_samples,
-                                        &old_track_buf,
+                                        &cf.leftover,
                                         &mut cf.fade,
                                         output_channels,
                                     );
+                                    // Drain consumed samples from leftover
+                                    let consumed = out_samples.len().min(cf.leftover.len());
+                                    cf.leftover.drain(..consumed);
                                     if cf.fade.is_complete() {
                                         crossfade = None;
                                     }
@@ -427,18 +424,6 @@ pub fn run<R: Runtime>(
                                     pushed += 1;
                                 }
                                 filled += pushed;
-
-                                // Re-check crossfade trigger after position advances
-                                let remaining2 = dur - source_pos_secs;
-                                if crossfade_duration_secs > 0.0
-                                    && remaining2 <= crossfade_duration_secs
-                                    && remaining2 > 0.0
-                                    && preloaded.is_some()
-                                    && crossfade.is_none()
-                                {
-                                    begin_crossfade = true;
-                                    break;
-                                }
                             }
                             Ok(None) => {
                                 // EOF — check for gapless transition
@@ -476,7 +461,6 @@ pub fn run<R: Runtime>(
                     if let Some((new_dec, new_rs, new_src_ch)) = preloaded.take() {
                         let old_rs = resampler.take();
                         let old_src_ch = source_channels;
-                        let old_src_rate = source_rate;
 
                         // Actual crossfade uses remaining time (may be less than setting)
                         let dur = shared.get_duration();
@@ -484,11 +468,19 @@ pub fn run<R: Runtime>(
                             .min(crossfade_duration_secs)
                             .max(0.0);
 
+                        // Hand off the current time_stretcher to the old track so it
+                        // continues at the same playback speed during fade-out.
+                        let old_ts = std::mem::replace(
+                            &mut time_stretcher,
+                            TimeStretcher::new(output_channels),
+                        );
+                        time_stretcher.set_speed(current_speed);
+
                         crossfade = Some(CrossfadeState::new(
                             old_dec,
                             old_rs,
                             old_src_ch,
-                            old_src_rate,
+                            old_ts,
                             actual_cf_secs,
                             output_rate,
                             output_channels,
@@ -565,17 +557,12 @@ pub fn run<R: Runtime>(
     }
 }
 
-/// Decode samples from the old track during a crossfade.
-/// Fills `buf` with up to `needed` output-rate samples (channel-adapted + resampled).
-/// Time-stretch and EQ are not applied to the fading-out track.
-fn decode_old_track(
-    cf: &mut CrossfadeState,
-    buf: &mut Vec<f32>,
-    needed: usize,
-    output_channels: u16,
-) {
-    buf.clear();
-    while buf.len() < needed {
+/// Decode samples from the old track during a crossfade into `cf.leftover`.
+/// Ensures at least `needed` samples are available (or until EOF).
+/// Applies channel adaptation, resampling, and time-stretch so the old track
+/// matches the current playback speed.
+fn decode_old_track(cf: &mut CrossfadeState, needed: usize, output_channels: u16) {
+    while cf.leftover.len() < needed {
         match cf.decoder.next_samples() {
             Ok(Some(samples)) => {
                 let adapted = adapt_channels(samples, cf.source_channels, output_channels);
@@ -584,7 +571,8 @@ fn decode_old_track(
                 } else {
                     adapted
                 };
-                buf.extend_from_slice(&resampled);
+                let stretched = cf.time_stretcher.process(&resampled);
+                cf.leftover.extend_from_slice(&stretched);
             }
             Ok(None) | Err(_) => break, // old track ended or errored — just stop mixing
         }

@@ -1,16 +1,19 @@
 use super::decoder::AudioDecoder;
 use super::resampler::Resampler;
+use super::time_stretch::TimeStretcher;
 
 /// Manages the fade-out side of a crossfade transition.
-/// Holds the old track's decoder and resampler, and tracks fade progress.
+/// Holds the old track's decoder, resampler, time stretcher, and tracks fade progress.
 pub struct CrossfadeState {
     pub decoder: AudioDecoder,
     pub resampler: Option<Resampler>,
     pub source_channels: u16,
-    #[allow(dead_code)]
-    pub source_rate: u32,
+    pub time_stretcher: TimeStretcher,
     /// Fade progress tracker (separated for testability).
     pub fade: FadeProgress,
+    /// Leftover samples from decoding — retained across iterations so excess
+    /// decoded samples from a large packet aren't discarded.
+    pub leftover: Vec<f32>,
 }
 
 impl CrossfadeState {
@@ -18,29 +21,33 @@ impl CrossfadeState {
         decoder: AudioDecoder,
         resampler: Option<Resampler>,
         source_channels: u16,
-        source_rate: u32,
+        time_stretcher: TimeStretcher,
         crossfade_duration_secs: f64,
         output_rate: u32,
         output_channels: u16,
     ) -> Self {
+        // total_samples counts individual interleaved f32 values, not audio frames.
+        // For stereo at 44100 Hz with a 6s crossfade: 6 * 44100 * 2 = 529200 samples.
         let total_samples =
             (crossfade_duration_secs * output_rate as f64 * output_channels as f64) as usize;
         Self {
             decoder,
             resampler,
             source_channels,
-            source_rate,
+            time_stretcher,
             fade: FadeProgress::new(total_samples),
+            leftover: Vec::new(),
         }
     }
 }
 
 /// Tracks crossfade progress and computes gain values.
 /// Separated from CrossfadeState for testability (no decoder dependency).
+///
+/// "Samples" throughout this struct means individual interleaved f32 values,
+/// not audio frames. For stereo, one frame = 2 samples.
 pub struct FadeProgress {
-    /// Total output samples (individual f32 values) for the crossfade region.
     total_samples: usize,
-    /// Output samples mixed so far.
     progress_samples: usize,
 }
 

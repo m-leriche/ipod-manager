@@ -9,6 +9,7 @@ fn main() {
 fn build_swift_helper() {
     let swift_dir = Path::new("swift-helper");
     if !swift_dir.exists() {
+        println!("cargo:warning=swift-helper/ not found — skipping Swift build");
         return;
     }
 

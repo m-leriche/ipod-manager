@@ -47,7 +47,12 @@ fn helper_path() -> Result<PathBuf, String> {
         }
     }
 
-    Err("crate-disk-helper not found — run `swift build -c release` in swift-helper/".into())
+    #[cfg(debug_assertions)]
+    let msg = "crate-disk-helper not found — run `swift build -c release` in swift-helper/";
+    #[cfg(not(debug_assertions))]
+    let msg = "Disk helper not found — the app may be corrupted. Try reinstalling.";
+
+    Err(msg.into())
 }
 
 fn target_triple() -> &'static str {

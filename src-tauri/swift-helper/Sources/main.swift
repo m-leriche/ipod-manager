@@ -1,11 +1,12 @@
 // crate-disk-helper
 // macOS disk helper using DiskArbitration.framework.
-// Replaces diskutil text parsing with typed API access.
+// Uses diskutil plist output for disk enumeration (DA has no "list all external disks" API),
+// then reads disk properties and performs mount/unmount via DiskArbitration.
 //
 // Commands:
-//   detect   — JSON array of external FAT32 disk candidates
-//   mount ID — mount disk at /Volumes/IPOD (no sudo needed)
-//   unmount  — unmount /Volumes/IPOD
+//   detect        — JSON array of external FAT32 disk candidates
+//   mount ID      — mount disk at /Volumes/IPOD (no sudo needed)
+//   unmount [path] — unmount volume (defaults to /Volumes/IPOD)
 
 import DiskArbitration
 import Foundation
@@ -197,6 +198,8 @@ func describeDAStatus(_ status: DAReturn) -> String {
 }
 
 // File-level globals for C-compatible DA callbacks (cannot capture local state).
+// Note: safe only because this is a single-threaded CLI — callbacks fire on the
+// main run loop thread. Not safe for concurrent use.
 private var gCallbackError: String?
 private var gCallbackDone = false
 
@@ -260,9 +263,9 @@ func mountDisk(identifier: String) -> String? {
     return gCallbackError
 }
 
-func unmountDisk() -> String? {
-    guard FileManager.default.fileExists(atPath: "/Volumes/IPOD") else {
-        return "Nothing mounted at /Volumes/IPOD"
+func unmountDisk(volumePath: String = "/Volumes/IPOD") -> String? {
+    guard FileManager.default.fileExists(atPath: volumePath) else {
+        return "Nothing mounted at \(volumePath)"
     }
 
     guard let session = DASessionCreate(kCFAllocatorDefault) else {
@@ -274,9 +277,9 @@ func unmountDisk() -> String? {
             session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
     }
 
-    let volumeURL = URL(fileURLWithPath: "/Volumes/IPOD") as CFURL
+    let volumeURL = URL(fileURLWithPath: volumePath) as CFURL
     guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, volumeURL) else {
-        return "No disk found at /Volumes/IPOD"
+        return "No disk found at \(volumePath)"
     }
 
     gCallbackDone = false
@@ -323,7 +326,8 @@ case "mount":
     }
 
 case "unmount":
-    if let error = unmountDisk() {
+    let volumePath = args.count >= 3 ? args[2] : "/Volumes/IPOD"
+    if let error = unmountDisk(volumePath: volumePath) {
         fputs(error + "\n", stderr)
         exit(1)
     }

@@ -51,3 +51,20 @@ pub async fn export_library(
     .map_err(|e| format!("Task failed: {}", e))?
     .map_err(Into::into)
 }
+
+#[tauri::command]
+pub async fn import_library(
+    input_path: String,
+    db: State<'_, LibraryDb>,
+) -> Result<library::export::ImportResult, AppError> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock error: {}", e))?;
+        library::export::import_library(&conn, &input_path)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
+}

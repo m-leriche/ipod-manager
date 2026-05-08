@@ -286,6 +286,7 @@ pub fn run() {
             commands::get_library_health,
             commands::get_health_issue_tracks,
             commands::export_library,
+            commands::import_library,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

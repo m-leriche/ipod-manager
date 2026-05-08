@@ -410,7 +410,7 @@ const AppContent = () => {
                     Health
                   </ToolTabButton>
                   <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
-                    Export
+                    Export / Import
                   </ToolTabButton>
                 </div>
                 <Suspense fallback={null}>

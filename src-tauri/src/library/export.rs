@@ -7,6 +7,18 @@ use super::playlists;
 use super::smart_playlists;
 use super::types::{Playlist, SmartPlaylist};
 
+// ── Import result ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportResult {
+    pub tracks_updated: usize,
+    pub tracks_skipped: usize,
+    pub playlists_imported: usize,
+    pub playlists_skipped: usize,
+    pub smart_playlists_imported: usize,
+    pub smart_playlists_skipped: usize,
+}
+
 // ── Types ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +110,134 @@ pub fn export_library(conn: &Connection, output_path: &str) -> Result<ExportResu
         playlist_count,
         smart_playlist_count,
         file_size,
+    })
+}
+
+// ── Import ──────────────────────────────────────────────────────
+
+pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResult, String> {
+    let path = Path::new(input_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", input_path));
+    }
+
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read import file: {}", e))?;
+
+    let data: LibraryExportData =
+        serde_json::from_str(&content).map_err(|e| format!("Invalid backup file: {}", e))?;
+
+    let mut tracks_updated = 0usize;
+    let mut tracks_skipped = 0usize;
+
+    // Restore track metadata (rating, play_count, flagged)
+    for track in &data.tracks {
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM tracks WHERE file_path = ?1",
+                [&track.file_path],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        if exists {
+            conn.execute(
+                "UPDATE tracks SET rating = ?1, play_count = ?2, flagged = ?3 WHERE file_path = ?4",
+                rusqlite::params![
+                    track.rating as i64,
+                    track.play_count as i64,
+                    track.flagged,
+                    track.file_path,
+                ],
+            )
+            .map_err(|e| format!("Failed to update track: {}", e))?;
+            tracks_updated += 1;
+        } else {
+            tracks_skipped += 1;
+        }
+    }
+
+    // Restore playlists
+    let mut playlists_imported = 0usize;
+    let mut playlists_skipped = 0usize;
+
+    for playlist in &data.playlists {
+        let already_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM playlists WHERE name = ?1",
+                [&playlist.name],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        if already_exists {
+            playlists_skipped += 1;
+            continue;
+        }
+
+        let created = playlists::create_playlist(conn, &playlist.name)?;
+
+        // Resolve file_paths to track IDs
+        let mut track_ids = Vec::new();
+        for fp in &playlist.tracks {
+            if let Ok(id) =
+                conn.query_row("SELECT id FROM tracks WHERE file_path = ?1", [fp], |r| {
+                    r.get::<_, i64>(0)
+                })
+            {
+                track_ids.push(id);
+            }
+        }
+
+        if !track_ids.is_empty() {
+            playlists::add_tracks_to_playlist(conn, created.id, &track_ids)?;
+        }
+
+        playlists_imported += 1;
+    }
+
+    // Restore smart playlists (skip built-ins)
+    let mut smart_playlists_imported = 0usize;
+    let mut smart_playlists_skipped = 0usize;
+
+    for sp in &data.smart_playlists {
+        if sp.is_builtin {
+            smart_playlists_skipped += 1;
+            continue;
+        }
+
+        let already_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM smart_playlists WHERE name = ?1",
+                [&sp.name],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        if already_exists {
+            smart_playlists_skipped += 1;
+            continue;
+        }
+
+        smart_playlists::create_smart_playlist(
+            conn,
+            &sp.name,
+            &sp.rules,
+            sp.sort_by.as_deref(),
+            sp.sort_direction.as_deref(),
+            sp.track_limit,
+        )?;
+
+        smart_playlists_imported += 1;
+    }
+
+    Ok(ImportResult {
+        tracks_updated,
+        tracks_skipped,
+        playlists_imported,
+        playlists_skipped,
+        smart_playlists_imported,
+        smart_playlists_skipped,
     })
 }
 
@@ -371,5 +511,183 @@ mod tests {
         let conn = setup_db();
         let result = export_library(&conn, "/nonexistent/dir/export.json");
         assert!(result.is_err());
+    }
+
+    // ── Import tests ───────────────────────────────────────────
+
+    fn export_then_path(conn: &Connection) -> (std::path::PathBuf, std::path::PathBuf) {
+        let dir = temp_dir();
+        let path = dir.join("export.json");
+        export_library(conn, path.to_str().unwrap()).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn import_restores_ratings_and_play_counts() {
+        let conn = setup_db();
+        insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
+        insert_track(&conn, 2, "/music/song2.flac", "Song 2", "Artist B");
+
+        let (dir, path) = export_then_path(&conn);
+
+        // Reset ratings and play counts
+        conn.execute(
+            "UPDATE tracks SET rating = 0, play_count = 0, flagged = 0",
+            [],
+        )
+        .unwrap();
+
+        let result = import_library(&conn, path.to_str().unwrap()).unwrap();
+        assert_eq!(result.tracks_updated, 2);
+        assert_eq!(result.tracks_skipped, 0);
+
+        // Verify restored values
+        let rating: i64 = conn
+            .query_row(
+                "SELECT rating FROM tracks WHERE file_path = '/music/song1.flac'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rating, 4);
+
+        let play_count: i64 = conn
+            .query_row(
+                "SELECT play_count FROM tracks WHERE file_path = '/music/song1.flac'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(play_count, 10);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_skips_missing_tracks() {
+        let conn = setup_db();
+        insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
+
+        let (dir, path) = export_then_path(&conn);
+
+        // Remove the track from DB so it won't match
+        conn.execute("DELETE FROM tracks", []).unwrap();
+
+        let result = import_library(&conn, path.to_str().unwrap()).unwrap();
+        assert_eq!(result.tracks_updated, 0);
+        assert_eq!(result.tracks_skipped, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_creates_playlists() {
+        let conn = setup_db();
+        insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
+
+        // Create a playlist and export
+        conn.execute(
+            "INSERT INTO playlists (id, name, created_at, updated_at) VALUES (1, 'My Playlist', 0, 0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (1, 1, 0)",
+            [],
+        )
+        .unwrap();
+
+        let (dir, path) = export_then_path(&conn);
+
+        // Remove the playlist so import can recreate it
+        conn.execute("DELETE FROM playlist_tracks", []).unwrap();
+        conn.execute("DELETE FROM playlists", []).unwrap();
+
+        let result = import_library(&conn, path.to_str().unwrap()).unwrap();
+        assert_eq!(result.playlists_imported, 1);
+        assert_eq!(result.playlists_skipped, 0);
+
+        // Verify playlist was recreated with tracks
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlists WHERE name = 'My Playlist'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let track_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlist_tracks pt JOIN playlists p ON p.id = pt.playlist_id WHERE p.name = 'My Playlist'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(track_count, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_skips_existing_playlists() {
+        let conn = setup_db();
+        insert_track(&conn, 1, "/music/song1.flac", "Song 1", "Artist A");
+
+        conn.execute(
+            "INSERT INTO playlists (id, name, created_at, updated_at) VALUES (1, 'My Playlist', 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        let (dir, path) = export_then_path(&conn);
+
+        // Playlist still exists — import should skip it
+        let result = import_library(&conn, path.to_str().unwrap()).unwrap();
+        assert_eq!(result.playlists_skipped, 1);
+        assert_eq!(result.playlists_imported, 0);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_creates_smart_playlists() {
+        let conn = setup_db();
+
+        // Create a non-builtin smart playlist
+        conn.execute(
+            "INSERT INTO smart_playlists (id, name, rules_json, is_builtin, created_at, updated_at)
+             VALUES (1, 'Custom SP', '{\"match\":\"all\",\"rules\":[]}', 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        let (dir, path) = export_then_path(&conn);
+
+        // Remove so import can recreate
+        conn.execute("DELETE FROM smart_playlists", []).unwrap();
+
+        let result = import_library(&conn, path.to_str().unwrap()).unwrap();
+        assert_eq!(result.smart_playlists_imported, 1);
+        assert_eq!(result.smart_playlists_skipped, 0);
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM smart_playlists WHERE name = 'Custom SP'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_nonexistent_file_fails() {
+        let conn = setup_db();
+        let result = import_library(&conn, "/nonexistent/backup.json");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("File not found"));
     }
 }

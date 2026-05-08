@@ -94,10 +94,26 @@ pub fn detect_ipod_disk() -> Result<Option<DiskInfo>, String> {
     Ok(pick_ipod(candidates))
 }
 
-/// Mount the iPod at /Volumes/IPOD.
-/// Uses native macOS auth dialog for privilege elevation (no password piping).
-pub fn mount_ipod_disk(identifier: &str) -> Result<(), String> {
-    let output = run_helper(&["mount", identifier])?;
+/// Mount the iPod at /Volumes/IPOD via `sudo mount -t msdos`.
+/// Password is piped to the Swift helper's stdin (never passed as an argument).
+pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
+    let path = helper_path()?;
+    let mut child = std::process::Command::new(&path)
+        .args(["mount", identifier])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to run crate-disk-helper: {e}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = writeln!(stdin, "{}", password);
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for crate-disk-helper: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

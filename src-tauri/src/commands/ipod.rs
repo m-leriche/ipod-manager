@@ -12,14 +12,14 @@ pub async fn detect_ipod() -> Result<Option<DiskInfo>, AppError> {
 }
 
 #[tauri::command]
-pub async fn mount_ipod(identifier: String) -> Result<(), AppError> {
+pub async fn mount_ipod(identifier: String, password: String) -> Result<(), AppError> {
     if !identifier.starts_with("disk")
         || identifier.len() <= 4
         || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
     {
         return Err(AppError::InvalidInput("Invalid disk identifier".into()));
     }
-    tauri::async_runtime::spawn_blocking(move || disk::mount_ipod_disk(&identifier))
+    tauri::async_runtime::spawn_blocking(move || disk::mount_ipod_disk(&identifier, &password))
         .await
         .map_err(|e| format!("Mount failed: {}", e))?
         .map_err(Into::into)

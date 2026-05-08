@@ -233,42 +233,65 @@ private func waitForCallback(timeoutSeconds: Double) {
     }
 }
 
-func mountDisk(identifier: String) -> String? {
+func mountDisk(identifier: String, password: String) -> String? {
     // iPod FAT32 partitions need `mount -t msdos` — diskutil's auto-detection fails.
-    // This requires root, so we use osascript "with administrator privileges" which
-    // triggers the native macOS auth dialog (supports Touch ID / Apple Watch).
-    // This replaces the old approach of piping a password through stdin to sudo.
-    let shellCmd =
-        "cd / && /bin/mkdir -p /Volumes/IPOD && /sbin/mount -t msdos /dev/\(identifier) /Volumes/IPOD"
-    let script = "do shell script \"\(shellCmd)\" with administrator privileges"
+    // This requires root via sudo. Password is piped to stdin (same as old Rust impl).
 
+    // Step 1: Unmount from any existing mount point (best-effort).
+    let _ = sudoRun(password: password, args: ["diskutil", "unmount", "/dev/\(identifier)"])
+
+    // Step 2: Create mount point.
+    if let err = sudoRun(password: password, args: ["mkdir", "-p", "/Volumes/IPOD"]).error {
+        return "Failed to create mount point: \(err)"
+    }
+
+    // Step 3: Mount as FAT32.
+    if let err = sudoRun(
+        password: password,
+        args: ["mount", "-t", "msdos", "/dev/\(identifier)", "/Volumes/IPOD"]
+    ).error {
+        return "Mount failed: \(err)"
+    }
+
+    return nil
+}
+
+/// Run a command with sudo, piping the password via stdin.
+private func sudoRun(password: String, args: [String]) -> (ok: Bool, error: String?) {
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    process.arguments = ["-e", script]
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
+    process.arguments = ["-S"] + args
     process.currentDirectoryURL = URL(fileURLWithPath: "/")
+
+    let stdinPipe = Pipe()
     let errPipe = Pipe()
-    process.standardError = errPipe
+    process.standardInput = stdinPipe
     process.standardOutput = FileHandle.nullDevice
+    process.standardError = errPipe
 
     do {
         try process.run()
-        process.waitUntilExit()
     } catch {
-        return "Failed to run mount: \(error.localizedDescription)"
+        return (false, error.localizedDescription)
     }
+
+    // Write password + newline, then close stdin
+    stdinPipe.fileHandleForWriting.write(Data((password + "\n").utf8))
+    stdinPipe.fileHandleForWriting.closeFile()
+    process.waitUntilExit()
 
     guard process.terminationStatus == 0 else {
         let stderr = String(
             data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
         ) ?? "Unknown error"
         let msg = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if msg.contains("-128") {
-            return "Mount cancelled by user"
+        if msg.contains("incorrect password") || msg.contains("Sorry, try again") {
+            return (false, "Incorrect password")
         }
-        return "Mount failed: \(msg)"
+        return (false, msg)
     }
 
-    return nil
+    return (true, nil)
 }
 
 func unmountDisk(volumePath: String = "/Volumes/IPOD") -> String? {
@@ -326,13 +349,22 @@ case "detect":
 case "mount":
     guard args.count >= 3 else {
         fputs("Usage: crate-disk-helper mount <identifier>\n", stderr)
+        fputs("Password is read from stdin.\n", stderr)
         exit(1)
     }
     guard isValidDiskIdentifier(args[2]) else {
         fputs("Invalid disk identifier: \(args[2])\n", stderr)
         exit(1)
     }
-    if let error = mountDisk(identifier: args[2]) {
+    guard let passwordData = FileHandle.standardInput.availableData as Data?,
+          let password = String(data: passwordData, encoding: .utf8)?.trimmingCharacters(
+              in: .whitespacesAndNewlines),
+          !password.isEmpty
+    else {
+        fputs("No password provided on stdin\n", stderr)
+        exit(1)
+    }
+    if let error = mountDisk(identifier: args[2], password: password) {
         fputs(error + "\n", stderr)
         exit(1)
     }

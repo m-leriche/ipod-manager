@@ -72,12 +72,23 @@ describe("MountPanel", () => {
     });
   });
 
-  it("enables Mount button when iPod is connected but not mounted", async () => {
+  it("disables Mount button without password", async () => {
     mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
     render(<MountPanel />);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Mount" })).toBeDisabled();
     });
+  });
+
+  it("enables Mount button when password is entered", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
+    render(<MountPanel />);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("macOS password")).toBeInTheDocument();
+    });
+    await user.type(screen.getByPlaceholderText("macOS password"), "pass");
+    expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
   });
 
   it("disables Mount button when iPod is already mounted", async () => {
@@ -88,7 +99,7 @@ describe("MountPanel", () => {
     });
   });
 
-  it("calls mount_ipod without password", async () => {
+  it("calls mount_ipod with password", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockInvoke
       .mockResolvedValueOnce({ ...DISK_INFO, mounted: false, mount_point: null }) // detect
@@ -97,12 +108,16 @@ describe("MountPanel", () => {
 
     render(<MountPanel />);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
+      expect(screen.getByPlaceholderText("macOS password")).toBeInTheDocument();
     });
 
+    await user.type(screen.getByPlaceholderText("macOS password"), "testpass");
     await user.click(screen.getByRole("button", { name: "Mount" }));
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("mount_ipod", { identifier: "disk5s1" });
+      expect(mockInvoke).toHaveBeenCalledWith("mount_ipod", {
+        identifier: "disk5s1",
+        password: "testpass",
+      });
     });
   });
 

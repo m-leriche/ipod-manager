@@ -127,6 +127,27 @@ pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResul
     let data: LibraryExportData =
         serde_json::from_str(&content).map_err(|e| format!("Invalid backup file: {}", e))?;
 
+    // Wrap entire import in a transaction so a mid-import failure rolls back cleanly
+    conn.execute_batch("BEGIN")
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    match import_library_inner(conn, &data) {
+        Ok(result) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+            Ok(result)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+fn import_library_inner(
+    conn: &Connection,
+    data: &LibraryExportData,
+) -> Result<ImportResult, String> {
     let mut tracks_updated = 0usize;
     let mut tracks_skipped = 0usize;
 
@@ -138,7 +159,7 @@ pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResul
                 [&track.file_path],
                 |r| r.get(0),
             )
-            .unwrap_or(false);
+            .map_err(|e| format!("DB query error: {}", e))?;
 
         if exists {
             conn.execute(
@@ -168,7 +189,7 @@ pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResul
                 [&playlist.name],
                 |r| r.get(0),
             )
-            .unwrap_or(false);
+            .map_err(|e| format!("DB query error: {}", e))?;
 
         if already_exists {
             playlists_skipped += 1;
@@ -177,7 +198,7 @@ pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResul
 
         let created = playlists::create_playlist(conn, &playlist.name)?;
 
-        // Resolve file_paths to track IDs
+        // Resolve file_paths to track IDs (skip tracks not in the library)
         let mut track_ids = Vec::new();
         for fp in &playlist.tracks {
             if let Ok(id) =
@@ -212,7 +233,7 @@ pub fn import_library(conn: &Connection, input_path: &str) -> Result<ImportResul
                 [&sp.name],
                 |r| r.get(0),
             )
-            .unwrap_or(false);
+            .map_err(|e| format!("DB query error: {}", e))?;
 
         if already_exists {
             smart_playlists_skipped += 1;

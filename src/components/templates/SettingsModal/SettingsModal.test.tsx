@@ -112,4 +112,24 @@ describe("SettingsModal", () => {
     });
     expect(invoke).not.toHaveBeenCalledWith("set_library_location", expect.anything());
   });
+
+  it("renders the crossfade slider", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    expect(screen.getByText("Crossfade")).toBeInTheDocument();
+    expect(screen.getByTestId("crossfade-slider")).toBeInTheDocument();
+  });
+
+  it("shows 'Off' when crossfade is 0", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    expect(screen.getByText("Off")).toBeInTheDocument();
+  });
+
+  it("crossfade slider has correct initial value and range", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    const slider = screen.getByTestId("crossfade-slider") as HTMLInputElement;
+    expect(slider.min).toBe("0");
+    expect(slider.max).toBe("12");
+    expect(slider.step).toBe("1");
+    expect(slider.value).toBe("0");
+  });
 });

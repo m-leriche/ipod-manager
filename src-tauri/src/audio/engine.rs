@@ -9,6 +9,7 @@ use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::HeapRb;
 use tauri::{AppHandle, Emitter, Runtime};
 
+use super::crossfade::{mix_crossfade, CrossfadeState};
 use super::decoder::AudioDecoder;
 use super::equalizer::Equalizer;
 use super::resampler::Resampler;
@@ -118,6 +119,13 @@ pub fn run<R: Runtime>(
     // Current playback speed (for computing source position from output samples)
     let mut current_speed: f64 = 1.0;
 
+    // Crossfade state: active crossfade (old track fading out)
+    let mut crossfade: Option<CrossfadeState> = None;
+    // Crossfade duration setting (0 = pure gapless, no overlap)
+    let mut crossfade_duration_secs: f64 = 0.0;
+    // Reusable buffer for old track samples during crossfade
+    let mut old_track_buf: Vec<f32> = Vec::new();
+
     // Position event timer
     let mut last_position_event = std::time::Instant::now();
 
@@ -134,6 +142,7 @@ pub fn run<R: Runtime>(
                     decoder = None;
                     resampler = None;
                     preloaded = None;
+                    crossfade = None;
                     leftover.clear();
                     equalizer.reset();
                     shared.out_samples.store(0, Ordering::Relaxed);
@@ -230,6 +239,7 @@ pub fn run<R: Runtime>(
                     decoder = None;
                     resampler = None;
                     preloaded = None;
+                    crossfade = None;
                     leftover.clear();
                     shared.out_samples.store(0, Ordering::Relaxed);
                     shared.set_position(0.0);
@@ -246,6 +256,8 @@ pub fn run<R: Runtime>(
                             }
                             time_stretcher.reset();
                             equalizer.reset();
+                            // Cancel any active crossfade — seeking resets the track
+                            crossfade = None;
 
                             // Clear ring buffer by dropping and recreating
                             if current_stream.is_some() {
@@ -320,6 +332,10 @@ pub fn run<R: Runtime>(
                     time_stretcher.set_speed(speed);
                 }
 
+                AudioCommand::SetCrossfade { duration_secs } => {
+                    crossfade_duration_secs = duration_secs.clamp(0.0, 12.0);
+                }
+
                 AudioCommand::Shutdown => {
                     if let Some(stream) = current_stream.take() {
                         stream.pause().ok();
@@ -332,6 +348,7 @@ pub fn run<R: Runtime>(
 
         // Decode and fill ring buffer if playing
         let mut gapless_transition = false;
+        let mut begin_crossfade = false;
 
         if shared.get_state() == PlayState::Playing {
             if let (Some(ref mut dec), Some(ref mut prod)) = (&mut decoder, &mut ring_producer) {
@@ -345,8 +362,20 @@ pub fn run<R: Runtime>(
                 }
                 leftover.drain(..i);
 
+                // Check if we should start crossfade before decoding
+                let dur = shared.get_duration();
+                let remaining = dur - source_pos_secs;
+                if crossfade_duration_secs > 0.0
+                    && remaining <= crossfade_duration_secs
+                    && remaining > 0.0
+                    && preloaded.is_some()
+                    && crossfade.is_none()
+                {
+                    begin_crossfade = true;
+                }
+
                 // Decode new packets while there's space
-                if leftover.is_empty() {
+                if leftover.is_empty() && !begin_crossfade {
                     let mut filled = 0;
                     while prod.vacant_len() > 4096 && filled < 32768 {
                         match dec.next_samples() {
@@ -368,6 +397,26 @@ pub fn run<R: Runtime>(
                                 let mut out_samples = time_stretcher.process(&resampled);
                                 // Apply EQ
                                 equalizer.process(&mut out_samples, output_channels);
+
+                                // If crossfading, mix in old track samples
+                                if let Some(ref mut cf) = crossfade {
+                                    decode_old_track(
+                                        cf,
+                                        &mut old_track_buf,
+                                        out_samples.len(),
+                                        output_channels,
+                                    );
+                                    mix_crossfade(
+                                        &mut out_samples,
+                                        &old_track_buf,
+                                        &mut cf.fade,
+                                        output_channels,
+                                    );
+                                    if cf.fade.is_complete() {
+                                        crossfade = None;
+                                    }
+                                }
+
                                 let mut pushed = 0;
                                 for &s in &out_samples {
                                     if prod.try_push(s).is_err() {
@@ -378,15 +427,31 @@ pub fn run<R: Runtime>(
                                     pushed += 1;
                                 }
                                 filled += pushed;
+
+                                // Re-check crossfade trigger after position advances
+                                let remaining2 = dur - source_pos_secs;
+                                if crossfade_duration_secs > 0.0
+                                    && remaining2 <= crossfade_duration_secs
+                                    && remaining2 > 0.0
+                                    && preloaded.is_some()
+                                    && crossfade.is_none()
+                                {
+                                    begin_crossfade = true;
+                                    break;
+                                }
                             }
                             Ok(None) => {
                                 // EOF — check for gapless transition
-                                if preloaded.is_some() {
-                                    gapless_transition = true;
-                                } else {
-                                    shared.set_state(PlayState::Stopped);
-                                    let _ = app_handle.emit("audio:track-ended", ());
-                                    decoder = None;
+                                if crossfade.is_none() {
+                                    // Only do gapless if not already crossfading
+                                    // (crossfade already transitioned to the new track)
+                                    if preloaded.is_some() {
+                                        gapless_transition = true;
+                                    } else {
+                                        shared.set_state(PlayState::Stopped);
+                                        let _ = app_handle.emit("audio:track-ended", ());
+                                        decoder = None;
+                                    }
                                 }
                                 break;
                             }
@@ -405,7 +470,53 @@ pub fn run<R: Runtime>(
                 shared.set_position(source_pos_secs);
             }
 
-            // Handle gapless transition outside the borrow scope
+            // Handle crossfade start outside the borrow scope
+            if begin_crossfade {
+                if let Some(old_dec) = decoder.take() {
+                    if let Some((new_dec, new_rs, new_src_ch)) = preloaded.take() {
+                        let old_rs = resampler.take();
+                        let old_src_ch = source_channels;
+                        let old_src_rate = source_rate;
+
+                        // Actual crossfade uses remaining time (may be less than setting)
+                        let dur = shared.get_duration();
+                        let actual_cf_secs = (dur - source_pos_secs)
+                            .min(crossfade_duration_secs)
+                            .max(0.0);
+
+                        crossfade = Some(CrossfadeState::new(
+                            old_dec,
+                            old_rs,
+                            old_src_ch,
+                            old_src_rate,
+                            actual_cf_secs,
+                            output_rate,
+                            output_channels,
+                        ));
+
+                        // Install the new track as the main decoder
+                        let new_dur = new_dec.duration_secs;
+                        source_rate = new_dec.sample_rate;
+                        decoder = Some(new_dec);
+                        resampler = new_rs;
+                        source_channels = new_src_ch;
+                        equalizer.reset();
+                        time_stretcher.reset();
+                        leftover.clear();
+                        source_pos_secs = 0.0;
+                        playback_offset_secs = 0.0;
+                        shared.out_samples.store(0, Ordering::Relaxed);
+                        shared.set_position(0.0);
+                        shared.set_duration(new_dur);
+                        let _ = app_handle.emit("audio:gapless-transition", new_dur);
+                    } else {
+                        // No preloaded track available, put decoder back
+                        decoder = Some(old_dec);
+                    }
+                }
+            }
+
+            // Handle pure gapless transition (no crossfade, or crossfade disabled)
             if gapless_transition {
                 if let Some((next_dec, next_rs, next_src_ch)) = preloaded.take() {
                     let dur = next_dec.duration_secs;
@@ -437,7 +548,7 @@ pub fn run<R: Runtime>(
                 let playback_pos = playback_offset_secs + wall_secs * current_speed;
                 let dur = shared.get_duration();
                 // Clamp to duration — decode position can slightly overshoot
-                let pos = playback_pos.min(dur);
+                let pos = playback_pos.min(dur).max(0.0);
                 shared.set_position(pos);
                 let _ = app_handle.emit(
                     "audio:position",
@@ -451,6 +562,32 @@ pub fn run<R: Runtime>(
 
         // Don't busy-wait — sleep briefly between iterations
         std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// Decode samples from the old track during a crossfade.
+/// Fills `buf` with up to `needed` output-rate samples (channel-adapted + resampled).
+/// Time-stretch and EQ are not applied to the fading-out track.
+fn decode_old_track(
+    cf: &mut CrossfadeState,
+    buf: &mut Vec<f32>,
+    needed: usize,
+    output_channels: u16,
+) {
+    buf.clear();
+    while buf.len() < needed {
+        match cf.decoder.next_samples() {
+            Ok(Some(samples)) => {
+                let adapted = adapt_channels(samples, cf.source_channels, output_channels);
+                let resampled = if let Some(ref mut rs) = cf.resampler {
+                    rs.process(&adapted)
+                } else {
+                    adapted
+                };
+                buf.extend_from_slice(&resampled);
+            }
+            Ok(None) | Err(_) => break, // old track ended or errored — just stop mixing
+        }
     }
 }
 

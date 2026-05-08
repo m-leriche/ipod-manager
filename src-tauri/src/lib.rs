@@ -240,6 +240,7 @@ pub fn run() {
             commands::audio_get_status,
             commands::audio_set_eq,
             commands::audio_set_speed,
+            commands::audio_set_crossfade,
             commands::get_playlists,
             commands::create_playlist,
             commands::rename_playlist,

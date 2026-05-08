@@ -3,7 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { LibraryTrack } from "../../types/library";
 import type { PlaybackState, PlaybackTimeState, PlaybackContextValue, RepeatMode } from "./types";
-import { loadVolume, saveVolume, savePlaybackState, loadPlaybackState } from "./persistence";
+import {
+  loadVolume,
+  saveVolume,
+  loadCrossfade,
+  saveCrossfade,
+  savePlaybackState,
+  loadPlaybackState,
+} from "./persistence";
 
 // ── Shuffle helpers ─────────────────────────────────────────────
 
@@ -25,6 +32,7 @@ const initialState: PlaybackState = {
   isPlaying: false,
   volume: loadVolume(),
   speed: 1.0,
+  crossfade: loadCrossfade(),
   queue: restoredState?.queue ?? [],
   queueIndex: restoredState?.queueIndex ?? -1,
   shuffle: restoredState?.shuffle ?? false,
@@ -74,9 +82,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Restored position for resume-from-where-you-left-off
   const restoredPositionRef = useRef(restoredState?.position ?? 0);
 
-  // ── Set initial volume on the Rust engine ────────────────────
+  // ── Set initial volume and crossfade on the Rust engine ─────
   useEffect(() => {
     invoke("audio_set_volume", { volume: state.volume }).catch(() => {});
+    invoke("audio_set_crossfade", { durationSecs: state.crossfade }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -421,11 +430,11 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   // ── Preload next track for gapless playback ──────────────────
 
+  // Immediate preload: fire whenever queue position or settings change
   useEffect(() => {
     if (!state.isPlaying || state.queue.length === 0) return;
 
     if (state.repeat === "one") {
-      // Preload same track for seamless repeat (also replaces any stale preload)
       const currentTrack = state.queue[state.queueIndex];
       if (currentTrack) {
         invoke("audio_preload_next", { path: currentTrack.file_path }).catch(() => {});
@@ -438,6 +447,40 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       invoke("audio_preload_next", { path: state.queue[nextIdx].file_path }).catch(() => {});
     }
   }, [state.queueIndex, state.queue, state.shuffle, state.repeat, state.isPlaying, getNextIndex]);
+
+  // Time-based preload: ensure next track is preloaded before crossfade starts.
+  // When crossfade is enabled, the engine needs the preloaded decoder ready
+  // crossfade-duration + buffer seconds before EOF. Re-issue preload if it
+  // might be stale (e.g. queue was modified after the initial preload).
+  const preloadIssuedRef = useRef(false);
+
+  useEffect(() => {
+    // Reset the guard whenever queue or index changes — the immediate effect above
+    // handles that preload, but we want the time-based one to also fire later.
+    preloadIssuedRef.current = false;
+  }, [state.queueIndex, state.queue]);
+
+  useEffect(() => {
+    if (!state.isPlaying || state.repeat === "one") return;
+    if (preloadIssuedRef.current) return;
+
+    const cf = stateRef.current.crossfade;
+    const dur = timeRef.current.duration;
+    const pos = timeRef.current.currentTime;
+    if (dur <= 0) return;
+
+    // Preload threshold: crossfade duration + 5s buffer (min 10s before end)
+    const threshold = Math.max(cf + 5, 10);
+    const remaining = dur - pos;
+
+    if (remaining <= threshold && remaining > 0) {
+      preloadIssuedRef.current = true;
+      const nextIdx = getNextIndex();
+      if (nextIdx !== null && stateRef.current.queue[nextIdx]) {
+        invoke("audio_preload_next", { path: stateRef.current.queue[nextIdx].file_path }).catch(() => {});
+      }
+    }
+  }, [time.currentTime, state.isPlaying, state.repeat, getNextIndex]);
 
   // ── Update macOS Now Playing metadata when track changes ─────
 
@@ -684,6 +727,13 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     setState((prev) => ({ ...prev, speed: clamped }));
   }, []);
 
+  const setCrossfade = useCallback((seconds: number) => {
+    const clamped = Math.max(0, Math.min(12, seconds));
+    invoke("audio_set_crossfade", { durationSecs: clamped }).catch(() => {});
+    saveCrossfade(clamped);
+    setState((prev) => ({ ...prev, crossfade: clamped }));
+  }, []);
+
   const clearPlaybackError = useCallback(() => {
     setState((prev) => (prev.playbackError ? { ...prev, playbackError: null } : prev));
   }, []);
@@ -709,6 +759,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       toggleShuffle,
       cycleRepeat,
       setSpeed,
+      setCrossfade,
       clearPlaybackError,
     }),
     [
@@ -730,6 +781,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       toggleShuffle,
       cycleRepeat,
       setSpeed,
+      setCrossfade,
       clearPlaybackError,
     ],
   );

@@ -2,6 +2,7 @@ import type { LibraryTrack } from "../../types/library";
 import type { PlaybackState, RepeatMode } from "./types";
 
 const VOLUME_KEY = "crate-playback-volume";
+const CROSSFADE_KEY = "crate-playback-crossfade";
 const PLAYBACK_STATE_KEY = "crate-playback-state";
 
 export const loadVolume = (): number => {
@@ -15,6 +16,19 @@ export const loadVolume = (): number => {
 
 export const saveVolume = (volume: number) => {
   localStorage.setItem(VOLUME_KEY, String(volume));
+};
+
+export const loadCrossfade = (): number => {
+  const stored = localStorage.getItem(CROSSFADE_KEY);
+  if (stored !== null) {
+    const v = parseFloat(stored);
+    if (isFinite(v) && v >= 0 && v <= 12) return v;
+  }
+  return 0;
+};
+
+export const saveCrossfade = (seconds: number) => {
+  localStorage.setItem(CROSSFADE_KEY, String(seconds));
 };
 
 export interface PersistedPlaybackState {

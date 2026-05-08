@@ -25,6 +25,9 @@ pub enum AudioCommand {
     SetSpeed {
         speed: f64,
     },
+    SetCrossfade {
+        duration_secs: f64,
+    },
     Shutdown,
 }
 

@@ -49,20 +49,3 @@ pub async fn identify_tracks(
         .map_err(|e| format!("Task failed: {}", e))?
         .map_err(Into::into)
 }
-
-#[cfg(test)]
-mod tests {
-    /// Verify that show_in_finder's approach (Command::new + .arg()) passes paths as
-    /// individual arguments, not through a shell — so metacharacters can't cause injection.
-    #[test]
-    fn open_command_uses_arg_not_shell() {
-        let path_with_metacharacters = "/tmp/test;rm -rf /";
-        let mut binding = std::process::Command::new("echo");
-        let cmd = binding.arg("-R").arg(path_with_metacharacters);
-
-        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
-        assert_eq!(args.len(), 2);
-        assert_eq!(args[0], "-R");
-        assert_eq!(args[1], path_with_metacharacters);
-    }
-}

@@ -2,9 +2,3 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
-
-# Compiled Swift helper (built by build.rs)
-/binaries/
-
-# Swift package build cache
-/swift-helper/.build/

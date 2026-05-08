@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -19,24 +19,52 @@ import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowD
 import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
-import { FileManager } from "./components/templates/FileManager/FileManager";
-import { AudioExtractor } from "./components/templates/AudioExtractor/AudioExtractor";
-import { MetadataEditor } from "./components/templates/MetadataEditor/MetadataEditor";
-import { IpodSummary } from "./components/templates/IpodSummary/IpodSummary";
-import { DuplicateDetector } from "./components/templates/DuplicateDetector/DuplicateDetector";
-import { AudioConverter } from "./components/templates/AudioConverter/AudioConverter";
-import { LibraryHealthDashboard } from "./components/templates/LibraryHealthDashboard/LibraryHealthDashboard";
-import { LibraryExport } from "./components/templates/LibraryExport/LibraryExport";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
 import { LyricsPanel } from "./components/organisms/LyricsPanel/LyricsPanel";
 import { useResizableWidth as useLyricsPanelWidth } from "./components/organisms/LyricsPanel/useResizableWidth";
-import { SettingsModal } from "./components/templates/SettingsModal/SettingsModal";
-import { KeyboardShortcutsDialog } from "./components/atoms/KeyboardShortcutsDialog/KeyboardShortcutsDialog";
 import type { LibraryScanProgress, LibraryTrack } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
+
+// Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
+const FileManager = lazy(() =>
+  import("./components/templates/FileManager/FileManager").then((m) => ({ default: m.FileManager })),
+);
+const AudioExtractor = lazy(() =>
+  import("./components/templates/AudioExtractor/AudioExtractor").then((m) => ({ default: m.AudioExtractor })),
+);
+const MetadataEditor = lazy(() =>
+  import("./components/templates/MetadataEditor/MetadataEditor").then((m) => ({ default: m.MetadataEditor })),
+);
+const IpodSummary = lazy(() =>
+  import("./components/templates/IpodSummary/IpodSummary").then((m) => ({ default: m.IpodSummary })),
+);
+const DuplicateDetector = lazy(() =>
+  import("./components/templates/DuplicateDetector/DuplicateDetector").then((m) => ({
+    default: m.DuplicateDetector,
+  })),
+);
+const AudioConverter = lazy(() =>
+  import("./components/templates/AudioConverter/AudioConverter").then((m) => ({ default: m.AudioConverter })),
+);
+const LibraryHealthDashboard = lazy(() =>
+  import("./components/templates/LibraryHealthDashboard/LibraryHealthDashboard").then((m) => ({
+    default: m.LibraryHealthDashboard,
+  })),
+);
+const LibraryExport = lazy(() =>
+  import("./components/templates/LibraryExport/LibraryExport").then((m) => ({ default: m.LibraryExport })),
+);
+const SettingsModal = lazy(() =>
+  import("./components/templates/SettingsModal/SettingsModal").then((m) => ({ default: m.SettingsModal })),
+);
+const KeyboardShortcutsDialog = lazy(() =>
+  import("./components/atoms/KeyboardShortcutsDialog/KeyboardShortcutsDialog").then((m) => ({
+    default: m.KeyboardShortcutsDialog,
+  })),
+);
 
 type TopTab = "library" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
@@ -385,56 +413,58 @@ const AppContent = () => {
                     Export
                   </ToolTabButton>
                 </div>
-                <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
-                  {toolTab === "ipod" && (
-                    <ErrorBoundary name="iPod Summary">
-                      <IpodSummary
-                        diskInfo={diskInfo}
-                        isMounted={ipodMounted}
-                        cachedInfo={ipodInfo}
-                        onInfoLoaded={setIpodInfo}
-                      />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "files" && (
-                    <ErrorBoundary name="File Manager">
-                      <FileManager />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "metadata" && (
-                    <ErrorBoundary name="Metadata Editor">
-                      <MetadataEditor
-                        initialPaths={metadataRepairPaths}
-                        onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
-                      />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "audio" && (
-                    <ErrorBoundary name="Audio Extractor">
-                      <AudioExtractor />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "duplicates" && (
-                    <ErrorBoundary name="Duplicate Detector">
-                      <DuplicateDetector />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "convert" && (
-                    <ErrorBoundary name="Audio Converter">
-                      <AudioConverter />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "health" && (
-                    <ErrorBoundary name="Library Health">
-                      <LibraryHealthDashboard />
-                    </ErrorBoundary>
-                  )}
-                  {toolTab === "export" && (
-                    <ErrorBoundary name="Library Export">
-                      <LibraryExport />
-                    </ErrorBoundary>
-                  )}
-                </div>
+                <Suspense fallback={null}>
+                  <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
+                    {toolTab === "ipod" && (
+                      <ErrorBoundary name="iPod Summary">
+                        <IpodSummary
+                          diskInfo={diskInfo}
+                          isMounted={ipodMounted}
+                          cachedInfo={ipodInfo}
+                          onInfoLoaded={setIpodInfo}
+                        />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "files" && (
+                      <ErrorBoundary name="File Manager">
+                        <FileManager />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "metadata" && (
+                      <ErrorBoundary name="Metadata Editor">
+                        <MetadataEditor
+                          initialPaths={metadataRepairPaths}
+                          onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                        />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "audio" && (
+                      <ErrorBoundary name="Audio Extractor">
+                        <AudioExtractor />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "duplicates" && (
+                      <ErrorBoundary name="Duplicate Detector">
+                        <DuplicateDetector />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "convert" && (
+                      <ErrorBoundary name="Audio Converter">
+                        <AudioConverter />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "health" && (
+                      <ErrorBoundary name="Library Health">
+                        <LibraryHealthDashboard />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "export" && (
+                      <ErrorBoundary name="Library Export">
+                        <LibraryExport />
+                      </ErrorBoundary>
+                    )}
+                  </div>
+                </Suspense>
               </div>
             </div>
           )}
@@ -474,14 +504,20 @@ const AppContent = () => {
       </ErrorBoundary>
 
       {settingsOpen && (
-        <ErrorBoundary name="Settings">
-          <SettingsModal
-            onClose={() => setSettingsOpen(false)}
-            onLibraryChanged={() => libraryRefreshRef.current?.()}
-          />
-        </ErrorBoundary>
+        <Suspense fallback={null}>
+          <ErrorBoundary name="Settings">
+            <SettingsModal
+              onClose={() => setSettingsOpen(false)}
+              onLibraryChanged={() => libraryRefreshRef.current?.()}
+            />
+          </ErrorBoundary>
+        </Suspense>
       )}
-      {shortcutsOpen && <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 };

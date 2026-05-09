@@ -156,7 +156,7 @@ pub async fn export_playlists_to_ipod(
         })?;
 
         let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
-        if sub.contains("..") || sub.starts_with('/') {
+        if sub.starts_with('/') || sub.split('/').any(|seg| seg == "..") {
             return Err("Invalid music subdirectory name".to_string());
         }
 

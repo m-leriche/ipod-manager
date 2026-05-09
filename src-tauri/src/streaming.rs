@@ -77,6 +77,11 @@ pub fn handle_request<R: tauri::Runtime>(
     // Security: canonicalize to resolve symlinks and ".." traversal, then
     // verify the result is an audio file.  This prevents serving arbitrary
     // files on disk through the stream:// protocol.
+    //
+    // Note: this still allows streaming any audio file on the filesystem.
+    // For a local desktop app this is acceptable — the user already has
+    // filesystem access.  If stronger isolation is ever needed, also check
+    // that the resolved path starts with a known music directory.
     let raw_path = Path::new(&decoded);
     if !raw_path.is_absolute() {
         return Response::builder()

@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useToast } from "../../../contexts/ToastContext";
-import type { Playlist, PlaylistExportResult, SmartPlaylist } from "../../../types/library";
+import { PlaylistContextMenu, SmartPlaylistIcon, formatExportResult } from "./PlaylistContextMenu";
+import type { PlaylistContextMenuState } from "./PlaylistContextMenu";
+import type { Playlist, SmartPlaylist } from "../../../types/library";
 
 interface PlaylistSidebarProps {
   onPlaylistSelect: (id: number | null) => void;
@@ -32,34 +34,13 @@ export const PlaylistSidebar = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    type: "playlist" | "smart";
-    playlist?: Playlist;
-    smartPlaylist?: SmartPlaylist;
-  } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<PlaylistContextMenuState | null>(null);
   const [exportMsg, setExportMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (creating || editingId !== null) inputRef.current?.focus();
   }, [creating, editingId]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handle = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const timer = setTimeout(() => window.addEventListener("mousedown", handle), 0);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("mousedown", handle);
-    };
-  }, [contextMenu]);
 
   useEffect(() => {
     if (!exportMsg) return;
@@ -140,12 +121,6 @@ export const PlaylistSidebar = ({
     [exportToIpod],
   );
 
-  const startCreate = useCallback(() => {
-    setCreating(true);
-    setInputValue("");
-    setEditingId(null);
-  }, []);
-
   const startRename = useCallback((playlist: Playlist) => {
     setEditingId(playlist.id);
     setInputValue(playlist.name);
@@ -200,7 +175,11 @@ export const PlaylistSidebar = ({
             </button>
           )}
           <button
-            onClick={startCreate}
+            onClick={() => {
+              setCreating(true);
+              setInputValue("");
+              setEditingId(null);
+            }}
             className="text-text-tertiary hover:text-text-secondary transition-colors"
             title="New Playlist"
           >
@@ -212,7 +191,7 @@ export const PlaylistSidebar = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* "All Tracks" option */}
+        {/* All Tracks */}
         <button
           onClick={() => {
             onPlaylistSelect(null);
@@ -241,7 +220,6 @@ export const PlaylistSidebar = ({
           </button>
         </div>
 
-        {/* Built-in smart playlists */}
         {builtinSmartPlaylists.map((sp) => (
           <button
             key={sp.id}
@@ -260,7 +238,6 @@ export const PlaylistSidebar = ({
           </button>
         ))}
 
-        {/* User smart playlists */}
         {userSmartPlaylists.map((sp) => (
           <button
             key={sp.id}
@@ -289,7 +266,7 @@ export const PlaylistSidebar = ({
           </button>
         ))}
 
-        {/* Playlists header */}
+        {/* Playlists */}
         <div className="px-3 pt-3 pb-1">
           <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest">Playlists</span>
         </div>
@@ -376,111 +353,17 @@ export const PlaylistSidebar = ({
 
       {/* Context menu */}
       {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 min-w-[160px] bg-bg-card border border-border rounded-xl shadow-lg py-1 overflow-hidden"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          {contextMenu.type === "playlist" && contextMenu.playlist && (
-            <>
-              <button
-                onClick={() => startRename(contextMenu.playlist!)}
-                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-              >
-                Rename
-              </button>
-              <button
-                onClick={() => handleExport([contextMenu.playlist!.id])}
-                disabled={exporting}
-                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors disabled:opacity-30"
-              >
-                Export to iPod
-              </button>
-              <div className="h-px bg-border my-1" />
-              <button
-                onClick={() => handleDelete(contextMenu.playlist!.id)}
-                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-              >
-                Delete
-              </button>
-            </>
-          )}
-          {contextMenu.type === "smart" && contextMenu.smartPlaylist && (
-            <>
-              <button
-                onClick={() => {
-                  onSmartPlaylistEdit(contextMenu.smartPlaylist!);
-                  setContextMenu(null);
-                }}
-                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-              >
-                Edit Rules
-              </button>
-              <div className="h-px bg-border my-1" />
-              <button
-                onClick={() => handleDeleteSmart(contextMenu.smartPlaylist!.id)}
-                className="w-full text-left px-3 py-2 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-              >
-                Delete
-              </button>
-            </>
-          )}
-        </div>
+        <PlaylistContextMenu
+          menu={contextMenu}
+          exporting={exporting}
+          onClose={() => setContextMenu(null)}
+          onRename={startRename}
+          onDelete={handleDelete}
+          onDeleteSmart={handleDeleteSmart}
+          onExport={handleExport}
+          onEditSmartPlaylist={onSmartPlaylistEdit}
+        />
       )}
     </div>
   );
-};
-
-const SmartPlaylistIcon = ({ type }: { type: string | null }) => {
-  switch (type) {
-    case "clock":
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
-          <circle cx="12" cy="12" r="9" />
-          <path strokeLinecap="round" d="M12 7v5l3 3" />
-        </svg>
-      );
-    case "fire":
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18z"
-          />
-        </svg>
-      );
-    case "circle":
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
-          <circle cx="12" cy="12" r="9" />
-        </svg>
-      );
-    default:
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 shrink-0">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
-          />
-        </svg>
-      );
-  }
-};
-
-const formatExportResult = (result: PlaylistExportResult): { text: string; type: "success" | "error" } => {
-  if (result.exported === 0 && result.errors.length > 0) {
-    return { text: result.errors[0], type: "error" };
-  }
-  const parts = [`${result.exported} playlist${result.exported !== 1 ? "s" : ""} exported`];
-  if (result.skipped_tracks > 0) {
-    parts.push(`${result.skipped_tracks} track${result.skipped_tracks !== 1 ? "s" : ""} skipped`);
-  }
-  return { text: parts.join(", "), type: "success" };
 };

@@ -1,12 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { pickFolder } from "../../../utils/pickPath";
 import { cancelSync } from "../../../utils/cancelSync";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
-import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MetadataTree } from "./MetadataTree";
 import { MetadataEditPanel } from "./MetadataEditPanel";
+import { MetadataToolbar } from "./MetadataToolbar";
+import { MetadataStatusBanners } from "./MetadataStatusBanners";
 import { RepairAlbumCard } from "./RepairAlbumCard";
 import { RepairDetailPanel } from "./RepairDetailPanel";
 import { TagSanitizerModal } from "./TagSanitizerModal";
@@ -14,7 +14,6 @@ import { QualityList } from "../QualityAnalyzer/QualityList";
 import { QualityDetailPanel } from "../QualityAnalyzer/QualityDetailPanel";
 import { AudioPreviewModal } from "../QualityAnalyzer/AudioPreviewModal";
 import { useAudioPlayback } from "../../molecules/MiniPlayer/useAudioPlayback";
-import { verdictColor } from "../QualityAnalyzer/helpers";
 import { useMetadataEvents } from "./useMetadataEvents";
 import { useDragDrop } from "./useDragDrop";
 import { useRepairActions } from "./useRepairActions";
@@ -26,6 +25,7 @@ import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeR
 import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
+import { listen } from "@tauri-apps/api/event";
 
 export const MetadataEditor = ({
   initialPaths,
@@ -60,18 +60,15 @@ export const MetadataEditor = ({
   const [sanitizerOpen, setSanitizerOpen] = useState(false);
   const lastScanPaths = useRef<string[]>([]);
 
-  // ── Cancel ──
   const cancel = cancelSync;
 
   // ── Refresh tracks ──
   const refreshTracks = async () => {
     const paths = lastScanPaths.current;
     if (paths.length === 0) return;
-
     setEditedTracks({});
     setSaveResult(null);
     setError(null);
-
     try {
       const data = await invoke<TrackMetadata[]>("scan_metadata_paths", { paths });
       setTracks(data);
@@ -85,7 +82,7 @@ export const MetadataEditor = ({
   // ── Event listeners ──
   useMetadataEvents(updateProgress, setSaveProgress);
 
-  // ── Repair actions ──
+  // ── Hooks ──
   const repair = useRepairActions(
     tracks,
     setPhase,
@@ -99,7 +96,6 @@ export const MetadataEditor = ({
     refreshTracks,
   );
 
-  // ── Identify actions ──
   const identify = useIdentifyActions(
     setPhase,
     setError,
@@ -112,7 +108,6 @@ export const MetadataEditor = ({
     setView,
   );
 
-  // ── Quality actions ──
   const quality = useQualityActions(
     lastScanPaths,
     setPhase,
@@ -158,7 +153,6 @@ export const MetadataEditor = ({
   };
 
   const scanPaths = (paths: string[]) => doScan(paths, () => invoke<TrackMetadata[]>("scan_metadata_paths", { paths }));
-
   const scan = (path?: string) => {
     const targetPath = path ?? scanPath;
     return doScan([targetPath], () => invoke<TrackMetadata[]>("scan_metadata", { path: targetPath }));
@@ -176,7 +170,7 @@ export const MetadataEditor = ({
     }
   };
 
-  // ── Auto-scan from external navigation (e.g. library right-click) ──
+  // ── Auto-scan from external navigation ──
   useEffect(() => {
     if (initialPaths && initialPaths.length > 0) {
       scanPaths(initialPaths);
@@ -185,12 +179,10 @@ export const MetadataEditor = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Drag-and-drop ──
   const isDragOver = useDragDrop(phase, scanPaths);
 
   // ── Editor logic ──
   const groups = useMemo(() => groupTracks(tracks, editedTracks), [tracks, editedTracks]);
-
   const dirtyCount = useMemo(() => {
     let count = 0;
     for (const [filePath, edited] of Object.entries(editedTracks)) {
@@ -217,11 +209,8 @@ export const MetadataEditor = ({
     setSelected((prev) => {
       const allSelected = filePaths.every((p) => prev.has(p));
       const next = new Set(prev);
-      if (allSelected) {
-        filePaths.forEach((p) => next.delete(p));
-      } else {
-        filePaths.forEach((p) => next.add(p));
-      }
+      if (allSelected) filePaths.forEach((p) => next.delete(p));
+      else filePaths.forEach((p) => next.add(p));
       return next;
     });
   }, []);
@@ -243,9 +232,7 @@ export const MetadataEditor = ({
   const handleRevert = useCallback(() => {
     setEditedTracks((prev) => {
       const next = { ...prev };
-      for (const filePath of selected) {
-        delete next[filePath];
-      }
+      for (const filePath of selected) delete next[filePath];
       return next;
     });
   }, [selected]);
@@ -328,10 +315,8 @@ export const MetadataEditor = ({
   const handleSanitize = async (options: SanitizeModalOptions) => {
     setSanitizerOpen(false);
     const filePaths = [...selected];
-
     setPhase("saving");
     startProgress("Sanitizing tags...", cancel);
-
     try {
       const result = await invoke<SanitizeResult>("sanitize_tags", {
         options: {
@@ -348,13 +333,9 @@ export const MetadataEditor = ({
           drop_disc_for_single: options.dropDiscForSingle,
         },
       });
-
       finishProgress(`Sanitized ${result.succeeded} of ${result.total} files`);
-      if (result.succeeded > 0) {
-        refreshTracks();
-      } else {
-        setPhase("scanned");
-      }
+      if (result.succeeded > 0) refreshTracks();
+      else setPhase("scanned");
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");
@@ -377,7 +358,6 @@ export const MetadataEditor = ({
           </button>
           {error && <span className="text-danger text-[11px] ml-2">{error}</span>}
         </div>
-
         <div
           className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
             isDragOver ? "border-accent bg-accent/5" : "border-border hover:border-border-active"
@@ -397,7 +377,6 @@ export const MetadataEditor = ({
     );
   }
 
-  // ── Scanning / Looking up ──
   if (phase === "scanning" || phase === "looking_up") {
     return <div className="flex-1" />;
   }
@@ -405,262 +384,48 @@ export const MetadataEditor = ({
   // ── Scanned / Saving (main view) ──
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-2xl px-5 py-3 shrink-0">
-        <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">Folder</span>
-        <span className="flex-1 min-w-0 text-xs text-text-secondary font-medium truncate">{scanPath}</span>
-        <span className="text-[11px] text-text-tertiary shrink-0">{tracks.length} tracks</span>
-        <button
-          onClick={browse}
-          disabled={phase === "saving"}
-          className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-xs shrink-0 hover:not-disabled:text-text-secondary hover:not-disabled:border-border-active disabled:opacity-30 transition-all"
-        >
-          Browse
-        </button>
-        <button
-          onClick={() => scan()}
-          disabled={phase === "saving"}
-          className="px-3 py-1.5 bg-bg-card border border-border text-text-tertiary rounded-lg text-xs shrink-0 hover:not-disabled:text-text-secondary hover:not-disabled:border-border-active disabled:opacity-30 transition-all"
-        >
-          ↻ Rescan
-        </button>
+      <MetadataToolbar
+        scanPath={scanPath}
+        trackCount={tracks.length}
+        phase={phase}
+        view={view}
+        onViewChange={setView}
+        onBrowse={browse}
+        onRescan={() => scan()}
+        dirtyCount={dirtyCount}
+        repairReport={repair.report}
+        onStartRepair={repair.startRepair}
+        repairTotalAccepted={repair.totalAccepted}
+        onClearAllRepairs={repair.handleClearAllRepairs}
+        onApplyRepairs={repair.handleApplyRepairs}
+        onAcceptAllRepairs={repair.handleAcceptAllRepairs}
+        hasQualityResults={quality.qualityFiles.length > 0}
+        onStartQualityScan={quality.startQualityScan}
+        identifyResults={identify.results}
+        onStartIdentify={(filePaths) => identify.startIdentify(filePaths)}
+        identifyChosenCount={identify.chosenCount}
+        identifyMatchedCount={identify.matchedCount}
+        onAutoSelectBest={identify.autoSelectBest}
+        onClearAllIdentify={identify.clearAll}
+        onApplyIdentify={identify.applyChoices}
+        tracks={tracks}
+      />
 
-        {(repair.report || quality.qualityFiles.length > 0 || identify.results) && (
-          <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
-            <button
-              onClick={() => setView("edit")}
-              className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
-                view === "edit" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
-              }`}
-            >
-              Edit
-            </button>
-            {repair.report && (
-              <button
-                onClick={() => setView("repair")}
-                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
-                  view === "repair" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
-                }`}
-              >
-                Repair
-              </button>
-            )}
-            {quality.qualityFiles.length > 0 && (
-              <button
-                onClick={() => setView("quality")}
-                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
-                  view === "quality" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
-                }`}
-              >
-                Quality
-              </button>
-            )}
-            {identify.results && (
-              <button
-                onClick={() => setView("identify")}
-                className={`px-3 py-1.5 text-[11px] font-medium transition-all ${
-                  view === "identify" ? "bg-bg-card text-text-primary" : "text-text-tertiary hover:text-text-secondary"
-                }`}
-              >
-                Identify
-              </button>
-            )}
-          </div>
-        )}
-
-        {phase !== "saving" && view === "edit" && (
-          <div className="flex gap-1.5 shrink-0">
-            {!repair.report && (
-              <button
-                onClick={repair.startRepair}
-                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
-              >
-                Repair with MusicBrainz
-              </button>
-            )}
-            {quality.qualityFiles.length === 0 && (
-              <button
-                onClick={quality.startQualityScan}
-                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
-              >
-                Quality Scan
-              </button>
-            )}
-            {!identify.results && (
-              <button
-                onClick={() => identify.startIdentify(tracks.map((t) => t.file_path))}
-                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
-              >
-                Identify with AcoustID
-              </button>
-            )}
-          </div>
-        )}
-
-        {view === "edit" && dirtyCount > 0 && (
-          <span className="text-[11px] font-medium text-accent shrink-0">
-            {dirtyCount} unsaved {dirtyCount === 1 ? "change" : "changes"}
-          </span>
-        )}
-
-        {view === "repair" && repair.totalAccepted > 0 && (
-          <>
-            <button
-              onClick={repair.handleClearAllRepairs}
-              className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
-            >
-              Clear All
-            </button>
-            <button
-              onClick={repair.handleApplyRepairs}
-              className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium shrink-0 hover:opacity-90 transition-all"
-            >
-              Apply {repair.totalAccepted} {repair.totalAccepted === 1 ? "Fix" : "Fixes"}
-            </button>
-          </>
-        )}
-        {view === "repair" &&
-          repair.totalAccepted === 0 &&
-          repair.report &&
-          repair.report.total_issues.error_count +
-            repair.report.total_issues.warning_count +
-            repair.report.total_issues.info_count >
-            0 && (
-            <button
-              onClick={repair.handleAcceptAllRepairs}
-              className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
-            >
-              Accept All Fixes
-            </button>
-          )}
-        {view === "identify" && identify.results && (
-          <>
-            {identify.chosenCount === 0 && identify.matchedCount > 0 && (
-              <button
-                onClick={identify.autoSelectBest}
-                className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
-              >
-                Auto-Select Best
-              </button>
-            )}
-            {identify.chosenCount > 0 && (
-              <>
-                <button
-                  onClick={identify.clearAll}
-                  className="px-3 py-1.5 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] shrink-0 hover:text-text-primary hover:border-border-active transition-all"
-                >
-                  Clear All
-                </button>
-                <button
-                  onClick={identify.applyChoices}
-                  className="px-3 py-1.5 bg-text-primary text-bg-primary rounded-lg text-[11px] font-medium shrink-0 hover:opacity-90 transition-all"
-                >
-                  Apply {identify.chosenCount} {identify.chosenCount === 1 ? "Tag" : "Tags"}
-                </button>
-              </>
-            )}
-          </>
-        )}
-      </div>
-
-      {view === "repair" && repair.report && (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] bg-bg-secondary border border-border shrink-0">
-          {repair.report.total_issues.error_count > 0 && (
-            <span className="text-danger">{repair.report.total_issues.error_count} errors</span>
-          )}
-          {repair.report.total_issues.warning_count > 0 && (
-            <span className="text-warning">{repair.report.total_issues.warning_count} warnings</span>
-          )}
-          {repair.report.total_issues.info_count > 0 && (
-            <span className="text-accent">{repair.report.total_issues.info_count} info</span>
-          )}
-          {repair.report.total_issues.error_count === 0 &&
-            repair.report.total_issues.warning_count === 0 &&
-            repair.report.total_issues.info_count === 0 && (
-              <span className="text-success">All metadata looks good</span>
-            )}
-        </div>
-      )}
-
-      {view === "identify" && identify.results && (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-[11px] bg-bg-secondary border border-border shrink-0">
-          <span className="text-success">{identify.matchedCount} matched</span>
-          <span className="text-text-tertiary">{identify.results.length - identify.matchedCount} unmatched</span>
-          {identify.chosenCount > 0 && <span className="text-accent">{identify.chosenCount} selected</span>}
-        </div>
-      )}
-
-      {view === "quality" && quality.qualityFiles.length > 0 && (
-        <div className="flex gap-5 px-5 py-2.5 bg-bg-secondary border border-border rounded-2xl shrink-0 text-xs font-medium">
-          {quality.qualityCounts.lossless > 0 && (
-            <span className={verdictColor("lossless")}>{quality.qualityCounts.lossless} lossless</span>
-          )}
-          {quality.qualityCounts.lossy > 0 && (
-            <span className={verdictColor("lossy")}>{quality.qualityCounts.lossy} lossy</span>
-          )}
-          {quality.qualityCounts.suspect > 0 && (
-            <span className={verdictColor("suspect")}>{quality.qualityCounts.suspect} suspect</span>
-          )}
-        </div>
-      )}
-
-      {saveResult && (
-        <div
-          className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed shrink-0 ${
-            saveResult.cancelled
-              ? "bg-warning/10 text-warning"
-              : saveResult.failed > 0
-                ? "bg-warning/10 text-warning"
-                : "bg-success/10 text-success"
-          }`}
-        >
-          {saveResult.cancelled
-            ? `Cancelled — saved ${saveResult.succeeded} of ${saveResult.total} files before stopping`
-            : `Saved ${saveResult.succeeded} of ${saveResult.total} files`}
-          {!saveResult.cancelled && saveResult.failed > 0 && ` — ${saveResult.failed} failed`}
-          {saveResult.errors.length > 0 && (
-            <div className="mt-1 text-[10px] opacity-70">
-              {saveResult.errors.slice(0, 3).map((e, i) => (
-                <div key={i}>{e}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {phase === "saving" && !progressState.active && (
-        <div className="px-4 py-3 bg-bg-secondary border border-border rounded-2xl shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs text-text-secondary font-medium">
-              <Spinner /> Saving metadata...
-            </div>
-            <button
-              onClick={cancel}
-              className="px-3 py-1 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] hover:text-text-primary hover:border-border-active transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-          {saveProgress && (
-            <>
-              <div className="w-full h-1.5 bg-bg-card rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-accent rounded-full transition-all duration-200"
-                  style={{ width: `${(saveProgress.completed / saveProgress.total) * 100}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-1.5">
-                <span className="text-[10px] text-text-tertiary truncate max-w-[60%]">{saveProgress.current_file}</span>
-                <span className="text-[10px] text-text-secondary font-medium">
-                  {saveProgress.completed} of {saveProgress.total}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {error && <div className="px-3 py-2 rounded-xl text-[11px] bg-danger/10 text-danger shrink-0">{error}</div>}
+      <MetadataStatusBanners
+        view={view}
+        phase={phase}
+        error={error}
+        repairReport={repair.report}
+        identifyResults={identify.results}
+        identifyMatchedCount={identify.matchedCount}
+        identifyChosenCount={identify.chosenCount}
+        qualityFiles={quality.qualityFiles}
+        qualityCounts={quality.qualityCounts}
+        saveResult={saveResult}
+        saveProgress={saveProgress}
+        progressActive={progressState.active}
+        onCancel={cancel}
+      />
 
       {/* Main content */}
       <div className="flex-1 flex gap-3 min-h-0">
@@ -713,7 +478,6 @@ export const MetadataEditor = ({
                 ))}
               </div>
             </div>
-
             {repair.selectedAlbumData ? (
               <RepairDetailPanel
                 album={repair.selectedAlbumData}

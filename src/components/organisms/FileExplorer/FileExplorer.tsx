@@ -5,13 +5,14 @@ import { useProgress } from "../../../contexts/ProgressContext";
 import { cancelSync } from "../../../utils/cancelSync";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
-import { InlineRenameInput } from "./InlineRenameInput";
 import { useFileSelection } from "./useFileSelection";
 import { useClipboard } from "./useClipboard";
 import { useFileOperations } from "./useFileOperations";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useDragAndDrop } from "./useDragAndDrop";
-import { fmtSize, fmtDate, icon, joinPath, buildContextMenuItems } from "./helpers";
+import { FileRow } from "./FileRow";
+import { InlineRenameInput } from "./InlineRenameInput";
+import { joinPath, buildContextMenuItems } from "./helpers";
 import type { FileEntry, FileExplorerProps, FileExplorerHandle, ContextMenuState } from "./types";
 
 const TH = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
@@ -421,21 +422,18 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
                 {flatRows.map(({ entry: e, parentPath: rowPath, depth }) => {
                   const fullPath = joinPath(rowPath, e.name);
-                  const rowSelected = isSelected(fullPath);
-                  const rowCut = isCut(fullPath);
-                  const isFolderDropTarget = e.is_dir && dnd.dropTargetFolder === fullPath;
-                  const isExpanded = e.is_dir && expandedFolders.has(fullPath);
                   const isTopLevel = depth === 0;
-
-                  const selectedCell = rowSelected ? "!bg-accent !text-white" : "";
-
                   return (
-                    <tr
+                    <FileRow
                       key={fullPath}
-                      data-drop-folder={e.is_dir ? fullPath : undefined}
-                      className={`transition-colors group cursor-default ${
-                        isFolderDropTarget ? "bg-accent/15" : rowSelected ? "" : "hover:bg-bg-hover/50"
-                      } ${rowCut ? "opacity-50" : ""}`}
+                      entry={e}
+                      fullPath={fullPath}
+                      depth={depth}
+                      isSelected={isSelected(fullPath)}
+                      isCut={isCut(fullPath)}
+                      isFolderDropTarget={e.is_dir && dnd.dropTargetFolder === fullPath}
+                      isExpanded={e.is_dir && expandedFolders.has(fullPath)}
+                      isRenaming={isTopLevel && renamingEntry === e.name}
                       onMouseDown={(ev) => dnd.rowMouseDown(ev, fullPath)}
                       onClick={(ev) => {
                         if (dnd.wasDragging.current) return;
@@ -443,64 +441,14 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
                       }}
                       onDoubleClick={e.is_dir ? () => load(fullPath) : undefined}
                       onContextMenu={(ev) => openContextMenu(ev, "entry", e, fullPath)}
-                    >
-                      <td
-                        className={`py-[7px] pr-3 text-xs border-b border-border-subtle overflow-hidden text-ellipsis whitespace-nowrap ${selectedCell}`}
-                        style={{ paddingLeft: `${12 + depth * 20}px` }}
-                      >
-                        {e.is_dir ? (
-                          <span
-                            className={`inline-block w-4 text-[10px] cursor-pointer select-none align-middle ${rowSelected ? "text-white/70 hover:text-white" : "text-text-tertiary hover:text-text-secondary"}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              toggleExpand(fullPath);
-                            }}
-                          >
-                            {isExpanded ? "\u25BE" : "\u25B8"}
-                          </span>
-                        ) : (
-                          <span className="inline-block w-4 align-middle" />
-                        )}
-                        <span className={`mr-1.5 text-xs align-middle ${rowSelected ? "opacity-90" : "opacity-60"}`}>
-                          {icon(e)}
-                        </span>
-                        {isTopLevel && renamingEntry === e.name ? (
-                          <InlineRenameInput
-                            initialName={e.name}
-                            isDir={e.is_dir}
-                            onConfirm={async (newName) => {
-                              await handleRename(e.name, newName);
-                              setRenamingEntry(null);
-                            }}
-                            onCancel={() => setRenamingEntry(null)}
-                          />
-                        ) : e.is_dir ? (
-                          <span
-                            className={`cursor-pointer transition-colors align-middle ${rowSelected ? "text-white hover:text-white/80" : "text-text-primary hover:text-accent"}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              load(fullPath);
-                            }}
-                          >
-                            {e.name}
-                          </span>
-                        ) : (
-                          <span className={`align-middle ${rowSelected ? "text-white" : "text-text-secondary"}`}>
-                            {e.name}
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className={`px-3 py-[7px] text-xs border-b border-border-subtle ${selectedCell || "text-text-tertiary"}`}
-                      >
-                        {fmtSize(e.size)}
-                      </td>
-                      <td
-                        className={`px-3 py-[7px] text-xs border-b border-border-subtle ${selectedCell || "text-text-tertiary"}`}
-                      >
-                        {fmtDate(e.modified)}
-                      </td>
-                    </tr>
+                      onToggleExpand={() => toggleExpand(fullPath)}
+                      onNavigate={() => load(fullPath)}
+                      onRenameConfirm={async (newName) => {
+                        await handleRename(e.name, newName);
+                        setRenamingEntry(null);
+                      }}
+                      onRenameCancel={() => setRenamingEntry(null)}
+                    />
                   );
                 })}
               </tbody>

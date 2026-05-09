@@ -12,9 +12,7 @@ export const useLibraryImport = (
   updateProgress: (completed: number, total: number, currentFile: string) => void,
   finishProgress: (msg: string) => void,
   failProgress: (msg: string) => void,
-  fetchBrowserData: () => Promise<void>,
-  setHasLibrary: (v: boolean) => void,
-  setDataLoaded: (v: boolean) => void,
+  onImportComplete: () => Promise<void>,
 ) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const isActiveRef = useRef(isActive);
@@ -37,15 +35,13 @@ export const useLibraryImport = (
     try {
       await invoke("set_library_location", { path: selected });
       finishProgress("Library scan complete");
-      setHasLibrary(true);
-      await fetchBrowserData();
-      setDataLoaded(true);
+      await onImportComplete();
     } catch (e) {
       failProgress(`Scan failed: ${e}`);
     } finally {
       unlisten();
     }
-  }, [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData, setHasLibrary, setDataLoaded]);
+  }, [startProgress, updateProgress, finishProgress, failProgress, onImportComplete]);
 
   const handleDrop = useCallback(
     async (paths: string[]) => {
@@ -75,9 +71,7 @@ export const useLibraryImport = (
               ? `${result.skipped} track${result.skipped !== 1 ? "s" : ""} already in library`
               : "No audio files found";
         finishProgress(msg);
-        setHasLibrary(true);
-        await fetchBrowserData();
-        setDataLoaded(true);
+        await onImportComplete();
       } catch (e) {
         failProgress(`Import failed: ${e}`);
       } finally {
@@ -85,7 +79,7 @@ export const useLibraryImport = (
         unlistenScan();
       }
     },
-    [startProgress, updateProgress, finishProgress, failProgress, fetchBrowserData, setHasLibrary, setDataLoaded],
+    [startProgress, updateProgress, finishProgress, failProgress, onImportComplete],
   );
 
   useEffect(() => {

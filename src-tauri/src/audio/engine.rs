@@ -73,6 +73,380 @@ impl SharedState {
 // Ring buffer size: ~500ms at 96kHz stereo (generous for high sample rates)
 const RING_BUFFER_SIZE: usize = 96000 * 2;
 
+/// All mutable state for the audio engine, bundled to keep `run()` readable.
+struct EngineState<R: Runtime> {
+    host: Host,
+    output_rate: u32,
+    output_channels: u16,
+    current_stream: Option<Stream>,
+    ring_producer: Option<ringbuf::HeapProd<f32>>,
+
+    decoder: Option<AudioDecoder>,
+    resampler: Option<Resampler>,
+    source_channels: u16,
+    source_rate: u32,
+
+    equalizer: Equalizer,
+    time_stretcher: TimeStretcher,
+    leftover: Vec<f32>,
+
+    preloaded: Option<(AudioDecoder, Option<Resampler>, u16)>,
+    crossfade: Option<CrossfadeState>,
+    crossfade_duration_secs: f64,
+
+    source_pos_secs: f64,
+    playback_offset_secs: f64,
+    current_speed: f64,
+    last_position_event: std::time::Instant,
+
+    shared: Arc<SharedState>,
+    app_handle: AppHandle<R>,
+}
+
+impl<R: Runtime> EngineState<R> {
+    fn handle_play(&mut self, path: String, seek_secs: Option<f64>) {
+        self.stop_playback();
+
+        match AudioDecoder::open(&path) {
+            Ok(mut dec) => {
+                let src_rate = dec.sample_rate;
+                let src_ch = dec.channels;
+                let dur = dec.duration_secs;
+
+                self.shared.set_duration(dur);
+                self.shared
+                    .out_channels
+                    .store(self.output_channels as u64, Ordering::Relaxed);
+                self.shared
+                    .out_rate
+                    .store(self.output_rate as u64, Ordering::Relaxed);
+                self.source_channels = src_ch;
+                self.source_rate = src_rate;
+
+                let rs = Resampler::new(src_rate, self.output_rate, self.output_channels);
+                self.resampler = if rs.is_active() { Some(rs) } else { None };
+
+                self.source_pos_secs = 0.0;
+                self.playback_offset_secs = 0.0;
+                if let Some(secs) = seek_secs {
+                    if dec.seek(secs).is_ok() {
+                        self.source_pos_secs = secs;
+                        self.playback_offset_secs = secs;
+                        self.shared.set_position(secs);
+                    }
+                }
+
+                let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
+                let (prod, cons) = rb.split();
+
+                match create_output_stream(
+                    &self.host,
+                    self.output_rate,
+                    self.output_channels,
+                    cons,
+                    Arc::clone(&self.shared.volume),
+                    Arc::clone(&self.shared.out_samples),
+                ) {
+                    Ok(stream) => {
+                        stream.play().ok();
+                        self.current_stream = Some(stream);
+                        self.ring_producer = Some(prod);
+                        self.decoder = Some(dec);
+                        self.shared.set_state(PlayState::Playing);
+                        let _ = self.app_handle.emit("audio:duration-ready", dur);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create audio stream: {}", e);
+                        let _ = self.app_handle.emit("audio:error", e);
+                        self.shared.set_state(PlayState::Stopped);
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to open audio: {}", e);
+                let _ = self.app_handle.emit("audio:error", e);
+                self.shared.set_state(PlayState::Stopped);
+            }
+        }
+    }
+
+    fn stop_playback(&mut self) {
+        if let Some(stream) = self.current_stream.take() {
+            stream.pause().ok();
+        }
+        self.ring_producer = None;
+        self.decoder = None;
+        self.resampler = None;
+        self.preloaded = None;
+        self.crossfade = None;
+        self.leftover.clear();
+        self.equalizer.reset();
+        self.shared.out_samples.store(0, Ordering::Relaxed);
+        self.shared.set_position(0.0);
+    }
+
+    fn handle_seek(&mut self, position_secs: f64) {
+        let Some(ref mut dec) = self.decoder else {
+            return;
+        };
+        if dec.seek(position_secs).is_err() {
+            return;
+        }
+
+        self.leftover.clear();
+        if let Some(ref mut rs) = self.resampler {
+            rs.reset();
+        }
+        self.time_stretcher.reset();
+        self.equalizer.reset();
+        self.crossfade = None;
+
+        // Clear ring buffer by dropping and recreating the stream
+        if self.current_stream.is_some() {
+            let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
+            let (prod, cons) = rb.split();
+
+            if let Some(stream) = self.current_stream.take() {
+                stream.pause().ok();
+            }
+
+            match create_output_stream(
+                &self.host,
+                self.output_rate,
+                self.output_channels,
+                cons,
+                Arc::clone(&self.shared.volume),
+                Arc::clone(&self.shared.out_samples),
+            ) {
+                Ok(stream) => {
+                    if self.shared.get_state() == PlayState::Playing {
+                        stream.play().ok();
+                    }
+                    self.current_stream = Some(stream);
+                    self.ring_producer = Some(prod);
+                }
+                Err(e) => {
+                    log::error!("Failed to recreate stream after seek: {}", e);
+                }
+            }
+        }
+
+        self.source_pos_secs = position_secs;
+        self.playback_offset_secs = position_secs;
+        self.shared.out_samples.store(0, Ordering::Relaxed);
+        self.shared.set_position(position_secs);
+    }
+
+    fn handle_set_speed(&mut self, speed: f64) {
+        // Anchor playback position before speed change so out_samples
+        // count restarts relative to the new speed.
+        let out = self.shared.out_samples.load(Ordering::Relaxed);
+        let ch = self.shared.out_channels.load(Ordering::Relaxed).max(1);
+        let rate = self.shared.out_rate.load(Ordering::Relaxed).max(1);
+        let wall_secs = out as f64 / (rate as f64 * ch as f64);
+        self.playback_offset_secs += wall_secs * self.current_speed;
+        self.shared.out_samples.store(0, Ordering::Relaxed);
+
+        self.current_speed = speed;
+        self.time_stretcher.set_speed(speed);
+    }
+
+    /// Install a new track as the active decoder, resetting processing state.
+    /// Shared by both crossfade and gapless transitions.
+    fn install_track(&mut self, dec: AudioDecoder, rs: Option<Resampler>, src_ch: u16) {
+        let dur = dec.duration_secs;
+        self.source_rate = dec.sample_rate;
+        self.decoder = Some(dec);
+        self.resampler = rs;
+        self.source_channels = src_ch;
+        self.equalizer.reset();
+        self.time_stretcher.reset();
+        self.leftover.clear();
+        self.source_pos_secs = 0.0;
+        self.playback_offset_secs = 0.0;
+        self.shared.out_samples.store(0, Ordering::Relaxed);
+        self.shared.set_position(0.0);
+        self.shared.set_duration(dur);
+        let _ = self.app_handle.emit("audio:gapless-transition", dur);
+    }
+
+    /// Decode audio samples and push them into the ring buffer.
+    /// Returns `(gapless_transition, begin_crossfade)` flags.
+    fn decode_and_fill(&mut self) -> (bool, bool) {
+        let (Some(ref mut dec), Some(ref mut prod)) = (&mut self.decoder, &mut self.ring_producer)
+        else {
+            return (false, false);
+        };
+
+        // Push leftover samples from previous iteration
+        let mut i = 0;
+        while i < self.leftover.len() {
+            if prod.try_push(self.leftover[i]).is_err() {
+                break;
+            }
+            i += 1;
+        }
+        self.leftover.drain(..i);
+
+        if !self.leftover.is_empty() {
+            self.shared.set_position(self.source_pos_secs);
+            return (false, false);
+        }
+
+        let dur = self.shared.get_duration();
+        let mut filled = 0;
+
+        while prod.vacant_len() > 4096 && filled < 32768 {
+            // Check crossfade trigger
+            let remaining = dur - self.source_pos_secs;
+            if self.crossfade_duration_secs > 0.0
+                && remaining <= self.crossfade_duration_secs
+                && remaining > 0.0
+                && self.preloaded.is_some()
+                && self.crossfade.is_none()
+            {
+                self.shared.set_position(self.source_pos_secs);
+                return (false, true);
+            }
+
+            match dec.next_samples() {
+                Ok(Some(samples)) => {
+                    let decoded_frames = samples.len() / self.source_channels as usize;
+                    self.source_pos_secs += decoded_frames as f64 / self.source_rate as f64;
+
+                    let adapted =
+                        adapt_channels(samples, self.source_channels, self.output_channels);
+                    let resampled = if let Some(ref mut rs) = self.resampler {
+                        rs.process(&adapted)
+                    } else {
+                        adapted
+                    };
+                    let mut out_samples = self.time_stretcher.process(&resampled);
+                    self.equalizer
+                        .process(&mut out_samples, self.output_channels);
+
+                    // Mix in old track samples during crossfade
+                    if let Some(ref mut cf) = self.crossfade {
+                        decode_old_track(cf, out_samples.len(), self.output_channels);
+                        mix_crossfade(
+                            &mut out_samples,
+                            &cf.leftover,
+                            &mut cf.fade,
+                            self.output_channels,
+                        );
+                        let consumed = out_samples.len().min(cf.leftover.len());
+                        cf.leftover.drain(..consumed);
+                        if cf.fade.is_complete() {
+                            self.crossfade = None;
+                        }
+                    }
+
+                    let mut pushed = 0;
+                    for &s in &out_samples {
+                        if prod.try_push(s).is_err() {
+                            self.leftover.extend_from_slice(&out_samples[pushed..]);
+                            break;
+                        }
+                        pushed += 1;
+                    }
+                    filled += pushed;
+                }
+                Ok(None) => {
+                    // EOF
+                    if self.crossfade.is_none() && self.preloaded.is_some() {
+                        self.shared.set_position(self.source_pos_secs);
+                        return (true, false);
+                    }
+                    if self.crossfade.is_none() {
+                        self.shared.set_state(PlayState::Stopped);
+                        let _ = self.app_handle.emit("audio:track-ended", ());
+                        self.decoder = None;
+                    }
+                    break;
+                }
+                Err(e) => {
+                    log::error!("Decode error: {}", e);
+                    self.shared.set_state(PlayState::Stopped);
+                    let _ = self.app_handle.emit("audio:error", e);
+                    self.decoder = None;
+                    break;
+                }
+            }
+        }
+
+        self.shared.set_position(self.source_pos_secs);
+        (false, false)
+    }
+
+    fn begin_crossfade(&mut self) {
+        let Some(old_dec) = self.decoder.take() else {
+            return;
+        };
+        let Some((new_dec, new_rs, new_src_ch)) = self.preloaded.take() else {
+            self.decoder = Some(old_dec);
+            return;
+        };
+
+        let old_rs = self.resampler.take();
+        let old_src_ch = self.source_channels;
+
+        let dur = self.shared.get_duration();
+        let actual_cf_secs = (dur - self.source_pos_secs)
+            .min(self.crossfade_duration_secs)
+            .max(0.0);
+
+        // Hand off the current time_stretcher so the old track fades at the same speed
+        let old_ts = std::mem::replace(
+            &mut self.time_stretcher,
+            TimeStretcher::new(self.output_channels),
+        );
+        self.time_stretcher.set_speed(self.current_speed);
+
+        self.crossfade = Some(CrossfadeState::new(
+            old_dec,
+            old_rs,
+            old_src_ch,
+            old_ts,
+            actual_cf_secs,
+            self.output_rate,
+            self.output_channels,
+        ));
+
+        self.install_track(new_dec, new_rs, new_src_ch);
+    }
+
+    fn do_gapless_transition(&mut self) {
+        if let Some((next_dec, next_rs, next_src_ch)) = self.preloaded.take() {
+            self.install_track(next_dec, next_rs, next_src_ch);
+        }
+    }
+
+    /// Emit position events at ~20Hz using output-sample-based position.
+    fn emit_position(&mut self) {
+        if self.last_position_event.elapsed() < Duration::from_millis(50) {
+            return;
+        }
+        self.last_position_event = std::time::Instant::now();
+
+        let out = self.shared.out_samples.load(Ordering::Relaxed);
+        let ch = self.shared.out_channels.load(Ordering::Relaxed).max(1);
+        let rate = self.shared.out_rate.load(Ordering::Relaxed).max(1);
+        let wall_secs = out as f64 / (rate as f64 * ch as f64);
+        let playback_pos = self.playback_offset_secs + wall_secs * self.current_speed;
+        let dur = self.shared.get_duration();
+        let pos = playback_pos.min(dur).max(0.0);
+
+        self.shared.set_position(pos);
+        let _ = self.app_handle.emit(
+            "audio:position",
+            serde_json::json!({
+                "position": pos,
+                "duration": dur,
+            }),
+        );
+    }
+}
+
 /// Runs the audio engine on a dedicated thread.
 /// This function does not return until Shutdown is received.
 pub fn run<R: Runtime>(
@@ -89,7 +463,6 @@ pub fn run<R: Runtime>(
         }
     };
 
-    // Query the device's default output config — this is what CoreAudio actually supports
     let default_config = match device.default_output_config() {
         Ok(c) => c,
         Err(e) => {
@@ -100,467 +473,103 @@ pub fn run<R: Runtime>(
     let output_rate = default_config.sample_rate().0;
     let output_channels = default_config.channels();
 
-    let mut current_stream: Option<Stream> = None;
-    let mut decoder: Option<AudioDecoder> = None;
-    let mut ring_producer: Option<ringbuf::HeapProd<f32>> = None;
-    let mut resampler: Option<Resampler> = None;
-    let mut equalizer = Equalizer::new(output_rate, output_channels);
-    let mut time_stretcher = TimeStretcher::new(output_channels);
-    let mut source_channels: u16 = 2;
-    let mut source_rate: u32 = 44100;
-    // Leftover samples from a partially-pushed decode packet
-    let mut leftover: Vec<f32> = Vec::new();
-    // Preloaded next track for gapless playback
-    let mut preloaded: Option<(AudioDecoder, Option<Resampler>, u16)> = None;
-    // Track source decode position (may be ahead of audible output due to buffering)
-    let mut source_pos_secs: f64 = 0.0;
-    // Offset added to out_samples-based position after seek
-    let mut playback_offset_secs: f64 = 0.0;
-    // Current playback speed (for computing source position from output samples)
-    let mut current_speed: f64 = 1.0;
-
-    // Crossfade state: active crossfade (old track fading out)
-    let mut crossfade: Option<CrossfadeState> = None;
-    // Crossfade duration setting (0 = pure gapless, no overlap)
-    let mut crossfade_duration_secs: f64 = 0.0;
-
-    // Position event timer
-    let mut last_position_event = std::time::Instant::now();
+    let mut state = EngineState {
+        host,
+        output_rate,
+        output_channels,
+        current_stream: None,
+        ring_producer: None,
+        decoder: None,
+        resampler: None,
+        source_channels: 2,
+        source_rate: 44100,
+        equalizer: Equalizer::new(output_rate, output_channels),
+        time_stretcher: TimeStretcher::new(output_channels),
+        leftover: Vec::new(),
+        preloaded: None,
+        crossfade: None,
+        crossfade_duration_secs: 0.0,
+        source_pos_secs: 0.0,
+        playback_offset_secs: 0.0,
+        current_speed: 1.0,
+        last_position_event: std::time::Instant::now(),
+        shared,
+        app_handle,
+    };
 
     loop {
         // Process all pending commands
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
-                AudioCommand::Play { path, seek_secs } => {
-                    // Stop current playback
-                    if let Some(stream) = current_stream.take() {
-                        stream.pause().ok();
-                    }
-                    ring_producer = None;
-                    decoder = None;
-                    resampler = None;
-                    preloaded = None;
-                    crossfade = None;
-                    leftover.clear();
-                    equalizer.reset();
-                    shared.out_samples.store(0, Ordering::Relaxed);
-                    shared.set_position(0.0);
-
-                    match AudioDecoder::open(&path) {
-                        Ok(mut dec) => {
-                            let src_rate = dec.sample_rate;
-                            let src_ch = dec.channels;
-                            let dur = dec.duration_secs;
-
-                            shared.set_duration(dur);
-                            shared
-                                .out_channels
-                                .store(output_channels as u64, Ordering::Relaxed);
-                            shared.out_rate.store(output_rate as u64, Ordering::Relaxed);
-                            source_channels = src_ch;
-                            source_rate = src_rate;
-
-                            // Create resampler if source and output rates differ
-                            let rs = Resampler::new(src_rate, output_rate, output_channels);
-                            if rs.is_active() {
-                                resampler = Some(rs);
-                            } else {
-                                resampler = None;
-                            }
-
-                            // Seek if requested
-                            source_pos_secs = 0.0;
-                            playback_offset_secs = 0.0;
-                            if let Some(secs) = seek_secs {
-                                if dec.seek(secs).is_ok() {
-                                    source_pos_secs = secs;
-                                    playback_offset_secs = secs;
-                                    shared.set_position(secs);
-                                }
-                            }
-
-                            // Create ring buffer and cpal stream using the device's native config
-                            let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
-                            let (prod, cons) = rb.split();
-
-                            match create_output_stream(
-                                &host,
-                                output_rate,
-                                output_channels,
-                                cons,
-                                Arc::clone(&shared.volume),
-                                Arc::clone(&shared.out_samples),
-                            ) {
-                                Ok(stream) => {
-                                    stream.play().ok();
-                                    current_stream = Some(stream);
-                                    ring_producer = Some(prod);
-                                    decoder = Some(dec);
-                                    shared.set_state(PlayState::Playing);
-
-                                    let _ = app_handle.emit("audio:duration-ready", dur);
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to create audio stream: {}", e);
-                                    let _ = app_handle.emit("audio:error", e);
-                                    shared.set_state(PlayState::Stopped);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to open audio: {}", e);
-                            let _ = app_handle.emit("audio:error", e);
-                            shared.set_state(PlayState::Stopped);
-                        }
-                    }
-                }
-
+                AudioCommand::Play { path, seek_secs } => state.handle_play(path, seek_secs),
                 AudioCommand::Pause => {
-                    if let Some(ref stream) = current_stream {
+                    if let Some(ref stream) = state.current_stream {
                         stream.pause().ok();
                     }
-                    shared.set_state(PlayState::Paused);
+                    state.shared.set_state(PlayState::Paused);
                 }
-
                 AudioCommand::Resume => {
-                    if let Some(ref stream) = current_stream {
+                    if let Some(ref stream) = state.current_stream {
                         stream.play().ok();
                     }
-                    shared.set_state(PlayState::Playing);
+                    state.shared.set_state(PlayState::Playing);
                 }
-
                 AudioCommand::Stop => {
-                    if let Some(stream) = current_stream.take() {
-                        stream.pause().ok();
-                    }
-                    ring_producer = None;
-                    decoder = None;
-                    resampler = None;
-                    preloaded = None;
-                    crossfade = None;
-                    leftover.clear();
-                    shared.out_samples.store(0, Ordering::Relaxed);
-                    shared.set_position(0.0);
-                    shared.set_duration(0.0);
-                    shared.set_state(PlayState::Stopped);
+                    state.stop_playback();
+                    state.shared.set_duration(0.0);
+                    state.shared.set_state(PlayState::Stopped);
                 }
-
-                AudioCommand::Seek { position_secs } => {
-                    if let Some(ref mut dec) = decoder {
-                        if dec.seek(position_secs).is_ok() {
-                            leftover.clear();
-                            if let Some(ref mut rs) = resampler {
-                                rs.reset();
-                            }
-                            time_stretcher.reset();
-                            equalizer.reset();
-                            // Cancel any active crossfade — seeking resets the track
-                            crossfade = None;
-
-                            // Clear ring buffer by dropping and recreating
-                            if current_stream.is_some() {
-                                let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
-                                let (prod, cons) = rb.split();
-
-                                if let Some(stream) = current_stream.take() {
-                                    stream.pause().ok();
-                                }
-
-                                match create_output_stream(
-                                    &host,
-                                    output_rate,
-                                    output_channels,
-                                    cons,
-                                    Arc::clone(&shared.volume),
-                                    Arc::clone(&shared.out_samples),
-                                ) {
-                                    Ok(stream) => {
-                                        if shared.get_state() == PlayState::Playing {
-                                            stream.play().ok();
-                                        }
-                                        current_stream = Some(stream);
-                                        ring_producer = Some(prod);
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to recreate stream after seek: {}", e);
-                                    }
-                                }
-                            }
-
-                            source_pos_secs = position_secs;
-                            playback_offset_secs = position_secs;
-                            shared.out_samples.store(0, Ordering::Relaxed);
-                            shared.set_position(position_secs);
-                        }
-                    }
-                }
-
+                AudioCommand::Seek { position_secs } => state.handle_seek(position_secs),
                 AudioCommand::SetVolume { volume } => {
-                    shared.set_volume(volume.clamp(0.0, 1.0));
+                    state.shared.set_volume(volume.clamp(0.0, 1.0));
                 }
-
                 AudioCommand::PreloadNext { path } => match AudioDecoder::open(&path) {
                     Ok(dec) => {
                         let src_ch = dec.channels;
                         let rs = Resampler::new(dec.sample_rate, output_rate, output_channels);
                         let rs_opt = if rs.is_active() { Some(rs) } else { None };
-                        preloaded = Some((dec, rs_opt, src_ch));
+                        state.preloaded = Some((dec, rs_opt, src_ch));
                     }
                     Err(e) => {
                         log::warn!("Failed to preload next track: {}", e);
-                        preloaded = None;
+                        state.preloaded = None;
                     }
                 },
-
-                AudioCommand::SetEq { config } => {
-                    equalizer.update_config(&config);
-                }
-
-                AudioCommand::SetSpeed { speed } => {
-                    // Anchor playback position before speed change so out_samples
-                    // count restarts relative to the new speed.
-                    let out = shared.out_samples.load(Ordering::Relaxed);
-                    let ch = shared.out_channels.load(Ordering::Relaxed).max(1);
-                    let rate = shared.out_rate.load(Ordering::Relaxed).max(1);
-                    let wall_secs = out as f64 / (rate as f64 * ch as f64);
-                    playback_offset_secs += wall_secs * current_speed;
-                    shared.out_samples.store(0, Ordering::Relaxed);
-
-                    current_speed = speed;
-                    time_stretcher.set_speed(speed);
-                }
-
+                AudioCommand::SetEq { config } => state.equalizer.update_config(&config),
+                AudioCommand::SetSpeed { speed } => state.handle_set_speed(speed),
                 AudioCommand::SetCrossfade { duration_secs } => {
-                    crossfade_duration_secs = duration_secs.clamp(0.0, 12.0);
+                    state.crossfade_duration_secs = duration_secs.clamp(0.0, 12.0);
                 }
-
                 AudioCommand::Shutdown => {
-                    if let Some(stream) = current_stream.take() {
+                    if let Some(stream) = state.current_stream.take() {
                         stream.pause().ok();
                     }
-                    shared.set_state(PlayState::Stopped);
+                    state.shared.set_state(PlayState::Stopped);
                     return;
                 }
             }
         }
 
         // Decode and fill ring buffer if playing
-        let mut gapless_transition = false;
-        let mut begin_crossfade = false;
+        if state.shared.get_state() == PlayState::Playing {
+            let (gapless, begin_cf) = state.decode_and_fill();
 
-        if shared.get_state() == PlayState::Playing {
-            if let (Some(ref mut dec), Some(ref mut prod)) = (&mut decoder, &mut ring_producer) {
-                // First, push any leftover samples from previous iteration
-                let mut i = 0;
-                while i < leftover.len() {
-                    if prod.try_push(leftover[i]).is_err() {
-                        break;
-                    }
-                    i += 1;
-                }
-                leftover.drain(..i);
-
-                // Decode new packets while there's space
-                let dur = shared.get_duration();
-                if leftover.is_empty() {
-                    let mut filled = 0;
-                    while prod.vacant_len() > 4096 && filled < 32768 {
-                        // Check crossfade trigger using up-to-date source_pos_secs
-                        let remaining = dur - source_pos_secs;
-                        if crossfade_duration_secs > 0.0
-                            && remaining <= crossfade_duration_secs
-                            && remaining > 0.0
-                            && preloaded.is_some()
-                            && crossfade.is_none()
-                        {
-                            begin_crossfade = true;
-                            break;
-                        }
-
-                        match dec.next_samples() {
-                            Ok(Some(samples)) => {
-                                // Track source position from decoded frames
-                                let decoded_frames = samples.len() / source_channels as usize;
-                                source_pos_secs += decoded_frames as f64 / source_rate as f64;
-
-                                // Convert to output channel layout if needed
-                                let adapted =
-                                    adapt_channels(samples, source_channels, output_channels);
-                                // Resample if source and output rates differ
-                                let resampled = if let Some(ref mut rs) = resampler {
-                                    rs.process(&adapted)
-                                } else {
-                                    adapted
-                                };
-                                // Time-stretch for speed control (pitch-preserving)
-                                let mut out_samples = time_stretcher.process(&resampled);
-                                // Apply EQ
-                                equalizer.process(&mut out_samples, output_channels);
-
-                                // If crossfading, mix in old track samples
-                                if let Some(ref mut cf) = crossfade {
-                                    decode_old_track(cf, out_samples.len(), output_channels);
-                                    mix_crossfade(
-                                        &mut out_samples,
-                                        &cf.leftover,
-                                        &mut cf.fade,
-                                        output_channels,
-                                    );
-                                    // Drain consumed samples from leftover
-                                    let consumed = out_samples.len().min(cf.leftover.len());
-                                    cf.leftover.drain(..consumed);
-                                    if cf.fade.is_complete() {
-                                        crossfade = None;
-                                    }
-                                }
-
-                                let mut pushed = 0;
-                                for &s in &out_samples {
-                                    if prod.try_push(s).is_err() {
-                                        // Save remainder for next iteration
-                                        leftover.extend_from_slice(&out_samples[pushed..]);
-                                        break;
-                                    }
-                                    pushed += 1;
-                                }
-                                filled += pushed;
-                            }
-                            Ok(None) => {
-                                // EOF — check for gapless transition
-                                if crossfade.is_none() {
-                                    // Only do gapless if not already crossfading
-                                    // (crossfade already transitioned to the new track)
-                                    if preloaded.is_some() {
-                                        gapless_transition = true;
-                                    } else {
-                                        shared.set_state(PlayState::Stopped);
-                                        let _ = app_handle.emit("audio:track-ended", ());
-                                        decoder = None;
-                                    }
-                                }
-                                break;
-                            }
-                            Err(e) => {
-                                log::error!("Decode error: {}", e);
-                                shared.set_state(PlayState::Stopped);
-                                let _ = app_handle.emit("audio:error", e);
-                                decoder = None;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Update position from source decode tracking (accurate at any speed)
-                shared.set_position(source_pos_secs);
+            if begin_cf {
+                state.begin_crossfade();
+            }
+            if gapless {
+                state.do_gapless_transition();
             }
 
-            // Handle crossfade start outside the borrow scope
-            if begin_crossfade {
-                if let Some(old_dec) = decoder.take() {
-                    if let Some((new_dec, new_rs, new_src_ch)) = preloaded.take() {
-                        let old_rs = resampler.take();
-                        let old_src_ch = source_channels;
-
-                        // Actual crossfade uses remaining time (may be less than setting)
-                        let dur = shared.get_duration();
-                        let actual_cf_secs = (dur - source_pos_secs)
-                            .min(crossfade_duration_secs)
-                            .max(0.0);
-
-                        // Hand off the current time_stretcher to the old track so it
-                        // continues at the same playback speed during fade-out.
-                        let old_ts = std::mem::replace(
-                            &mut time_stretcher,
-                            TimeStretcher::new(output_channels),
-                        );
-                        time_stretcher.set_speed(current_speed);
-
-                        crossfade = Some(CrossfadeState::new(
-                            old_dec,
-                            old_rs,
-                            old_src_ch,
-                            old_ts,
-                            actual_cf_secs,
-                            output_rate,
-                            output_channels,
-                        ));
-
-                        // Install the new track as the main decoder
-                        let new_dur = new_dec.duration_secs;
-                        source_rate = new_dec.sample_rate;
-                        decoder = Some(new_dec);
-                        resampler = new_rs;
-                        source_channels = new_src_ch;
-                        equalizer.reset();
-                        time_stretcher.reset();
-                        leftover.clear();
-                        source_pos_secs = 0.0;
-                        playback_offset_secs = 0.0;
-                        shared.out_samples.store(0, Ordering::Relaxed);
-                        shared.set_position(0.0);
-                        shared.set_duration(new_dur);
-                        let _ = app_handle.emit("audio:gapless-transition", new_dur);
-                    } else {
-                        // No preloaded track available, put decoder back
-                        decoder = Some(old_dec);
-                    }
-                }
-            }
-
-            // Handle pure gapless transition (no crossfade, or crossfade disabled)
-            if gapless_transition {
-                if let Some((next_dec, next_rs, next_src_ch)) = preloaded.take() {
-                    let dur = next_dec.duration_secs;
-                    source_rate = next_dec.sample_rate;
-                    decoder = Some(next_dec);
-                    resampler = next_rs;
-                    source_channels = next_src_ch;
-                    equalizer.reset();
-                    time_stretcher.reset();
-                    leftover.clear();
-                    source_pos_secs = 0.0;
-                    playback_offset_secs = 0.0;
-                    shared.out_samples.store(0, Ordering::Relaxed);
-                    shared.set_position(0.0);
-                    shared.set_duration(dur);
-                    let _ = app_handle.emit("audio:gapless-transition", dur);
-                }
-            }
-
-            // Emit position events at ~20Hz
-            // Use output-sample-based position (what's actually been heard)
-            // instead of decode position (which runs ahead due to buffering).
-            if last_position_event.elapsed() >= Duration::from_millis(50) {
-                last_position_event = std::time::Instant::now();
-                let out = shared.out_samples.load(Ordering::Relaxed);
-                let ch = shared.out_channels.load(Ordering::Relaxed).max(1);
-                let rate = shared.out_rate.load(Ordering::Relaxed).max(1);
-                let wall_secs = out as f64 / (rate as f64 * ch as f64);
-                let playback_pos = playback_offset_secs + wall_secs * current_speed;
-                let dur = shared.get_duration();
-                // Clamp to duration — decode position can slightly overshoot
-                let pos = playback_pos.min(dur).max(0.0);
-                shared.set_position(pos);
-                let _ = app_handle.emit(
-                    "audio:position",
-                    serde_json::json!({
-                        "position": pos,
-                        "duration": dur,
-                    }),
-                );
-            }
+            state.emit_position();
         }
 
-        // Don't busy-wait — sleep briefly between iterations
+        // Don't busy-wait
         std::thread::sleep(Duration::from_millis(2));
     }
 }
 
 /// Decode samples from the old track during a crossfade into `cf.leftover`.
-/// Ensures at least `needed` samples are available (or until EOF).
-/// Applies channel adaptation, resampling, and time-stretch so the old track
-/// matches the current playback speed.
 fn decode_old_track(cf: &mut CrossfadeState, needed: usize, output_channels: u16) {
     while cf.leftover.len() < needed {
         match cf.decoder.next_samples() {
@@ -574,13 +583,12 @@ fn decode_old_track(cf: &mut CrossfadeState, needed: usize, output_channels: u16
                 let stretched = cf.time_stretcher.process(&resampled);
                 cf.leftover.extend_from_slice(&stretched);
             }
-            Ok(None) | Err(_) => break, // old track ended or errored — just stop mixing
+            Ok(None) | Err(_) => break,
         }
     }
 }
 
 /// Adapt interleaved samples from source channel count to output channel count.
-/// Returns a Vec with the converted samples.
 fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
     if src_ch == out_ch {
         return samples.to_vec();
@@ -595,10 +603,8 @@ fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
         let base = frame * src;
         for c in 0..out {
             if c < src {
-                // Copy existing channel
                 result.push(samples[base + c]);
             } else {
-                // Duplicate first channel (mono→stereo upmix, etc.)
                 result.push(samples[base]);
             }
         }
@@ -608,7 +614,6 @@ fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
 }
 
 /// Create a cpal output stream that reads from a ring buffer consumer.
-/// The output sample counter is incremented in the callback for accurate position tracking.
 fn create_output_stream(
     host: &Host,
     sample_rate: u32,
@@ -617,8 +622,6 @@ fn create_output_stream(
     volume: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
 ) -> Result<Stream, String> {
-    // Re-query the current default output device each time so audio follows
-    // macOS system routing (e.g. Bluetooth speaker selection changes)
     let device = host
         .default_output_device()
         .ok_or_else(|| "No audio output device found".to_string())?;
@@ -640,7 +643,6 @@ fn create_output_stream(
                     *sample = s * vol;
                     played += 1;
                 }
-                // Increment output counter — this tracks actual playback position
                 out_samples.fetch_add(played, Ordering::Relaxed);
             },
             |err| {

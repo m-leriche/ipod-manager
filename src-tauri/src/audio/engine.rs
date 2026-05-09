@@ -583,6 +583,7 @@ fn decode_old_track(cf: &mut CrossfadeState, needed: usize, output_channels: u16
                 let stretched = cf.time_stretcher.process(&resampled);
                 cf.leftover.extend_from_slice(&stretched);
             }
+            // Old track ended or errored — just stop mixing
             Ok(None) | Err(_) => break,
         }
     }
@@ -614,6 +615,8 @@ fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
 }
 
 /// Create a cpal output stream that reads from a ring buffer consumer.
+/// Re-queries the default output device each time so audio follows
+/// macOS system routing (e.g. Bluetooth speaker selection changes).
 fn create_output_stream(
     host: &Host,
     sample_rate: u32,

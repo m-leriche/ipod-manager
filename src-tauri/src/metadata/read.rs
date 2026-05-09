@@ -65,7 +65,7 @@ pub fn read_track(path: &Path) -> TrackMetadata {
     }
 }
 
-pub fn empty_track(file_path: String, file_name: String) -> TrackMetadata {
+pub(super) fn empty_track(file_path: String, file_name: String) -> TrackMetadata {
     TrackMetadata {
         file_path,
         file_name,

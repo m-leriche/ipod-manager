@@ -297,6 +297,9 @@ fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
     if !path.exists() {
         return Err("File not found".to_string());
     }
+    if !is_audio(path) {
+        return Err("Not an audio file".to_string());
+    }
 
     let is_mp3 = path
         .extension()

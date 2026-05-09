@@ -1,3 +1,4 @@
+use crate::audio_utils;
 use percent_encoding::percent_decode_str;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
@@ -73,16 +74,40 @@ pub fn handle_request<R: tauri::Runtime>(
         }
     };
 
-    // Security: only serve files, reject path traversal
-    let file_path = Path::new(&decoded);
-    if !file_path.is_absolute() || !file_path.exists() {
+    // Security: canonicalize to resolve symlinks and ".." traversal, then
+    // verify the result is an audio file.  This prevents serving arbitrary
+    // files on disk through the stream:// protocol.
+    //
+    // Note: this still allows streaming any audio file on the filesystem.
+    // For a local desktop app this is acceptable — the user already has
+    // filesystem access.  If stronger isolation is ever needed, also check
+    // that the resolved path starts with a known music directory.
+    let raw_path = Path::new(&decoded);
+    if !raw_path.is_absolute() {
         return Response::builder()
             .status(404)
             .body(b"Not found".to_vec())
             .expect("valid HTTP response");
     }
 
-    let file_size = match fs::metadata(file_path) {
+    let file_path = match raw_path.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            return Response::builder()
+                .status(404)
+                .body(b"Not found".to_vec())
+                .expect("valid HTTP response");
+        }
+    };
+
+    if !audio_utils::is_audio(&file_path) {
+        return Response::builder()
+            .status(403)
+            .body(b"Forbidden: not an audio file".to_vec())
+            .expect("valid HTTP response");
+    }
+
+    let file_size = match fs::metadata(&file_path) {
         Ok(m) => m.len(),
         Err(_) => {
             return Response::builder()
@@ -92,7 +117,7 @@ pub fn handle_request<R: tauri::Runtime>(
         }
     };
 
-    let content_type = mime_type(&decoded);
+    let content_type = mime_type(&file_path.to_string_lossy());
 
     // Check for Range header
     let range_header = request

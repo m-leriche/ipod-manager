@@ -22,7 +22,7 @@ fn collect_files_recursive(
     map: &mut HashMap<String, (u64, u64)>,
     cancel_flag: &Arc<AtomicBool>,
 ) -> Result<(), String> {
-    if cancel_flag.load(Ordering::Relaxed) {
+    if cancel_flag.load(Ordering::SeqCst) {
         return Err("Cancelled".to_string());
     }
 

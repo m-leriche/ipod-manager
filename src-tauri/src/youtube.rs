@@ -72,12 +72,25 @@ pub fn check_dependencies() -> Result<(), String> {
     }
 }
 
+// ── Validation ──────────────────────────────────────────────────
+
+fn validate_url(url: &str) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("Invalid URL: must start with http:// or https://".to_string());
+    }
+    // Must have a host after the scheme (reject "https://", "https:///path")
+    let after_scheme = url.split("://").nth(1).unwrap_or("");
+    let host = after_scheme.split('/').next().unwrap_or("");
+    if host.is_empty() || !host.contains('.') {
+        return Err("Invalid URL: missing or malformed host".to_string());
+    }
+    Ok(())
+}
+
 // ── Video info ───────────────────────────────────────────────────
 
 pub fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
-    if !url.starts_with("http") {
-        return Err("Invalid URL".to_string());
-    }
+    validate_url(url)?;
 
     let output = Command::new("yt-dlp")
         .args(["--dump-json", "--no-download", url])
@@ -141,6 +154,14 @@ pub fn download_audio(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> DownloadResult {
+    if let Err(e) = validate_url(url) {
+        return DownloadResult {
+            success: false,
+            cancelled: false,
+            file_paths: vec![],
+            error: Some(e),
+        };
+    }
     if format != "flac" && format != "mp3" {
         return DownloadResult {
             success: false,
@@ -499,5 +520,22 @@ mod tests {
         assert!(parse_progress_line("[info] Extracting URL").is_none());
         assert!(parse_progress_line("[ExtractAudio] Destination: /foo.flac").is_none());
         assert!(parse_progress_line("").is_none());
+    }
+
+    #[test]
+    fn validate_url_accepts_valid() {
+        assert!(validate_url("https://www.youtube.com/watch?v=abc").is_ok());
+        assert!(validate_url("http://example.com/video").is_ok());
+        assert!(validate_url("https://soundcloud.com/artist/track").is_ok());
+    }
+
+    #[test]
+    fn validate_url_rejects_invalid() {
+        assert!(validate_url("not-a-url").is_err());
+        assert!(validate_url("ftp://files.example.com").is_err());
+        assert!(validate_url("https://").is_err());
+        assert!(validate_url("https:///path").is_err());
+        assert!(validate_url("http://localhost").is_err());
+        assert!(validate_url("").is_err());
     }
 }

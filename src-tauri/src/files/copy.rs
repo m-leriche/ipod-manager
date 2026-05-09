@@ -43,7 +43,7 @@ impl CopyProgress {
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.cancel_flag.load(Ordering::Relaxed)
+        self.cancel_flag.load(Ordering::SeqCst)
     }
 
     pub fn inc_total(&self, n: usize) {
@@ -123,7 +123,7 @@ fn collect_copy_pairs(
     cancel_flag: &AtomicBool,
     pairs: &mut Vec<(std::path::PathBuf, std::path::PathBuf)>,
 ) {
-    if cancel_flag.load(Ordering::Relaxed) {
+    if cancel_flag.load(Ordering::SeqCst) {
         return;
     }
     let entries = match fs::read_dir(src) {
@@ -171,7 +171,7 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
                 Err(e) => {
                     let _ = fs::remove_file(dest_file);
                     if is_no_space(&e) {
-                        progress.cancel_flag.store(true, Ordering::Relaxed);
+                        progress.cancel_flag.store(true, Ordering::SeqCst);
                         if let Ok(mut errs) = errors.lock() {
                             errs.push("Disk full — stopped copying".to_string());
                         }
@@ -313,7 +313,7 @@ pub fn delete_file_list(
     let mut last_emit = Instant::now() - Duration::from_millis(100);
 
     for (i, path_str) in paths.iter().enumerate() {
-        if cancel_flag.load(Ordering::Relaxed) {
+        if cancel_flag.load(Ordering::SeqCst) {
             cancelled = true;
             break;
         }

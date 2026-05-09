@@ -100,6 +100,20 @@ pub async fn save_metadata(
                 updated += 1;
             }
         }
+
+        // Clean up any ghost records left at old paths.  The file watcher can
+        // re-create records between the tag write and the reorganize because
+        // the DB lock is not held during the spawn_blocking tag-write phase.
+        for file_path in &file_paths {
+            if file_path.starts_with(&library_root) && !Path::new(file_path).exists() {
+                conn.execute(
+                    "DELETE FROM tracks WHERE file_path = ?1",
+                    params![file_path.as_str()],
+                )
+                .ok();
+            }
+        }
+
         if updated > 0 {
             let _ = app_clone.emit("library-files-reorganized", updated);
         }

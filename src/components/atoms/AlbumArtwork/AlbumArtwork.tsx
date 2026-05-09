@@ -21,6 +21,10 @@ const THUMB_SIZE_MAP: Record<string, string | null> = {
   full: null,
 };
 
+/** In-memory cache of resolved thumbnail paths to avoid re-invoking IPC
+ *  when rows scroll out of view and back. Keyed by "folderPath|size". */
+const thumbPathCache = new Map<string, string>();
+
 interface AlbumArtworkProps {
   folderPath: string | null;
   size?: keyof typeof sizes;
@@ -63,7 +67,12 @@ export const AlbumArtwork = ({
   // Respond to per-folder art fix events (only re-render this artwork when its folder is fixed)
   useEffect(() => {
     const handler = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === folderPath) {
+      const fixedFolder = (e as CustomEvent<string>).detail;
+      if (fixedFolder === folderPath) {
+        // Evict stale thumbnail cache entries for this folder
+        for (const key of thumbPathCache.keys()) {
+          if (key.startsWith(`${fixedFolder}|`)) thumbPathCache.delete(key);
+        }
         setLocalBust((n) => n + 1);
       }
     };
@@ -75,15 +84,28 @@ export const AlbumArtwork = ({
   const thumbSize = THUMB_SIZE_MAP[size] ?? null;
   useEffect(() => {
     if (!folderPath || !thumbSize || !isVisible) return;
+    const cacheKey = `${folderPath}|${thumbSize}|${effectiveBust}`;
+
+    // Return from in-memory cache without IPC
+    const cached = thumbPathCache.get(cacheKey);
+    if (cached) {
+      setThumbSrc(cached);
+      return;
+    }
+
     const id = ++thumbRequestRef.current;
     invoke<string | null>("get_thumbnail", { folderPath, size: thumbSize })
       .then((path) => {
         if (id !== thumbRequestRef.current) return;
         if (path) {
-          setThumbSrc(convertFileSrc(path) + (effectiveBust ? `?v=${effectiveBust}` : ""));
+          const src = convertFileSrc(path) + (effectiveBust ? `?v=${effectiveBust}` : "");
+          thumbPathCache.set(cacheKey, src);
+          setThumbSrc(src);
         }
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (import.meta.env.DEV) console.debug("Thumbnail fetch failed:", folderPath, e);
+      });
   }, [folderPath, thumbSize, effectiveBust, isVisible]);
 
   const showFallback = !folderPath || failed;

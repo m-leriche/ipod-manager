@@ -84,6 +84,7 @@ export interface LibraryFilter {
   rating_max?: number;
   offset?: number;
   limit?: number;
+  skip_count?: boolean;
 }
 
 export interface Playlist {

@@ -555,7 +555,7 @@ export const TrackTable = memo(function TrackTable({
             const track = tracks[virtualRow.index];
             if (!track) {
               return (
-                <tr key={`skeleton-${virtualRow.index}`} style={{ height: ROW_HEIGHT }}>
+                <tr key={`skeleton-${virtualRow.index}`} data-index={virtualRow.index} style={{ height: ROW_HEIGHT }}>
                   <td colSpan={orderedColumns.length} className="px-3">
                     <div className="h-3 w-2/3 rounded bg-bg-card animate-pulse" />
                   </td>

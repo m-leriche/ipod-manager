@@ -30,7 +30,7 @@ impl ThumbSize {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "small" | "s" => Some(ThumbSize::Small),
             "medium" | "m" => Some(ThumbSize::Medium),

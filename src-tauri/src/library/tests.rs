@@ -174,6 +174,7 @@ fn track_upsert_and_query() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -198,6 +199,7 @@ fn filter_by_artist() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
     let tracks = get_tracks(&conn, &filter).unwrap();
     assert_eq!(tracks.len(), 1);
@@ -300,6 +302,7 @@ fn browser_data_filters_albums_by_artist() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
     let data = get_browser_data(&conn, &filter).unwrap();
 
@@ -494,6 +497,7 @@ fn delete_tracks_removes_files_and_db_records() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -520,6 +524,7 @@ fn delete_tracks_removes_files_and_db_records() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -562,6 +567,7 @@ fn delete_tracks_removes_album_folder_with_cover_art() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap()[0]
@@ -622,6 +628,7 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -647,6 +654,7 @@ fn delete_tracks_keeps_album_folder_when_other_tracks_remain() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -671,6 +679,7 @@ fn flag_tracks_and_filter() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
 
     let tracks = get_tracks(&conn, &all_filter).unwrap();
@@ -705,6 +714,7 @@ fn flag_tracks_and_filter() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
     let flagged = get_tracks(&conn, &flagged_filter).unwrap();
     assert_eq!(flagged.len(), 1);
@@ -885,6 +895,7 @@ fn filter_with_sql_metacharacters_in_artist() {
         rating_max: None,
         offset: None,
         limit: None,
+        skip_count: None,
     };
     let results = get_tracks(&conn, &filter).unwrap();
     assert!(results.is_empty());
@@ -904,6 +915,7 @@ fn filter_with_sql_metacharacters_in_artist() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -937,6 +949,7 @@ fn flag_with_invalid_ids_is_harmless() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();
@@ -977,6 +990,7 @@ fn large_batch_insert_and_query() {
             rating_max: None,
             offset: None,
             limit: None,
+            skip_count: None,
         },
     )
     .unwrap();

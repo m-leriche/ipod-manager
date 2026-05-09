@@ -140,7 +140,7 @@ export const LibraryPlayer = ({
   const [albumList, setAlbumList] = useState<AlbumSummary[]>([]);
 
   const [totalTrackCount, setTotalTrackCount] = useState(0);
-  const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const isLoadingPageRef = useRef(false);
 
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -324,16 +324,19 @@ export const LibraryPlayer = ({
 
   const loadMoreTracks = useCallback(
     async (startIndex: number) => {
-      if (isLoadingPage || startIndex >= totalTrackCount) return;
-      // Don't paginate playlist views
+      if (isLoadingPageRef.current || startIndex >= totalTrackCount) return;
       if (activePlaylistId !== null || activeSmartPlaylistId !== null) return;
-      setIsLoadingPage(true);
+      // Capture the current fetch generation so we can discard stale pages
+      // if a filter change fires fetchBrowserData while this is in-flight.
+      const generation = fetchIdRef.current;
+      isLoadingPageRef.current = true;
       try {
         const filter: LibraryFilter = {
           sort_by: sortBy,
           sort_direction: sortDirection,
           offset: startIndex,
           limit: PAGE_SIZE,
+          skip_count: true,
           ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
           ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
           ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
@@ -341,15 +344,16 @@ export const LibraryPlayer = ({
           ...(flaggedOnly ? { flagged_only: true } : {}),
         };
         const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
+        // Discard if filters changed while we were fetching
+        if (generation !== fetchIdRef.current) return;
         setTracks((prev) => [...prev, ...page.tracks]);
       } catch (e) {
         console.error("Failed to load tracks page:", e);
       } finally {
-        setIsLoadingPage(false);
+        isLoadingPageRef.current = false;
       }
     },
     [
-      isLoadingPage,
       totalTrackCount,
       activePlaylistId,
       activeSmartPlaylistId,

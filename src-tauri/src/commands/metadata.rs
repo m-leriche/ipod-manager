@@ -246,7 +246,7 @@ pub async fn get_thumbnail(
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
         .join("thumbnails");
 
-    let thumb_size = crate::thumbnail::ThumbSize::from_str(&size)
+    let thumb_size = crate::thumbnail::ThumbSize::parse(&size)
         .ok_or_else(|| AppError::InvalidInput(format!("Invalid thumbnail size: {size}")))?;
 
     let result = tauri::async_runtime::spawn_blocking(move || {

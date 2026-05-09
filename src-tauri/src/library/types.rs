@@ -71,6 +71,9 @@ pub struct LibraryFilter {
     pub rating_max: Option<u8>,
     pub offset: Option<usize>,
     pub limit: Option<usize>,
+    /// When true, skip the COUNT query in paginated results (total_count = 0).
+    /// Use for subsequent page loads where the caller already knows the total.
+    pub skip_count: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

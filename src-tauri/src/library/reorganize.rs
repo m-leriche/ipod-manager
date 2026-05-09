@@ -102,43 +102,58 @@ pub fn reorganize_library_file(
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    // Update the existing record in place (preserving its id) rather than
-    // DELETE + INSERT which would generate a new id and break frontend selection.
+    // Try to update the existing record in place (preserving its id).
+    let rows_changed = conn
+        .execute(
+            "UPDATE tracks SET
+                file_path=?1, file_name=?2, folder_path=?3, title=?4, artist=?5,
+                album=?6, album_artist=?7, sort_artist=?8, sort_album_artist=?9,
+                track_number=?10, track_total=?11, disc_number=?12, disc_total=?13,
+                year=?14, genre=?15, duration_secs=?16, sample_rate=?17,
+                bitrate_kbps=?18, format=?19, file_size=?20, modified_at=?21, scanned_at=?22
+            WHERE file_path = ?23",
+            params![
+                track_data.file_path,
+                track_data.file_name,
+                track_data.folder_path,
+                track_data.title,
+                track_data.artist,
+                track_data.album,
+                track_data.album_artist,
+                track_data.sort_artist,
+                track_data.sort_album_artist,
+                track_data.track_number,
+                track_data.track_total,
+                track_data.disc_number,
+                track_data.disc_total,
+                track_data.year,
+                track_data.genre,
+                track_data.duration_secs,
+                track_data.sample_rate,
+                track_data.bitrate_kbps,
+                track_data.format,
+                track_data.file_size as i64,
+                mtime,
+                now,
+                file_path,
+            ],
+        )
+        .map_err(|e| format!("Failed to update track: {}", e))?;
+
+    if rows_changed == 0 {
+        // Record wasn't found at old path — insert at the new location instead
+        upsert_track(conn, &track_data, mtime, now)?;
+    }
+
+    // Always clean up any stale record at the old path.  When the UPDATE
+    // matched, the record has already moved to new_path and this is a no-op.
+    // When it didn't (e.g. the watcher re-created the record under a
+    // slightly different path string), this removes the ghost.
     conn.execute(
-        "UPDATE tracks SET
-            file_path=?1, file_name=?2, folder_path=?3, title=?4, artist=?5,
-            album=?6, album_artist=?7, sort_artist=?8, sort_album_artist=?9,
-            track_number=?10, track_total=?11, disc_number=?12, disc_total=?13,
-            year=?14, genre=?15, duration_secs=?16, sample_rate=?17,
-            bitrate_kbps=?18, format=?19, file_size=?20, modified_at=?21, scanned_at=?22
-        WHERE file_path = ?23",
-        params![
-            track_data.file_path,
-            track_data.file_name,
-            track_data.folder_path,
-            track_data.title,
-            track_data.artist,
-            track_data.album,
-            track_data.album_artist,
-            track_data.sort_artist,
-            track_data.sort_album_artist,
-            track_data.track_number,
-            track_data.track_total,
-            track_data.disc_number,
-            track_data.disc_total,
-            track_data.year,
-            track_data.genre,
-            track_data.duration_secs,
-            track_data.sample_rate,
-            track_data.bitrate_kbps,
-            track_data.format,
-            track_data.file_size as i64,
-            mtime,
-            now,
-            file_path,
-        ],
+        "DELETE FROM tracks WHERE file_path = ?1",
+        params![file_path],
     )
-    .map_err(|e| format!("Failed to update track: {}", e))?;
+    .ok();
 
     // Move cover art from old folder to new folder if they differ
     let old_parent = src.parent();

@@ -113,9 +113,7 @@ export const LibraryPlayer = ({
     updateProgress,
     finishProgress,
     failProgress,
-    data.fetchBrowserData,
-    data.setHasLibrary,
-    data.setDataLoaded,
+    data.onImportComplete,
   );
 
   // ── Render ────────────────────────────────────────────────────
@@ -322,7 +320,6 @@ export const LibraryPlayer = ({
             sortBy={data.sortBy}
             sortDirection={data.sortDirection}
             onSort={data.handleSort}
-            onTrackSelect={data.handleTrackSelect}
             onSelectionChange={data.handleSelectionChange}
             onTracksDeleted={data.fetchBrowserData}
             onFlagTracks={actions.handleFlagTracks}

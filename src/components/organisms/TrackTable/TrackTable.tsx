@@ -16,6 +16,7 @@ import { TrackRow } from "./TrackRow";
 import { getAlbumTracks } from "./helpers";
 import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
+import type { ContextMenuState } from "./types";
 
 // Module-level drag payload so drop targets can read the tracks
 let dragPayload: LibraryTrack[] = [];
@@ -41,12 +42,6 @@ interface TrackTableProps {
   isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
-}
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  track: LibraryTrack;
 }
 
 export const TrackTable = memo(function TrackTable({
@@ -85,6 +80,7 @@ export const TrackTable = memo(function TrackTable({
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Ref for selected so handleClick doesn't depend on selected state
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 

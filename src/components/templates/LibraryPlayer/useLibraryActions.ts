@@ -43,7 +43,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   const handleRepairAlbumArt = useCallback(
     async (selectedTracks: LibraryTrack[]) => {
       const folders = [...new Set(selectedTracks.map((t) => t.folder_path))];
-      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}...`, () =>
+      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}\u2026`, () =>
         invoke("cancel_sync"),
       );
 
@@ -95,7 +95,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
 
   const handleFixAlbumArtForAlbum = useCallback(
     async (album: AlbumSummary) => {
-      startProgress(`Repairing album art for "${album.name}"...`, () => invoke("cancel_sync"));
+      startProgress(`Repairing album art for "${album.name}"\u2026`, () => invoke("cancel_sync"));
 
       const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
         "albumart-progress",

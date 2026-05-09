@@ -15,9 +15,7 @@ const makeArgs = () => ({
   updateProgress: vi.fn(),
   finishProgress: vi.fn(),
   failProgress: vi.fn(),
-  fetchBrowserData: vi.fn().mockResolvedValue(undefined),
-  setHasLibrary: vi.fn(),
-  setDataLoaded: vi.fn(),
+  onImportComplete: vi.fn().mockResolvedValue(undefined),
 });
 
 beforeEach(() => {
@@ -37,9 +35,7 @@ describe("useLibraryImport", () => {
         args.updateProgress,
         args.finishProgress,
         args.failProgress,
-        args.fetchBrowserData,
-        args.setHasLibrary,
-        args.setDataLoaded,
+        args.onImportComplete,
       ),
     );
     expect(result.current.isDragOver).toBe(false);
@@ -56,9 +52,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -81,9 +75,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -94,9 +86,7 @@ describe("useLibraryImport", () => {
       expect(mockInvoke).toHaveBeenCalledWith("set_library_location", { path: "/my-music" });
       expect(args.startProgress).toHaveBeenCalledWith("Scanning library...", expect.any(Function));
       expect(args.finishProgress).toHaveBeenCalledWith("Library scan complete");
-      expect(args.setHasLibrary).toHaveBeenCalledWith(true);
-      expect(args.fetchBrowserData).toHaveBeenCalled();
-      expect(args.setDataLoaded).toHaveBeenCalledWith(true);
+      expect(args.onImportComplete).toHaveBeenCalled();
     });
 
     it("calls failProgress on scan error", async () => {
@@ -110,9 +100,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -139,9 +127,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -171,9 +157,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -200,9 +184,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -227,9 +209,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -254,9 +234,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 
@@ -281,9 +259,7 @@ describe("useLibraryImport", () => {
           args.updateProgress,
           args.finishProgress,
           args.failProgress,
-          args.fetchBrowserData,
-          args.setHasLibrary,
-          args.setDataLoaded,
+          args.onImportComplete,
         ),
       );
 

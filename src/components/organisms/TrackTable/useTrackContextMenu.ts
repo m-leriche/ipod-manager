@@ -3,12 +3,7 @@ import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { getAlbumTracks, getContextIds } from "./helpers";
 import type { LibraryTrack } from "../../../types/library";
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  track: LibraryTrack;
-}
+import type { ContextMenuState } from "./types";
 
 interface UseTrackContextMenuOptions {
   tracks: LibraryTrack[];

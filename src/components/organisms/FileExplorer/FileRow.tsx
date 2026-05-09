@@ -43,7 +43,6 @@ export const FileRow = ({
 
   return (
     <tr
-      key={fullPath}
       data-drop-folder={entry.is_dir ? fullPath : undefined}
       className={`transition-colors group cursor-default ${
         isFolderDropTarget ? "bg-accent/15" : isSelected ? "" : "hover:bg-bg-hover/50"

@@ -401,10 +401,17 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   // ── Track selection ───────────────────────────────────────────
 
-  const handleTrackSelect = useCallback((_track: LibraryTrack) => {}, []);
   const handleSelectionChange = useCallback((ids: Set<number>) => {
     setSelectedTrackIds(ids);
   }, []);
+
+  // ── Import complete (used by useLibraryImport) ────────────────
+
+  const onImportComplete = useCallback(async () => {
+    setHasLibrary(true);
+    await fetchBrowserData();
+    setDataLoaded(true);
+  }, [fetchBrowserData]);
 
   // ── Album sort mode (persisted) ───────────────────────────────
 
@@ -421,9 +428,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     albumList,
     totalTrackCount,
     hasLibrary,
-    setHasLibrary,
     dataLoaded,
-    setDataLoaded,
     isBackgroundScanning,
     libraryPath,
     displayedTracks,
@@ -450,8 +455,8 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     handleAlbumSortModeChange,
     // Selection
     handleSelectionChange,
-    handleTrackSelect,
     // Data operations
+    onImportComplete,
     fetchBrowserData,
     loadMoreTracks,
   };

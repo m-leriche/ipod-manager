@@ -5,6 +5,7 @@ use crate::library::{self, LibraryDb};
 use crate::metadata;
 use crate::metarepair;
 use crate::sanitize;
+use crate::watcher::FolderWatcher;
 use rusqlite::params;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -73,6 +74,7 @@ pub async fn save_metadata(
     updates: Vec<metadata::MetadataUpdate>,
     app: AppHandle,
     db: State<'_, LibraryDb>,
+    watcher: State<'_, FolderWatcher>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<metadata::MetadataSaveResult, AppError> {
     let flag = cancel.new_flag();
@@ -81,43 +83,84 @@ pub async fn save_metadata(
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
+    // Pause the file watcher so it doesn't read partially-written files
+    // and create ghost records with null metadata.
+    watcher.pause();
+
     let result = tauri::async_runtime::spawn_blocking(move || {
         Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))??;
+    .map_err(|e| {
+        watcher.resume();
+        format!("Task failed: {}", e)
+    })?
+    .inspect_err(|_| {
+        watcher.resume();
+    })?;
 
     // Re-scan metadata into DB and reorganize files in the managed library
-    let conn = conn_arc
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-    if let Some(library_root) = library::get_library_location(&conn) {
-        let mut updated = 0usize;
+    let db_result = (|| -> Result<(), AppError> {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        // Re-read and upsert ALL affected tracks so the DB reflects the
+        // freshly-written tags, regardless of whether they're in the
+        // managed library.
         for file_path in &file_paths {
-            if file_path.starts_with(&library_root)
-                && library::reorganize_library_file(&conn, &library_root, file_path).is_ok()
-            {
-                updated += 1;
+            let path = Path::new(file_path);
+            if path.exists() {
+                let mtime = std::fs::metadata(path)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(now);
+                let track_data = library::read_track_for_library(path);
+                library::upsert_track(&conn, &track_data, mtime, now).ok();
             }
         }
 
-        // Clean up any ghost records left at old paths.  The file watcher can
-        // re-create records between the tag write and the reorganize because
-        // the DB lock is not held during the spawn_blocking tag-write phase.
-        for file_path in &file_paths {
-            if file_path.starts_with(&library_root) && !Path::new(file_path).exists() {
-                conn.execute(
-                    "DELETE FROM tracks WHERE file_path = ?1",
-                    params![file_path.as_str()],
-                )
-                .ok();
+        // Reorganize library files (moves to Artist/Album folder structure)
+        if let Some(library_root) = library::get_library_location(&conn) {
+            let mut updated = 0usize;
+            for file_path in &file_paths {
+                if file_path.starts_with(&library_root)
+                    && library::reorganize_library_file(&conn, &library_root, file_path).is_ok()
+                {
+                    updated += 1;
+                }
+            }
+
+            // Clean up ghost records at old paths that no longer have files
+            for file_path in &file_paths {
+                if file_path.starts_with(&library_root) && !Path::new(file_path).exists() {
+                    conn.execute(
+                        "DELETE FROM tracks WHERE file_path = ?1",
+                        params![file_path.as_str()],
+                    )
+                    .ok();
+                }
+            }
+
+            if updated > 0 {
+                let _ = app_clone.emit("library-files-reorganized", updated);
             }
         }
 
-        if updated > 0 {
-            let _ = app_clone.emit("library-files-reorganized", updated);
-        }
-    }
+        Ok(())
+    })();
+
+    // Always resume the watcher, even if DB operations failed
+    watcher.resume();
+
+    db_result?;
 
     Ok(result)
 }

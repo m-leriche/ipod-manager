@@ -1,9 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { useState } from "react";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
-import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { useResizableHeight } from "../../organisms/AlbumGrid/useResizableHeight";
 import { ColumnBrowser } from "../../organisms/ColumnBrowser/ColumnBrowser";
 import { TrackTable } from "../../organisms/TrackTable/TrackTable";
@@ -12,36 +9,18 @@ import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { PlaylistSidebar } from "./PlaylistSidebar";
 import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
 import { LibraryStatusBar } from "./LibraryStatusBar";
+import { LibraryToolbar } from "./LibraryToolbar";
 import { useProgress } from "../../../contexts/ProgressContext";
-import { useToast } from "../../../contexts/ToastContext";
-import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
+import { useToast } from "../../../contexts/ToastContext";
 import { useLibraryImport } from "./useLibraryImport";
-import type {
-  LibraryTrack,
-  ArtistSummary,
-  AlbumSummary,
-  GenreSummary,
-  BrowserData,
-  PaginatedBrowserData,
-  PaginatedTracks,
-  LibraryFilter,
-  SmartPlaylist,
-} from "../../../types/library";
+import { useLibraryData } from "./useLibraryData";
+import { useLibraryActions } from "./useLibraryActions";
+import type { LibraryTrack, SmartPlaylist } from "../../../types/library";
 import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
-import { getCachedLibrary, setCachedLibrary } from "./helpers";
-import { pickFile } from "../../../utils/pickPath";
-
-const PAGE_SIZE = 500;
-const FLAGGED_FILTER_KEY = "crate-flagged-filter";
-const SORT_BY_KEY = "crate-sort-by";
-const SORT_DIR_KEY = "crate-sort-direction";
-const ALBUM_SORT_MODE_KEY = "crate-album-sort-mode";
-
-// ── Component ───────────────────────────────────────────────────
 
 export const LibraryPlayer = ({
   onRefreshRef,
@@ -88,7 +67,6 @@ export const LibraryPlayer = ({
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
-  const { bumpArtCache } = useArtCache();
   const { state: artRepairState, startRepair: startArtRepair } = useBackgroundArtRepair();
   const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
   const gridResize = useResizableHeight();
@@ -105,564 +83,27 @@ export const LibraryPlayer = ({
     maxFraction: 0.6,
   });
   const {
-    playTrack,
-    addToQueue,
     state: { libraryAvailable },
   } = usePlayback();
   const {
     playlists,
     activePlaylistId,
-    activePlaylistTracks,
     setActivePlaylist,
-    addTracks: addToPlaylistCtx,
+    activeSmartPlaylistId,
+    createSmartPlaylist,
+    updateSmartPlaylist,
   } = usePlaylist();
-  const playAfterFetchRef = useRef(false);
 
-  // Column browser filter state (multi-select via Cmd+click / Shift+click)
-  const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
-  const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
-  const [selectedAlbums, setSelectedAlbums] = useState<Set<string>>(new Set());
-
-  // Track table state (persisted)
-  const [sortBy, setSortBy] = useState(() => localStorage.getItem(SORT_BY_KEY) || "artist");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(
-    () => (localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc",
-  );
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [flaggedOnly, setFlaggedOnly] = useState(() => localStorage.getItem(FLAGGED_FILTER_KEY) === "true");
-  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<number>>(new Set());
-
-  // All data from backend (pre-filtered by column selections)
-  const [tracks, setTracks] = useState<LibraryTrack[]>([]);
-  const [genreList, setGenreList] = useState<GenreSummary[]>([]);
-  const [artistList, setArtistList] = useState<ArtistSummary[]>([]);
-  const [albumList, setAlbumList] = useState<AlbumSummary[]>([]);
-
-  const [totalTrackCount, setTotalTrackCount] = useState(0);
-  const isLoadingPageRef = useRef(false);
-
-  const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
-
-  const [libraryPath, setLibraryPath] = useState<string | null>(null);
   const [smartPlaylistEditing, setSmartPlaylistEditing] = useState<SmartPlaylist | null>(null);
   const [smartPlaylistCreating, setSmartPlaylistCreating] = useState(false);
-  const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(
-    () => (localStorage.getItem(ALBUM_SORT_MODE_KEY) as AlbumSortMode) || "album",
-  );
 
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const fetchIdRef = useRef(0);
-  const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
+  // ── Data management ───────────────────────────────────────────
 
-  // ── Global Cmd+F to focus search ─────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  const data = useLibraryData(onRefreshRef);
 
-  // ── Displayed tracks (library, playlist, or smart playlist) ────
+  // ── Action handlers ───────────────────────────────────────────
 
-  const { activeSmartPlaylistId, activeSmartPlaylistTracks, createSmartPlaylist, updateSmartPlaylist } = usePlaylist();
-
-  const displayedTracks = useMemo(() => {
-    const isPlaylistView = activeSmartPlaylistId !== null || activePlaylistId !== null;
-    const baseTracks = isPlaylistView
-      ? activeSmartPlaylistId !== null
-        ? activeSmartPlaylistTracks
-        : activePlaylistTracks
-      : tracks;
-    // Library view: search is handled by the backend via filter, no client-side filtering needed
-    if (!debouncedSearch || !isPlaylistView) return baseTracks;
-    // Playlist views: apply client-side search since playlists aren't paginated
-    const q = debouncedSearch.toLowerCase();
-    return baseTracks.filter(
-      (t) =>
-        (t.title ?? t.file_name ?? "").toLowerCase().includes(q) ||
-        (t.artist ?? "").toLowerCase().includes(q) ||
-        (t.album ?? "").toLowerCase().includes(q),
-    );
-  }, [
-    activeSmartPlaylistId,
-    activeSmartPlaylistTracks,
-    activePlaylistId,
-    activePlaylistTracks,
-    tracks,
-    debouncedSearch,
-  ]);
-
-  // ── Derived selected tracks ───────────────────────────────────
-
-  const selectedTracks = useMemo(
-    () => displayedTracks.filter((t) => selectedTrackIds.has(t.id)),
-    [displayedTracks, selectedTrackIds],
-  );
-
-  // Prune stale selections when displayed tracks change
-  useEffect(() => {
-    const currentIds = new Set(displayedTracks.map((t) => t.id));
-    setSelectedTrackIds((prev) => {
-      const pruned = new Set([...prev].filter((id) => currentIds.has(id)));
-      return pruned.size === prev.size ? prev : pruned;
-    });
-  }, [displayedTracks]);
-
-  // ── Debounce search input ─────────────────────────────────────
-
-  useEffect(() => {
-    clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => setDebouncedSearch(search), 200);
-    return () => clearTimeout(searchTimerRef.current);
-  }, [search]);
-
-  // ── Keep isActive ref in sync ──────────────────────────────────
-
-  // ── Fetch all browser data from backend ───────────────────────
-
-  const fetchBrowserData = useCallback(async () => {
-    const id = ++fetchIdRef.current;
-    const isUnfiltered =
-      selectedGenres.size === 0 &&
-      selectedArtists.size === 0 &&
-      selectedAlbums.size === 0 &&
-      !debouncedSearch &&
-      !flaggedOnly;
-
-    // Instant restore from in-memory cache when returning to unfiltered state
-    if (
-      isUnfiltered &&
-      unfilteredCacheRef.current &&
-      unfilteredCacheRef.current.sortBy === sortBy &&
-      unfilteredCacheRef.current.sortDirection === sortDirection
-    ) {
-      const cached = unfilteredCacheRef.current.data;
-      setTracks(cached.tracks);
-      setGenreList(cached.genres);
-      setArtistList(cached.artists);
-      setAlbumList(cached.albums);
-    }
-
-    try {
-      const filter: LibraryFilter = {
-        sort_by: sortBy,
-        sort_direction: sortDirection,
-        offset: 0,
-        limit: PAGE_SIZE,
-        ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
-        ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
-        ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(flaggedOnly ? { flagged_only: true } : {}),
-      };
-      const data = await invoke<PaginatedBrowserData>("get_library_browser_data_paginated", { filter });
-      if (id !== fetchIdRef.current) return;
-      startTransition(() => {
-        setTracks(data.tracks.tracks);
-        setTotalTrackCount(data.tracks.total_count);
-        setGenreList(data.genres);
-        setArtistList(data.artists);
-        setAlbumList(data.albums);
-      });
-      if (isUnfiltered) {
-        // Cache as BrowserData for backward-compatible IndexedDB cache
-        const browserData: BrowserData = {
-          tracks: data.tracks.tracks,
-          genres: data.genres,
-          artists: data.artists,
-          albums: data.albums,
-        };
-        unfilteredCacheRef.current = { data: browserData, sortBy, sortDirection };
-        setCachedLibrary({ hasLibrary: true, browserData, cachedAt: Date.now() });
-      }
-      if (playAfterFetchRef.current && data.tracks.tracks.length > 0) {
-        playAfterFetchRef.current = false;
-        playTrack(data.tracks.tracks[0], data.tracks.tracks);
-      }
-    } catch (e) {
-      if (id !== fetchIdRef.current) return;
-      console.error("Failed to load library data:", e);
-      playAfterFetchRef.current = false;
-      setTracks([]);
-      setTotalTrackCount(0);
-      setGenreList([]);
-      setArtistList([]);
-      setAlbumList([]);
-    }
-  }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly, playTrack]);
-
-  // ── Background incremental rescan ──────────────────────────────
-
-  const backgroundRescan = useCallback(async () => {
-    setIsBackgroundScanning(true);
-    try {
-      const result = await invoke<{ changed: number; removed: number; total_scanned: number }>("background_rescan");
-      if (result.changed > 0 || result.removed > 0) {
-        // The backend now emits "library-changed" which triggers App.tsx -> libraryRefreshRef -> fetchBrowserData
-        const parts: string[] = [];
-        if (result.changed > 0) parts.push(`${result.changed} updated`);
-        if (result.removed > 0) parts.push(`${result.removed} removed`);
-        toast.success(`Library updated — ${parts.join(", ")}`);
-      }
-    } catch {
-      // Background scan is non-critical — fail silently
-    } finally {
-      setIsBackgroundScanning(false);
-    }
-  }, [toast]);
-
-  // ── Load more tracks (scroll pagination) ──────────────────────
-
-  const loadMoreTracks = useCallback(
-    async (startIndex: number) => {
-      if (isLoadingPageRef.current || startIndex >= totalTrackCount) return;
-      if (activePlaylistId !== null || activeSmartPlaylistId !== null) return;
-      // Capture the current fetch generation so we can discard stale pages
-      // if a filter change fires fetchBrowserData while this is in-flight.
-      const generation = fetchIdRef.current;
-      isLoadingPageRef.current = true;
-      try {
-        const filter: LibraryFilter = {
-          sort_by: sortBy,
-          sort_direction: sortDirection,
-          offset: startIndex,
-          limit: PAGE_SIZE,
-          skip_count: true,
-          ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
-          ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
-          ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
-          ...(debouncedSearch ? { search: debouncedSearch } : {}),
-          ...(flaggedOnly ? { flagged_only: true } : {}),
-        };
-        const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
-        // Discard if filters changed while we were fetching
-        if (generation !== fetchIdRef.current) return;
-        setTracks((prev) => [...prev, ...page.tracks]);
-      } catch (e) {
-        console.error("Failed to load tracks page:", e);
-      } finally {
-        isLoadingPageRef.current = false;
-      }
-    },
-    [
-      totalTrackCount,
-      activePlaylistId,
-      activeSmartPlaylistId,
-      sortBy,
-      sortDirection,
-      selectedGenres,
-      selectedArtists,
-      selectedAlbums,
-      debouncedSearch,
-      flaggedOnly,
-    ],
-  );
-
-  // ── Initial load ──────────────────────────────────────────────
-
-  const checkLibrary = useCallback(async () => {
-    // Load cached data first for instant render
-    const cached = await getCachedLibrary();
-    // Always fetch library path for stats panel
-    invoke<string | null>("get_library_location")
-      .then((loc) => setLibraryPath(loc))
-      .catch(() => {});
-    if (cached) {
-      setHasLibrary(cached.hasLibrary);
-      if (cached.hasLibrary) {
-        setTracks(cached.browserData.tracks);
-        setGenreList(cached.browserData.genres);
-        setArtistList(cached.browserData.artists);
-        setAlbumList(cached.browserData.albums);
-        unfilteredCacheRef.current = {
-          data: cached.browserData,
-          sortBy: localStorage.getItem(SORT_BY_KEY) || "artist",
-          sortDirection: localStorage.getItem(SORT_DIR_KEY) || "asc",
-        };
-        setDataLoaded(true);
-        // Background incremental rescan to pick up changes since last session
-        backgroundRescan();
-        return;
-      }
-    }
-
-    // No cache (first launch) — fetch from backend
-    try {
-      const location = await invoke<string | null>("get_library_location");
-      setLibraryPath(location);
-      const hasLocation = !!location;
-      setHasLibrary(hasLocation);
-      if (hasLocation) {
-        await fetchBrowserData();
-        setDataLoaded(true);
-      }
-    } catch {
-      setHasLibrary(false);
-    }
-  }, [fetchBrowserData, backgroundRescan]);
-
-  useEffect(() => {
-    checkLibrary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Expose refresh callback to parent
-  useEffect(() => {
-    if (onRefreshRef) onRefreshRef.current = fetchBrowserData;
-    return () => {
-      if (onRefreshRef) onRefreshRef.current = null;
-    };
-  }, [onRefreshRef, fetchBrowserData]);
-
-  const toggleFlaggedOnly = useCallback(() => {
-    setFlaggedOnly((prev) => {
-      const next = !prev;
-      localStorage.setItem(FLAGGED_FILTER_KEY, String(next));
-      return next;
-    });
-  }, []);
-
-  const handleFlagTracks = useCallback(
-    async (trackIds: number[], flagged: boolean) => {
-      try {
-        await invoke("flag_tracks", { trackIds, flagged });
-        await fetchBrowserData();
-      } catch (e) {
-        toast.error(`Failed to update sync flags: ${e}`);
-      }
-    },
-    [fetchBrowserData, toast],
-  );
-
-  const handleRateTracks = useCallback(
-    async (trackIds: number[], rating: number) => {
-      try {
-        await invoke("rate_tracks", { trackIds, rating });
-        await fetchBrowserData();
-      } catch (e) {
-        toast.error(`Failed to update ratings: ${e}`);
-      }
-    },
-    [fetchBrowserData, toast],
-  );
-
-  const handleRepairAlbumArt = useCallback(
-    async (tracks: LibraryTrack[]) => {
-      const folders = [...new Set(tracks.map((t) => t.folder_path))];
-      startProgress(`Repairing album art for ${folders.length} album${folders.length === 1 ? "" : "s"}…`, () =>
-        invoke("cancel_sync"),
-      );
-
-      const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
-        "albumart-progress",
-        (event) => {
-          const { total, completed, current_album } = event.payload;
-          updateProgress(completed, total, current_album);
-        },
-      );
-
-      try {
-        const result = await invoke<{ cancelled: boolean; fixed: number }>("fix_album_art", { folders });
-        if (result.cancelled) {
-          failProgress("Album art repair cancelled");
-        } else {
-          finishProgress(`Album art repair complete — ${result.fixed} fixed`);
-        }
-        bumpArtCache();
-        await fetchBrowserData();
-      } catch (e) {
-        failProgress(`Album art repair failed: ${e}`);
-      } finally {
-        unlisten();
-      }
-    },
-    [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
-  );
-
-  const handleFetchLyrics = useCallback(
-    async (track: LibraryTrack) => {
-      if (!track.artist && !track.title) return;
-      try {
-        await invoke("fetch_lyrics", {
-          trackId: track.id,
-          artist: track.artist || "",
-          title: track.title || track.file_name,
-          album: track.album,
-          durationSecs: track.duration_secs || null,
-          filePath: track.file_path,
-        });
-        toast.success(`Lyrics fetched for "${track.title || track.file_name}"`);
-      } catch {
-        toast.error(`No lyrics found for "${track.title || track.file_name}"`);
-      }
-    },
-    [toast],
-  );
-
-  const handleFixAlbumArtForAlbum = useCallback(
-    async (album: AlbumSummary) => {
-      startProgress(`Repairing album art for "${album.name}"…`, () => invoke("cancel_sync"));
-
-      const unlisten = await listen<{ total: number; completed: number; current_album: string }>(
-        "albumart-progress",
-        (event) => {
-          const { total, completed, current_album } = event.payload;
-          updateProgress(completed, total, current_album);
-        },
-      );
-
-      try {
-        const result = await invoke<{ cancelled: boolean; fixed: number }>("fix_album_art", {
-          folders: [album.folder_path],
-        });
-        if (result.cancelled) {
-          failProgress("Album art repair cancelled");
-        } else {
-          finishProgress("Album art repair complete");
-        }
-        bumpArtCache();
-        await fetchBrowserData();
-      } catch (e) {
-        failProgress(`Album art repair failed: ${e}`);
-      } finally {
-        unlisten();
-      }
-    },
-    [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress, bumpArtCache],
-  );
-
-  const handleUploadAlbumArt = useCallback(
-    async (album: AlbumSummary) => {
-      const imagePath = await pickFile("Select album artwork", [
-        { name: "Images", extensions: ["jpg", "jpeg", "png", "bmp", "webp"] },
-      ]);
-      if (!imagePath) return;
-
-      try {
-        await invoke("upload_album_art", { folderPath: album.folder_path, imagePath });
-        bumpArtCache();
-        await fetchBrowserData();
-      } catch (e) {
-        console.error("Failed to upload album art:", e);
-      }
-    },
-    [fetchBrowserData, bumpArtCache],
-  );
-
-  // ── Re-fetch when any filter/sort changes ─────────────────────
-
-  useEffect(() => {
-    if (dataLoaded) fetchBrowserData();
-  }, [dataLoaded, fetchBrowserData]);
-
-  // ── Refresh on library file reorganization ────────────────────
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen<number>("library-files-reorganized", () => {
-      fetchBrowserData();
-    }).then((fn) => {
-      unlisten = fn;
-    });
-    return () => {
-      unlisten?.();
-    };
-  }, [fetchBrowserData]);
-
-  // ── Update play count in place when a track finishes ──────────
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { trackId } = (e as CustomEvent<{ trackId: number }>).detail;
-      setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, play_count: t.play_count + 1 } : t)));
-    };
-    window.addEventListener("play-count-updated", handler);
-    return () => window.removeEventListener("play-count-updated", handler);
-  }, []);
-
-  // ── Column selection handlers ─────────────────────────────────
-
-  const handleSelectGenre = useCallback((genres: Set<string>) => {
-    setSelectedGenres(genres);
-  }, []);
-
-  const handleSelectArtist = useCallback((artists: Set<string>) => {
-    setSelectedArtists(artists);
-  }, []);
-
-  const handleSelectAlbum = useCallback((albums: Set<string>) => {
-    setSelectedAlbums(albums);
-    if (albums.size > 0) {
-      setSortBy("track_number");
-      setSortDirection("asc");
-    } else {
-      // Restore user's persisted sort preference
-      setSortBy(localStorage.getItem(SORT_BY_KEY) || "artist");
-      setSortDirection((localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc");
-    }
-  }, []);
-
-  const handlePlayColumn = useCallback(() => {
-    playAfterFetchRef.current = true;
-    fetchBrowserData();
-  }, [fetchBrowserData]);
-
-  // ── Column browser context menu handlers ──────────────────────
-
-  const getTracksForColumnAction = useCallback(
-    (action: { column: string; value: string }) => {
-      return tracks.filter((t) => {
-        switch (action.column) {
-          case "genre":
-            return t.genre === action.value;
-          case "artist":
-            return t.artist === action.value;
-          case "album":
-            return t.album === action.value;
-          default:
-            return false;
-        }
-      });
-    },
-    [tracks],
-  );
-
-  const handleColumnPlayAll = useCallback(
-    (action: { column: string; value: string }) => {
-      const matched = getTracksForColumnAction(action);
-      if (matched.length > 0) playTrack(matched[0], matched);
-    },
-    [getTracksForColumnAction, playTrack],
-  );
-
-  const handleColumnAddToQueue = useCallback(
-    (action: { column: string; value: string }) => {
-      const matched = getTracksForColumnAction(action);
-      if (matched.length > 0) addToQueue(matched);
-    },
-    [getTracksForColumnAction, addToQueue],
-  );
-
-  const handleColumnAddToPlaylist = useCallback(
-    (action: { column: string; value: string }, playlistId: number) => {
-      const matched = getTracksForColumnAction(action);
-      if (matched.length > 0)
-        addToPlaylistCtx(
-          playlistId,
-          matched.map((t) => t.id),
-        );
-    },
-    [getTracksForColumnAction, addToPlaylistCtx],
-  );
+  const actions = useLibraryActions(data.fetchBrowserData, data.tracks);
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 
@@ -672,44 +113,14 @@ export const LibraryPlayer = ({
     updateProgress,
     finishProgress,
     failProgress,
-    fetchBrowserData,
-    setHasLibrary,
-    setDataLoaded,
+    data.fetchBrowserData,
+    data.setHasLibrary,
+    data.setDataLoaded,
   );
-
-  // ── Sort handling ─────────────────────────────────────────────
-
-  const handleSort = useCallback(
-    (key: string) => {
-      if (key === sortBy) {
-        setSortDirection((d) => {
-          const next = d === "asc" ? "desc" : "asc";
-          localStorage.setItem(SORT_DIR_KEY, next);
-          return next;
-        });
-      } else {
-        setSortBy(key);
-        setSortDirection("asc");
-        localStorage.setItem(SORT_BY_KEY, key);
-        localStorage.setItem(SORT_DIR_KEY, "asc");
-      }
-    },
-    [sortBy],
-  );
-
-  // ── Track selection ───────────────────────────────────────────
-
-  const handleTrackSelect = useCallback((_track: LibraryTrack) => {
-    // Last-clicked track kept for playback context (not used for detail panel anymore)
-  }, []);
-
-  const handleSelectionChange = useCallback((ids: Set<number>) => {
-    setSelectedTrackIds(ids);
-  }, []);
 
   // ── Render ────────────────────────────────────────────────────
 
-  if (hasLibrary === false) {
+  if (data.hasLibrary === false) {
     return (
       <div className="relative flex items-center justify-center h-full">
         <div className="text-center">
@@ -753,9 +164,11 @@ export const LibraryPlayer = ({
     );
   }
 
-  if (!dataLoaded) {
+  if (!data.dataLoaded) {
     return <LibraryLoadingSkeleton />;
   }
+
+  const isPlaylistView = activePlaylistId !== null || activeSmartPlaylistId !== null;
 
   return (
     <div className="relative flex h-full">
@@ -770,9 +183,7 @@ export const LibraryPlayer = ({
       )}
       {showPlaylistSidebar && (
         <PlaylistSidebar
-          onPlaylistSelect={(id) => {
-            setActivePlaylist(id);
-          }}
+          onPlaylistSelect={(id) => setActivePlaylist(id)}
           activePlaylistId={activePlaylistId}
           onSmartPlaylistEdit={(sp) => setSmartPlaylistEditing(sp)}
           onSmartPlaylistCreate={() => setSmartPlaylistCreating(true)}
@@ -795,96 +206,35 @@ export const LibraryPlayer = ({
           </div>
         )}
 
-        {/* Search bar */}
-        <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search... (⌘F)"
-            className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
-          />
-          <button
-            onClick={toggleFlaggedOnly}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-              flaggedOnly ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
-            }`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill={flaggedOnly ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth={2}
-              className="w-3 h-3"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V3h16l-6 9 6 9H4" />
-            </svg>
-            To Sync
-          </button>
-          <div className="flex-1" />
-          {isBackgroundScanning && (
-            <span className="text-[10px] text-text-tertiary flex items-center gap-1.5 animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              Updating…
-            </span>
-          )}
-          <span className="text-[10px] text-text-tertiary tabular-nums">
-            {activePlaylistId === null && activeSmartPlaylistId === null ? totalTrackCount : displayedTracks.length}{" "}
-            tracks
-          </span>
-          <div className="w-px h-4 bg-border" />
-          <div className="flex items-center gap-0.5">
-            {onTogglePlaylistSidebar && (
-              <ViewToggle active={showPlaylistSidebar} onClick={onTogglePlaylistSidebar} title="Playlists">
-                <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
-              </ViewToggle>
-            )}
-            {onToggleColumnBrowser && (
-              <ViewToggle
-                active={showColumnBrowser && !showAlbumGrid}
-                onClick={onToggleColumnBrowser}
-                title="Column browser"
-              >
-                <rect x="3" y="3" width="5" height="18" rx="1" />
-                <rect x="10" y="3" width="5" height="18" rx="1" />
-                <rect x="17" y="3" width="5" height="18" rx="1" />
-              </ViewToggle>
-            )}
-            {onToggleAlbumGrid && (
-              <ViewToggle active={showAlbumGrid} onClick={onToggleAlbumGrid} title="Album grid">
-                <rect x="3" y="3" width="8" height="8" rx="1" />
-                <rect x="13" y="3" width="8" height="8" rx="1" />
-                <rect x="3" y="13" width="8" height="8" rx="1" />
-                <rect x="13" y="13" width="8" height="8" rx="1" />
-              </ViewToggle>
-            )}
-            {onToggleArtworkCarousel && (
-              <ViewToggle active={showArtworkCarousel} onClick={onToggleArtworkCarousel} title="Cover flow">
-                <path d="M2 8l4-1v10l-4-1V8z" />
-                <rect x="8" y="4" width="8" height="16" rx="1" />
-                <path d="M22 8l-4-1v10l4-1V8z" />
-              </ViewToggle>
-            )}
-            {(showAlbumGrid || showArtworkCarousel) && onToggleTrackList && (
-              <ViewToggle active={showTrackList} onClick={onToggleTrackList} title="Track list">
-                <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </ViewToggle>
-            )}
-            {onToggleLyricsPanel && (
-              <LyricsToggle
-                showLyricsPanel={showLyricsPanel}
-                lyricsOverlay={lyricsOverlay}
-                showArtworkCarousel={showArtworkCarousel}
-                onToggleLyricsPanel={onToggleLyricsPanel}
-                onToggleLyricsOverlay={onToggleLyricsOverlay}
-              />
-            )}
-          </div>
-        </div>
+        {/* Search bar + view toggles */}
+        <LibraryToolbar
+          searchInputRef={data.searchInputRef}
+          search={data.search}
+          onSearchChange={data.setSearch}
+          flaggedOnly={data.flaggedOnly}
+          onToggleFlaggedOnly={data.toggleFlaggedOnly}
+          isBackgroundScanning={data.isBackgroundScanning}
+          trackCount={data.totalTrackCount}
+          displayedTrackCount={data.displayedTracks.length}
+          isPlaylistView={isPlaylistView}
+          showPlaylistSidebar={showPlaylistSidebar}
+          showColumnBrowser={showColumnBrowser}
+          showAlbumGrid={showAlbumGrid}
+          showArtworkCarousel={showArtworkCarousel}
+          showTrackList={showTrackList}
+          showLyricsPanel={showLyricsPanel}
+          lyricsOverlay={lyricsOverlay}
+          onTogglePlaylistSidebar={onTogglePlaylistSidebar}
+          onToggleColumnBrowser={onToggleColumnBrowser}
+          onToggleAlbumGrid={onToggleAlbumGrid}
+          onToggleArtworkCarousel={onToggleArtworkCarousel}
+          onToggleTrackList={onToggleTrackList}
+          onToggleLyricsPanel={onToggleLyricsPanel}
+          onToggleLyricsOverlay={onToggleLyricsOverlay}
+        />
 
-        {/* Column browser or album grid (toggleable, hidden when viewing playlist or smart playlist) */}
-        {activePlaylistId === null && activeSmartPlaylistId === null && (
+        {/* Column browser / album grid / carousel (hidden in playlist view) */}
+        {!isPlaylistView && (
           <>
             {showArtworkCarousel ? (
               <>
@@ -894,27 +244,17 @@ export const LibraryPlayer = ({
                   className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
                   <ArtworkCarousel
-                    albums={albumList}
-                    selectedAlbum={selectedAlbums.size === 1 ? [...selectedAlbums][0] : null}
-                    onSelectAlbum={(name) => handleSelectAlbum(name ? new Set([name]) : new Set())}
-                    onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
-                    sortMode={albumSortMode}
-                    onSortModeChange={(mode) => {
-                      setAlbumSortMode(mode);
-                      localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
-                    }}
+                    albums={data.albumList}
+                    selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
+                    onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
+                    onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                    sortMode={data.albumSortMode}
+                    onSortModeChange={data.handleAlbumSortModeChange}
                     lyricsOverlay={lyricsOverlay}
                     onLyricsOverlayDismiss={onLyricsOverlayDismiss}
                   />
                 </div>
-                {showTrackList && (
-                  <div
-                    onMouseDown={carouselResize.onDragStart}
-                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
-                  >
-                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
-                  </div>
-                )}
+                {showTrackList && <ResizeHandle onMouseDown={carouselResize.onDragStart} />}
               </>
             ) : showAlbumGrid ? (
               <>
@@ -924,29 +264,19 @@ export const LibraryPlayer = ({
                   className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
                   <AlbumGrid
-                    albums={albumList}
-                    selectedAlbum={selectedAlbums.size === 1 ? [...selectedAlbums][0] : null}
-                    onSelectAlbum={(name) => handleSelectAlbum(name ? new Set([name]) : new Set())}
-                    onPlayAlbum={(name) => handleColumnPlayAll({ column: "album", value: name })}
-                    onFixAlbumArt={handleFixAlbumArtForAlbum}
-                    onUploadAlbumArt={handleUploadAlbumArt}
+                    albums={data.albumList}
+                    selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
+                    onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
+                    onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                    onFixAlbumArt={actions.handleFixAlbumArtForAlbum}
+                    onUploadAlbumArt={actions.handleUploadAlbumArt}
                     onFixAllAlbumArt={startArtRepair}
                     isFixingAllArt={artRepairState.active}
-                    sortMode={albumSortMode}
-                    onSortModeChange={(mode) => {
-                      setAlbumSortMode(mode);
-                      localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
-                    }}
+                    sortMode={data.albumSortMode}
+                    onSortModeChange={data.handleAlbumSortModeChange}
                   />
                 </div>
-                {showTrackList && (
-                  <div
-                    onMouseDown={gridResize.onDragStart}
-                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
-                  >
-                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
-                  </div>
-                )}
+                {showTrackList && <ResizeHandle onMouseDown={gridResize.onDragStart} />}
               </>
             ) : (
               showColumnBrowser && (
@@ -957,53 +287,50 @@ export const LibraryPlayer = ({
                     className="shrink-0 min-h-0 view-enter bg-bg-primary"
                   >
                     <ColumnBrowser
-                      genres={genreList}
-                      artists={artistList}
-                      albums={albumList}
-                      selectedGenres={selectedGenres}
-                      selectedArtists={selectedArtists}
-                      selectedAlbums={selectedAlbums}
-                      onSelectGenres={handleSelectGenre}
-                      onSelectArtists={handleSelectArtist}
-                      onSelectAlbums={handleSelectAlbum}
-                      onPlay={handlePlayColumn}
-                      onPlayAll={handleColumnPlayAll}
-                      onAddAllToQueue={handleColumnAddToQueue}
-                      onAddAllToPlaylist={handleColumnAddToPlaylist}
+                      genres={data.genreList}
+                      artists={data.artistList}
+                      albums={data.albumList}
+                      selectedGenres={data.selectedGenres}
+                      selectedArtists={data.selectedArtists}
+                      selectedAlbums={data.selectedAlbums}
+                      onSelectGenres={data.handleSelectGenre}
+                      onSelectArtists={data.handleSelectArtist}
+                      onSelectAlbums={data.handleSelectAlbum}
+                      onPlay={data.handlePlayColumn}
+                      onPlayAll={actions.handleColumnPlayAll}
+                      onAddAllToQueue={actions.handleColumnAddToQueue}
+                      onAddAllToPlaylist={actions.handleColumnAddToPlaylist}
                       playlists={playlists}
                     />
                   </div>
-                  <div
+                  <ResizeHandle
                     onMouseDown={browserResize.onDragStart}
-                    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 transition-colors"
                     style={{ background: "var(--color-bg-primary)" }}
-                  >
-                    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
-                  </div>
+                  />
                 </>
               )
             )}
           </>
         )}
 
-        {/* Track table (hidden when album grid or carousel is active with track list toggled off) */}
+        {/* Track table */}
         {(!(showAlbumGrid || showArtworkCarousel) || showTrackList) && (
           <TrackTable
-            tracks={displayedTracks}
-            totalTrackCount={activePlaylistId === null && activeSmartPlaylistId === null ? totalTrackCount : undefined}
-            onLoadMore={activePlaylistId === null && activeSmartPlaylistId === null ? loadMoreTracks : undefined}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-            onTrackSelect={handleTrackSelect}
-            onSelectionChange={handleSelectionChange}
-            onTracksDeleted={fetchBrowserData}
-            onFlagTracks={handleFlagTracks}
-            onRateTracks={handleRateTracks}
-            onRepairAlbumArt={handleRepairAlbumArt}
+            tracks={data.displayedTracks}
+            totalTrackCount={!isPlaylistView ? data.totalTrackCount : undefined}
+            onLoadMore={!isPlaylistView ? data.loadMoreTracks : undefined}
+            sortBy={data.sortBy}
+            sortDirection={data.sortDirection}
+            onSort={data.handleSort}
+            onTrackSelect={data.handleTrackSelect}
+            onSelectionChange={data.handleSelectionChange}
+            onTracksDeleted={data.fetchBrowserData}
+            onFlagTracks={actions.handleFlagTracks}
+            onRateTracks={actions.handleRateTracks}
+            onRepairAlbumArt={actions.handleRepairAlbumArt}
             onRepairAllAlbumArt={startArtRepair}
             isRepairingAllArt={artRepairState.active}
-            onFetchLyrics={handleFetchLyrics}
+            onFetchLyrics={actions.handleFetchLyrics}
             onFetchAllLyrics={startLyricsFetch}
             isFetchingAllLyrics={lyricsState.active}
             onRepairMetadata={onRepairMetadata}
@@ -1011,14 +338,13 @@ export const LibraryPlayer = ({
           />
         )}
 
-        {/* Status bar */}
-        <LibraryStatusBar selectedTracks={selectedTracks} />
+        <LibraryStatusBar selectedTracks={data.selectedTracks} />
       </div>
 
-      {showInfoPanel && <TrackDetailPanel tracks={selectedTracks} onSave={fetchBrowserData} />}
+      {showInfoPanel && <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} />}
       {showStatsPanel && (
         <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden panel-slide-right">
-          <LibraryStats libraryPath={libraryPath} />
+          <LibraryStats libraryPath={data.libraryPath} />
         </div>
       )}
 
@@ -1053,105 +379,18 @@ export const LibraryPlayer = ({
   );
 };
 
-const ViewToggle = ({
-  active,
-  onClick,
-  title,
-  children,
+const ResizeHandle = ({
+  onMouseDown,
+  style,
 }: {
-  active?: boolean;
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
+  onMouseDown: (e: React.MouseEvent) => void;
+  style?: React.CSSProperties;
 }) => (
-  <button
-    onClick={onClick}
-    className={`p-1.5 rounded transition-colors ${
-      active ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
-    }`}
-    title={title}
+  <div
+    onMouseDown={onMouseDown}
+    className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center group hover:bg-accent/10 rounded-full transition-colors"
+    style={style}
   >
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-      {children}
-    </svg>
-  </button>
+    <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors" />
+  </div>
 );
-
-/**
- * Lyrics button with 3-state cycling in cover flow mode:
- *   off → sidebar lyrics → overlay lyrics → off
- * In all other modes it's a simple on/off for sidebar lyrics.
- */
-const LyricsToggle = ({
-  showLyricsPanel,
-  lyricsOverlay,
-  showArtworkCarousel,
-  onToggleLyricsPanel,
-  onToggleLyricsOverlay,
-}: {
-  showLyricsPanel: boolean;
-  lyricsOverlay: boolean;
-  showArtworkCarousel: boolean;
-  onToggleLyricsPanel: () => void;
-  onToggleLyricsOverlay?: () => void;
-}) => {
-  const inCoverFlow = showArtworkCarousel && !!onToggleLyricsOverlay;
-
-  const handleClick = () => {
-    if (!inCoverFlow) {
-      // Simple on/off in non-coverflow modes
-      onToggleLyricsPanel();
-      return;
-    }
-    // 3-state cycle: off → overlay → sidebar → off
-    if (!showLyricsPanel) {
-      // off → overlay on (both lyrics + overlay)
-      onToggleLyricsPanel();
-      onToggleLyricsOverlay!();
-    } else if (lyricsOverlay) {
-      // overlay on → sidebar only (turn off overlay)
-      onToggleLyricsOverlay!();
-    } else {
-      // sidebar on → everything off
-      onToggleLyricsPanel();
-    }
-  };
-
-  const isOverlay = showLyricsPanel && lyricsOverlay && inCoverFlow;
-  const isSidebar = showLyricsPanel && !isOverlay;
-
-  const title = isOverlay
-    ? "Lyrics overlay (click for sidebar)"
-    : isSidebar && inCoverFlow
-      ? "Lyrics sidebar (click to turn off)"
-      : "Lyrics";
-
-  return (
-    <button
-      onClick={handleClick}
-      className={`p-1.5 rounded transition-colors ${
-        isOverlay
-          ? "text-accent bg-accent/20 ring-1 ring-accent/40"
-          : showLyricsPanel
-            ? "text-accent bg-accent/10"
-            : "text-text-tertiary hover:text-text-secondary"
-      }`}
-      title={title}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
-        {isOverlay ? (
-          <>
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path strokeLinecap="round" d="M7 10h10M7 14h6" />
-          </>
-        ) : (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5l-10.5 3v7.553m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z"
-          />
-        )}
-      </svg>
-    </button>
-  );
-};

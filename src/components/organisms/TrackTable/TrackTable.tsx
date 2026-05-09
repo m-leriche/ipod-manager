@@ -4,7 +4,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
-import { StarRating } from "../../atoms/StarRating/StarRating";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useToast } from "../../../contexts/ToastContext";
@@ -12,9 +11,10 @@ import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
 import { useColumnOrder } from "./useColumnOrder";
-import { getAlbumTracks, getContextIds } from "./helpers";
-import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD, CELL_CLASSES } from "./constants";
-import type { TrackTableColumn } from "./constants";
+import { useTrackContextMenu } from "./useTrackContextMenu";
+import { TrackRow } from "./TrackRow";
+import { getAlbumTracks } from "./helpers";
+import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
 
 // Module-level drag payload so drop targets can read the tracks
@@ -70,8 +70,8 @@ export const TrackTable = memo(function TrackTable({
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
-  const { state, playTrack, playNext, addToQueue } = usePlayback();
-  const { playlists, addTracks: addToPlaylist, removeTracks: removeFromPlaylist, moveTrack } = usePlaylist();
+  const { state, playTrack } = usePlayback();
+  const { moveTrack } = usePlaylist();
   const toast = useToast();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -85,7 +85,6 @@ export const TrackTable = memo(function TrackTable({
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Ref for selected so handleClick doesn't depend on selected state
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
@@ -103,7 +102,6 @@ export const TrackTable = memo(function TrackTable({
     overscan: 20,
   });
 
-  // Trigger loading more tracks when scrolling near the end of loaded data
   const virtualItems = virtualizer.getVirtualItems();
   useEffect(() => {
     if (!onLoadMore || !totalTrackCount) return;
@@ -114,15 +112,14 @@ export const TrackTable = memo(function TrackTable({
     }
   }, [virtualItems, tracks.length, totalTrackCount, onLoadMore]);
 
+  // ── Keyboard navigation ──────────────────────────────────────
+
+  const lastClickedIndexRef = useRef(0);
   const searchField = SORT_KEY_TO_TRACK_FIELD[sortBy] ?? "title";
   const searchLabels = useMemo(
     () => tracks.map((t) => String(t[searchField] ?? t.title ?? t.file_name ?? "")),
     [tracks, searchField],
   );
-
-  // ── Keyboard navigation ──────────────────────────────────────
-
-  const lastClickedIndexRef = useRef(0);
 
   const handleKeyboardNavigate = useCallback(
     (index: number, mode: "single" | "range") => {
@@ -150,20 +147,14 @@ export const TrackTable = memo(function TrackTable({
     [tracks, playTrack],
   );
 
-  const handleKeyboardDeselect = useCallback(() => {
-    setSelected(new Set());
-  }, []);
-
   const { onKeyDown: handleNavKeyDown, focusedIndexRef } = useKeyboardNavigation({
     count: tracks.length,
     onNavigate: handleKeyboardNavigate,
     onActivate: handleKeyboardActivate,
-    onDeselect: handleKeyboardDeselect,
+    onDeselect: useCallback(() => setSelected(new Set()), []),
     virtualizer,
     selectedIndex: lastClickedIndexRef.current,
   });
-
-  // ── Type-to-select ───────────────────────────────────────────
 
   const handleTypeToSelectMatch = useCallback(
     (index: number) => {
@@ -190,7 +181,8 @@ export const TrackTable = memo(function TrackTable({
     [handleNavKeyDown, handleTypeToSelectKeyDown],
   );
 
-  // Stable callbacks — accept track as parameter, no inline closures per row
+  // ── Click / selection handlers ────────────────────────────────
+
   const handleClick = useCallback(
     (e: React.MouseEvent, track: LibraryTrack) => {
       const sel = selectedRef.current;
@@ -212,7 +204,6 @@ export const TrackTable = memo(function TrackTable({
       } else {
         setSelected(new Set([track.id]));
       }
-      // Sync keyboard nav position
       if (clickedIndex >= 0) {
         lastClickedIndexRef.current = clickedIndex;
         focusedIndexRef.current = clickedIndex;
@@ -232,12 +223,31 @@ export const TrackTable = memo(function TrackTable({
 
   const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {
     e.preventDefault();
-    // If right-clicked track isn't in current selection, select only it
     if (!selectedRef.current.has(track.id)) {
       setSelected(new Set([track.id]));
     }
     setContextMenu({ x: e.clientX, y: e.clientY, track });
   }, []);
+
+  // ── Context menu items ────────────────────────────────────────
+
+  const contextMenuItems = useTrackContextMenu({
+    tracks,
+    selected,
+    contextMenu,
+    activePlaylistId,
+    onFlagTracks,
+    onRateTracks,
+    onRepairAlbumArt,
+    onRepairAllAlbumArt,
+    isRepairingAllArt,
+    onFetchLyrics,
+    onFetchAllLyrics,
+    isFetchingAllLyrics,
+    onRepairMetadata,
+    onClose: useCallback(() => setContextMenu(null), []),
+    onDeleteRequest: useCallback((ids: number[]) => setDeleteConfirm(ids), []),
+  });
 
   // ── Playlist drag-to-reorder ──────────────────────────────────
 
@@ -255,8 +265,6 @@ export const TrackTable = memo(function TrackTable({
           reorderActiveRef.current = true;
         }
         if (!reorderActiveRef.current || !scrollRef.current) return;
-
-        // Find which row the mouse is over
         const rows = scrollRef.current.querySelectorAll("tbody tr[data-index]");
         let targetIndex: number | null = null;
         for (const row of rows) {
@@ -272,9 +280,7 @@ export const TrackTable = memo(function TrackTable({
       const handleMouseUp = (ev: MouseEvent) => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
-
         if (reorderActiveRef.current && reorderFromRef.current !== null && activePlaylistId != null) {
-          // Find drop target from final mouse position
           const rows = scrollRef.current?.querySelectorAll("tbody tr[data-index]");
           let targetIndex: number | null = null;
           if (rows) {
@@ -290,7 +296,6 @@ export const TrackTable = memo(function TrackTable({
             moveTrack(activePlaylistId, reorderFromRef.current, targetIndex);
           }
         }
-
         reorderFromRef.current = null;
         reorderActiveRef.current = false;
         setReorderDragOver(null);
@@ -314,177 +319,7 @@ export const TrackTable = memo(function TrackTable({
     setDeleteConfirm(null);
   }, [deleteConfirm, onTracksDeleted, toast]);
 
-  const contextMenuItems = contextMenu
-    ? (() => {
-        const ids = getContextIds(contextMenu.track.id, selected);
-        const isMulti = ids.length > 1;
-        return [
-          {
-            label: "Play",
-            onClick: () => {
-              playTrack(contextMenu.track, getAlbumTracks(contextMenu.track, tracks));
-              setContextMenu(null);
-            },
-          },
-          {
-            label: "Play Next",
-            onClick: () => {
-              playNext([contextMenu.track]);
-              setContextMenu(null);
-            },
-          },
-          {
-            label: "Add to Queue",
-            onClick: () => {
-              addToQueue([contextMenu.track]);
-              setContextMenu(null);
-            },
-          },
-          ...(playlists.length > 0
-            ? [
-                {
-                  type: "submenu" as const,
-                  label: "Add to Playlist",
-                  children: playlists.map((p) => ({
-                    label: p.name,
-                    onClick: () => {
-                      addToPlaylist(p.id, ids);
-                      setContextMenu(null);
-                    },
-                  })),
-                },
-              ]
-            : []),
-          ...(activePlaylistId != null
-            ? [
-                {
-                  label: isMulti ? `Remove ${ids.length} from Playlist` : "Remove from Playlist",
-                  onClick: () => {
-                    removeFromPlaylist(activePlaylistId, ids);
-                    setContextMenu(null);
-                  },
-                },
-              ]
-            : []),
-          { type: "separator" as const },
-          {
-            label: (() => {
-              const relevant = tracks.filter((t) => ids.includes(t.id));
-              const allFlagged = relevant.every((t) => t.flagged);
-              if (isMulti) {
-                return allFlagged
-                  ? `Remove ${ids.length} Tracks from Sync List`
-                  : `Add ${ids.length} Tracks to Sync List`;
-              }
-              return allFlagged ? "Remove from Sync List" : "Add to Sync List";
-            })(),
-            onClick: () => {
-              const relevant = tracks.filter((t) => ids.includes(t.id));
-              const allFlagged = relevant.every((t) => t.flagged);
-              onFlagTracks?.(ids, !allFlagged);
-              setContextMenu(null);
-            },
-          },
-          ...(onRateTracks
-            ? [
-                {
-                  type: "submenu" as const,
-                  label: "Rate",
-                  children: [
-                    ...[5, 4, 3, 2, 1].map((r) => ({
-                      label: "\u2605".repeat(r),
-                      onClick: () => {
-                        onRateTracks(ids, r);
-                        setContextMenu(null);
-                      },
-                    })),
-                    { type: "separator" as const },
-                    {
-                      label: "No Rating",
-                      onClick: () => {
-                        onRateTracks(ids, 0);
-                        setContextMenu(null);
-                      },
-                    },
-                  ],
-                },
-              ]
-            : []),
-          ...(onRepairAlbumArt
-            ? [
-                {
-                  label: (() => {
-                    const folderCount = new Set(tracks.filter((t) => ids.includes(t.id)).map((t) => t.folder_path))
-                      .size;
-                    return folderCount > 1
-                      ? `Find & Repair Album Art (${folderCount} albums)`
-                      : "Find & Repair Album Art";
-                  })(),
-                  onClick: () => {
-                    onRepairAlbumArt(tracks.filter((t) => ids.includes(t.id)));
-                    setContextMenu(null);
-                  },
-                },
-              ]
-            : []),
-          ...(onRepairAllAlbumArt
-            ? [
-                {
-                  label: "Find & Repair Art for Entire Library",
-                  onClick: () => {
-                    onRepairAllAlbumArt();
-                    setContextMenu(null);
-                  },
-                  disabled: isRepairingAllArt,
-                },
-              ]
-            : []),
-          ...(onFetchLyrics && !isMulti
-            ? [
-                {
-                  label: "Fetch Lyrics",
-                  onClick: () => {
-                    const track = tracks.find((t) => t.id === ids[0]);
-                    if (track) onFetchLyrics(track);
-                    setContextMenu(null);
-                  },
-                },
-              ]
-            : []),
-          ...(onFetchAllLyrics
-            ? [
-                {
-                  label: "Fetch Lyrics for Entire Library",
-                  onClick: () => {
-                    onFetchAllLyrics();
-                    setContextMenu(null);
-                  },
-                  disabled: isFetchingAllLyrics,
-                },
-              ]
-            : []),
-          ...(onRepairMetadata
-            ? [
-                {
-                  label: isMulti ? `Repair Metadata for ${ids.length} Tracks` : "Repair Metadata",
-                  onClick: () => {
-                    onRepairMetadata(tracks.filter((t) => ids.includes(t.id)));
-                    setContextMenu(null);
-                  },
-                },
-              ]
-            : []),
-          { type: "separator" as const },
-          {
-            label: isMulti ? `Delete ${ids.length} Tracks from Library` : "Delete from Library",
-            onClick: () => {
-              setDeleteConfirm(ids);
-              setContextMenu(null);
-            },
-          },
-        ];
-      })()
-    : [];
+  // ── Render ────────────────────────────────────────────────────
 
   const currentTrackId = state.currentTrack?.id ?? null;
   const isActivePlaying = state.isPlaying;
@@ -499,7 +334,6 @@ export const TrackTable = memo(function TrackTable({
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onDragStartCapture={() => {
-        // Populate module-level drag payload with currently selected tracks (or all if none selected)
         dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
       }}
     >
@@ -529,9 +363,8 @@ export const TrackTable = memo(function TrackTable({
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
-                    {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "▲" : "▼"}</span>}
+                    {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "\u25B2" : "\u25BC"}</span>}
                   </span>
-                  {/* Resize handle — wide hit area, thin visible line */}
                   {i < orderedColumns.length - 1 && (
                     <div
                       onMouseDown={(e) => onResizeStart(i, e)}
@@ -563,7 +396,7 @@ export const TrackTable = memo(function TrackTable({
               );
             }
             return (
-              <TrackRowDynamic
+              <TrackRow
                 key={track.id}
                 track={track}
                 index={virtualRow.index}
@@ -634,145 +467,5 @@ export const TrackTable = memo(function TrackTable({
         />
       )}
     </div>
-  );
-});
-
-const formatDuration = (secs: number): string => {
-  if (!isFinite(secs) || secs < 0) return "—";
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
-const formatDateAdded = (epoch: number): string => {
-  if (!epoch) return "—";
-  const d = new Date(epoch * 1000);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-};
-
-const getCellContent = (
-  key: string,
-  track: LibraryTrack,
-  index: number,
-  isCurrentTrack: boolean,
-  isPlaying: boolean,
-  isSelected: boolean,
-): React.ReactNode => {
-  switch (key) {
-    case "flagged":
-      return track.flagged ? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className={`w-3 h-3 mx-auto ${isSelected ? "text-white" : "text-accent"}`}
-        >
-          <path d="M4 24V1h16l-5 7.5L20 16H6v8z" />
-        </svg>
-      ) : null;
-    case "#": {
-      const barColor = isSelected ? "bg-white" : "bg-accent";
-      return isCurrentTrack ? (
-        <div className="flex items-center justify-center gap-[2px] h-3">
-          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-1" : "h-[6px]"}`} />
-          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-2" : "h-[4px]"}`} />
-          <span className={`w-[3px] ${barColor} rounded-full ${isPlaying ? "animate-equalizer-3" : "h-[6px]"}`} />
-        </div>
-      ) : (
-        <span className={isSelected ? "" : "text-text-tertiary"}>{index + 1}</span>
-      );
-    }
-    case "title":
-      return (
-        <div
-          className={`text-xs font-medium truncate ${isSelected ? "" : isCurrentTrack ? "text-accent" : "text-text-primary"}`}
-        >
-          {track.title || track.file_name}
-        </div>
-      );
-    case "artist":
-      return track.artist || "—";
-    case "album":
-      return track.album || "—";
-    case "genre":
-      return track.genre || "—";
-    case "track_number":
-      return track.track_number || "—";
-    case "year":
-      return track.year || "—";
-    case "duration":
-      return formatDuration(track.duration_secs);
-    case "date_added":
-      return formatDateAdded(track.created_at);
-    case "rating":
-      return <StarRating rating={track.rating} size="sm" />;
-    case "plays":
-      return track.play_count || "—";
-    default:
-      return "—";
-  }
-};
-
-const TrackRowDynamic = memo(function TrackRowDynamic({
-  track,
-  index,
-  columns,
-  isCurrentTrack,
-  isPlaying,
-  isSelected,
-  isDragOver,
-  selectedCount,
-  onClick,
-  onDoubleClick,
-  onContextMenu,
-  onMouseDown,
-}: {
-  track: LibraryTrack;
-  index: number;
-  columns: TrackTableColumn[];
-  isCurrentTrack: boolean;
-  isPlaying: boolean;
-  isSelected: boolean;
-  isDragOver?: boolean;
-  selectedCount: number;
-  onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
-  onDoubleClick: (track: LibraryTrack) => void;
-  onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
-  onMouseDown?: (e: React.MouseEvent, index: number) => void;
-}) {
-  return (
-    <tr
-      data-index={index}
-      draggable
-      onDragStart={(e) => {
-        const count = isSelected && selectedCount > 1 ? selectedCount : 1;
-        const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
-        e.dataTransfer.setData("application/x-crate-queue-drag", "1");
-        e.dataTransfer.effectAllowed = "copy";
-        // Store payload for drop target to read
-        // dragPayload is set by the parent table's onDragStartCapture
-        const el = document.createElement("div");
-        el.textContent = label;
-        el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
-        document.body.appendChild(el);
-        e.dataTransfer.setDragImage(el, 0, 0);
-        requestAnimationFrame(() => el.remove());
-      }}
-      onClick={(e) => onClick(e, track)}
-      onDoubleClick={() => onDoubleClick(track)}
-      onContextMenu={(e) => onContextMenu(e, track)}
-      onMouseDown={onMouseDown ? (e) => onMouseDown(e, index) : undefined}
-      className={`group cursor-default select-none transition-colors ${
-        isSelected ? "" : isCurrentTrack ? "bg-accent/8 border-l-2 border-l-accent" : "hover:bg-bg-hover/50"
-      }`}
-    >
-      {columns.map((col) => (
-        <td
-          key={col.key}
-          className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""} ${isDragOver ? "border-t-2 border-t-accent" : ""}`}
-        >
-          {getCellContent(col.key, track, index, isCurrentTrack, isPlaying, isSelected)}
-        </td>
-      ))}
-    </tr>
   );
 });

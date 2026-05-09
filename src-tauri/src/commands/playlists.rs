@@ -156,6 +156,9 @@ pub async fn export_playlists_to_ipod(
         })?;
 
         let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
+        if sub.contains("..") || sub.starts_with('/') {
+            return Err("Invalid music subdirectory name".to_string());
+        }
 
         let all_playlists = library::playlists::get_playlists(&conn)?;
         let target: Vec<_> = if playlist_ids.is_empty() {

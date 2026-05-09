@@ -280,6 +280,9 @@ pub fn background_rescan_all_folders(
         }
     }
 
+    // Persist the scan timestamp so we know when the last successful scan ran
+    let _ = super::settings::set_setting(conn, "last_scan_timestamp", &now.to_string());
+
     Ok(super::types::BackgroundScanResult {
         changed,
         removed,

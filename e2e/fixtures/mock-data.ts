@@ -167,6 +167,14 @@ export const MOCK_BROWSER_DATA = {
   ],
 };
 
+/** Paginated version of MOCK_BROWSER_DATA for the paginated endpoint. */
+export const MOCK_PAGINATED_BROWSER_DATA = {
+  tracks: { tracks: MOCK_TRACKS, total_count: MOCK_TRACKS.length, offset: 0, limit: 500 },
+  genres: MOCK_BROWSER_DATA.genres,
+  artists: MOCK_BROWSER_DATA.artists,
+  albums: MOCK_BROWSER_DATA.albums,
+};
+
 // ── File operations ──────────────────────────────────────
 
 export const MOCK_FILE_ENTRIES = [

@@ -23,6 +23,8 @@ export const getDragPayload = (): LibraryTrack[] => dragPayload;
 
 interface TrackTableProps {
   tracks: LibraryTrack[];
+  totalTrackCount?: number;
+  onLoadMore?: (startIndex: number) => void;
   sortBy: string;
   sortDirection: "asc" | "desc";
   onSort: (key: string) => void;
@@ -49,6 +51,8 @@ interface ContextMenuState {
 
 export const TrackTable = memo(function TrackTable({
   tracks,
+  totalTrackCount,
+  onLoadMore,
   sortBy,
   sortDirection,
   onSort,
@@ -91,12 +95,24 @@ export const TrackTable = memo(function TrackTable({
 
   const totalWidth = useMemo(() => widths.reduce((a, b) => a + b, 0), [widths]);
 
+  const rowCount = totalTrackCount ?? tracks.length;
   const virtualizer = useVirtualizer({
-    count: tracks.length,
+    count: rowCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
   });
+
+  // Trigger loading more tracks when scrolling near the end of loaded data
+  const virtualItems = virtualizer.getVirtualItems();
+  useEffect(() => {
+    if (!onLoadMore || !totalTrackCount) return;
+    if (virtualItems.length === 0) return;
+    const lastItem = virtualItems[virtualItems.length - 1];
+    if (lastItem.index >= tracks.length - 100 && tracks.length < totalTrackCount) {
+      onLoadMore(tracks.length);
+    }
+  }, [virtualItems, tracks.length, totalTrackCount, onLoadMore]);
 
   const searchField = SORT_KEY_TO_TRACK_FIELD[sortBy] ?? "title";
   const searchLabels = useMemo(
@@ -472,7 +488,6 @@ export const TrackTable = memo(function TrackTable({
 
   const currentTrackId = state.currentTrack?.id ?? null;
   const isActivePlaying = state.isPlaying;
-  const virtualItems = virtualizer.getVirtualItems();
   const paddingTop = virtualItems[0]?.start ?? 0;
   const paddingBottom =
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
@@ -538,6 +553,15 @@ export const TrackTable = memo(function TrackTable({
           )}
           {virtualItems.map((virtualRow) => {
             const track = tracks[virtualRow.index];
+            if (!track) {
+              return (
+                <tr key={`skeleton-${virtualRow.index}`} data-index={virtualRow.index} style={{ height: ROW_HEIGHT }}>
+                  <td colSpan={orderedColumns.length} className="px-3">
+                    <div className="h-3 w-2/3 rounded bg-bg-card animate-pulse" />
+                  </td>
+                </tr>
+              );
+            }
             return (
               <TrackRowDynamic
                 key={track.id}
@@ -564,7 +588,7 @@ export const TrackTable = memo(function TrackTable({
         </tbody>
       </table>
 
-      {tracks.length === 0 && (
+      {rowCount === 0 && (
         <div className="flex flex-col items-center justify-center h-48 gap-2">
           <svg
             viewBox="0 0 24 24"

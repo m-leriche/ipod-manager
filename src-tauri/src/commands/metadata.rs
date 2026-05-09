@@ -7,7 +7,7 @@ use crate::metarepair;
 use crate::sanitize;
 use rusqlite::params;
 use std::path::Path;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn scan_album_art(
@@ -215,6 +215,10 @@ pub async fn upload_album_art(
 ) -> Result<(), AppError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<(), AppError> {
         albumart::save_uploaded_cover(&folder_path, &image_path)?;
+        // Invalidate cached thumbnails so they regenerate from the new art
+        if let Ok(cache_dir) = app.path().app_data_dir().map(|d| d.join("thumbnails")) {
+            crate::thumbnail::invalidate(&cache_dir, &folder_path);
+        }
         let _ = app.emit("album-art-fixed", folder_path);
         Ok(())
     })
@@ -225,5 +229,44 @@ pub async fn upload_album_art(
 #[tauri::command]
 pub fn cancel_art_repair(cancel: State<'_, ArtRepairCancel>) -> Result<(), AppError> {
     cancel.cancel();
+    Ok(())
+}
+
+// ── Thumbnail cache ────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_thumbnail(
+    folder_path: String,
+    size: String,
+    app: AppHandle,
+) -> Result<Option<String>, AppError> {
+    let cache_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("thumbnails");
+
+    let thumb_size = crate::thumbnail::ThumbSize::parse(&size)
+        .ok_or_else(|| AppError::InvalidInput(format!("Invalid thumbnail size: {size}")))?;
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::thumbnail::get_or_create(&cache_dir, &folder_path, thumb_size)
+            .map(|p| p.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn invalidate_thumbnail(folder_path: String, app: AppHandle) -> Result<(), AppError> {
+    let cache_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join("thumbnails");
+
+    crate::thumbnail::invalidate(&cache_dir, &folder_path);
     Ok(())
 }

@@ -69,11 +69,32 @@ pub struct LibraryFilter {
     pub flagged_only: Option<bool>,
     pub rating_min: Option<u8>,
     pub rating_max: Option<u8>,
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+    /// When true, skip the COUNT query in paginated results (total_count = 0).
+    /// Use for subsequent page loads where the caller already knows the total.
+    pub skip_count: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BrowserData {
     pub tracks: Vec<LibraryTrack>,
+    pub genres: Vec<GenreSummary>,
+    pub artists: Vec<ArtistSummary>,
+    pub albums: Vec<AlbumSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaginatedTracks {
+    pub tracks: Vec<LibraryTrack>,
+    pub total_count: usize,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaginatedBrowserData {
+    pub tracks: PaginatedTracks,
     pub genres: Vec<GenreSummary>,
     pub artists: Vec<ArtistSummary>,
     pub albums: Vec<AlbumSummary>,

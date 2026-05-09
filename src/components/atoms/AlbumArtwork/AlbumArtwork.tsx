@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useLazyImage } from "../../../hooks/useLazyImage";
@@ -10,6 +11,19 @@ const sizes = {
   xl: "w-[280px] h-[280px]",
   full: "w-full aspect-square",
 } as const;
+
+/** Map component size to backend thumbnail size. "full" uses raw cover.jpg. */
+const THUMB_SIZE_MAP: Record<string, string | null> = {
+  sm: "small",
+  md: "small",
+  lg: "medium",
+  xl: "large",
+  full: null,
+};
+
+/** In-memory cache of resolved thumbnail paths to avoid re-invoking IPC
+ *  when rows scroll out of view and back. Keyed by "folderPath|size". */
+const thumbPathCache = new Map<string, string>();
 
 interface AlbumArtworkProps {
   folderPath: string | null;
@@ -39,16 +53,26 @@ export const AlbumArtwork = ({
   const [loaded, setLoaded] = useState(false);
   const { ref, isVisible } = useLazyImage(lazy);
 
+  // Thumbnail state
+  const [thumbSrc, setThumbSrc] = useState<string | null>(null);
+  const thumbRequestRef = useRef(0);
+
   // Reset failed/loaded state when the folder changes or after a repair (cacheBust changes)
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
+    setThumbSrc(null);
   }, [folderPath, effectiveBust]);
 
   // Respond to per-folder art fix events (only re-render this artwork when its folder is fixed)
   useEffect(() => {
     const handler = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === folderPath) {
+      const fixedFolder = (e as CustomEvent<string>).detail;
+      if (fixedFolder === folderPath) {
+        // Evict stale thumbnail cache entries for this folder
+        for (const key of thumbPathCache.keys()) {
+          if (key.startsWith(`${fixedFolder}|`)) thumbPathCache.delete(key);
+        }
         setLocalBust((n) => n + 1);
       }
     };
@@ -56,8 +80,41 @@ export const AlbumArtwork = ({
     return () => window.removeEventListener("album-art-fixed", handler);
   }, [folderPath]);
 
+  // Request a cached thumbnail when visible
+  const thumbSize = THUMB_SIZE_MAP[size] ?? null;
+  useEffect(() => {
+    if (!folderPath || !thumbSize || !isVisible) return;
+    const cacheKey = `${folderPath}|${thumbSize}|${effectiveBust}`;
+
+    // Return from in-memory cache without IPC
+    const cached = thumbPathCache.get(cacheKey);
+    if (cached) {
+      setThumbSrc(cached);
+      return;
+    }
+
+    const id = ++thumbRequestRef.current;
+    invoke<string | null>("get_thumbnail", { folderPath, size: thumbSize })
+      .then((path) => {
+        if (id !== thumbRequestRef.current) return;
+        if (path) {
+          const src = convertFileSrc(path) + (effectiveBust ? `?v=${effectiveBust}` : "");
+          thumbPathCache.set(cacheKey, src);
+          setThumbSrc(src);
+        }
+      })
+      .catch((e) => {
+        if (import.meta.env.DEV) console.debug("Thumbnail fetch failed:", folderPath, e);
+      });
+  }, [folderPath, thumbSize, effectiveBust, isVisible]);
+
   const showFallback = !folderPath || failed;
   const showImage = !showFallback && isVisible;
+
+  // Use thumbnail if available, otherwise fall back to raw cover.jpg
+  const imgSrc =
+    thumbSrc ||
+    (folderPath ? convertFileSrc(folderPath + "/cover.jpg") + (effectiveBust ? `?v=${effectiveBust}` : "") : "");
 
   return (
     <div ref={ref} className={`${sizes[size]} shrink-0 rounded-lg overflow-hidden ${className}`}>
@@ -85,7 +142,7 @@ export const AlbumArtwork = ({
           )}
           {showImage && (
             <img
-              src={convertFileSrc(folderPath + "/cover.jpg") + (effectiveBust ? `?v=${effectiveBust}` : "")}
+              src={imgSrc}
               alt=""
               className={`w-full h-full object-cover transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setLoaded(true)}

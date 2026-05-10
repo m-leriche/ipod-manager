@@ -7,7 +7,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 use super::folders::add_folder;
-use super::scan::{read_track_for_library, scan_folder};
+use super::scan::scan_folder;
+use super::track_io::read_track_for_library;
 use super::types::{ImportProgress, ImportResult, TrackData};
 
 pub fn sanitize_path_component(name: &str) -> String {

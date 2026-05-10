@@ -2,7 +2,9 @@ pub mod crossfade;
 pub mod decoder;
 pub mod engine;
 pub mod equalizer;
+mod output;
 pub mod resampler;
+pub mod shared_state;
 pub mod time_stretch;
 pub mod types;
 
@@ -11,7 +13,7 @@ use std::sync::Arc;
 use crossbeam_channel::Sender;
 use tauri::{AppHandle, Runtime};
 
-use engine::SharedState;
+use shared_state::SharedState;
 use types::{AudioCommand, EqConfig, PlayState, PlaybackStatus};
 
 /// Audio engine managed by Tauri. Holds a command sender and shared state

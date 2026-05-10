@@ -1,6 +1,6 @@
 use crate::library::*;
 use crate::library::{
-    delete::delete_tracks, import::compute_library_dest, scan::upsert_track, types::TrackData,
+    delete::delete_tracks, import::compute_library_dest, track_io::upsert_track, types::TrackData,
 };
 use rusqlite::Connection;
 use std::path::Path;

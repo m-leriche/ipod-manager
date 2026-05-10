@@ -38,6 +38,7 @@ interface TrackTableProps {
   onRepairAllAlbumArt?: () => void;
   isRepairingAllArt?: boolean;
   onFetchLyrics?: (track: LibraryTrack) => void;
+  onRemoveLyrics?: (track: LibraryTrack) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
@@ -60,6 +61,7 @@ export const TrackTable = memo(function TrackTable({
   onRepairAllAlbumArt,
   isRepairingAllArt,
   onFetchLyrics,
+  onRemoveLyrics,
   onFetchAllLyrics,
   isFetchingAllLyrics,
   onRepairMetadata,
@@ -238,6 +240,7 @@ export const TrackTable = memo(function TrackTable({
     onRepairAllAlbumArt,
     isRepairingAllArt,
     onFetchLyrics,
+    onRemoveLyrics,
     onFetchAllLyrics,
     isFetchingAllLyrics,
     onRepairMetadata,

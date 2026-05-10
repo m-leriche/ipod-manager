@@ -328,6 +328,7 @@ export const LibraryPlayer = ({
             onRepairAllAlbumArt={startArtRepair}
             isRepairingAllArt={artRepairState.active}
             onFetchLyrics={actions.handleFetchLyrics}
+            onRemoveLyrics={actions.handleRemoveLyrics}
             onFetchAllLyrics={startLyricsFetch}
             isFetchingAllLyrics={lyricsState.active}
             onRepairMetadata={onRepairMetadata}

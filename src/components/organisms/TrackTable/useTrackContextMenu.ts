@@ -16,6 +16,7 @@ interface UseTrackContextMenuOptions {
   onRepairAllAlbumArt?: () => void;
   isRepairingAllArt?: boolean;
   onFetchLyrics?: (track: LibraryTrack) => void;
+  onRemoveLyrics?: (track: LibraryTrack) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
@@ -34,6 +35,7 @@ export const useTrackContextMenu = ({
   onRepairAllAlbumArt,
   isRepairingAllArt,
   onFetchLyrics,
+  onRemoveLyrics,
   onFetchAllLyrics,
   isFetchingAllLyrics,
   onRepairMetadata,
@@ -177,6 +179,18 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
+      ...(onRemoveLyrics && !isMulti
+        ? [
+            {
+              label: "Remove Lyrics",
+              onClick: () => {
+                const track = tracks.find((t) => t.id === ids[0]);
+                if (track) onRemoveLyrics(track);
+                onClose();
+              },
+            },
+          ]
+        : []),
       ...(onFetchAllLyrics
         ? [
             {
@@ -226,6 +240,7 @@ export const useTrackContextMenu = ({
     onRepairAllAlbumArt,
     isRepairingAllArt,
     onFetchLyrics,
+    onRemoveLyrics,
     onFetchAllLyrics,
     isFetchingAllLyrics,
     onRepairMetadata,

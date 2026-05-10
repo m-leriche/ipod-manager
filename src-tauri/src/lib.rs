@@ -284,6 +284,7 @@ pub fn run() {
             commands::get_lyrics,
             commands::fetch_lyrics,
             commands::save_lyrics,
+            commands::remove_lyrics,
             commands::write_lyrics_to_file,
             commands::fetch_library_lyrics,
             commands::cancel_lyrics_fetch,

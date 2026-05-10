@@ -64,6 +64,19 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
     }
   }, [track]);
 
+  const handleRemove = useCallback(async () => {
+    try {
+      await invoke("remove_lyrics", {
+        trackId: track.id,
+        filePath: track.file_path,
+      });
+      setLyrics(null);
+      lastTrackIdRef.current = null;
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [track.id, track.file_path]);
+
   // Parse synced lyrics
   const syncedLyricsText = lyrics?.synced_lyrics ?? null;
   const syncedLines = useMemo(() => (syncedLyricsText ? parseLrc(syncedLyricsText) : null), [syncedLyricsText]);
@@ -121,7 +134,7 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
   if (syncedLines && syncedLines.length > 0) {
     return (
       <div className={baseClass}>
-        {!isOverlay && <PanelHeader onRefetch={handleFetch} fetching={fetching} />}
+        {!isOverlay && <PanelHeader onRefetch={handleFetch} onRemove={handleRemove} fetching={fetching} />}
         <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth">
           <div className="space-y-2">
             {syncedLines.map((line, i) => {
@@ -155,7 +168,7 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
   // Plain lyrics view
   return (
     <div className={baseClass}>
-      {!isOverlay && <PanelHeader onRefetch={handleFetch} fetching={fetching} />}
+      {!isOverlay && <PanelHeader onRefetch={handleFetch} onRemove={handleRemove} fetching={fetching} />}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <pre
           className={`whitespace-pre-wrap font-sans text-xs leading-relaxed ${isOverlay ? "text-white/80" : "text-text-secondary"}`}
@@ -167,18 +180,37 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
   );
 };
 
-const PanelHeader = ({ onRefetch, fetching }: { onRefetch?: () => void; fetching?: boolean }) => (
+const PanelHeader = ({
+  onRefetch,
+  onRemove,
+  fetching,
+}: {
+  onRefetch?: () => void;
+  onRemove?: () => void;
+  fetching?: boolean;
+}) => (
   <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
     <span className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">Lyrics</span>
     {onRefetch && (
-      <button
-        onClick={onRefetch}
-        disabled={fetching}
-        className="text-[10px] text-text-tertiary hover:text-accent transition-colors disabled:opacity-50"
-        title="Search for lyrics online"
-      >
-        {fetching ? "Searching..." : "Refetch"}
-      </button>
+      <div className="flex items-center gap-2">
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="text-[10px] text-text-tertiary hover:text-red-400 transition-colors"
+            title="Remove incorrect lyrics"
+          >
+            Remove
+          </button>
+        )}
+        <button
+          onClick={onRefetch}
+          disabled={fetching}
+          className="text-[10px] text-text-tertiary hover:text-accent transition-colors disabled:opacity-50"
+          title="Search for lyrics online"
+        >
+          {fetching ? "Searching..." : "Refetch"}
+        </button>
+      </div>
     )}
   </div>
 );

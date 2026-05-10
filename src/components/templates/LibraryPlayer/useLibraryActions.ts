@@ -93,6 +93,21 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
     [toast],
   );
 
+  const handleRemoveLyrics = useCallback(
+    async (track: LibraryTrack) => {
+      try {
+        await invoke("remove_lyrics", {
+          trackId: track.id,
+          filePath: track.file_path,
+        });
+        toast.success(`Lyrics removed for "${track.title || track.file_name}"`);
+      } catch (e) {
+        toast.error(`Failed to remove lyrics: ${e}`);
+      }
+    },
+    [toast],
+  );
+
   const handleFixAlbumArtForAlbum = useCallback(
     async (album: AlbumSummary) => {
       startProgress(`Repairing album art for "${album.name}"\u2026`, () => invoke("cancel_sync"));
@@ -196,6 +211,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
     handleRateTracks,
     handleRepairAlbumArt,
     handleFetchLyrics,
+    handleRemoveLyrics,
     handleFixAlbumArtForAlbum,
     handleUploadAlbumArt,
     handleColumnPlayAll,

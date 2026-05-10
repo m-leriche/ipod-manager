@@ -61,6 +61,24 @@ pub async fn fetch_lyrics(
 }
 
 #[tauri::command]
+pub async fn remove_lyrics(
+    track_id: i64,
+    file_path: String,
+    db: State<'_, LibraryDb>,
+) -> Result<(), AppError> {
+    let conn_arc = db.conn_arc();
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), AppError> {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| format!("DB lock failed: {}", e))?;
+        lyrics::remove_lyrics(&conn, track_id, &file_path).map_err(Into::into)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
 pub async fn save_lyrics(
     track_id: i64,
     plain_lyrics: Option<String>,

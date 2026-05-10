@@ -96,10 +96,9 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   const handleRemoveLyrics = useCallback(
     async (track: LibraryTrack) => {
       try {
-        await invoke("save_lyrics", {
+        await invoke("remove_lyrics", {
           trackId: track.id,
-          plainLyrics: null,
-          syncedLyrics: null,
+          filePath: track.file_path,
         });
         toast.success(`Lyrics removed for "${track.title || track.file_name}"`);
       } catch (e) {

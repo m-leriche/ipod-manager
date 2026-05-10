@@ -66,17 +66,16 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
 
   const handleRemove = useCallback(async () => {
     try {
-      await invoke("save_lyrics", {
+      await invoke("remove_lyrics", {
         trackId: track.id,
-        plainLyrics: null,
-        syncedLyrics: null,
+        filePath: track.file_path,
       });
       setLyrics(null);
       lastTrackIdRef.current = null;
     } catch (e) {
       setError(String(e));
     }
-  }, [track.id]);
+  }, [track.id, track.file_path]);
 
   // Parse synced lyrics
   const syncedLyricsText = lyrics?.synced_lyrics ?? null;
@@ -194,13 +193,15 @@ const PanelHeader = ({
     <span className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">Lyrics</span>
     {onRefetch && (
       <div className="flex items-center gap-2">
-        <button
-          onClick={onRemove}
-          className="text-[10px] text-text-tertiary hover:text-red-400 transition-colors"
-          title="Remove incorrect lyrics"
-        >
-          Remove
-        </button>
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="text-[10px] text-text-tertiary hover:text-red-400 transition-colors"
+            title="Remove incorrect lyrics"
+          >
+            Remove
+          </button>
+        )}
         <button
           onClick={onRefetch}
           disabled={fetching}

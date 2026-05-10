@@ -2,7 +2,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 const USER_AGENT: &str = "Crate/1.0 (https://github.com/m-leriche/ipod-manager)";
@@ -199,12 +199,14 @@ fn write_lyrics_id3(path: &std::path::Path, lyrics: &str) -> Result<(), String> 
     // Remove existing USLT frames
     tag.remove("USLT");
 
-    // Add new lyrics frame
-    tag.add_frame(id3::frame::Lyrics {
-        lang: "eng".to_string(),
-        description: String::new(),
-        text: lyrics.to_string(),
-    });
+    // Only add new frame if lyrics are non-empty
+    if !lyrics.is_empty() {
+        tag.add_frame(id3::frame::Lyrics {
+            lang: "eng".to_string(),
+            description: String::new(),
+            text: lyrics.to_string(),
+        });
+    }
 
     tag.write_to_path(path, id3::Version::Id3v24)
         .map_err(|e| format!("Failed to write lyrics: {}", e))?;
@@ -293,14 +295,33 @@ pub fn reset_lyrics_not_found(conn: &Connection) -> Result<usize, String> {
     .map_err(|e| format!("Failed to reset lyrics_not_found: {}", e))
 }
 
+/// Remove lyrics from the database and strip embedded tags from the audio file.
+pub fn remove_lyrics(conn: &Connection, track_id: i64, file_path: &str) -> Result<(), String> {
+    save_lyrics(conn, track_id, None, None)?;
+    let _ = write_lyrics_to_file(file_path, "");
+    Ok(())
+}
+
+/// Global throttle: ensures at least `REQUEST_THROTTLE` between any two requests.
+fn global_throttle(last_request: &Mutex<Instant>) {
+    if let Ok(mut last) = last_request.lock() {
+        let elapsed = last.elapsed();
+        if elapsed < REQUEST_THROTTLE {
+            std::thread::sleep(REQUEST_THROTTLE - elapsed);
+        }
+        *last = Instant::now();
+    }
+}
+
 /// Process a single track: fetch lyrics, save to DB, embed in file.
 fn process_track(
     track: &TrackRow,
     conn_arc: &Arc<Mutex<Connection>>,
+    last_request: &Mutex<Instant>,
     fetched: &AtomicUsize,
     not_found_count: &AtomicUsize,
 ) {
-    std::thread::sleep(REQUEST_THROTTLE);
+    global_throttle(last_request);
 
     let artist = track.artist.as_deref().unwrap_or("");
     let title = track.title.as_deref().unwrap_or("");
@@ -407,21 +428,32 @@ pub fn fetch_library_lyrics(
     };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
-        .build();
+        .build()
+        .or_else(|e| {
+            log::warn!(
+                "Failed to create thread pool, falling back to sequential: {}",
+                e
+            );
+            rayon::ThreadPoolBuilder::new().num_threads(1).build()
+        });
 
-    if let Err(e) = &pool {
-        log::warn!(
-            "Failed to create thread pool, falling back to sequential: {}",
-            e
-        );
-    }
+    let pool = match pool {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("Failed to create fallback thread pool: {}", e);
+            return LyricsFetchResult {
+                total,
+                fetched: 0,
+                already_had: 0,
+                not_found: 0,
+                skipped_not_found,
+                cancelled: false,
+            };
+        }
+    };
 
-    let pool = pool.unwrap_or_else(|_| {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
-            .build()
-            .expect("single-thread pool")
-    });
+    // Shared throttle ensures at most one request per REQUEST_THROTTLE globally
+    let last_request = Mutex::new(Instant::now() - REQUEST_THROTTLE);
 
     pool.install(|| {
         use rayon::prelude::*;
@@ -430,7 +462,7 @@ pub fn fetch_library_lyrics(
                 return;
             }
 
-            process_track(track, conn_arc, &fetched, &not_found_count);
+            process_track(track, conn_arc, &last_request, &fetched, &not_found_count);
 
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
             let display = track.title.as_deref().unwrap_or(track.file_name.as_str());

@@ -36,52 +36,36 @@ pub async fn lastfm_get_session(
     token: String,
     db: State<'_, LibraryDb>,
 ) -> Result<String, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
+    db.with_db(move |conn| {
         let session = lastfm::get_session(&token)?;
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::set_setting(&conn, "lastfm_session_key", &session.session_key)?;
-        library::set_setting(&conn, "lastfm_username", &session.username)?;
-        library::set_setting(&conn, "lastfm_scrobble_enabled", "true")?;
+        library::set_setting(conn, "lastfm_session_key", &session.session_key)?;
+        library::set_setting(conn, "lastfm_username", &session.username)?;
+        library::set_setting(conn, "lastfm_scrobble_enabled", "true")?;
         Ok::<_, String>(session.username)
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn lastfm_disconnect(db: State<'_, LibraryDb>) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::delete_setting(&conn, "lastfm_session_key")?;
-        library::delete_setting(&conn, "lastfm_username")?;
-        library::delete_setting(&conn, "lastfm_scrobble_enabled")?;
+    db.with_db(move |conn| {
+        library::delete_setting(conn, "lastfm_session_key")?;
+        library::delete_setting(conn, "lastfm_username")?;
+        library::delete_setting(conn, "lastfm_scrobble_enabled")?;
         Ok::<_, String>(())
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn lastfm_get_status(db: State<'_, LibraryDb>) -> Result<LastfmStatus, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        let session_key = library::get_setting(&conn, "lastfm_session_key");
-        let username = library::get_setting(&conn, "lastfm_username");
-        let scrobble_enabled = library::get_setting(&conn, "lastfm_scrobble_enabled")
+    db.with_db(move |conn| {
+        let session_key = library::get_setting(conn, "lastfm_session_key");
+        let username = library::get_setting(conn, "lastfm_username");
+        let scrobble_enabled = library::get_setting(conn, "lastfm_scrobble_enabled")
             .map(|v| v == "true")
             .unwrap_or(true);
-        let count = lastfm_queue::queue_count(&conn).unwrap_or(0);
+        let count = lastfm_queue::queue_count(conn).unwrap_or(0);
 
         Ok::<_, String>(LastfmStatus {
             connected: session_key.is_some(),
@@ -91,8 +75,6 @@ pub async fn lastfm_get_status(db: State<'_, LibraryDb>) -> Result<LastfmStatus,
         })
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -141,13 +123,8 @@ pub async fn lastfm_scrobble(
     timestamp: i64,
     db: State<'_, LibraryDb>,
 ) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-
-        let session_key = match library::get_setting(&conn, "lastfm_session_key") {
+    db.with_db(move |conn| {
+        let session_key = match library::get_setting(conn, "lastfm_session_key") {
             Some(sk) => sk,
             None => {
                 // Not connected — queue for later
@@ -159,7 +136,7 @@ pub async fn lastfm_scrobble(
                     duration_secs,
                     timestamp,
                 };
-                lastfm_queue::enqueue(&conn, &entry)?;
+                lastfm_queue::enqueue(conn, &entry)?;
                 return Ok::<_, String>(());
             }
         };
@@ -183,18 +160,16 @@ pub async fn lastfm_scrobble(
             }
             Err(e) => {
                 log::warn!("Scrobble failed, queuing for retry: {}", e);
-                lastfm_queue::enqueue(&conn, &entry)?;
+                lastfm_queue::enqueue(conn, &entry)?;
             }
         }
 
         // Try flushing queued scrobbles while we're at it
-        flush_queued_scrobbles(&conn, &session_key);
+        flush_queued_scrobbles(conn, &session_key);
 
         Ok::<_, String>(())
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -202,40 +177,28 @@ pub async fn lastfm_set_scrobble_enabled(
     enabled: bool,
     db: State<'_, LibraryDb>,
 ) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+    db.with_db(move |conn| {
         library::set_setting(
-            &conn,
+            conn,
             "lastfm_scrobble_enabled",
             if enabled { "true" } else { "false" },
         )?;
         Ok::<_, String>(())
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn lastfm_flush_queue(db: State<'_, LibraryDb>) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        let session_key = match library::get_setting(&conn, "lastfm_session_key") {
+    db.with_db(move |conn| {
+        let session_key = match library::get_setting(conn, "lastfm_session_key") {
             Some(sk) => sk,
             None => return Ok::<_, String>(()),
         };
-        flush_queued_scrobbles(&conn, &session_key);
+        flush_queued_scrobbles(conn, &session_key);
         Ok::<_, String>(())
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]

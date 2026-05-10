@@ -45,7 +45,8 @@ impl FolderWatcher {
 
     /// Start (or restart) watching the given folder paths.
     ///
-    /// Clears the suppression flag so the new callback processes events.
+    /// Suppresses the old watcher's lingering callbacks before dropping it,
+    /// then clears the flag for the new callback.
     pub fn watch(
         &self,
         paths: Vec<PathBuf>,
@@ -57,10 +58,12 @@ impl FolderWatcher {
             .lock()
             .map_err(|e| format!("Lock error: {}", e))?;
 
-        // Drop previous watcher
+        // Suppress before dropping so the old debouncer's lingering thread
+        // can't sneak in a callback between the drop and the flag clear.
+        self.suppressed.store(true, Ordering::SeqCst);
         *guard = None;
-
-        // Allow the new callback to process events.
+        // Now safe to clear — old thread is suppressed, new closure below
+        // will capture the Arc after this store.
         self.suppressed.store(false, Ordering::SeqCst);
 
         if paths.is_empty() {
@@ -72,9 +75,8 @@ impl FolderWatcher {
             Duration::from_secs(3),
             None,
             move |events: DebounceEventResult| {
-                // If suppressed, the debouncer's background thread is lingering
-                // after a stop — discard events to avoid ghost records.
                 if suppressed.load(Ordering::SeqCst) {
+                    log::debug!("Watcher callback suppressed — discarding events");
                     return;
                 }
                 handle_fs_events(events, &app, &db);
@@ -102,6 +104,8 @@ impl FolderWatcher {
     /// `notify-debouncer-full`'s `Drop` uses `Ordering::Relaxed` and does not
     /// join its background thread.  That thread can fire one last callback
     /// after the drop — the flag ensures it returns immediately.
+    ///
+    /// Use [`restart_from_db`] to start a fresh watcher afterward.
     pub fn stop(&self) {
         self.suppressed.store(true, Ordering::SeqCst);
         if let Ok(mut guard) = self.inner.lock() {

@@ -25,7 +25,13 @@ pub fn delete_tracks(
 
         let path = Path::new(&file_path);
         if path.exists() {
-            fs::remove_file(path).map_err(|e| format!("Failed to delete {}: {}", file_path, e))?;
+            if let Err(e) = fs::remove_file(path) {
+                // File may have been moved or deleted between the exists() check
+                // and remove_file (TOCTOU), or the path resolves via macOS Unicode
+                // normalization but the exact bytes don't match a real entry.
+                // Either way, we still want to remove the DB record.
+                log::warn!("Could not delete file {}: {}", file_path, e);
+            }
         }
 
         conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])

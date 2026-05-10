@@ -7,7 +7,6 @@ use crate::metarepair;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
-use std::collections::HashSet;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -132,27 +131,12 @@ pub async fn save_metadata(
 
             // Reorganize library files (moves to Artist/Album folder structure)
             if let Some(library_root) = library::get_library_location(&conn) {
-                // Collect all folders that are touched (source and destination)
-                // so we can sweep them for orphaned DB records afterward.
-                let mut affected_folders: HashSet<String> = HashSet::new();
-                for file_path in &file_paths {
-                    if file_path.starts_with(&library_root) {
-                        if let Some(parent) = Path::new(file_path).parent() {
-                            affected_folders.insert(parent.to_string_lossy().to_string());
-                        }
-                    }
-                }
-
                 for file_path in &file_paths {
                     if !file_path.starts_with(&library_root) {
                         continue;
                     }
                     match library::reorganize_library_file(&conn, &library_root, file_path) {
-                        Ok(Some(ref new_path)) => {
-                            if let Some(parent) = Path::new(new_path).parent() {
-                                affected_folders.insert(parent.to_string_lossy().to_string());
-                            }
-                        }
+                        Ok(Some(_)) => {}
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("Failed to reorganize {}: {}", file_path, e);
@@ -160,27 +144,38 @@ pub async fn save_metadata(
                     }
                 }
 
-                // Sweep all affected folders for orphaned DB records (files
-                // that no longer exist on disk).  This catches ghosts
-                // regardless of how they were created.
-                for folder in &affected_folders {
-                    let orphans: Vec<String> = conn
-                        .prepare("SELECT file_path FROM tracks WHERE folder_path = ?1")
-                        .and_then(|mut stmt| {
-                            stmt.query_map(params![folder.as_str()], |row| row.get::<_, String>(0))
-                                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                // Sweep the entire library for orphaned DB records (tracks
+                // whose files no longer exist on disk).  A library-wide scan
+                // is necessary because folder-level sweeps using exact
+                // `folder_path =` queries miss ghosts created with different
+                // path encodings — e.g. macOS HFS+ stores filenames in NFD
+                // Unicode but tags/lofty return NFC, so the DB folder_path
+                // may not match the query string byte-for-byte.
+                let all_paths: Vec<String> = conn
+                    .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
+                    .and_then(|mut stmt| {
+                        stmt.query_map(params![format!("{}%", library_root)], |row| {
+                            row.get::<_, String>(0)
                         })
-                        .unwrap_or_default();
+                        .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    })
+                    .unwrap_or_default();
 
-                    for orphan_path in &orphans {
-                        if !Path::new(orphan_path).exists() {
-                            conn.execute(
+                let mut cleaned = 0usize;
+                for path_str in &all_paths {
+                    if !Path::new(path_str).exists()
+                        && conn
+                            .execute(
                                 "DELETE FROM tracks WHERE file_path = ?1",
-                                params![orphan_path.as_str()],
+                                params![path_str.as_str()],
                             )
-                            .ok();
-                        }
+                            .is_ok()
+                    {
+                        cleaned += 1;
                     }
+                }
+                if cleaned > 0 {
+                    log::info!("Cleaned {} orphaned library tracks", cleaned);
                 }
 
                 true

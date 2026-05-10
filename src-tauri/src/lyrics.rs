@@ -305,7 +305,12 @@ fn process_track(
     let artist = track.artist.as_deref().unwrap_or("");
     let title = track.title.as_deref().unwrap_or("");
 
-    match fetch_lyrics(artist, title, track.album.as_deref(), Some(track.duration_secs)) {
+    match fetch_lyrics(
+        artist,
+        title,
+        track.album.as_deref(),
+        Some(track.duration_secs),
+    ) {
         Ok(result) => {
             if let Ok(conn) = conn_arc.lock() {
                 if let Err(e) = save_lyrics(
@@ -395,13 +400,20 @@ pub fn fetch_library_lyrics(
     let fetched = AtomicUsize::new(0);
     let not_found_count = AtomicUsize::new(0);
 
-    let num_threads = if total > 0 { CONCURRENT_WORKERS.min(total) } else { 1 };
+    let num_threads = if total > 0 {
+        CONCURRENT_WORKERS.min(total)
+    } else {
+        1
+    };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build();
 
     if let Err(e) = &pool {
-        log::warn!("Failed to create thread pool, falling back to sequential: {}", e);
+        log::warn!(
+            "Failed to create thread pool, falling back to sequential: {}",
+            e
+        );
     }
 
     let pool = pool.unwrap_or_else(|_| {

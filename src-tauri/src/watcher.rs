@@ -5,13 +5,23 @@ use notify_debouncer_full::{new_debouncer, notify, DebounceEventResult, Debounce
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 /// Tauri-managed state for the filesystem watcher.
+///
+/// The `suppressed` flag prevents the debouncer's background thread from
+/// modifying the database after `stop()` is called.  `notify-debouncer-full`'s
+/// `Drop` impl only sets a stop flag with `Ordering::Relaxed` and does NOT
+/// join the thread — so the thread can execute one final callback *after* the
+/// debouncer is dropped, racing with `save_metadata`'s tag-writing and
+/// creating ghost records from partially-written files.  The suppression flag
+/// is checked at the very start of the callback, before any DB access.
 pub struct FolderWatcher {
     inner: Mutex<Option<WatcherInner>>,
+    suppressed: Arc<AtomicBool>,
 }
 
 struct WatcherInner {
@@ -29,10 +39,13 @@ impl FolderWatcher {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
+            suppressed: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Start (or restart) watching the given folder paths.
+    ///
+    /// Clears the suppression flag so the new callback processes events.
     pub fn watch(
         &self,
         paths: Vec<PathBuf>,
@@ -47,14 +60,23 @@ impl FolderWatcher {
         // Drop previous watcher
         *guard = None;
 
+        // Allow the new callback to process events.
+        self.suppressed.store(false, Ordering::SeqCst);
+
         if paths.is_empty() {
             return Ok(());
         }
 
+        let suppressed = self.suppressed.clone();
         let mut debouncer = new_debouncer(
             Duration::from_secs(3),
             None,
             move |events: DebounceEventResult| {
+                // If suppressed, the debouncer's background thread is lingering
+                // after a stop — discard events to avoid ghost records.
+                if suppressed.load(Ordering::SeqCst) {
+                    return;
+                }
                 handle_fs_events(events, &app, &db);
             },
         )
@@ -74,18 +96,17 @@ impl FolderWatcher {
         Ok(())
     }
 
-    /// Stop watching all paths by dropping the debouncer.
+    /// Stop watching and suppress any lingering callbacks.
     ///
-    /// Preferred over a pause/resume approach because `notify-debouncer-full`
-    /// continues collecting OS filesystem events while paused — the callback
-    /// just skips them.  If the pause window is shorter than the debounce
-    /// timeout (3 s), accumulated events fire in one batch after resume,
-    /// creating ghost DB records.  Dropping the debouncer discards everything.
-    /// Use [`restart_from_db`] to start a fresh watcher afterward.
+    /// The suppression flag is set *before* the debouncer is dropped because
+    /// `notify-debouncer-full`'s `Drop` uses `Ordering::Relaxed` and does not
+    /// join its background thread.  That thread can fire one last callback
+    /// after the drop — the flag ensures it returns immediately.
     pub fn stop(&self) {
+        self.suppressed.store(true, Ordering::SeqCst);
         if let Ok(mut guard) = self.inner.lock() {
             *guard = None;
-            log::info!("File watcher stopped");
+            log::info!("File watcher stopped (suppressed)");
         }
     }
 }

@@ -1,4 +1,4 @@
-import type { AlbumSummary } from "../../../types/library";
+import type { AlbumSummary, ArtistSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
 
 export interface ArtworkCarouselProps {
@@ -8,6 +8,9 @@ export interface ArtworkCarouselProps {
   onPlayAlbum: (name: string) => void;
   sortMode?: AlbumSortMode;
   onSortModeChange?: (mode: AlbumSortMode) => void;
+  artists?: ArtistSummary[];
+  selectedArtist?: string | null;
+  onSelectArtist?: (artist: string | null) => void;
   lyricsOverlay?: boolean;
   onLyricsOverlayDismiss?: () => void;
 }

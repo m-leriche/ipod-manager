@@ -1,14 +1,12 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
 const USER_AGENT: &str = "Crate/1.0 (https://github.com/m-leriche/ipod-manager)";
-const RATE_LIMIT: Duration = Duration::from_millis(250);
 const BASE_URL: &str = "https://lrclib.net/api";
-
-static LAST_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
+const CONCURRENT_WORKERS: usize = 6;
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -27,20 +25,6 @@ pub struct TrackLyrics {
     pub source: String,
 }
 
-// ── Rate limiting ───────────────────────────────────────────────
-
-fn rate_limit() {
-    if let Ok(mut last) = LAST_REQUEST.lock() {
-        if let Some(prev) = *last {
-            let elapsed = prev.elapsed();
-            if elapsed < RATE_LIMIT {
-                std::thread::sleep(RATE_LIMIT - elapsed);
-            }
-        }
-        *last = Some(Instant::now());
-    }
-}
-
 // ── LRCLIB API ──────────────────────────────────────────────────
 
 /// Fetch lyrics from LRCLIB by exact match (artist, title, album, duration).
@@ -50,8 +34,6 @@ pub fn fetch_from_lrclib(
     album: Option<&str>,
     duration_secs: Option<f64>,
 ) -> Result<LyricsResult, String> {
-    rate_limit();
-
     let mut req = ureq::get(&format!("{}/get", BASE_URL))
         .query("artist_name", artist)
         .query("track_name", title);
@@ -97,8 +79,6 @@ pub fn fetch_from_lrclib(
 
 /// Search LRCLIB for lyrics when exact match fails.
 pub fn search_lrclib(artist: &str, title: &str) -> Result<LyricsResult, String> {
-    rate_limit();
-
     let query = format!("{} {}", artist, title);
     let resp = ureq::get(&format!("{}/search", BASE_URL))
         .query("q", &query)
@@ -313,15 +293,14 @@ pub fn reset_lyrics_not_found(conn: &Connection) -> Result<usize, String> {
 
 /// Fetch lyrics for all tracks in the library that don't have any yet.
 ///
-/// Takes an `Arc<Mutex<Connection>>` so the DB lock is only held briefly for
-/// each query/update, never during HTTP requests or file I/O.
+/// Uses a rayon thread pool with `CONCURRENT_WORKERS` threads for parallel
+/// fetching. DB lock is only held briefly for each query/update, never during
+/// HTTP requests or file I/O.
 pub fn fetch_library_lyrics(
-    conn_arc: &std::sync::Arc<std::sync::Mutex<Connection>>,
+    conn_arc: &Arc<Mutex<Connection>>,
     app: &tauri::AppHandle,
-    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    cancel_flag: &Arc<AtomicBool>,
 ) -> LyricsFetchResult {
-    use std::sync::atomic::Ordering;
-
     // Lock briefly to query tracks and count, then release
     let (tracks, skipped_not_found) = {
         let conn = match conn_arc.lock() {
@@ -369,69 +348,129 @@ pub fn fetch_library_lyrics(
     }; // lock released here
 
     let total = tracks.len();
-    let mut fetched = 0;
-    let mut not_found = 0;
+    let completed = AtomicUsize::new(0);
+    let fetched = AtomicUsize::new(0);
+    let not_found_count = AtomicUsize::new(0);
 
-    for (i, track) in tracks.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return LyricsFetchResult {
-                total,
-                fetched,
-                already_had: 0,
-                not_found,
-                skipped_not_found,
-                cancelled: true,
-            };
-        }
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(CONCURRENT_WORKERS)
+        .build();
 
-        let display = track.title.as_deref().unwrap_or(track.file_name.as_str());
-        let _ = app.emit(
-            "library-lyrics-progress",
-            LyricsProgress {
-                total,
-                completed: i,
-                current_track: display.to_string(),
-            },
-        );
+    match pool {
+        Ok(pool) => {
+            pool.install(|| {
+                use rayon::prelude::*;
+                tracks.par_iter().for_each(|track| {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        return;
+                    }
 
-        // artist and title are guaranteed non-empty by the SQL query
-        let artist = track.artist.as_deref().unwrap_or("");
-        let title = track.title.as_deref().unwrap_or("");
+                    let artist = track.artist.as_deref().unwrap_or("");
+                    let title = track.title.as_deref().unwrap_or("");
+                    let display =
+                        track.title.as_deref().unwrap_or(track.file_name.as_str());
 
-        // HTTP request happens here — no DB lock held
-        match fetch_lyrics(
-            artist,
-            title,
-            track.album.as_deref(),
-            Some(track.duration_secs),
-        ) {
-            Ok(result) => {
-                // Brief lock to save result
-                if let Ok(conn) = conn_arc.lock() {
-                    if let Err(e) = save_lyrics(
-                        &conn,
-                        track.id,
-                        result.plain_lyrics.as_deref(),
-                        result.synced_lyrics.as_deref(),
+                    match fetch_lyrics(
+                        artist,
+                        title,
+                        track.album.as_deref(),
+                        Some(track.duration_secs),
                     ) {
-                        log::warn!("Failed to save lyrics for track {}: {}", track.id, e);
+                        Ok(result) => {
+                            if let Ok(conn) = conn_arc.lock() {
+                                if let Err(e) = save_lyrics(
+                                    &conn,
+                                    track.id,
+                                    result.plain_lyrics.as_deref(),
+                                    result.synced_lyrics.as_deref(),
+                                ) {
+                                    log::warn!(
+                                        "Failed to save lyrics for track {}: {}",
+                                        track.id,
+                                        e
+                                    );
+                                }
+                            }
+                            if let Some(ref plain) = result.plain_lyrics {
+                                let _ = write_lyrics_to_file(&track.file_path, plain);
+                            }
+                            fetched.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Err(_) => {
+                            if let Ok(conn) = conn_arc.lock() {
+                                let _ = conn.execute(
+                                    "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
+                                    params![track.id],
+                                );
+                            }
+                            not_found_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    let _ = app.emit(
+                        "library-lyrics-progress",
+                        LyricsProgress {
+                            total,
+                            completed: done,
+                            current_track: display.to_string(),
+                        },
+                    );
+                });
+            });
+        }
+        Err(e) => {
+            log::warn!("Failed to create thread pool, falling back to sequential: {}", e);
+            for track in &tracks {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                let artist = track.artist.as_deref().unwrap_or("");
+                let title = track.title.as_deref().unwrap_or("");
+                let display =
+                    track.title.as_deref().unwrap_or(track.file_name.as_str());
+
+                match fetch_lyrics(
+                    artist,
+                    title,
+                    track.album.as_deref(),
+                    Some(track.duration_secs),
+                ) {
+                    Ok(result) => {
+                        if let Ok(conn) = conn_arc.lock() {
+                            let _ = save_lyrics(
+                                &conn,
+                                track.id,
+                                result.plain_lyrics.as_deref(),
+                                result.synced_lyrics.as_deref(),
+                            );
+                        }
+                        if let Some(ref plain) = result.plain_lyrics {
+                            let _ = write_lyrics_to_file(&track.file_path, plain);
+                        }
+                        fetched.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(_) => {
+                        if let Ok(conn) = conn_arc.lock() {
+                            let _ = conn.execute(
+                                "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
+                                params![track.id],
+                            );
+                        }
+                        not_found_count.fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                // File I/O — no lock needed
-                if let Some(ref plain) = result.plain_lyrics {
-                    let _ = write_lyrics_to_file(&track.file_path, plain);
-                }
-                fetched += 1;
-            }
-            Err(_) => {
-                // Brief lock to mark as not found
-                if let Ok(conn) = conn_arc.lock() {
-                    let _ = conn.execute(
-                        "UPDATE tracks SET lyrics_not_found = 1 WHERE id = ?1",
-                        params![track.id],
-                    );
-                }
-                not_found += 1;
+
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                let _ = app.emit(
+                    "library-lyrics-progress",
+                    LyricsProgress {
+                        total,
+                        completed: done,
+                        current_track: display.to_string(),
+                    },
+                );
             }
         }
     }
@@ -448,11 +487,11 @@ pub fn fetch_library_lyrics(
 
     LyricsFetchResult {
         total,
-        fetched,
+        fetched: fetched.load(Ordering::Relaxed),
         already_had: 0,
-        not_found,
+        not_found: not_found_count.load(Ordering::Relaxed),
         skipped_not_found,
-        cancelled: false,
+        cancelled: cancel_flag.load(Ordering::Relaxed),
     }
 }
 

@@ -13,6 +13,7 @@ pub mod smart_playlists;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+mod track_reader;
 pub mod types;
 
 use rusqlite::Connection;
@@ -31,10 +32,10 @@ pub use queries::{
 };
 pub use reorganize::reorganize_library_file;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
-pub(crate) use scan::{read_track_for_library, upsert_track};
 pub use settings::{
     delete_setting, get_library_location, get_setting, set_library_location, set_setting,
 };
+pub(crate) use track_reader::{read_track_for_library, upsert_track};
 pub use types::*;
 
 // ── Database state ─────────────────────────────────────────────

@@ -1,74 +1,22 @@
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Host, Stream, StreamConfig};
+use cpal::{Host, Stream};
 use crossbeam_channel::Receiver;
-use ringbuf::traits::{Consumer, Observer, Producer, Split};
+use ringbuf::traits::{Observer, Producer, Split};
 use ringbuf::HeapRb;
 use tauri::{AppHandle, Emitter, Runtime};
 
 use super::crossfade::{mix_crossfade, CrossfadeState};
 use super::decoder::AudioDecoder;
 use super::equalizer::Equalizer;
+use super::output::{adapt_channels, create_output_stream, decode_old_track};
 use super::resampler::Resampler;
+use super::shared_state::SharedState;
 use super::time_stretch::TimeStretcher;
 use super::types::{AudioCommand, PlayState};
-
-/// Shared state between the engine thread, cpal callback, and Tauri commands.
-pub struct SharedState {
-    pub position: Arc<AtomicU64>,     // f64 bits: seconds
-    pub duration: Arc<AtomicU64>,     // f64 bits: seconds
-    pub state: Arc<AtomicU8>,         // PlayState as u8
-    pub volume: Arc<AtomicU64>,       // f32 bits stored as u64 for atomic access
-    pub out_samples: Arc<AtomicU64>,  // samples actually played by cpal callback
-    pub out_channels: Arc<AtomicU64>, // output channel count (for position calc)
-    pub out_rate: Arc<AtomicU64>,     // output sample rate (for position calc)
-}
-
-impl SharedState {
-    pub fn new() -> Self {
-        Self {
-            position: Arc::new(AtomicU64::new(0)),
-            duration: Arc::new(AtomicU64::new(0)),
-            state: Arc::new(AtomicU8::new(PlayState::Stopped as u8)),
-            volume: Arc::new(AtomicU64::new(f32::to_bits(0.8) as u64)),
-            out_samples: Arc::new(AtomicU64::new(0)),
-            out_channels: Arc::new(AtomicU64::new(2)),
-            out_rate: Arc::new(AtomicU64::new(44100)),
-        }
-    }
-
-    pub fn get_position(&self) -> f64 {
-        f64::from_bits(self.position.load(Ordering::Relaxed))
-    }
-
-    pub fn set_position(&self, secs: f64) {
-        self.position.store(secs.to_bits(), Ordering::Relaxed);
-    }
-
-    pub fn get_duration(&self) -> f64 {
-        f64::from_bits(self.duration.load(Ordering::Relaxed))
-    }
-
-    pub fn set_duration(&self, secs: f64) {
-        self.duration.store(secs.to_bits(), Ordering::Relaxed);
-    }
-
-    pub fn get_state(&self) -> PlayState {
-        PlayState::from_u8(self.state.load(Ordering::Relaxed))
-    }
-
-    pub fn set_state(&self, state: PlayState) {
-        self.state.store(state as u8, Ordering::Relaxed);
-    }
-
-    pub fn set_volume(&self, vol: f32) {
-        self.volume
-            .store(f32::to_bits(vol) as u64, Ordering::Relaxed);
-    }
-}
 
 // Ring buffer size: ~500ms at 96kHz stereo (generous for high sample rates)
 const RING_BUFFER_SIZE: usize = 96000 * 2;
@@ -567,93 +515,4 @@ pub fn run<R: Runtime>(
         // Don't busy-wait
         std::thread::sleep(Duration::from_millis(2));
     }
-}
-
-/// Decode samples from the old track during a crossfade into `cf.leftover`.
-fn decode_old_track(cf: &mut CrossfadeState, needed: usize, output_channels: u16) {
-    while cf.leftover.len() < needed {
-        match cf.decoder.next_samples() {
-            Ok(Some(samples)) => {
-                let adapted = adapt_channels(samples, cf.source_channels, output_channels);
-                let resampled = if let Some(ref mut rs) = cf.resampler {
-                    rs.process(&adapted)
-                } else {
-                    adapted
-                };
-                let stretched = cf.time_stretcher.process(&resampled);
-                cf.leftover.extend_from_slice(&stretched);
-            }
-            // Old track ended or errored — just stop mixing
-            Ok(None) | Err(_) => break,
-        }
-    }
-}
-
-/// Adapt interleaved samples from source channel count to output channel count.
-fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f32> {
-    if src_ch == out_ch {
-        return samples.to_vec();
-    }
-
-    let src = src_ch as usize;
-    let out = out_ch as usize;
-    let frames = samples.len() / src;
-    let mut result = Vec::with_capacity(frames * out);
-
-    for frame in 0..frames {
-        let base = frame * src;
-        for c in 0..out {
-            if c < src {
-                result.push(samples[base + c]);
-            } else {
-                result.push(samples[base]);
-            }
-        }
-    }
-
-    result
-}
-
-/// Create a cpal output stream that reads from a ring buffer consumer.
-/// Re-queries the default output device each time so audio follows
-/// macOS system routing (e.g. Bluetooth speaker selection changes).
-fn create_output_stream(
-    host: &Host,
-    sample_rate: u32,
-    channels: u16,
-    mut consumer: ringbuf::HeapCons<f32>,
-    volume: Arc<AtomicU64>,
-    out_samples: Arc<AtomicU64>,
-) -> Result<Stream, String> {
-    let device = host
-        .default_output_device()
-        .ok_or_else(|| "No audio output device found".to_string())?;
-
-    let config = StreamConfig {
-        channels,
-        sample_rate: cpal::SampleRate(sample_rate),
-        buffer_size: cpal::BufferSize::Default,
-    };
-
-    let stream = device
-        .build_output_stream(
-            &config,
-            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
-                let mut played: u64 = 0;
-                for sample in data.iter_mut() {
-                    let s = consumer.try_pop().unwrap_or(0.0);
-                    *sample = s * vol;
-                    played += 1;
-                }
-                out_samples.fetch_add(played, Ordering::Relaxed);
-            },
-            |err| {
-                log::error!("Audio stream error: {}", err);
-            },
-            None,
-        )
-        .map_err(|e| format!("Failed to build output stream: {}", e))?;
-
-    Ok(stream)
 }

@@ -5,7 +5,6 @@ use notify_debouncer_full::{new_debouncer, notify, DebounceEventResult, Debounce
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -13,10 +12,6 @@ use tauri::{AppHandle, Emitter};
 /// Tauri-managed state for the filesystem watcher.
 pub struct FolderWatcher {
     inner: Mutex<Option<WatcherInner>>,
-    /// When true, the watcher callback skips processing events.  Used by
-    /// `save_metadata` to prevent the watcher from reading partially-written
-    /// files and inserting ghost records with null metadata.
-    paused: Arc<AtomicBool>,
 }
 
 struct WatcherInner {
@@ -34,19 +29,7 @@ impl FolderWatcher {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
-            paused: Arc::new(AtomicBool::new(false)),
         }
-    }
-
-    /// Pause event processing.  While paused the debouncer callback returns
-    /// immediately, preventing stale reads of files being rewritten.
-    pub fn pause(&self) {
-        self.paused.store(true, Ordering::SeqCst);
-    }
-
-    /// Resume event processing after a pause.
-    pub fn resume(&self) {
-        self.paused.store(false, Ordering::SeqCst);
     }
 
     /// Start (or restart) watching the given folder paths.
@@ -68,14 +51,10 @@ impl FolderWatcher {
             return Ok(());
         }
 
-        let paused = self.paused.clone();
         let mut debouncer = new_debouncer(
             Duration::from_secs(3),
             None,
             move |events: DebounceEventResult| {
-                if paused.load(Ordering::SeqCst) {
-                    return;
-                }
                 handle_fs_events(events, &app, &db);
             },
         )
@@ -95,8 +74,14 @@ impl FolderWatcher {
         Ok(())
     }
 
-    /// Stop watching all paths.
-    #[allow(dead_code)]
+    /// Stop watching all paths by dropping the debouncer.
+    ///
+    /// Preferred over a pause/resume approach because `notify-debouncer-full`
+    /// continues collecting OS filesystem events while paused — the callback
+    /// just skips them.  If the pause window is shorter than the debounce
+    /// timeout (3 s), accumulated events fire in one batch after resume,
+    /// creating ghost DB records.  Dropping the debouncer discards everything.
+    /// Use [`restart_from_db`] to start a fresh watcher afterward.
     pub fn stop(&self) {
         if let Ok(mut guard) = self.inner.lock() {
             *guard = None;

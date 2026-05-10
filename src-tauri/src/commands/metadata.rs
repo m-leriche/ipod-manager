@@ -7,6 +7,7 @@ use crate::metarepair;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
+use std::collections::HashSet;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -79,90 +80,134 @@ pub async fn save_metadata(
 ) -> Result<metadata::MetadataSaveResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
+    let conn_arc_for_restart = conn_arc.clone();
     let app_clone = app.clone();
+    let app_for_restart = app.clone();
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
-    // Pause the file watcher so it doesn't read partially-written files
-    // and create ghost records with null metadata.
-    watcher.pause();
+    // Stop the file watcher entirely so the debouncer is dropped and all
+    // queued/pending OS filesystem events are discarded.  The previous
+    // pause/resume approach was insufficient: the debouncer continued
+    // collecting events during the pause and delivered them after resume,
+    // creating ghost duplicate records.
+    watcher.stop();
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
-    })
-    .await
-    .map_err(|e| {
-        watcher.resume();
-        format!("Task failed: {}", e)
-    })?
-    .inspect_err(|_| {
-        watcher.resume();
-    })?;
+    let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
+        })
+        .await
+        .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
-    // Re-scan metadata into DB and reorganize files in the managed library
-    let db_result = (|| -> Result<(), AppError> {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+        // All DB work happens in a block so the lock is released before we
+        // emit the frontend event — that way the frontend's refresh query
+        // doesn't block on the lock.
+        let is_library = {
+            let conn = conn_arc
+                .lock()
+                .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
 
-        // Re-read and upsert ALL affected tracks so the DB reflects the
-        // freshly-written tags, regardless of whether they're in the
-        // managed library.
-        for file_path in &file_paths {
-            let path = Path::new(file_path);
-            if path.exists() {
-                let mtime = std::fs::metadata(path)
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs() as i64)
-                    .unwrap_or(now);
-                let track_data = library::read_track_for_library(path);
-                library::upsert_track(&conn, &track_data, mtime, now).ok();
-            }
-        }
-
-        // Reorganize library files (moves to Artist/Album folder structure)
-        if let Some(library_root) = library::get_library_location(&conn) {
-            let mut updated = 0usize;
+            // Re-read and upsert ALL affected tracks so the DB reflects the
+            // freshly-written tags, regardless of whether they're in the
+            // managed library.
             for file_path in &file_paths {
-                if file_path.starts_with(&library_root)
-                    && library::reorganize_library_file(&conn, &library_root, file_path).is_ok()
-                {
-                    updated += 1;
+                let path = Path::new(file_path);
+                if path.exists() {
+                    let mtime = std::fs::metadata(path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(now);
+                    let track_data = library::read_track_for_library(path);
+                    library::upsert_track(&conn, &track_data, mtime, now).ok();
                 }
             }
 
-            // Clean up ghost records at old paths that no longer have files
-            for file_path in &file_paths {
-                if file_path.starts_with(&library_root) && !Path::new(file_path).exists() {
-                    conn.execute(
-                        "DELETE FROM tracks WHERE file_path = ?1",
-                        params![file_path.as_str()],
-                    )
-                    .ok();
+            // Reorganize library files (moves to Artist/Album folder structure)
+            if let Some(library_root) = library::get_library_location(&conn) {
+                // Collect all folders that are touched (source and destination)
+                // so we can sweep them for orphaned DB records afterward.
+                let mut affected_folders: HashSet<String> = HashSet::new();
+                for file_path in &file_paths {
+                    if file_path.starts_with(&library_root) {
+                        if let Some(parent) = Path::new(file_path).parent() {
+                            affected_folders.insert(parent.to_string_lossy().to_string());
+                        }
+                    }
                 }
-            }
 
-            if updated > 0 {
-                let _ = app_clone.emit("library-files-reorganized", updated);
+                for file_path in &file_paths {
+                    if !file_path.starts_with(&library_root) {
+                        continue;
+                    }
+                    match library::reorganize_library_file(&conn, &library_root, file_path) {
+                        Ok(Some(ref new_path)) => {
+                            if let Some(parent) = Path::new(new_path).parent() {
+                                affected_folders.insert(parent.to_string_lossy().to_string());
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            log::warn!("Failed to reorganize {}: {}", file_path, e);
+                        }
+                    }
+                }
+
+                // Sweep all affected folders for orphaned DB records (files
+                // that no longer exist on disk).  This catches ghosts
+                // regardless of how they were created.
+                for folder in &affected_folders {
+                    let orphans: Vec<String> = conn
+                        .prepare("SELECT file_path FROM tracks WHERE folder_path = ?1")
+                        .and_then(|mut stmt| {
+                            stmt.query_map(params![folder.as_str()], |row| row.get::<_, String>(0))
+                                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                        })
+                        .unwrap_or_default();
+
+                    for orphan_path in &orphans {
+                        if !Path::new(orphan_path).exists() {
+                            conn.execute(
+                                "DELETE FROM tracks WHERE file_path = ?1",
+                                params![orphan_path.as_str()],
+                            )
+                            .ok();
+                        }
+                    }
+                }
+
+                true
+            } else {
+                false
             }
+        }; // conn dropped here — DB lock released
+
+        // Always tell the frontend to refresh after a metadata save so it
+        // picks up the latest DB state (renamed files, cleaned-up ghosts).
+        if is_library {
+            let _ = app_clone.emit("library-files-reorganized", file_paths.len());
         }
 
-        Ok(())
-    })();
+        Ok(result)
+    }
+    .await;
 
-    // Always resume the watcher, even if DB operations failed
-    watcher.resume();
+    // Always restart the watcher with a fresh debouncer, regardless of
+    // whether operations above succeeded or failed.
+    if let Err(e) =
+        crate::watcher::restart_from_db(&watcher, &app_for_restart, &conn_arc_for_restart)
+    {
+        log::warn!("Failed to restart file watcher after metadata save: {}", e);
+    }
 
-    db_result?;
-
-    Ok(result)
+    final_result
 }
 
 #[tauri::command]

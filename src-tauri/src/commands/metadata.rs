@@ -79,31 +79,30 @@ pub async fn save_metadata(
 ) -> Result<metadata::MetadataSaveResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
+    let conn_arc_for_restart = conn_arc.clone();
     let app_clone = app.clone();
+    let app_for_restart = app.clone();
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
-    // Pause the file watcher so it doesn't read partially-written files
-    // and create ghost records with null metadata.
-    watcher.pause();
+    // Stop the file watcher entirely so the debouncer is dropped and all
+    // queued/pending OS filesystem events are discarded.  The previous
+    // pause/resume approach was insufficient: the debouncer continued
+    // collecting events during the pause and delivered them after resume,
+    // creating ghost duplicate records.
+    watcher.stop();
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
-    })
-    .await
-    .map_err(|e| {
-        watcher.resume();
-        format!("Task failed: {}", e)
-    })?
-    .inspect_err(|_| {
-        watcher.resume();
-    })?;
+    let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
+        })
+        .await
+        .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
-    // Re-scan metadata into DB and reorganize files in the managed library
-    let db_result = (|| -> Result<(), AppError> {
+        // Re-scan metadata into DB and reorganize files in the managed library
         let conn = conn_arc
             .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -154,15 +153,19 @@ pub async fn save_metadata(
             }
         }
 
-        Ok(())
-    })();
+        Ok(result)
+    }
+    .await;
 
-    // Always resume the watcher, even if DB operations failed
-    watcher.resume();
+    // Always restart the watcher with a fresh debouncer, regardless of
+    // whether operations above succeeded or failed.
+    if let Err(e) =
+        crate::watcher::restart_from_db(&watcher, &app_for_restart, &conn_arc_for_restart)
+    {
+        log::warn!("Failed to restart file watcher after metadata save: {}", e);
+    }
 
-    db_result?;
-
-    Ok(result)
+    final_result
 }
 
 #[tauri::command]

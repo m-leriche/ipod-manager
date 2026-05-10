@@ -85,6 +85,13 @@ pub fn reorganize_library_file(
         return Ok(None);
     }
 
+    // Another file already occupies the destination — update the DB
+    // record in place rather than overwriting the existing file.
+    if dest.exists() {
+        upsert_track(conn, &track_data, mtime, now)?;
+        return Ok(None);
+    }
+
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }

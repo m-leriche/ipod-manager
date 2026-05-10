@@ -248,6 +248,9 @@ export const LibraryPlayer = ({
                     onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
                     sortMode={data.albumSortMode}
                     onSortModeChange={data.handleAlbumSortModeChange}
+                    artists={data.artistList}
+                    selectedArtist={data.selectedArtists.size === 1 ? [...data.selectedArtists][0] : null}
+                    onSelectArtist={(name) => data.handleSelectArtist(name ? new Set([name]) : new Set())}
                     lyricsOverlay={lyricsOverlay}
                     onLyricsOverlayDismiss={onLyricsOverlayDismiss}
                   />

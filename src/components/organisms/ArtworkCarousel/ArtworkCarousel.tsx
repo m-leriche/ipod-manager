@@ -5,6 +5,7 @@ import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
 import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/helpers";
 import { CoverFlowLyrics } from "./CoverFlowLyrics";
+import { ArtistPicker } from "./ArtistPicker";
 import type { ArtworkCarouselProps, AlbumArtProps } from "./types";
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
@@ -111,6 +112,9 @@ export const ArtworkCarousel = ({
   onPlayAlbum,
   sortMode = "album",
   onSortModeChange,
+  artists,
+  selectedArtist,
+  onSelectArtist,
   lyricsOverlay = false,
   onLyricsOverlayDismiss,
 }: ArtworkCarouselProps) => {
@@ -260,6 +264,10 @@ export const ArtworkCarousel = ({
       onWheel={handleWheel}
     >
       <AmbientBackground artUrl={ambientArtUrl} />
+
+      {artists && onSelectArtist && (
+        <ArtistPicker artists={artists} selectedArtist={selectedArtist ?? null} onSelectArtist={onSelectArtist} />
+      )}
 
       {onSortModeChange && (
         <div className="absolute top-2 right-3 z-10 flex gap-0.5 bg-white/5 backdrop-blur-sm rounded-md p-0.5">

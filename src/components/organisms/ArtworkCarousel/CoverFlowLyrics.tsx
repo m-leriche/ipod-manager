@@ -4,6 +4,11 @@ import { usePlayback, usePlaybackTime } from "../../../contexts/PlaybackContext"
 import { parseLrc, findActiveLine } from "../LyricsPanel/helpers";
 import type { TrackLyrics } from "../LyricsPanel/types";
 
+const LYRICS_SIZE_KEY = "crate-lyrics-overlay-size";
+type LyricsSize = 1 | 1.25 | 1.5;
+const SIZES: LyricsSize[] = [1, 1.25, 1.5];
+const BASE_SIZE_PX = 14;
+
 export const CoverFlowLyrics = () => {
   const {
     state: { currentTrack },
@@ -15,6 +20,15 @@ export const CoverFlowLyrics = () => {
   const linesRef = useRef<HTMLDivElement>(null);
   const [translateY, setTranslateY] = useState(0);
   const lastTrackIdRef = useRef<number | null>(null);
+  const [size, setSize] = useState<LyricsSize>(() => {
+    const stored = localStorage.getItem(LYRICS_SIZE_KEY);
+    return stored && SIZES.includes(Number(stored) as LyricsSize) ? (Number(stored) as LyricsSize) : 1;
+  });
+
+  const handleSizeChange = (s: LyricsSize) => {
+    setSize(s);
+    localStorage.setItem(LYRICS_SIZE_KEY, String(s));
+  };
 
   // Load lyrics when track changes
   useEffect(() => {
@@ -43,18 +57,20 @@ export const CoverFlowLyrics = () => {
     if (!lineEl) return;
 
     const containerH = containerRef.current.clientHeight;
-    setTranslateY(-(lineEl.offsetTop - containerH / 2 + lineEl.offsetHeight / 2));
-  }, [activeLine]);
+    setTranslateY(-(lineEl.offsetTop - containerH * 0.45 + lineEl.offsetHeight / 2));
+  }, [activeLine, size]);
 
   if (!currentTrack || loading || !syncedLines?.length) return null;
 
+  const fontSize = BASE_SIZE_PX * size;
+
   return (
     <div className="absolute inset-0 z-[5] flex items-center justify-center pointer-events-none">
-      <div className="w-[70%] max-w-lg h-[85%] rounded-2xl bg-black/25 backdrop-blur-[2px] overflow-hidden pointer-events-auto">
+      <div className="w-[70%] max-w-lg h-[85%] rounded-2xl bg-black/25 backdrop-blur-[2px] overflow-hidden pointer-events-auto relative">
         <div ref={containerRef} className="h-full overflow-hidden px-6">
           <div
             ref={linesRef}
-            className="transition-transform duration-700 ease-in-out pt-[50%]"
+            className="transition-transform duration-700 ease-in-out pt-[45%]"
             style={{ transform: `translateY(${translateY}px)` }}
           >
             {syncedLines.map((line, i) => {
@@ -62,9 +78,10 @@ export const CoverFlowLyrics = () => {
               return (
                 <div
                   key={i}
+                  style={{ fontSize: `${fontSize}px` }}
                   className={`py-2 text-center transition-[color,opacity,transform] duration-500 ease-in-out origin-center ${
                     isActive ? "text-white font-semibold scale-[1.08] opacity-100" : "text-white/30 opacity-60"
-                  } text-sm`}
+                  }`}
                 >
                   {line.text || "\u00A0"}
                 </div>
@@ -73,6 +90,22 @@ export const CoverFlowLyrics = () => {
             {/* Bottom padding so last line can center */}
             <div className="h-[50%]" />
           </div>
+        </div>
+        {/* Size controls */}
+        <div className="absolute bottom-3 left-0 right-0 flex justify-center items-end gap-1.5">
+          {SIZES.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleSizeChange(s)}
+              className={`leading-none transition-colors ${
+                s === size ? "text-white" : "text-white/30 hover:text-white/50"
+              }`}
+              style={{ fontSize: `${10 + (s - 1) * 12}px` }}
+              title={`${s}x`}
+            >
+              A
+            </button>
+          ))}
         </div>
       </div>
     </div>

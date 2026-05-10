@@ -7,6 +7,7 @@ use crate::metarepair;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
+use std::collections::HashSet;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -128,23 +129,59 @@ pub async fn save_metadata(
 
         // Reorganize library files (moves to Artist/Album folder structure)
         if let Some(library_root) = library::get_library_location(&conn) {
-            let mut updated = 0usize;
+            // Collect all folders that are touched (source and destination)
+            // so we can sweep them for orphaned DB records afterward.
+            let mut affected_folders: HashSet<String> = HashSet::new();
             for file_path in &file_paths {
-                if file_path.starts_with(&library_root)
-                    && library::reorganize_library_file(&conn, &library_root, file_path).is_ok()
-                {
-                    updated += 1;
+                if file_path.starts_with(&library_root) {
+                    if let Some(parent) = Path::new(file_path).parent() {
+                        affected_folders.insert(parent.to_string_lossy().to_string());
+                    }
                 }
             }
 
-            // Clean up ghost records at old paths that no longer have files
+            let mut updated = 0usize;
             for file_path in &file_paths {
-                if file_path.starts_with(&library_root) && !Path::new(file_path).exists() {
-                    conn.execute(
-                        "DELETE FROM tracks WHERE file_path = ?1",
-                        params![file_path.as_str()],
-                    )
-                    .ok();
+                if !file_path.starts_with(&library_root) {
+                    continue;
+                }
+                match library::reorganize_library_file(&conn, &library_root, file_path) {
+                    Ok(Some(ref new_path)) => {
+                        if let Some(parent) = Path::new(new_path).parent() {
+                            affected_folders.insert(parent.to_string_lossy().to_string());
+                        }
+                        updated += 1;
+                    }
+                    Ok(None) => {
+                        updated += 1;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to reorganize {}: {}", file_path, e);
+                    }
+                }
+            }
+
+            // Sweep all affected folders for orphaned DB records (files that
+            // no longer exist on disk).  This is a defensive cleanup that
+            // catches ghosts regardless of how they were created — whether
+            // from a failed reorganize, the watcher, or any other source.
+            for folder in &affected_folders {
+                let orphans: Vec<String> = conn
+                    .prepare("SELECT file_path FROM tracks WHERE folder_path = ?1")
+                    .and_then(|mut stmt| {
+                        stmt.query_map(params![folder.as_str()], |row| row.get::<_, String>(0))
+                            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    })
+                    .unwrap_or_default();
+
+                for orphan_path in &orphans {
+                    if !Path::new(orphan_path).exists() {
+                        conn.execute(
+                            "DELETE FROM tracks WHERE file_path = ?1",
+                            params![orphan_path.as_str()],
+                        )
+                        .ok();
+                    }
                 }
             }
 

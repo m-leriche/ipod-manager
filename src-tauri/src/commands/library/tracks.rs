@@ -3,37 +3,6 @@ use crate::library::{self, LibraryDb};
 use tauri::State;
 
 #[tauri::command]
-pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        match library::get_library_location(&conn) {
-            Some(loc) => Ok::<_, String>(std::path::Path::new(&loc).exists()),
-            None => Ok::<_, String>(false),
-        }
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
-}
-
-#[tauri::command]
-pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        Ok::<_, String>(library::get_library_location(&conn))
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
-}
-
-#[tauri::command]
 pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
@@ -136,36 +105,6 @@ pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Re
         )
         .map_err(|e| format!("Play count update failed: {}", e))?;
         Ok::<_, String>(())
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
-}
-
-#[tauri::command]
-pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::remove_folder(&conn, &path)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
-}
-
-#[tauri::command]
-pub async fn get_library_folders(
-    db: State<'_, LibraryDb>,
-) -> Result<Vec<library::LibraryFolder>, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::get_folders(&conn)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

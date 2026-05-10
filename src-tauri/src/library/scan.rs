@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter};
 
 use super::folders::get_folders;
 use super::now_epoch;
-use super::track_reader::{read_track_for_library, upsert_track};
+use super::track_io::{read_track_for_library, upsert_track};
 use super::types::LibraryScanProgress;
 
 pub fn scan_folder(

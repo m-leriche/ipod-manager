@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::import::compute_library_dest;
-use super::track_reader::{read_track_for_library, upsert_track};
+use super::track_io::{read_track_for_library, upsert_track};
 
 const COVER_NAMES: &[&str] = &[
     "cover.jpg",

@@ -100,94 +100,99 @@ pub async fn save_metadata(
         .await
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
-        // Re-scan metadata into DB and reorganize files in the managed library
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
+        // All DB work happens in a block so the lock is released before we
+        // emit the frontend event — that way the frontend's refresh query
+        // doesn't block on the lock.
+        let is_library = {
+            let conn = conn_arc
+                .lock()
+                .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
 
-        // Re-read and upsert ALL affected tracks so the DB reflects the
-        // freshly-written tags, regardless of whether they're in the
-        // managed library.
-        for file_path in &file_paths {
-            let path = Path::new(file_path);
-            if path.exists() {
-                let mtime = std::fs::metadata(path)
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs() as i64)
-                    .unwrap_or(now);
-                let track_data = library::read_track_for_library(path);
-                library::upsert_track(&conn, &track_data, mtime, now).ok();
-            }
-        }
-
-        // Reorganize library files (moves to Artist/Album folder structure)
-        if let Some(library_root) = library::get_library_location(&conn) {
-            // Collect all folders that are touched (source and destination)
-            // so we can sweep them for orphaned DB records afterward.
-            let mut affected_folders: HashSet<String> = HashSet::new();
+            // Re-read and upsert ALL affected tracks so the DB reflects the
+            // freshly-written tags, regardless of whether they're in the
+            // managed library.
             for file_path in &file_paths {
-                if file_path.starts_with(&library_root) {
-                    if let Some(parent) = Path::new(file_path).parent() {
-                        affected_folders.insert(parent.to_string_lossy().to_string());
-                    }
+                let path = Path::new(file_path);
+                if path.exists() {
+                    let mtime = std::fs::metadata(path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(now);
+                    let track_data = library::read_track_for_library(path);
+                    library::upsert_track(&conn, &track_data, mtime, now).ok();
                 }
             }
 
-            let mut updated = 0usize;
-            for file_path in &file_paths {
-                if !file_path.starts_with(&library_root) {
-                    continue;
-                }
-                match library::reorganize_library_file(&conn, &library_root, file_path) {
-                    Ok(Some(ref new_path)) => {
-                        if let Some(parent) = Path::new(new_path).parent() {
+            // Reorganize library files (moves to Artist/Album folder structure)
+            if let Some(library_root) = library::get_library_location(&conn) {
+                // Collect all folders that are touched (source and destination)
+                // so we can sweep them for orphaned DB records afterward.
+                let mut affected_folders: HashSet<String> = HashSet::new();
+                for file_path in &file_paths {
+                    if file_path.starts_with(&library_root) {
+                        if let Some(parent) = Path::new(file_path).parent() {
                             affected_folders.insert(parent.to_string_lossy().to_string());
                         }
-                        updated += 1;
-                    }
-                    Ok(None) => {
-                        updated += 1;
-                    }
-                    Err(e) => {
-                        log::warn!("Failed to reorganize {}: {}", file_path, e);
                     }
                 }
-            }
 
-            // Sweep all affected folders for orphaned DB records (files that
-            // no longer exist on disk).  This is a defensive cleanup that
-            // catches ghosts regardless of how they were created — whether
-            // from a failed reorganize, the watcher, or any other source.
-            for folder in &affected_folders {
-                let orphans: Vec<String> = conn
-                    .prepare("SELECT file_path FROM tracks WHERE folder_path = ?1")
-                    .and_then(|mut stmt| {
-                        stmt.query_map(params![folder.as_str()], |row| row.get::<_, String>(0))
-                            .map(|rows| rows.filter_map(|r| r.ok()).collect())
-                    })
-                    .unwrap_or_default();
-
-                for orphan_path in &orphans {
-                    if !Path::new(orphan_path).exists() {
-                        conn.execute(
-                            "DELETE FROM tracks WHERE file_path = ?1",
-                            params![orphan_path.as_str()],
-                        )
-                        .ok();
+                for file_path in &file_paths {
+                    if !file_path.starts_with(&library_root) {
+                        continue;
+                    }
+                    match library::reorganize_library_file(&conn, &library_root, file_path) {
+                        Ok(Some(ref new_path)) => {
+                            if let Some(parent) = Path::new(new_path).parent() {
+                                affected_folders.insert(parent.to_string_lossy().to_string());
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            log::warn!("Failed to reorganize {}: {}", file_path, e);
+                        }
                     }
                 }
-            }
 
-            if updated > 0 {
-                let _ = app_clone.emit("library-files-reorganized", updated);
+                // Sweep all affected folders for orphaned DB records (files
+                // that no longer exist on disk).  This catches ghosts
+                // regardless of how they were created.
+                for folder in &affected_folders {
+                    let orphans: Vec<String> = conn
+                        .prepare("SELECT file_path FROM tracks WHERE folder_path = ?1")
+                        .and_then(|mut stmt| {
+                            stmt.query_map(params![folder.as_str()], |row| row.get::<_, String>(0))
+                                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                        })
+                        .unwrap_or_default();
+
+                    for orphan_path in &orphans {
+                        if !Path::new(orphan_path).exists() {
+                            conn.execute(
+                                "DELETE FROM tracks WHERE file_path = ?1",
+                                params![orphan_path.as_str()],
+                            )
+                            .ok();
+                        }
+                    }
+                }
+
+                true
+            } else {
+                false
             }
+        }; // conn dropped here — DB lock released
+
+        // Always tell the frontend to refresh after a metadata save so it
+        // picks up the latest DB state (renamed files, cleaned-up ghosts).
+        if is_library {
+            let _ = app_clone.emit("library-files-reorganized", file_paths.len());
         }
 
         Ok(result)

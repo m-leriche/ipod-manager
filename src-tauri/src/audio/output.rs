@@ -93,13 +93,7 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                // CPAL timestamp captures local buffer latency (callback → playback).
-                // Use fetch_max so it never drops below the BT base offset.
-                let ts = info.timestamp();
-                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
-                    output_latency_us.fetch_max(latency.as_micros() as u64, Ordering::Relaxed);
-                }
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
 
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;

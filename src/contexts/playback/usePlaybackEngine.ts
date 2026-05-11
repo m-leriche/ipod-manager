@@ -71,8 +71,14 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const onGaplessTransitionRef = useRef<() => void>(() => {});
   const getNextIndexRef = useRef<() => number | null>(() => null);
   const onMediaToggleRef = useRef<() => void>(() => {});
+  const onMediaPlayRef = useRef<() => void>(() => {});
+  const onMediaPauseRef = useRef<() => void>(() => {});
   const onMediaNextRef = useRef<() => void>(() => {});
   const onMediaPreviousRef = useRef<() => void>(() => {});
+
+  // Gate for media key events: only respond after user explicitly starts playback.
+  // Prevents macOS system events (phone calls, FaceTime) from triggering playback.
+  const engineActiveRef = useRef(false);
 
   // Dedupe guard: prevent double-incrementing the same track (e.g. from StrictMode double-mount)
   const lastCountedRef = useRef<{ id: number; at: number }>({ id: -1, at: 0 });
@@ -221,12 +227,12 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     );
     register(
       listen("mediakey:play", () => {
-        if (active) onMediaToggleRef.current();
+        if (active) onMediaPlayRef.current();
       }),
     );
     register(
       listen("mediakey:pause", () => {
-        if (active) onMediaToggleRef.current();
+        if (active) onMediaPauseRef.current();
       }),
     );
     register(
@@ -304,6 +310,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // ── Play a track via the native audio engine ─────────────────
 
   const playFile = useCallback((track: LibraryTrack) => {
+    engineActiveRef.current = true;
     if (!stateRef.current.libraryAvailable) {
       setState((prev) => ({
         ...prev,
@@ -528,6 +535,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   }, []);
 
   const resume = useCallback(() => {
+    engineActiveRef.current = true;
     const s = stateRef.current;
     // Cold resume: track is restored from localStorage but audio engine hasn't loaded it
     if (s.currentTrack && !s.isPlaying && timeRef.current.duration === 0) {
@@ -548,6 +556,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   }, []);
 
   const stop = useCallback(() => {
+    engineActiveRef.current = false;
     invoke("audio_stop").catch(() => {});
     setState((prev) => ({
       ...prev,
@@ -605,10 +614,13 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     }
   }, [playFile]);
 
-  // Keep media key refs in sync (must be after next/previous are defined)
+  // Keep media key refs in sync (must be after next/previous are defined).
+  // All handlers are gated on engineActiveRef to prevent macOS system events
+  // (phone calls, FaceTime) from triggering playback. The gate is set when
+  // the user explicitly plays or resumes a track.
   onMediaToggleRef.current = () => {
     const s = stateRef.current;
-    if (!s.currentTrack) return;
+    if (!s.currentTrack || !engineActiveRef.current) return;
     if (s.isPlaying) {
       invoke("audio_pause").catch(() => {});
       setState((prev) => ({ ...prev, isPlaying: false }));
@@ -619,8 +631,26 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       setState((prev) => ({ ...prev, isPlaying: true }));
     }
   };
-  onMediaNextRef.current = () => next();
-  onMediaPreviousRef.current = () => previous();
+  onMediaPlayRef.current = () => {
+    const s = stateRef.current;
+    if (!s.currentTrack || !engineActiveRef.current || s.isPlaying) return;
+    invoke("audio_resume").catch(() => {});
+    lastPositionRef.current = timeRef.current.currentTime;
+    lastPositionTimeRef.current = performance.now();
+    setState((prev) => ({ ...prev, isPlaying: true }));
+  };
+  onMediaPauseRef.current = () => {
+    const s = stateRef.current;
+    if (!s.currentTrack || !s.isPlaying) return;
+    invoke("audio_pause").catch(() => {});
+    setState((prev) => ({ ...prev, isPlaying: false }));
+  };
+  onMediaNextRef.current = () => {
+    if (engineActiveRef.current) next();
+  };
+  onMediaPreviousRef.current = () => {
+    if (engineActiveRef.current) previous();
+  };
 
   const seekTo = useCallback((fraction: number) => {
     const dur = timeRef.current.duration;

@@ -62,9 +62,6 @@ impl<R: Runtime> EngineState<R> {
                     self.equalizer
                         .process(&mut out_samples, self.output_channels);
 
-                    self.spectrum
-                        .push_samples(&out_samples, self.output_channels);
-
                     // Mix in old track samples during crossfade
                     if let Some(ref mut cf) = self.crossfade {
                         decode_old_track(cf, out_samples.len(), self.output_channels);

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Host, Stream, StreamConfig};
-use ringbuf::traits::Consumer;
+use ringbuf::traits::{Consumer, Producer};
 
 use super::crossfade::CrossfadeState;
 
@@ -62,6 +62,7 @@ pub(super) fn create_output_stream(
     mut consumer: ringbuf::HeapCons<f32>,
     volume: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
+    mut analysis_prod: ringbuf::HeapProd<f32>,
 ) -> Result<Stream, String> {
     let device = host
         .default_output_device()
@@ -82,6 +83,8 @@ pub(super) fn create_output_stream(
                 for sample in data.iter_mut() {
                     let s = consumer.try_pop().unwrap_or(0.0);
                     *sample = s * vol;
+                    // Mirror to analysis buffer for beat-accurate spectrum
+                    let _ = analysis_prod.try_push(*sample);
                     played += 1;
                 }
                 out_samples.fetch_add(played, Ordering::Relaxed);

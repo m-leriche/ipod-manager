@@ -187,6 +187,14 @@ impl<R: Runtime> EngineState<R> {
                 "duration": dur,
             }),
         );
+    }
+
+    /// Emit spectrum events at ~30Hz for responsive visualization.
+    pub(super) fn emit_spectrum(&mut self) {
+        if self.last_spectrum_event.elapsed() < Duration::from_millis(33) {
+            return;
+        }
+        self.last_spectrum_event = std::time::Instant::now();
 
         let bands = self.spectrum.compute();
         let _ = self.app_handle.emit("audio:spectrum", &bands);

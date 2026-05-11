@@ -48,6 +48,7 @@ struct EngineState<R: Runtime> {
     playback_offset_secs: f64,
     current_speed: f64,
     last_position_event: std::time::Instant,
+    last_spectrum_event: std::time::Instant,
 
     shared: Arc<SharedState>,
     app_handle: AppHandle<R>,
@@ -100,6 +101,7 @@ pub fn run<R: Runtime>(
         playback_offset_secs: 0.0,
         current_speed: 1.0,
         last_position_event: std::time::Instant::now(),
+        last_spectrum_event: std::time::Instant::now(),
         shared,
         app_handle,
     };
@@ -169,6 +171,7 @@ pub fn run<R: Runtime>(
             }
 
             state.emit_position();
+            state.emit_spectrum();
         }
 
         // Don't busy-wait

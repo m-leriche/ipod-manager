@@ -1,7 +1,7 @@
 const TWO_PI = 2 * Math.PI;
 
-/** Decay rate per second — a full bar falls to zero in ~0.5s. */
-const DECAY_RATE = 2.0;
+/** Decay rate per second — a full bar falls to zero in ~0.17s. */
+const DECAY_RATE = 6.0;
 
 /**
  * Apply smooth decay to spectrum bands.

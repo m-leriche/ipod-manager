@@ -70,12 +70,18 @@ pub(super) fn create_output_stream(
         .default_output_device()
         .ok_or_else(|| "No audio output device found".to_string())?;
 
-    // Query full device pipeline latency via CoreAudio (includes Bluetooth)
-    let device_latency_us = query_device_latency_us(sample_rate);
-    output_latency_us.store(device_latency_us, Ordering::Relaxed);
+    // Detect Bluetooth and set a base latency floor.
+    // CoreAudio doesn't report BT transmission delay, so we add a fixed offset.
+    let bt_offset = if is_bluetooth_device() {
+        180_000u64 // 180ms for Bluetooth codec + transmission
+    } else {
+        0
+    };
+    output_latency_us.store(bt_offset, Ordering::Relaxed);
     log::info!(
-        "Output device latency: {:.1}ms",
-        device_latency_us as f64 / 1000.0
+        "Output device: bluetooth={}, base latency={:.0}ms",
+        bt_offset > 0,
+        bt_offset as f64 / 1000.0,
     );
 
     let config = StreamConfig {
@@ -87,13 +93,19 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                // CPAL timestamp captures local buffer latency (callback → playback).
+                // Use fetch_max so it never drops below the BT base offset.
+                let ts = info.timestamp();
+                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
+                    output_latency_us.fetch_max(latency.as_micros() as u64, Ordering::Relaxed);
+                }
+
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;
                 for sample in data.iter_mut() {
                     let s = consumer.try_pop().unwrap_or(0.0);
                     *sample = s * vol;
-                    // Mirror to analysis buffer for beat-accurate spectrum
                     let _ = analysis_prod.try_push(*sample);
                     played += 1;
                 }
@@ -109,21 +121,21 @@ pub(super) fn create_output_stream(
     Ok(stream)
 }
 
-// ── CoreAudio device latency query ──────────────────────────────
+// ── CoreAudio device transport type detection ───────────────────
 
-/// Query the macOS default output device's total pipeline latency in microseconds.
-/// Sums device latency + safety offset + buffer size (all in frames),
-/// which captures Bluetooth codec/transport delays.
-fn query_device_latency_us(sample_rate: u32) -> u64 {
-    let frames = query_coreaudio_latency_frames().unwrap_or(0);
-    if sample_rate == 0 {
-        return 0;
-    }
-    (frames as f64 / sample_rate as f64 * 1_000_000.0) as u64
+/// Check if the default output device is Bluetooth.
+fn is_bluetooth_device() -> bool {
+    transport_type()
+        .map(|t| {
+            const BLUETOOTH: u32 = u32::from_be_bytes(*b"blue");
+            const BLUETOOTH_LE: u32 = u32::from_be_bytes(*b"blea");
+            t == BLUETOOTH || t == BLUETOOTH_LE
+        })
+        .unwrap_or(false)
 }
 
-/// Raw CoreAudio FFI to get total output latency in frames.
-fn query_coreaudio_latency_frames() -> Option<u32> {
+/// Query the macOS default output device's transport type via CoreAudio.
+fn transport_type() -> Option<u32> {
     #[repr(C)]
     struct AudioObjectPropertyAddress {
         selector: u32,
@@ -131,15 +143,11 @@ fn query_coreaudio_latency_frames() -> Option<u32> {
         element: u32,
     }
 
-    // CoreAudio constants
     const SYSTEM_OBJECT: u32 = 1;
     const SCOPE_GLOBAL: u32 = u32::from_be_bytes(*b"glob");
-    const SCOPE_OUTPUT: u32 = u32::from_be_bytes(*b"outp");
     const ELEMENT_MAIN: u32 = 0;
     const DEFAULT_OUTPUT: u32 = u32::from_be_bytes(*b"dout");
-    const DEVICE_LATENCY: u32 = u32::from_be_bytes(*b"ltnc");
-    const SAFETY_OFFSET: u32 = u32::from_be_bytes(*b"saft");
-    const BUFFER_SIZE: u32 = u32::from_be_bytes(*b"bsiz");
+    const TRANSPORT_TYPE: u32 = u32::from_be_bytes(*b"tran");
 
     extern "C" {
         fn AudioObjectGetPropertyData(
@@ -169,18 +177,10 @@ fn query_coreaudio_latency_frames() -> Option<u32> {
                 &mut size,
                 &mut value as *mut u32 as *mut std::ffi::c_void,
             );
-            if status == 0 {
-                Some(value)
-            } else {
-                None
-            }
+            if status == 0 { Some(value) } else { None }
         };
 
         let device_id = get_u32(SYSTEM_OBJECT, DEFAULT_OUTPUT, SCOPE_GLOBAL)?;
-        let latency = get_u32(device_id, DEVICE_LATENCY, SCOPE_OUTPUT).unwrap_or(0);
-        let safety = get_u32(device_id, SAFETY_OFFSET, SCOPE_OUTPUT).unwrap_or(0);
-        let buffer = get_u32(device_id, BUFFER_SIZE, SCOPE_OUTPUT).unwrap_or(0);
-
-        Some(latency + safety + buffer)
+        get_u32(device_id, TRANSPORT_TYPE, SCOPE_GLOBAL)
     }
 }

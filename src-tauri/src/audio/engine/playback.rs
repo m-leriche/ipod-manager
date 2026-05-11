@@ -198,5 +198,7 @@ impl<R: Runtime> EngineState<R> {
 
         let bands = self.spectrum.compute();
         let _ = self.app_handle.emit("audio:spectrum", &bands);
+        let amp = self.spectrum.amplitude();
+        let _ = self.app_handle.emit("audio:amplitude", amp);
     }
 }

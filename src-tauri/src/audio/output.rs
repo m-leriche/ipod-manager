@@ -70,17 +70,19 @@ pub(super) fn create_output_stream(
         .default_output_device()
         .ok_or_else(|| "No audio output device found".to_string())?;
 
-    // Detect Bluetooth and set a base latency floor.
+    // Detect Bluetooth/wireless and set a base latency floor.
     // CoreAudio doesn't report BT transmission delay, so we add a fixed offset.
-    let bt_offset = if is_bluetooth_device() {
-        180_000u64 // 180ms for Bluetooth codec + transmission
+    let (transport, is_wireless) = detect_wireless_device();
+    let bt_offset = if is_wireless {
+        180_000u64 // 180ms for Bluetooth/AirPlay codec + transmission
     } else {
         0
     };
     output_latency_us.store(bt_offset, Ordering::Relaxed);
     log::info!(
-        "Output device: bluetooth={}, base latency={:.0}ms",
-        bt_offset > 0,
+        "Output device: transport={}, wireless={}, base latency={:.0}ms",
+        transport,
+        is_wireless,
         bt_offset as f64 / 1000.0,
     );
 
@@ -126,15 +128,21 @@ pub(super) fn create_output_stream(
 
 // ── CoreAudio device transport type detection ───────────────────
 
-/// Check if the default output device is Bluetooth.
-fn is_bluetooth_device() -> bool {
-    transport_type()
-        .map(|t| {
+/// Detect if the default output is wireless (Bluetooth, AirPlay, etc.).
+/// Returns (transport_type_string, is_wireless).
+fn detect_wireless_device() -> (String, bool) {
+    match transport_type() {
+        Some(t) => {
+            let bytes = t.to_be_bytes();
+            let label = String::from_utf8_lossy(&bytes).trim().to_string();
             const BLUETOOTH: u32 = u32::from_be_bytes(*b"blue");
             const BLUETOOTH_LE: u32 = u32::from_be_bytes(*b"blea");
-            t == BLUETOOTH || t == BLUETOOTH_LE
-        })
-        .unwrap_or(false)
+            const AIRPLAY: u32 = u32::from_be_bytes(*b"airp");
+            let wireless = t == BLUETOOTH || t == BLUETOOTH_LE || t == AIRPLAY;
+            (label, wireless)
+        }
+        None => ("unknown".to_string(), false),
+    }
 }
 
 /// Query the macOS default output device's transport type via CoreAudio.

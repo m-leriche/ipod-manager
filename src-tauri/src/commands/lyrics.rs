@@ -9,11 +9,7 @@ pub async fn get_lyrics(
     track_id: i64,
     db: State<'_, LibraryDb>,
 ) -> Result<lyrics::TrackLyrics, AppError> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-
+    let conn = db.lock_conn()?;
     lyrics::get_lyrics(&conn, track_id).map_err(Into::into)
 }
 
@@ -32,7 +28,6 @@ pub async fn fetch_lyrics(
     tauri::async_runtime::spawn_blocking(move || -> Result<lyrics::TrackLyrics, AppError> {
         let result = lyrics::fetch_lyrics(&artist, &title, album.as_deref(), duration_secs)?;
 
-        // Save to database
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
@@ -44,7 +39,6 @@ pub async fn fetch_lyrics(
             result.synced_lyrics.as_deref(),
         )?;
 
-        // Embed plain lyrics in audio file tags
         if let Some(ref plain) = result.plain_lyrics {
             let _ = lyrics::write_lyrics_to_file(&file_path, plain);
         }
@@ -66,16 +60,8 @@ pub async fn remove_lyrics(
     file_path: String,
     db: State<'_, LibraryDb>,
 ) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), AppError> {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        lyrics::remove_lyrics(&conn, track_id, &file_path).map_err(Into::into)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
+    db.with_db(move |conn| lyrics::remove_lyrics(conn, track_id, &file_path))
+        .await
 }
 
 #[tauri::command]
@@ -85,11 +71,7 @@ pub async fn save_lyrics(
     synced_lyrics: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<(), AppError> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-
+    let conn = db.lock_conn()?;
     lyrics::save_lyrics(
         &conn,
         track_id,
@@ -133,20 +115,12 @@ pub fn cancel_lyrics_fetch(cancel: State<'_, LyricsCancel>) -> Result<(), AppErr
 
 #[tauri::command]
 pub async fn reset_lyrics_not_found(db: State<'_, LibraryDb>) -> Result<usize, AppError> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-
+    let conn = db.lock_conn()?;
     lyrics::reset_lyrics_not_found(&conn).map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn count_lyrics_not_found(db: State<'_, LibraryDb>) -> Result<usize, AppError> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("DB lock failed: {}", e))?;
-
+    let conn = db.lock_conn()?;
     Ok(lyrics::count_lyrics_not_found(&conn))
 }

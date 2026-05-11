@@ -54,6 +54,35 @@ impl LibraryDb {
     pub fn conn_arc(&self) -> std::sync::Arc<std::sync::Mutex<Connection>> {
         self.conn.clone()
     }
+
+    /// Lock the database synchronously. Use for lightweight operations
+    /// that don't need `spawn_blocking`.
+    pub fn lock_conn(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Connection>, crate::error::AppError> {
+        self.conn
+            .lock()
+            .map_err(|e| crate::error::AppError::Generic(format!("DB lock failed: {}", e)))
+    }
+
+    /// Run a blocking closure with the database connection locked.
+    /// Wraps `spawn_blocking` + mutex lock + error conversion.
+    pub async fn with_db<F, T, E>(&self, f: F) -> Result<T, crate::error::AppError>
+    where
+        F: FnOnce(&Connection) -> Result<T, E> + Send + 'static,
+        T: Send + 'static,
+        E: Into<crate::error::AppError> + Send + 'static,
+    {
+        let conn_arc = self.conn_arc();
+        tauri::async_runtime::spawn_blocking(move || {
+            let conn = conn_arc
+                .lock()
+                .map_err(|e| crate::error::AppError::Generic(format!("DB lock failed: {}", e)))?;
+            f(&conn).map_err(Into::into)
+        })
+        .await
+        .map_err(|e| crate::error::AppError::Generic(format!("Task failed: {}", e)))?
+    }
 }
 
 // ── Database init ──────────────────────────────────────────────

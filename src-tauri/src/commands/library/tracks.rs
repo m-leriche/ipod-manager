@@ -7,18 +7,12 @@ pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
 ) -> Result<usize, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        let library_root = library::get_library_location(&conn)
+    db.with_db(move |conn| {
+        let library_root = library::get_library_location(conn)
             .ok_or_else(|| "No library location set".to_string())?;
-        library::delete_tracks(&conn, &library_root, &track_ids)
+        library::delete_tracks(conn, &library_root, &track_ids)
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -30,11 +24,7 @@ pub async fn flag_tracks(
     if track_ids.is_empty() {
         return Ok(0);
     }
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+    db.with_db(move |conn| {
         let placeholders: Vec<String> = (0..track_ids.len())
             .map(|i| format!("?{}", i + 2))
             .collect();
@@ -51,8 +41,6 @@ pub async fn flag_tracks(
             .map_err(|e| format!("Flag update failed: {}", e))
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -67,11 +55,7 @@ pub async fn rate_tracks(
     if rating > 5 {
         return Err(AppError::InvalidInput("Rating must be 0-5".into()));
     }
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+    db.with_db(move |conn| {
         let placeholders: Vec<String> = (0..track_ids.len())
             .map(|i| format!("?{}", i + 2))
             .collect();
@@ -88,17 +72,11 @@ pub async fn rate_tracks(
             .map_err(|e| format!("Rating update failed: {}", e))
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+    db.with_db(move |conn| {
         conn.execute(
             "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?1",
             rusqlite::params![track_id],
@@ -107,6 +85,4 @@ pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Re
         Ok::<_, String>(())
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }

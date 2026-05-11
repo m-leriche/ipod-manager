@@ -86,10 +86,7 @@ pub async fn save_metadata(
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
     // Stop the file watcher entirely so the debouncer is dropped and all
-    // queued/pending OS filesystem events are discarded.  The previous
-    // pause/resume approach was insufficient: the debouncer continued
-    // collecting events during the pause and delivered them after resume,
-    // creating ghost duplicate records.
+    // queued/pending OS filesystem events are discarded.
     watcher.stop();
 
     let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
@@ -100,8 +97,7 @@ pub async fn save_metadata(
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
         // All DB work happens in a block so the lock is released before we
-        // emit the frontend event — that way the frontend's refresh query
-        // doesn't block on the lock.
+        // emit the frontend event.
         let is_library = {
             let conn = conn_arc
                 .lock()
@@ -112,9 +108,6 @@ pub async fn save_metadata(
                 .unwrap_or_default()
                 .as_secs() as i64;
 
-            // Re-read and upsert ALL affected tracks so the DB reflects the
-            // freshly-written tags, regardless of whether they're in the
-            // managed library.
             for file_path in &file_paths {
                 let path = Path::new(file_path);
                 if path.exists() {
@@ -129,7 +122,6 @@ pub async fn save_metadata(
                 }
             }
 
-            // Reorganize library files (moves to Artist/Album folder structure)
             if let Some(library_root) = library::get_library_location(&conn) {
                 for file_path in &file_paths {
                     if !file_path.starts_with(&library_root) {
@@ -144,13 +136,6 @@ pub async fn save_metadata(
                     }
                 }
 
-                // Sweep the entire library for orphaned DB records (tracks
-                // whose files no longer exist on disk).  A library-wide scan
-                // is necessary because folder-level sweeps using exact
-                // `folder_path =` queries miss ghosts created with different
-                // path encodings — e.g. macOS HFS+ stores filenames in NFD
-                // Unicode but tags/lofty return NFC, so the DB folder_path
-                // may not match the query string byte-for-byte.
                 let all_paths: Vec<String> = conn
                     .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
                     .and_then(|mut stmt| {
@@ -182,10 +167,8 @@ pub async fn save_metadata(
             } else {
                 false
             }
-        }; // conn dropped here — DB lock released
+        };
 
-        // Always tell the frontend to refresh after a metadata save so it
-        // picks up the latest DB state (renamed files, cleaned-up ghosts).
         if is_library {
             let _ = app_clone.emit("library-files-reorganized", file_paths.len());
         }
@@ -194,8 +177,7 @@ pub async fn save_metadata(
     }
     .await;
 
-    // Always restart the watcher with a fresh debouncer, regardless of
-    // whether operations above succeeded or failed.
+    // Always restart the watcher, regardless of success or failure.
     if let Err(e) =
         crate::watcher::restart_from_db(&watcher, &app_for_restart, &conn_arc_for_restart)
     {
@@ -312,7 +294,6 @@ pub async fn upload_album_art(
 ) -> Result<(), AppError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<(), AppError> {
         albumart::save_uploaded_cover(&folder_path, &image_path)?;
-        // Invalidate cached thumbnails so they regenerate from the new art
         if let Ok(cache_dir) = app.path().app_data_dir().map(|d| d.join("thumbnails")) {
             crate::thumbnail::invalidate(&cache_dir, &folder_path);
         }

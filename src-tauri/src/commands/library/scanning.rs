@@ -23,17 +23,11 @@ pub async fn scan_library_stats(
 pub async fn get_library_stats(
     db: State<'_, LibraryDb>,
 ) -> Result<libstats::LibraryStats, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock error: {}", e))?;
-        let location = library::get_library_location(&conn).unwrap_or_default();
-        libstats::get_library_stats(&conn, &location)
+    db.with_db(move |conn| {
+        let location = library::get_library_location(conn).unwrap_or_default();
+        libstats::get_library_stats(conn, &location)
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -47,9 +41,7 @@ pub async fn set_library_location(
     let flag = cancel.new_flag();
 
     {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let conn = db.lock_conn()?;
         library::set_library_location(&conn, &path)?;
     }
 
@@ -76,9 +68,7 @@ pub async fn import_to_library(
     let flag = cancel.new_flag();
 
     let library_root = {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let conn = db.lock_conn()?;
         library::get_library_location(&conn).ok_or_else(|| {
             AppError::NotFound("No library location configured. Set one in Settings first.".into())
         })?
@@ -106,9 +96,7 @@ pub async fn add_library_folder(
     let conn_arc = db.conn_arc();
 
     {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
+        let conn = db.lock_conn()?;
         library::add_folder(&conn, &path)?;
     }
 
@@ -131,17 +119,8 @@ pub async fn refresh_library(
     cancel: State<'_, SyncCancel>,
 ) -> Result<(), AppError> {
     let flag = cancel.new_flag();
-    let conn_arc = db.conn_arc();
-
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::rescan_all_folders(&conn, &app, &flag)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
+    db.with_db(move |conn| library::rescan_all_folders(conn, &app, &flag))
+        .await
 }
 
 #[tauri::command]
@@ -151,16 +130,9 @@ pub async fn background_rescan(
     cancel: State<'_, SyncCancel>,
 ) -> Result<library::BackgroundScanResult, AppError> {
     let flag = cancel.new_flag();
-    let conn_arc = db.conn_arc();
-
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::background_rescan_all_folders(&conn, &flag)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))??;
+    let result = db
+        .with_db(move |conn| library::background_rescan_all_folders(conn, &flag))
+        .await?;
 
     if result.changed > 0 || result.removed > 0 {
         let _ = app.emit(
@@ -177,61 +149,28 @@ pub async fn background_rescan(
 
 #[tauri::command]
 pub async fn check_library_available(db: State<'_, LibraryDb>) -> Result<bool, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        match library::get_library_location(&conn) {
-            Some(loc) => Ok::<_, String>(std::path::Path::new(&loc).exists()),
-            None => Ok::<_, String>(false),
-        }
+    db.with_db(move |conn| match library::get_library_location(conn) {
+        Some(loc) => Ok::<_, String>(std::path::Path::new(&loc).exists()),
+        None => Ok::<_, String>(false),
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<String>, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        Ok::<_, String>(library::get_library_location(&conn))
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
+    db.with_db(|conn| Ok::<_, String>(library::get_library_location(conn)))
+        .await
 }
 
 #[tauri::command]
 pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::remove_folder(&conn, &path)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
+    db.with_db(move |conn| library::remove_folder(conn, &path))
+        .await
 }
 
 #[tauri::command]
 pub async fn get_library_folders(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryFolder>, AppError> {
-    let conn_arc = db.conn_arc();
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::get_folders(&conn)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
-    .map_err(Into::into)
+    db.with_db(library::get_folders).await
 }

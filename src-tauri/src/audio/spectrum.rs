@@ -91,7 +91,10 @@ impl SpectrumAnalyzer {
             // Normalize to 0-1 using dB scale (-35dB..0dB -> 0.0..1.0)
             let normalized = avg / (FFT_SIZE as f32 / 2.0);
             let db = 20.0 * normalized.max(1e-10).log10();
-            let value = ((db + 35.0) / 35.0).clamp(0.0, 1.0);
+            // Boost higher bands to compensate for natural treble energy rolloff
+            let t = band as f32 / NUM_BANDS as f32;
+            let boost = 1.0 + t * t * 6.0;
+            let value = ((db + 35.0) / 35.0 * boost).clamp(0.0, 1.0);
             bands.push(value);
         }
 

@@ -59,11 +59,12 @@ export const drawRadialSpectrum = (
     ctx.lineCap = "round";
 
     for (let i = 0; i < totalBars; i++) {
-      // Mirror: first half goes 0..31, second half goes 31..0
+      // Mirror: right side 0..31 (bass→treble bottom→top), left side 31..0
       const dataIdx = i < numBars ? i : totalBars - 1 - i;
       const mag = bands[dataIdx];
 
-      const angle = (i / totalBars) * TWO_PI - Math.PI / 2;
+      // Start at 6 o'clock (+PI/2) so bass fans out from bottom, treble meets at top
+      const angle = (i / totalBars) * TWO_PI + Math.PI / 2;
       const barHeight = Math.max(2, mag * maxBarHeight);
       const color = bandColor(dataIdx / numBars);
 

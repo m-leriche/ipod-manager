@@ -93,7 +93,16 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                // Measure local buffer latency, capped at 500ms to ignore garbage.
+                // Use max(cpal, bt_offset) so Bluetooth floor is never undercut.
+                let ts = info.timestamp();
+                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
+                    let us = latency.as_micros() as u64;
+                    if us < 500_000 {
+                        output_latency_us.store(us.max(bt_offset), Ordering::Relaxed);
+                    }
+                }
 
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;

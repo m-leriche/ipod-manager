@@ -88,10 +88,10 @@ impl SpectrumAnalyzer {
             }
             let avg = sum / (hi - lo) as f32;
 
-            // Normalize to 0-1 using dB scale (-60dB..0dB -> 0.0..1.0)
+            // Normalize to 0-1 using dB scale (-45dB..0dB -> 0.0..1.0)
             let normalized = avg / (FFT_SIZE as f32 / 2.0);
             let db = 20.0 * normalized.max(1e-10).log10();
-            let value = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
+            let value = ((db + 45.0) / 45.0).clamp(0.0, 1.0);
             bands.push(value);
         }
 

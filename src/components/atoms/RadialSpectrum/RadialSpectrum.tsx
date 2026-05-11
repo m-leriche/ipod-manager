@@ -7,7 +7,7 @@ const NUM_BANDS = 32;
 const ACCENT = "#0066ff";
 
 /** Extra canvas px per side so bars can radiate beyond the container. */
-const bleed = (size: number) => Math.max(16, Math.ceil(size * 0.16));
+const bleed = (size: number) => Math.max(16, Math.ceil(size * 0.22));
 
 export const RadialSpectrum = ({ size, children, className = "" }: RadialSpectrumProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -160,6 +160,7 @@ fn transport_type() -> Option<u32> {
     const DEFAULT_OUTPUT: u32 = u32::from_be_bytes(*b"dout");
     const TRANSPORT_TYPE: u32 = u32::from_be_bytes(*b"tran");
 
+    #[link(name = "CoreAudio", kind = "framework")]
     extern "C" {
         fn AudioObjectGetPropertyData(
             id: u32,
@@ -172,26 +173,50 @@ fn transport_type() -> Option<u32> {
     }
 
     unsafe {
-        let get_u32 = |id: u32, selector: u32, scope: u32| -> Option<u32> {
-            let addr = AudioObjectPropertyAddress {
-                selector,
-                scope,
-                element: ELEMENT_MAIN,
-            };
-            let mut value: u32 = 0;
-            let mut size = 4u32;
-            let status = AudioObjectGetPropertyData(
-                id,
-                &addr,
-                0,
-                std::ptr::null(),
-                &mut size,
-                &mut value as *mut u32 as *mut std::ffi::c_void,
-            );
-            if status == 0 { Some(value) } else { None }
+        // Step 1: get default output device ID
+        let addr = AudioObjectPropertyAddress {
+            selector: DEFAULT_OUTPUT,
+            scope: SCOPE_GLOBAL,
+            element: ELEMENT_MAIN,
         };
+        let mut device_id: u32 = 0;
+        let mut size = 4u32;
+        let status = AudioObjectGetPropertyData(
+            SYSTEM_OBJECT,
+            &addr,
+            0,
+            std::ptr::null(),
+            &mut size,
+            &mut device_id as *mut u32 as *mut std::ffi::c_void,
+        );
+        if status != 0 {
+            log::warn!("CoreAudio: failed to get default output device (status={status})");
+            return None;
+        }
 
-        let device_id = get_u32(SYSTEM_OBJECT, DEFAULT_OUTPUT, SCOPE_GLOBAL)?;
-        get_u32(device_id, TRANSPORT_TYPE, SCOPE_GLOBAL)
+        // Step 2: get transport type
+        let addr = AudioObjectPropertyAddress {
+            selector: TRANSPORT_TYPE,
+            scope: SCOPE_GLOBAL,
+            element: ELEMENT_MAIN,
+        };
+        let mut transport: u32 = 0;
+        let mut size = 4u32;
+        let status = AudioObjectGetPropertyData(
+            device_id,
+            &addr,
+            0,
+            std::ptr::null(),
+            &mut size,
+            &mut transport as *mut u32 as *mut std::ffi::c_void,
+        );
+        if status != 0 {
+            log::warn!(
+                "CoreAudio: failed to get transport type for device {device_id} (status={status})"
+            );
+            return None;
+        }
+
+        Some(transport)
     }
 }

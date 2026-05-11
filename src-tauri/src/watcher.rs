@@ -235,5 +235,35 @@ fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex
 }
 
 fn is_audio_file(path: &Path) -> bool {
-    is_audio(path)
+    let is_dot_file = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n.starts_with('.'))
+        .unwrap_or(true);
+    !is_dot_file && is_audio(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_apple_double_files() {
+        assert!(!is_audio_file(Path::new("/music/._01-10 Song.flac")));
+        assert!(!is_audio_file(Path::new("/music/._song.mp3")));
+        assert!(!is_audio_file(Path::new("/music/.hidden.m4a")));
+    }
+
+    #[test]
+    fn accepts_normal_audio_files() {
+        assert!(is_audio_file(Path::new("/music/01-10 Song.flac")));
+        assert!(is_audio_file(Path::new("/music/song.mp3")));
+        assert!(is_audio_file(Path::new("/music/track.m4a")));
+    }
+
+    #[test]
+    fn rejects_non_audio_files() {
+        assert!(!is_audio_file(Path::new("/music/cover.jpg")));
+        assert!(!is_audio_file(Path::new("/music/notes.txt")));
+    }
 }

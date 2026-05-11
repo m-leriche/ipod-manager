@@ -191,7 +191,7 @@ impl<R: Runtime> EngineState<R> {
 
     /// Emit spectrum events at ~30Hz for responsive visualization.
     pub(super) fn emit_spectrum(&mut self) {
-        if self.last_spectrum_event.elapsed() < Duration::from_millis(33) {
+        if self.last_spectrum_event.elapsed() < Duration::from_millis(16) {
             return;
         }
         self.last_spectrum_event = std::time::Instant::now();

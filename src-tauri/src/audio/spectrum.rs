@@ -2,7 +2,7 @@ use rustfft::num_complex::Complex;
 use rustfft::FftPlanner;
 use std::sync::Arc;
 
-const FFT_SIZE: usize = 1024;
+const FFT_SIZE: usize = 512;
 
 /// Number of logarithmic frequency bands emitted to the frontend.
 pub const NUM_BANDS: usize = 32;

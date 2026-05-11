@@ -77,12 +77,6 @@ pub(super) fn create_output_stream(
     let is_builtin = is_builtin_device(&device_name);
     let bt_offset = if is_builtin { 0u64 } else { 180_000 };
     output_latency_us.store(bt_offset, Ordering::Relaxed);
-    log::info!(
-        "Output device: name={:?}, builtin={}, base latency={:.0}ms",
-        device_name,
-        is_builtin,
-        bt_offset as f64 / 1000.0,
-    );
 
     let config = StreamConfig {
         channels,

@@ -243,8 +243,7 @@ impl<R: Runtime> EngineState<R> {
         if self.analysis_delay.len() > delay_samples {
             let ready = self.analysis_delay.len() - delay_samples;
             let samples: Vec<f32> = self.analysis_delay.drain(..ready).collect();
-            self.spectrum
-                .push_samples(&samples, self.output_channels);
+            self.spectrum.push_samples(&samples, self.output_channels);
         }
 
         let bands = self.spectrum.compute();

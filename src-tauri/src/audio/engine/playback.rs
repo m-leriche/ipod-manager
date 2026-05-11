@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cpal::traits::StreamTrait;
-use ringbuf::traits::Split;
+use ringbuf::traits::{Consumer, Split};
 use ringbuf::HeapRb;
 use tauri::{Emitter, Runtime};
 
@@ -49,6 +49,8 @@ impl<R: Runtime> EngineState<R> {
 
                 let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
                 let (prod, cons) = rb.split();
+                let analysis_rb = HeapRb::<f32>::new(8192);
+                let (analysis_prod, analysis_cons) = analysis_rb.split();
 
                 match create_output_stream(
                     &self.host,
@@ -57,11 +59,14 @@ impl<R: Runtime> EngineState<R> {
                     cons,
                     Arc::clone(&self.shared.volume),
                     Arc::clone(&self.shared.out_samples),
+                    analysis_prod,
+                    Arc::clone(&self.shared.output_latency_us),
                 ) {
                     Ok(stream) => {
                         stream.play().ok();
                         self.current_stream = Some(stream);
                         self.ring_producer = Some(prod);
+                        self.analysis_consumer = Some(analysis_cons);
                         self.decoder = Some(dec);
                         self.shared.set_state(PlayState::Playing);
                         let _ = self.app_handle.emit("audio:duration-ready", dur);
@@ -86,12 +91,15 @@ impl<R: Runtime> EngineState<R> {
             stream.pause().ok();
         }
         self.ring_producer = None;
+        self.analysis_consumer = None;
+        self.analysis_delay.clear();
         self.decoder = None;
         self.resampler = None;
         self.preloaded = None;
         self.crossfade = None;
         self.leftover.clear();
         self.equalizer.reset();
+        self.spectrum.reset();
         self.shared.out_samples.store(0, Ordering::Relaxed);
         self.shared.set_position(0.0);
     }
@@ -110,12 +118,15 @@ impl<R: Runtime> EngineState<R> {
         }
         self.time_stretcher.reset();
         self.equalizer.reset();
+        self.spectrum.reset();
         self.crossfade = None;
 
         // Clear ring buffer by dropping and recreating the stream
         if self.current_stream.is_some() {
             let rb = HeapRb::<f32>::new(RING_BUFFER_SIZE);
             let (prod, cons) = rb.split();
+            let analysis_rb = HeapRb::<f32>::new(8192);
+            let (analysis_prod, analysis_cons) = analysis_rb.split();
 
             if let Some(stream) = self.current_stream.take() {
                 stream.pause().ok();
@@ -128,6 +139,8 @@ impl<R: Runtime> EngineState<R> {
                 cons,
                 Arc::clone(&self.shared.volume),
                 Arc::clone(&self.shared.out_samples),
+                analysis_prod,
+                Arc::clone(&self.shared.output_latency_us),
             ) {
                 Ok(stream) => {
                     if self.shared.get_state() == PlayState::Playing {
@@ -135,6 +148,8 @@ impl<R: Runtime> EngineState<R> {
                     }
                     self.current_stream = Some(stream);
                     self.ring_producer = Some(prod);
+                    self.analysis_consumer = Some(analysis_cons);
+                    self.analysis_delay.clear();
                 }
                 Err(e) => {
                     log::error!("Failed to recreate stream after seek: {}", e);
@@ -185,5 +200,53 @@ impl<R: Runtime> EngineState<R> {
                 "duration": dur,
             }),
         );
+    }
+
+    /// Emit spectrum events at ~60Hz for responsive visualization.
+    /// Drains the analysis ring buffer (output-side samples) through a
+    /// delay buffer sized to the hardware output latency, so the
+    /// visualizer matches the moment audio actually reaches the speakers.
+    pub(super) fn emit_spectrum(&mut self) {
+        if self.last_spectrum_event.elapsed() < Duration::from_millis(16) {
+            return;
+        }
+        self.last_spectrum_event = std::time::Instant::now();
+
+        // Drain played samples into the delay buffer
+        if let Some(ref mut cons) = self.analysis_consumer {
+            let mut buf = [0.0f32; 4096];
+            loop {
+                let mut n = 0;
+                while n < buf.len() {
+                    match cons.try_pop() {
+                        Some(s) => {
+                            buf[n] = s;
+                            n += 1;
+                        }
+                        None => break,
+                    }
+                }
+                if n == 0 {
+                    break;
+                }
+                self.analysis_delay.extend_from_slice(&buf[..n]);
+            }
+        }
+
+        // Compute delay size from hardware latency
+        let latency_us = self.shared.output_latency_us.load(Ordering::Relaxed);
+        let latency_secs = latency_us as f64 / 1_000_000.0;
+        let delay_samples =
+            (latency_secs * self.output_rate as f64 * self.output_channels as f64) as usize;
+
+        // Feed spectrum analyzer only with samples old enough to have been heard
+        if self.analysis_delay.len() > delay_samples {
+            let ready = self.analysis_delay.len() - delay_samples;
+            let samples: Vec<f32> = self.analysis_delay.drain(..ready).collect();
+            self.spectrum.push_samples(&samples, self.output_channels);
+        }
+
+        let bands = self.spectrum.compute();
+        let _ = self.app_handle.emit("audio:spectrum", &bands);
     }
 }

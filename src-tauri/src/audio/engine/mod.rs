@@ -15,6 +15,7 @@ use super::decoder::AudioDecoder;
 use super::equalizer::Equalizer;
 use super::resampler::Resampler;
 use super::shared_state::SharedState;
+use super::spectrum::SpectrumAnalyzer;
 use super::time_stretch::TimeStretcher;
 use super::types::{AudioCommand, PlayState};
 
@@ -36,6 +37,9 @@ struct EngineState<R: Runtime> {
 
     equalizer: Equalizer,
     time_stretcher: TimeStretcher,
+    spectrum: SpectrumAnalyzer,
+    analysis_consumer: Option<ringbuf::HeapCons<f32>>,
+    analysis_delay: Vec<f32>,
     leftover: Vec<f32>,
 
     preloaded: Option<(AudioDecoder, Option<Resampler>, u16)>,
@@ -46,6 +50,7 @@ struct EngineState<R: Runtime> {
     playback_offset_secs: f64,
     current_speed: f64,
     last_position_event: std::time::Instant,
+    last_spectrum_event: std::time::Instant,
 
     shared: Arc<SharedState>,
     app_handle: AppHandle<R>,
@@ -89,6 +94,9 @@ pub fn run<R: Runtime>(
         source_rate: 44100,
         equalizer: Equalizer::new(output_rate, output_channels),
         time_stretcher: TimeStretcher::new(output_channels),
+        spectrum: SpectrumAnalyzer::new(),
+        analysis_consumer: None,
+        analysis_delay: Vec::new(),
         leftover: Vec::new(),
         preloaded: None,
         crossfade: None,
@@ -97,6 +105,7 @@ pub fn run<R: Runtime>(
         playback_offset_secs: 0.0,
         current_speed: 1.0,
         last_position_event: std::time::Instant::now(),
+        last_spectrum_event: std::time::Instant::now(),
         shared,
         app_handle,
     };
@@ -166,6 +175,7 @@ pub fn run<R: Runtime>(
             }
 
             state.emit_position();
+            state.emit_spectrum();
         }
 
         // Don't busy-wait

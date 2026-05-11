@@ -41,7 +41,7 @@ export const drawRadialSpectrum = (
   const centerY = height / 2;
   const gap = Math.max(3, artRadius * 0.02);
   const innerRadius = artRadius + gap;
-  const maxBarHeight = Math.max(14, artRadius * 0.35);
+  const maxBarHeight = Math.max(20, artRadius * 0.55);
   const numBars = bands.length;
   // Mirror: draw each band on both sides for symmetry (64 visual bars from 32 data points)
   const totalBars = numBars * 2;

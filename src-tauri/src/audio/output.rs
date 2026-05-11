@@ -70,6 +70,14 @@ pub(super) fn create_output_stream(
         .default_output_device()
         .ok_or_else(|| "No audio output device found".to_string())?;
 
+    // Query full device pipeline latency via CoreAudio (includes Bluetooth)
+    let device_latency_us = query_device_latency_us(sample_rate);
+    output_latency_us.store(device_latency_us, Ordering::Relaxed);
+    log::info!(
+        "Output device latency: {:.1}ms",
+        device_latency_us as f64 / 1000.0
+    );
+
     let config = StreamConfig {
         channels,
         sample_rate: cpal::SampleRate(sample_rate),
@@ -79,13 +87,7 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                // Measure hardware output latency (callback → actual playback)
-                let ts = info.timestamp();
-                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
-                    output_latency_us.store(latency.as_micros() as u64, Ordering::Relaxed);
-                }
-
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;
                 for sample in data.iter_mut() {
@@ -105,4 +107,80 @@ pub(super) fn create_output_stream(
         .map_err(|e| format!("Failed to build output stream: {}", e))?;
 
     Ok(stream)
+}
+
+// ── CoreAudio device latency query ──────────────────────────────
+
+/// Query the macOS default output device's total pipeline latency in microseconds.
+/// Sums device latency + safety offset + buffer size (all in frames),
+/// which captures Bluetooth codec/transport delays.
+fn query_device_latency_us(sample_rate: u32) -> u64 {
+    let frames = query_coreaudio_latency_frames().unwrap_or(0);
+    if sample_rate == 0 {
+        return 0;
+    }
+    (frames as f64 / sample_rate as f64 * 1_000_000.0) as u64
+}
+
+/// Raw CoreAudio FFI to get total output latency in frames.
+fn query_coreaudio_latency_frames() -> Option<u32> {
+    #[repr(C)]
+    struct AudioObjectPropertyAddress {
+        selector: u32,
+        scope: u32,
+        element: u32,
+    }
+
+    // CoreAudio constants
+    const SYSTEM_OBJECT: u32 = 1;
+    const SCOPE_GLOBAL: u32 = u32::from_be_bytes(*b"glob");
+    const SCOPE_OUTPUT: u32 = u32::from_be_bytes(*b"outp");
+    const ELEMENT_MAIN: u32 = 0;
+    const DEFAULT_OUTPUT: u32 = u32::from_be_bytes(*b"dout");
+    const DEVICE_LATENCY: u32 = u32::from_be_bytes(*b"ltnc");
+    const SAFETY_OFFSET: u32 = u32::from_be_bytes(*b"saft");
+    const BUFFER_SIZE: u32 = u32::from_be_bytes(*b"bsiz");
+
+    extern "C" {
+        fn AudioObjectGetPropertyData(
+            id: u32,
+            address: *const AudioObjectPropertyAddress,
+            qualifier_size: u32,
+            qualifier: *const std::ffi::c_void,
+            data_size: *mut u32,
+            data: *mut std::ffi::c_void,
+        ) -> i32;
+    }
+
+    unsafe {
+        let get_u32 = |id: u32, selector: u32, scope: u32| -> Option<u32> {
+            let addr = AudioObjectPropertyAddress {
+                selector,
+                scope,
+                element: ELEMENT_MAIN,
+            };
+            let mut value: u32 = 0;
+            let mut size = 4u32;
+            let status = AudioObjectGetPropertyData(
+                id,
+                &addr,
+                0,
+                std::ptr::null(),
+                &mut size,
+                &mut value as *mut u32 as *mut std::ffi::c_void,
+            );
+            if status == 0 {
+                Some(value)
+            } else {
+                None
+            }
+        };
+
+        let device_id = get_u32(SYSTEM_OBJECT, DEFAULT_OUTPUT, SCOPE_GLOBAL)?;
+        let latency = get_u32(device_id, DEVICE_LATENCY, SCOPE_OUTPUT).unwrap_or(0);
+        let safety = get_u32(device_id, SAFETY_OFFSET, SCOPE_OUTPUT).unwrap_or(0);
+        let buffer = get_u32(device_id, BUFFER_SIZE, SCOPE_OUTPUT).unwrap_or(0);
+
+        Some(latency + safety + buffer)
+    }
 }

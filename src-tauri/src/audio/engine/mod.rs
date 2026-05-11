@@ -15,6 +15,7 @@ use super::decoder::AudioDecoder;
 use super::equalizer::Equalizer;
 use super::resampler::Resampler;
 use super::shared_state::SharedState;
+use super::spectrum::SpectrumAnalyzer;
 use super::time_stretch::TimeStretcher;
 use super::types::{AudioCommand, PlayState};
 
@@ -36,6 +37,7 @@ struct EngineState<R: Runtime> {
 
     equalizer: Equalizer,
     time_stretcher: TimeStretcher,
+    spectrum: SpectrumAnalyzer,
     leftover: Vec<f32>,
 
     preloaded: Option<(AudioDecoder, Option<Resampler>, u16)>,
@@ -89,6 +91,7 @@ pub fn run<R: Runtime>(
         source_rate: 44100,
         equalizer: Equalizer::new(output_rate, output_channels),
         time_stretcher: TimeStretcher::new(output_channels),
+        spectrum: SpectrumAnalyzer::new(),
         leftover: Vec::new(),
         preloaded: None,
         crossfade: None,

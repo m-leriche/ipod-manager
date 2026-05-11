@@ -65,6 +65,11 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
+const FullscreenVisualizer = lazy(() =>
+  import("./components/templates/FullscreenVisualizer/FullscreenVisualizer").then((m) => ({
+    default: m.FullscreenVisualizer,
+  })),
+);
 
 type TopTab = "library" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
@@ -105,6 +110,7 @@ const TRACK_LIST_KEY = "crate-show-track-list";
 const LYRICS_PANEL_KEY = "crate-show-lyrics-panel";
 const ARTWORK_CAROUSEL_KEY = "crate-show-artwork-carousel";
 const LYRICS_OVERLAY_KEY = "crate-lyrics-overlay";
+const FULLSCREEN_VISUALIZER_KEY = "crate-show-fullscreen-visualizer";
 
 const AppContent = () => {
   const { state: playbackState } = usePlayback();
@@ -134,6 +140,9 @@ const AppContent = () => {
     () => localStorage.getItem(ARTWORK_CAROUSEL_KEY) === "true",
   );
   const [lyricsOverlay, setLyricsOverlay] = useState(() => localStorage.getItem(LYRICS_OVERLAY_KEY) === "true");
+  const [showFullscreenVisualizer, setShowFullscreenVisualizer] = useState(
+    () => localStorage.getItem(FULLSCREEN_VISUALIZER_KEY) === "true",
+  );
 
   const toggleColumnBrowser = useCallback(() => {
     // If another browser mode is active, switch to column browser
@@ -224,6 +233,12 @@ const AppContent = () => {
     localStorage.setItem(LYRICS_OVERLAY_KEY, "false");
     setShowLyricsPanel(false);
     localStorage.setItem(LYRICS_PANEL_KEY, "false");
+  }, []);
+  const toggleFullscreenVisualizer = useCallback(() => {
+    setShowFullscreenVisualizer((prev) => {
+      localStorage.setItem(FULLSCREEN_VISUALIZER_KEY, String(!prev));
+      return !prev;
+    });
   }, []);
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);
@@ -378,6 +393,8 @@ const AppContent = () => {
                 onToggleTrackList={toggleTrackList}
                 onToggleLyricsPanel={toggleLyricsPanel}
                 onToggleLyricsOverlay={toggleLyricsOverlay}
+                showFullscreenVisualizer={showFullscreenVisualizer}
+                onToggleFullscreenVisualizer={toggleFullscreenVisualizer}
               />
             </ErrorBoundary>
           </div>
@@ -516,6 +533,13 @@ const AppContent = () => {
       {shortcutsOpen && (
         <Suspense fallback={null}>
           <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+        </Suspense>
+      )}
+      {showFullscreenVisualizer && (
+        <Suspense fallback={null}>
+          <ErrorBoundary name="Visualizer">
+            <FullscreenVisualizer onClose={toggleFullscreenVisualizer} />
+          </ErrorBoundary>
         </Suspense>
       )}
     </div>

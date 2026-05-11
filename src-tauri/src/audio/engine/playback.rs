@@ -92,6 +92,7 @@ impl<R: Runtime> EngineState<R> {
         self.crossfade = None;
         self.leftover.clear();
         self.equalizer.reset();
+        self.spectrum.reset();
         self.shared.out_samples.store(0, Ordering::Relaxed);
         self.shared.set_position(0.0);
     }
@@ -110,6 +111,7 @@ impl<R: Runtime> EngineState<R> {
         }
         self.time_stretcher.reset();
         self.equalizer.reset();
+        self.spectrum.reset();
         self.crossfade = None;
 
         // Clear ring buffer by dropping and recreating the stream
@@ -185,5 +187,8 @@ impl<R: Runtime> EngineState<R> {
                 "duration": dur,
             }),
         );
+
+        let bands = self.spectrum.compute();
+        let _ = self.app_handle.emit("audio:spectrum", &bands);
     }
 }

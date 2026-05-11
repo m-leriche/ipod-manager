@@ -39,6 +39,7 @@ struct EngineState<R: Runtime> {
     time_stretcher: TimeStretcher,
     spectrum: SpectrumAnalyzer,
     analysis_consumer: Option<ringbuf::HeapCons<f32>>,
+    analysis_delay: Vec<f32>,
     leftover: Vec<f32>,
 
     preloaded: Option<(AudioDecoder, Option<Resampler>, u16)>,
@@ -95,6 +96,7 @@ pub fn run<R: Runtime>(
         time_stretcher: TimeStretcher::new(output_channels),
         spectrum: SpectrumAnalyzer::new(),
         analysis_consumer: None,
+        analysis_delay: Vec::new(),
         leftover: Vec::new(),
         preloaded: None,
         crossfade: None,

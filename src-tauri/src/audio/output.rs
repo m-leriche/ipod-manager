@@ -55,6 +55,7 @@ pub(super) fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f
 /// Create a cpal output stream that reads from a ring buffer consumer.
 /// Re-queries the default output device each time so audio follows
 /// macOS system routing (e.g. Bluetooth speaker selection changes).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn create_output_stream(
     host: &Host,
     sample_rate: u32,
@@ -63,6 +64,7 @@ pub(super) fn create_output_stream(
     volume: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
     mut analysis_prod: ringbuf::HeapProd<f32>,
+    output_latency_us: Arc<AtomicU64>,
 ) -> Result<Stream, String> {
     let device = host
         .default_output_device()
@@ -77,7 +79,13 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                // Measure hardware output latency (callback → actual playback)
+                let ts = info.timestamp();
+                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
+                    output_latency_us.store(latency.as_micros() as u64, Ordering::Relaxed);
+                }
+
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;
                 for sample in data.iter_mut() {

@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useEffect } from "react";
 import { usePlayback, usePlaybackTime } from "../../../contexts/PlaybackContext";
 import { AlbumArtwork } from "../../atoms/AlbumArtwork/AlbumArtwork";
 import { RadialSpectrum } from "../../atoms/RadialSpectrum/RadialSpectrum";
@@ -7,7 +6,6 @@ import type { FullscreenVisualizerProps } from "./types";
 
 export const FullscreenVisualizer = ({ onClose }: FullscreenVisualizerProps) => {
   const { state } = usePlayback();
-  const flashRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -17,27 +15,11 @@ export const FullscreenVisualizer = ({ onClose }: FullscreenVisualizerProps) => 
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  // Raw amplitude flash — direct DOM write, no React re-render, tests pure latency
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen<number>("audio:amplitude", (event) => {
-      if (flashRef.current) {
-        flashRef.current.style.opacity = String(event.payload * 0.25);
-      }
-    }).then((fn) => {
-      unlisten = fn;
-    });
-    return () => unlisten?.();
-  }, []);
-
   const { currentTime, duration } = usePlaybackTime();
   const track = state.currentTrack;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center select-none">
-      {/* Amplitude flash — raw latency test (white flash on beats) */}
-      <div ref={flashRef} className="absolute inset-0 bg-white pointer-events-none" style={{ opacity: 0 }} />
-
       {/* Close button */}
       <button
         onClick={onClose}

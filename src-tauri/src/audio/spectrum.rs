@@ -100,14 +100,6 @@ impl SpectrumAnalyzer {
         bands
     }
 
-    /// RMS amplitude of the current buffer (0.0–1.0). No FFT, just raw loudness.
-    pub fn amplitude(&self) -> f32 {
-        let sum_sq: f32 = self.buffer.iter().map(|s| s * s).sum();
-        let rms = (sum_sq / self.buffer.len() as f32).sqrt();
-        // Scale up so typical music hits 0.5–1.0
-        (rms * 8.0).clamp(0.0, 1.0)
-    }
-
     /// Reset the sample buffer (on seek or stop).
     pub fn reset(&mut self) {
         self.buffer.fill(0.0);

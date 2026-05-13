@@ -345,7 +345,7 @@ export const LibraryPlayer = ({
           />
         )}
 
-        <LibraryStatusBar selectedTracks={data.selectedTracks} />
+        <LibraryStatusBar selectedTracks={data.selectedTracks} hideSelectionStats={showAlbumGrid || showArtworkCarousel} />
       </div>
 
       {showInfoPanel && <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} />}

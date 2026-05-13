@@ -31,8 +31,8 @@ describe("ArtworkCarousel", () => {
 
   it("renders centered album info", () => {
     render(<ArtworkCarousel albums={albums} selectedAlbum="Gamma" onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />);
-    expect(screen.getByText("Gamma")).toBeInTheDocument();
-    expect(screen.getByText("Artist · 2024")).toBeInTheDocument();
+    expect(screen.getByText(/Artist - Gamma/)).toBeInTheDocument();
+    expect(screen.getByText(/· 2024/)).toBeInTheDocument();
   });
 
   it("calls onSelectAlbum when clicking a side album", () => {
@@ -71,7 +71,7 @@ describe("ArtworkCarousel", () => {
   it("defaults to first album when no selection and no playback", () => {
     render(<ArtworkCarousel albums={albums} selectedAlbum={null} onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />);
     // First album should be shown as centered (its name appears in the info area)
-    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText(/Artist - Alpha/)).toBeInTheDocument();
   });
 
   it("dismisses lyrics overlay when clicking a side album", () => {

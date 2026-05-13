@@ -7,6 +7,7 @@ import type { LibraryTrack } from "../../../types/library";
 
 interface LibraryStatusBarProps {
   selectedTracks: LibraryTrack[];
+  hideSelectionStats?: boolean;
 }
 
 const formatSize = (bytes: number): string => {
@@ -30,7 +31,7 @@ const formatDuration = (totalSecs: number): string => {
   return parts.join(", ");
 };
 
-export const LibraryStatusBar = ({ selectedTracks }: LibraryStatusBarProps) => {
+export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
   const { state: artRepair, cancelRepair } = useBackgroundArtRepair();
   const { state: lyricsFetch, cancelFetch: cancelLyricsFetch } = useBackgroundLyrics();
@@ -49,6 +50,11 @@ export const LibraryStatusBar = ({ selectedTracks }: LibraryStatusBarProps) => {
   const artProgressPct = artRepair.total > 0 ? (artRepair.completed / artRepair.total) * 100 : 0;
   const lyricsProgressPct = lyricsFetch.total > 0 ? (lyricsFetch.completed / lyricsFetch.total) * 100 : 0;
   const bgActive = artRepair.active || lyricsFetch.active;
+
+  // In CoverFlow/Album Art mode, hide entirely unless a background process is running
+  if (hideSelectionStats && !bgActive) {
+    return <EqualizerPanel />;
+  }
 
   return (
     <>

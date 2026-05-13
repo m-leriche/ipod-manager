@@ -345,12 +345,10 @@ export const ArtworkCarousel = ({
         <div className="relative shrink-0 py-3 flex flex-col items-center gap-0.5">
           <div className="absolute inset-0 bg-white/[0.03] backdrop-blur-xl" />
           {currentTrack?.album === centeredAlbum.name && currentTrack.title && (
-            <div className="relative text-white text-sm font-semibold truncate max-w-sm px-6">
-              {currentTrack.title}
-            </div>
+            <div className="relative text-white text-sm font-semibold truncate max-w-sm px-6">{currentTrack.title}</div>
           )}
           <div className="relative text-white/45 text-xs truncate max-w-sm px-6">
-            {centeredAlbum.artist || "Unknown Artist"} - {centeredAlbum.name} 
+            {centeredAlbum.artist || "Unknown Artist"} - {centeredAlbum.name}
             {centeredAlbum.year ? ` · ${centeredAlbum.year}` : ""}
           </div>
         </div>

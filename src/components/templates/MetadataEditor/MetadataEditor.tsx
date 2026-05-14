@@ -108,15 +108,7 @@ export const MetadataEditor = ({
     setView,
   );
 
-  const quality = useQualityActions(
-    setPhase,
-    setError,
-    startProgress,
-    finishProgress,
-    failProgress,
-    cancel,
-    setView,
-  );
+  const quality = useQualityActions(setPhase, setError, startProgress, finishProgress, failProgress, cancel, setView);
 
   const audio = useAudioPlayback(quality.selectedQualityFile);
 

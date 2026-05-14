@@ -55,12 +55,14 @@ jobs:
     defaults:
       run:
         working-directory: src-tauri
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.cargo
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri

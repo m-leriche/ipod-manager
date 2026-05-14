@@ -108,16 +108,7 @@ export const MetadataEditor = ({
     setView,
   );
 
-  const quality = useQualityActions(
-    lastScanPaths,
-    setPhase,
-    setError,
-    startProgress,
-    finishProgress,
-    failProgress,
-    cancel,
-    setView,
-  );
+  const quality = useQualityActions(setPhase, setError, startProgress, finishProgress, failProgress, cancel, setView);
 
   const audio = useAudioPlayback(quality.selectedQualityFile);
 
@@ -400,7 +391,10 @@ export const MetadataEditor = ({
         onApplyRepairs={repair.handleApplyRepairs}
         onAcceptAllRepairs={repair.handleAcceptAllRepairs}
         hasQualityResults={quality.qualityFiles.length > 0}
-        onStartQualityScan={quality.startQualityScan}
+        onStartQualityScan={() => {
+          const paths = selected.size > 0 ? [...selected] : tracks.map((t) => t.file_path);
+          quality.startQualityScan(paths);
+        }}
         identifyResults={identify.results}
         onStartIdentify={(filePaths) => identify.startIdentify(filePaths)}
         identifyChosenCount={identify.chosenCount}

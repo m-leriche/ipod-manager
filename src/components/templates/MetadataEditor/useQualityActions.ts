@@ -10,7 +10,6 @@ interface QualityPreviewModal {
 }
 
 export const useQualityActions = (
-  lastScanPaths: React.MutableRefObject<string[]>,
   setPhase: (p: Phase) => void,
   setError: (e: string | null) => void,
   startProgress: (msg: string, cancelFn: () => Promise<void>) => void,
@@ -40,10 +39,8 @@ export const useQualityActions = (
     [qualityFiles, selectedQualityFile],
   );
 
-  const startQualityScan = async () => {
-    const paths = lastScanPaths.current;
-    if (paths.length === 0) return;
-    const targetPath = paths[0];
+  const startQualityScan = async (filePaths: string[]) => {
+    if (filePaths.length === 0) return;
 
     setPhase("scanning");
     setError(null);
@@ -53,9 +50,9 @@ export const useQualityActions = (
     setWaveforms({});
     startProgress("Analyzing audio quality...", cancel);
     try {
-      const data = await invoke<AudioFileInfo[]>("scan_audio_quality", { path: targetPath });
+      const data = await invoke<AudioFileInfo[]>("scan_audio_quality_paths", { paths: filePaths });
       setQualityFiles(data);
-      setView("quality");
+      if (data.length > 0) setView("quality");
       setPhase("scanned");
       finishProgress(`Analyzed ${data.length} files`);
     } catch (e) {

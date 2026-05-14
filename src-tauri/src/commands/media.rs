@@ -156,6 +156,22 @@ pub async fn scan_audio_quality(
 }
 
 #[tauri::command]
+pub async fn scan_audio_quality_paths(
+    paths: Vec<String>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<Vec<audioquality::AudioFileInfo>, AppError> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        audioquality::scan_audio_quality_paths(&paths, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Scan failed: {}", e))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn generate_spectrogram(
     file_path: String,
 ) -> Result<audioquality::SpectrogramResult, AppError> {

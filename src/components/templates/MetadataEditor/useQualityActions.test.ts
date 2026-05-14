@@ -49,7 +49,6 @@ const files: AudioFileInfo[] = [
 ];
 
 const makeHookArgs = () => ({
-  lastScanPaths: { current: ["/music"] },
   setPhase: vi.fn(),
   setError: vi.fn(),
   startProgress: vi.fn(),
@@ -68,7 +67,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -89,7 +87,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -101,10 +98,12 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac", "/b.mp3", "/c.flac"]);
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("scan_audio_quality", { path: "/music" });
+    expect(mockInvoke).toHaveBeenCalledWith("scan_audio_quality_paths", {
+      paths: ["/a.flac", "/b.mp3", "/c.flac"],
+    });
     expect(result.current.qualityFiles).toEqual(files);
     expect(args.setPhase).toHaveBeenCalledWith("scanned");
     expect(args.setView).toHaveBeenCalledWith("quality");
@@ -116,7 +115,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -128,7 +126,7 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac", "/b.mp3", "/c.flac"]);
     });
 
     expect(result.current.qualityCounts).toEqual({ lossless: 1, lossy: 1, suspect: 1 });
@@ -139,7 +137,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -151,7 +148,7 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac"]);
     });
 
     expect(args.finishProgress).toHaveBeenCalledWith("Quality scan cancelled");
@@ -162,7 +159,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -174,19 +170,17 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac"]);
     });
 
     expect(args.setError).toHaveBeenCalledWith("ffprobe not found");
     expect(args.failProgress).toHaveBeenCalledWith("ffprobe not found");
   });
 
-  it("does nothing when lastScanPaths is empty", async () => {
+  it("does nothing when filePaths is empty", async () => {
     const args = makeHookArgs();
-    args.lastScanPaths.current = [];
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -198,10 +192,33 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan([]);
     });
 
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("does not switch view when scan returns 0 results", async () => {
+    mockInvoke.mockResolvedValue([]);
+    const args = makeHookArgs();
+    const { result } = renderHook(() =>
+      useQualityActions(
+        args.setPhase,
+        args.setError,
+        args.startProgress,
+        args.finishProgress,
+        args.failProgress,
+        args.cancel,
+        args.setView,
+      ),
+    );
+
+    await act(async () => {
+      await result.current.startQualityScan(["/a.flac"]);
+    });
+
+    expect(args.setView).not.toHaveBeenCalled();
+    expect(args.finishProgress).toHaveBeenCalledWith("Analyzed 0 files");
   });
 
   it("selectedQualityData returns matching file", async () => {
@@ -209,7 +226,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -221,7 +237,7 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac", "/b.mp3", "/c.flac"]);
     });
     act(() => result.current.setSelectedQualityFile("/b.mp3"));
     expect(result.current.selectedQualityData?.file_path).toBe("/b.mp3");
@@ -232,7 +248,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -252,7 +267,6 @@ describe("useQualityActions", () => {
     const args = makeHookArgs();
     const { result } = renderHook(() =>
       useQualityActions(
-        args.lastScanPaths,
         args.setPhase,
         args.setError,
         args.startProgress,
@@ -264,7 +278,7 @@ describe("useQualityActions", () => {
     );
 
     await act(async () => {
-      await result.current.startQualityScan();
+      await result.current.startQualityScan(["/a.flac", "/b.mp3", "/c.flac"]);
     });
     act(() => result.current.setSelectedQualityFile("/a.flac"));
     act(() => result.current.handleOpenQualityPreview("spectrogram"));

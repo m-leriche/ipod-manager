@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="crate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4a843"/>
+      <stop offset="100%" stop-color="#996b1d"/>
+    </linearGradient>
+    <linearGradient id="record" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#2a2a35"/>
+      <stop offset="100%" stop-color="#18181f"/>
+    </linearGradient>
+    <!-- Mask to punch handle hole through crate -->
+    <mask id="crate-mask">
+      <rect width="512" height="512" fill="white"/>
+      <rect x="206" y="310" width="100" height="26" rx="13" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Vinyl record peeking above crate -->
+  <circle cx="256" cy="192" r="86" fill="url(#record)"/>
+  <!-- Grooves -->
+  <circle cx="256" cy="192" r="70" fill="none" stroke="#3a3a4a" stroke-width="0.8" opacity="0.5"/>
+  <circle cx="256" cy="192" r="58" fill="none" stroke="#3a3a4a" stroke-width="0.8" opacity="0.4"/>
+  <circle cx="256" cy="192" r="46" fill="none" stroke="#3a3a4a" stroke-width="0.8" opacity="0.3"/>
+  <!-- Label -->
+  <circle cx="256" cy="192" r="24" fill="#0066ff"/>
+  <!-- Spindle hole -->
+  <circle cx="256" cy="192" r="3.5" fill="white"/>
+
+  <!-- Crate body with handle cutout -->
+  <g mask="url(#crate-mask)">
+    <rect x="100" y="238" width="312" height="192" rx="10" fill="url(#crate)"/>
+    <!-- Top edge highlight -->
+    <rect x="100" y="238" width="312" height="4" rx="2" fill="#e0bb55" opacity="0.5"/>
+    <!-- Slat dividers -->
+    <line x1="100" y1="302" x2="412" y2="302" stroke="#7d5815" stroke-width="2.5"/>
+    <line x1="100" y1="366" x2="412" y2="366" stroke="#7d5815" stroke-width="2.5"/>
+  </g>
+</svg>

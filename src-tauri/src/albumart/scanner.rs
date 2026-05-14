@@ -38,6 +38,7 @@ fn read_metadata(dir: &Path) -> (Option<String>, Option<String>, bool) {
 
 fn scan_dir(
     dir: &Path,
+    root: &Path,
     albums: &mut Vec<AlbumInfo>,
     app: &AppHandle,
     cancel_flag: &Arc<AtomicBool>,
@@ -45,6 +46,27 @@ fn scan_dir(
     if cancel_flag.load(Ordering::SeqCst) {
         return;
     }
+
+    // Emit progress on every directory so the UI shows scanning activity
+    let relative = dir
+        .strip_prefix(root)
+        .unwrap_or(dir)
+        .to_string_lossy()
+        .to_string();
+    let display_folder = if relative.is_empty() {
+        dir.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default()
+    } else {
+        relative
+    };
+    let _ = app.emit(
+        "albumart-scan-progress",
+        ScanProgress {
+            albums_found: albums.len(),
+            current_folder: display_folder,
+        },
+    );
 
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -84,18 +106,10 @@ fn scan_dir(
             has_cover_file: has_cover(dir),
             has_embedded_art: embedded,
         });
-
-        let _ = app.emit(
-            "albumart-scan-progress",
-            ScanProgress {
-                albums_found: albums.len(),
-                current_folder: folder_name,
-            },
-        );
     }
 
     for sub in subdirs {
-        scan_dir(&sub, albums, app, cancel_flag);
+        scan_dir(&sub, root, albums, app, cancel_flag);
     }
 }
 
@@ -109,7 +123,7 @@ pub fn scan_albums(
         .map_err(|e| format!("Invalid path: {}", e))?;
 
     let mut albums = Vec::new();
-    scan_dir(&root, &mut albums, &app, &cancel_flag);
+    scan_dir(&root, &root, &mut albums, &app, &cancel_flag);
 
     if cancel_flag.load(Ordering::SeqCst) {
         return Err("Cancelled".to_string());

@@ -368,7 +368,8 @@ mod tests {
     #[test]
     fn normalize_cover_returns_true_if_cover_jpg_exists() {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("cover.jpg"), "fake jpg data").unwrap();
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(10, 10));
+        img.save(tmp.path().join("cover.jpg")).unwrap();
         assert_eq!(normalize_cover(tmp.path()).unwrap(), true);
     }
 }

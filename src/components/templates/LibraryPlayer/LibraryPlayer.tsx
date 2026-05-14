@@ -71,8 +71,8 @@ export const LibraryPlayer = ({
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
-  const { state: artRepairState, startRepair: startArtRepair } = useBackgroundArtRepair();
-  const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
+  const { state: artRepairState, start: startArtRepair } = useBackgroundArtRepair();
+  const { state: lyricsState, start: startLyricsFetch } = useBackgroundLyrics();
   const gridResize = useResizableHeight();
   const carouselResize = useResizableHeight({
     storageKey: "crate-carousel-height",

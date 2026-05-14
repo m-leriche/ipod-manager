@@ -60,7 +60,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - run: |
+          source "$HOME/.cargo/env" 2>/dev/null || true
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri

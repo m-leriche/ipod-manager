@@ -48,6 +48,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
 
     const run = async () => {
       unlistenScan = await listen<ScanProgress>("albumart-scan-progress", (e) => {
+        console.log("[art-scan]", e.payload);
         if (mountedRef.current) setScanProgress(e.payload);
       });
 
@@ -151,7 +152,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
 
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-          {phase === "scanning" && <ScanningView progress={scanProgress} />}
+          {phase === "scanning" && <ScanningView progress={scanProgress} scanPath={musicPath} />}
           {phase === "summary" && <SummaryView total={albums.length} missing={missingAlbums.length} />}
           {phase === "review" && (
             <ReviewView albums={missingAlbums} selected={selected} onToggle={toggleAlbum} onToggleAll={toggleAll} />
@@ -190,7 +191,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
 
 // ── Sub-views ──────────────────────────────────────────────────
 
-const ScanningView = ({ progress }: { progress: ScanProgress }) => {
+const ScanningView = ({ progress, scanPath }: { progress: ScanProgress; scanPath: string }) => {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setElapsed((n) => n + 1), 1000);
@@ -215,9 +216,7 @@ const ScanningView = ({ progress }: { progress: ScanProgress }) => {
           ? `${progress.albums_found} album${progress.albums_found !== 1 ? "s" : ""} found · ${timeStr}`
           : timeStr}
       </p>
-      {progress.current_folder && (
-        <p className="text-[11px] text-text-tertiary truncate max-w-full">{progress.current_folder}</p>
-      )}
+      <p className="text-[11px] text-text-tertiary truncate max-w-full">{progress.current_folder || scanPath}</p>
     </div>
   );
 };

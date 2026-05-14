@@ -1,6 +1,8 @@
 mod fixer;
 mod scanner;
 
+use image::codecs::jpeg::JpegEncoder;
+use image::DynamicImage;
 use serde::Serialize;
 use std::path::Path;
 
@@ -90,12 +92,26 @@ pub fn find_cover(dir: &Path) -> Option<std::path::PathBuf> {
 }
 
 /// Resize an image to 600x600 if oversized, to save iPod storage.
-pub fn resize_if_needed(img: image::DynamicImage) -> image::DynamicImage {
+pub fn resize_if_needed(img: DynamicImage) -> DynamicImage {
     if img.width() > 600 || img.height() > 600 {
         img.resize(600, 600, image::imageops::FilterType::Lanczos3)
     } else {
         img
     }
+}
+
+/// Save a DynamicImage as cover.jpg with Rockbox-compatible encoding.
+/// Produces baseline JPEG with 4:2:2 chroma subsampling at quality 85.
+/// Rockbox's JPEG decoder cannot handle progressive or 4:4:4 JPEGs.
+pub fn save_cover_jpg(img: &DynamicImage, dir: &Path) -> Result<(), String> {
+    let path = dir.join("cover.jpg");
+    let file =
+        std::fs::File::create(&path).map_err(|e| format!("Failed to create cover.jpg: {}", e))?;
+    let writer = std::io::BufWriter::new(file);
+    let encoder = JpegEncoder::new_with_quality(writer, 85);
+    img.write_with_encoder(encoder)
+        .map_err(|e| format!("Failed to encode cover.jpg: {}", e))?;
+    Ok(())
 }
 
 // ── Public API (re-exports) ─────────────────────────────────────

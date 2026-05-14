@@ -7,13 +7,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
-use super::{find_cover, is_audio, resize_if_needed, AlbumArtProgress, AlbumArtResult};
+use super::{
+    find_cover, is_audio, resize_if_needed, save_cover_jpg, AlbumArtProgress, AlbumArtResult,
+};
 
-/// Ensure cover.jpg exists in the directory. If another cover variant exists
-/// (e.g. folder.jpg, album.jpg), convert it to cover.jpg.
+/// Ensure cover.jpg exists in the directory with Rockbox-compatible encoding.
+/// Re-encodes existing cover.jpg to guarantee baseline JPEG with compatible
+/// chroma subsampling. Converts variant names (folder.jpg, album.jpg, etc.)
+/// to cover.jpg.
 fn normalize_cover(dir: &Path) -> Result<bool, String> {
     let cover_jpg = dir.join("cover.jpg");
     if cover_jpg.exists() {
+        let img =
+            image::open(&cover_jpg).map_err(|e| format!("Failed to read cover.jpg: {}", e))?;
+        let img = resize_if_needed(img);
+        save_cover_jpg(&img, dir)?;
         return Ok(true);
     }
 
@@ -23,8 +31,8 @@ fn normalize_cover(dir: &Path) -> Result<bool, String> {
 
     let img = image::open(&existing)
         .map_err(|e| format!("Failed to read {}: {}", existing.display(), e))?;
-    img.save(&cover_jpg)
-        .map_err(|e| format!("Failed to save cover.jpg: {}", e))?;
+    let img = resize_if_needed(img);
+    save_cover_jpg(&img, dir)?;
 
     Ok(true)
 }
@@ -86,9 +94,7 @@ fn extract_embedded(dir: &Path) -> Result<bool, String> {
         let img =
             image::load_from_memory(pic.data()).map_err(|e| format!("Decode failed: {}", e))?;
         let img = resize_if_needed(img);
-
-        img.save(dir.join("cover.jpg"))
-            .map_err(|e| format!("Save failed: {}", e))?;
+        save_cover_jpg(&img, dir)?;
 
         return Ok(true);
     }
@@ -114,8 +120,7 @@ fn try_save_cover(
         };
 
         let img = resize_if_needed(img);
-        img.save(dir.join("cover.jpg"))
-            .map_err(|e| format!("Save failed: {}", e))?;
+        save_cover_jpg(&img, dir)?;
 
         return Ok(());
     }
@@ -304,9 +309,7 @@ pub fn save_uploaded_cover(folder: &str, image_path: &str) -> Result<(), String>
 
     let img = image::open(src).map_err(|e| format!("Failed to load image: {}", e))?;
     let img = resize_if_needed(img);
-
-    img.save(dir.join("cover.jpg"))
-        .map_err(|e| format!("Failed to save cover.jpg: {}", e))?;
+    save_cover_jpg(&img, dir)?;
 
     Ok(())
 }
@@ -365,7 +368,8 @@ mod tests {
     #[test]
     fn normalize_cover_returns_true_if_cover_jpg_exists() {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("cover.jpg"), "fake jpg data").unwrap();
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(10, 10));
+        img.save(tmp.path().join("cover.jpg")).unwrap();
         assert_eq!(normalize_cover(tmp.path()).unwrap(), true);
     }
 }

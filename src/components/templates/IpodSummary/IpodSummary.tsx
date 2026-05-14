@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { StorageBar } from "./StorageBar";
+import { IpodArtRepairModal } from "./IpodArtRepairModal";
 import { fmtBytes } from "./helpers";
 import type { IpodInfo } from "../../../types/ipod";
 import type { SummaryStatus, IpodSummaryProps } from "./types";
@@ -10,6 +11,7 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
   const [status, setStatus] = useState<SummaryStatus>(cachedInfo ? "loaded" : "no_ipod");
   const [info, setInfo] = useState<IpodInfo | null>(cachedInfo);
   const [error, setError] = useState<string | null>(null);
+  const [showArtRepair, setShowArtRepair] = useState(false);
 
   useEffect(() => {
     if (!isMounted || !diskInfo?.mount_point) {
@@ -133,6 +135,19 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
           totalSpace={info.total_space}
         />
       </div>
+
+      {/* Actions */}
+      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
+        <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-2">Actions</h3>
+        <button
+          onClick={() => setShowArtRepair(true)}
+          className="w-full py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:bg-bg-hover hover:text-text-primary"
+        >
+          Repair Album Art
+        </button>
+      </div>
+
+      {showArtRepair && <IpodArtRepairModal musicPath={info.mount_point} onClose={() => setShowArtRepair(false)} />}
     </div>
   );
 };

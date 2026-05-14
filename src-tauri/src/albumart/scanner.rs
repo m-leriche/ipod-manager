@@ -118,12 +118,15 @@ pub fn scan_albums(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<Vec<AlbumInfo>, String> {
+    log::info!("[art-scan] starting scan of: {}", music_path);
     let root = Path::new(music_path)
         .canonicalize()
         .map_err(|e| format!("Invalid path: {}", e))?;
+    log::info!("[art-scan] canonicalized to: {}", root.display());
 
     let mut albums = Vec::new();
     scan_dir(&root, &root, &mut albums, &app, &cancel_flag);
+    log::info!("[art-scan] scan complete: {} albums found", albums.len());
 
     if cancel_flag.load(Ordering::SeqCst) {
         return Err("Cancelled".to_string());

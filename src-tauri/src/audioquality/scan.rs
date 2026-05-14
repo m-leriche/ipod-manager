@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -20,6 +20,28 @@ pub fn scan_audio_quality(
     let mut audio_files = Vec::new();
     collect_audio_files(root, &mut audio_files);
 
+    probe_files(&audio_files, app, cancel_flag)
+}
+
+pub fn scan_audio_quality_paths(
+    paths: &[String],
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<AudioFileInfo>, String> {
+    let audio_files: Vec<PathBuf> = paths
+        .iter()
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .collect();
+
+    probe_files(&audio_files, app, cancel_flag)
+}
+
+fn probe_files(
+    audio_files: &[PathBuf],
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<Vec<AudioFileInfo>, String> {
     let total = audio_files.len();
     let mut results = Vec::with_capacity(total);
 

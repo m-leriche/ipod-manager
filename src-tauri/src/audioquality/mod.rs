@@ -4,7 +4,7 @@ mod spectrogram;
 mod transcode;
 mod waveform;
 
-pub use scan::scan_audio_quality;
+pub use scan::{scan_audio_quality, scan_audio_quality_paths};
 pub use spectrogram::generate_spectrogram;
 pub use waveform::{generate_waveform, WaveformResult};
 

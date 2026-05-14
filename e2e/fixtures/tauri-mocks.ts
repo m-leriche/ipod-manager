@@ -88,6 +88,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
 
   // Audio quality
   scan_audio_quality: [],
+  scan_audio_quality_paths: [],
   generate_spectrogram: { path: "" },
   generate_waveform: { path: "" },
 

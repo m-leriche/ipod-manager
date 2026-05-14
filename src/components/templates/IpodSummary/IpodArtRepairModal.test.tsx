@@ -50,10 +50,11 @@ describe("IpodArtRepairModal", () => {
     onClose.mockReset();
   });
 
-  it("shows scanning state initially", () => {
+  it("shows scanning state with cancel button", () => {
     vi.mocked(invoke).mockReturnValue(new Promise(() => {}));
     render(<IpodArtRepairModal musicPath="/Volumes/IPOD/Music" onClose={onClose} />);
     expect(screen.getByText("Scanning iPod for albums...")).toBeInTheDocument();
+    expect(screen.getByText("Cancel")).toBeInTheDocument();
   });
 
   it("shows summary after scan finds missing art", async () => {
@@ -255,6 +256,52 @@ describe("IpodArtRepairModal", () => {
 
     // Album2 has embedded art
     expect(screen.getByText(/has embedded art/)).toBeInTheDocument();
+  });
+
+  it("cancel during scan calls cancel_sync and closes modal", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "scan_album_art") return new Promise((_, reject) => setTimeout(() => reject("Cancelled"), 50));
+      return Promise.resolve();
+    });
+
+    const user = userEvent.setup();
+    render(<IpodArtRepairModal musicPath="/Volumes/IPOD/Music" onClose={onClose} />);
+
+    await user.click(screen.getByText("Cancel"));
+    expect(invoke).toHaveBeenCalledWith("cancel_sync");
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it("cancel during fix calls cancel_sync", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "scan_album_art") return Promise.resolve(mockAlbums);
+      if (cmd === "fix_album_art")
+        return new Promise((resolve) =>
+          setTimeout(() => resolve({ total: 2, fixed: 0, already_ok: 0, failed: 0, cancelled: true, errors: [] }), 50),
+        );
+      return Promise.resolve();
+    });
+
+    const user = userEvent.setup();
+    render(<IpodArtRepairModal musicPath="/Volumes/IPOD/Music" onClose={onClose} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Fix All (2)")).toBeInTheDocument();
+    });
+    await user.click(screen.getByText("Fix All (2)"));
+
+    // Should show cancel button during fixing
+    expect(screen.getByText("Cancel")).toBeInTheDocument();
+    await user.click(screen.getByText("Cancel"));
+    expect(invoke).toHaveBeenCalledWith("cancel_sync");
+
+    // Should show cancelled result
+    await waitFor(() => {
+      expect(screen.getByText(/cancelled/i)).toBeInTheDocument();
+    });
   });
 
   it("listens to scan and fix progress events", async () => {

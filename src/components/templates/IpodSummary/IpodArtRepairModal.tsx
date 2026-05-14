@@ -33,6 +33,8 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     return () => {
@@ -60,10 +62,14 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
           setResult({ total: 0, fixed: 0, already_ok: results.length, failed: 0, cancelled: false, errors: [] });
         }
       } catch (e) {
-        if (mountedRef.current) {
-          setError(`${e}`);
-          setPhase("done");
+        if (!mountedRef.current) return;
+        const msg = `${e}`;
+        if (msg.includes("Cancelled")) {
+          onCloseRef.current();
+          return;
         }
+        setError(msg);
+        setPhase("done");
       } finally {
         unlistenScan?.();
       }
@@ -105,6 +111,10 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
     },
     [bumpArtCache],
   );
+
+  const handleCancel = useCallback(() => {
+    invoke("cancel_sync").catch(() => {});
+  }, []);
 
   const handleFixAll = () => runFix(missingAlbums.map((a) => a.folder_path));
   const handleFixSelected = () => runFix([...selected]);
@@ -152,6 +162,9 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+          {(phase === "scanning" || phase === "fixing") && (
+            <ModalButton label="Cancel" variant="secondary" onClick={handleCancel} />
+          )}
           {phase === "summary" && (
             <>
               <ModalButton label="Review" variant="secondary" onClick={handleReview} />
@@ -182,6 +195,9 @@ const ScanningView = ({ progress }: { progress: ScanProgress }) => (
     <div className="flex items-center gap-2 text-text-secondary text-xs">
       <Spinner />
       Scanning iPod for albums...
+    </div>
+    <div className="w-full bg-bg-card border border-border rounded-full h-2 overflow-hidden">
+      <div className="h-full bg-accent rounded-full animate-pulse w-full" />
     </div>
     {progress.albums_found > 0 && (
       <p className="text-[11px] text-text-tertiary">

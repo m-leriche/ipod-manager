@@ -147,9 +147,7 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
         </button>
       </div>
 
-      {showArtRepair && (
-        <IpodArtRepairModal musicPath={`${info.mount_point}/Music`} onClose={() => setShowArtRepair(false)} />
-      )}
+      {showArtRepair && <IpodArtRepairModal musicPath={info.mount_point} onClose={() => setShowArtRepair(false)} />}
     </div>
   );
 };

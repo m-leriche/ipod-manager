@@ -20,7 +20,7 @@ pub fn read_track(path: &Path) -> TrackMetadata {
     let tagged = Probe::open(path).ok().and_then(|p| p.read().ok());
 
     // If lofty can't parse the file, fall back to ffprobe
-    if tagged.is_none() {
+    let Some(tagged) = tagged else {
         if let Some(meta) = ffprobe_meta::read_metadata(path) {
             return TrackMetadata {
                 file_path,
@@ -38,9 +38,7 @@ pub fn read_track(path: &Path) -> TrackMetadata {
             };
         }
         return empty_track(file_path, file_name);
-    }
-
-    let tagged = tagged.expect("checked above");
+    };
     let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
         return empty_track(file_path, file_name);
     };

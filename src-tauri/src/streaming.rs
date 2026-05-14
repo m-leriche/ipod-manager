@@ -47,6 +47,15 @@ fn parse_range(header: &str, file_size: u64) -> Option<(u64, u64)> {
     Some((start, end.min(file_size - 1)))
 }
 
+/// Build a plain error response. All callers pass hardcoded status codes and
+/// static byte-string bodies, so the builder cannot fail.
+fn error_response(status: u16, body: &[u8]) -> Response<Vec<u8>> {
+    Response::builder()
+        .status(status)
+        .body(body.to_vec())
+        .expect("hardcoded status with no custom headers")
+}
+
 /// Handle an audio stream request with Range support.
 pub fn handle_request<R: tauri::Runtime>(
     _ctx: tauri::UriSchemeContext<'_, R>,
@@ -66,12 +75,7 @@ pub fn handle_request<R: tauri::Runtime>(
 
     let decoded = match percent_decode_str(path_part).decode_utf8() {
         Ok(d) => d.into_owned(),
-        Err(_) => {
-            return Response::builder()
-                .status(400)
-                .body(b"Bad path encoding".to_vec())
-                .expect("valid HTTP response");
-        }
+        Err(_) => return error_response(400, b"Bad path encoding"),
     };
 
     // Security: canonicalize to resolve symlinks and ".." traversal, then
@@ -84,37 +88,21 @@ pub fn handle_request<R: tauri::Runtime>(
     // that the resolved path starts with a known music directory.
     let raw_path = Path::new(&decoded);
     if !raw_path.is_absolute() {
-        return Response::builder()
-            .status(404)
-            .body(b"Not found".to_vec())
-            .expect("valid HTTP response");
+        return error_response(404, b"Not found");
     }
 
     let file_path = match raw_path.canonicalize() {
         Ok(p) => p,
-        Err(_) => {
-            return Response::builder()
-                .status(404)
-                .body(b"Not found".to_vec())
-                .expect("valid HTTP response");
-        }
+        Err(_) => return error_response(404, b"Not found"),
     };
 
     if !audio_utils::is_audio(&file_path) {
-        return Response::builder()
-            .status(403)
-            .body(b"Forbidden: not an audio file".to_vec())
-            .expect("valid HTTP response");
+        return error_response(403, b"Forbidden: not an audio file");
     }
 
     let file_size = match fs::metadata(&file_path) {
         Ok(m) => m.len(),
-        Err(_) => {
-            return Response::builder()
-                .status(404)
-                .body(b"Not found".to_vec())
-                .expect("valid HTTP response");
-        }
+        Err(_) => return error_response(404, b"Not found"),
     };
 
     let content_type = mime_type(&file_path.to_string_lossy());
@@ -131,33 +119,21 @@ pub fn handle_request<R: tauri::Runtime>(
             let length = end - start + 1;
             let mut file = match File::open(file_path) {
                 Ok(f) => f,
-                Err(_) => {
-                    return Response::builder()
-                        .status(500)
-                        .body(b"Read error".to_vec())
-                        .expect("valid HTTP response");
-                }
+                Err(_) => return error_response(500, b"Read error"),
             };
 
             if file.seek(SeekFrom::Start(start)).is_err() {
-                return Response::builder()
-                    .status(500)
-                    .body(b"Seek error".to_vec())
-                    .expect("valid HTTP response");
+                return error_response(500, b"Seek error");
             }
 
             let mut buf = vec![0u8; length as usize];
             let bytes_read = match file.read(&mut buf) {
                 Ok(n) => n,
-                Err(_) => {
-                    return Response::builder()
-                        .status(500)
-                        .body(b"Read error".to_vec())
-                        .expect("valid HTTP response");
-                }
+                Err(_) => return error_response(500, b"Read error"),
             };
             buf.truncate(bytes_read);
 
+            // Status code and header names are hardcoded literals — infallible.
             return Response::builder()
                 .status(206)
                 .header("Content-Type", content_type)
@@ -173,28 +149,24 @@ pub fn handle_request<R: tauri::Runtime>(
                 )
                 .header("Accept-Ranges", "bytes")
                 .body(buf)
-                .expect("valid HTTP response");
+                .expect("hardcoded status and header names");
         }
     }
 
     // No Range header — serve full file
     let body = match fs::read(file_path) {
         Ok(data) => data,
-        Err(_) => {
-            return Response::builder()
-                .status(500)
-                .body(b"Read error".to_vec())
-                .expect("valid HTTP response");
-        }
+        Err(_) => return error_response(500, b"Read error"),
     };
 
+    // Status code and header names are hardcoded literals — infallible.
     Response::builder()
         .status(200)
         .header("Content-Type", content_type)
         .header("Content-Length", file_size.to_string())
         .header("Accept-Ranges", "bytes")
         .body(body)
-        .expect("valid HTTP response")
+        .expect("hardcoded status and header names")
 }
 
 #[cfg(test)]

@@ -32,29 +32,25 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
   const [result, setResult] = useState<AlbumArtResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // Track whether this effect invocation is still current (not stale from HMR)
+  const scanIdRef = useRef(0);
 
   // Scan on mount
   useEffect(() => {
+    const id = ++scanIdRef.current;
     let unlistenScan: (() => void) | null = null;
+    const stale = () => scanIdRef.current !== id;
 
     const run = async () => {
       unlistenScan = await listen<ScanProgress>("albumart-scan-progress", (e) => {
-        console.log("[art-scan]", e.payload);
-        if (mountedRef.current) setScanProgress(e.payload);
+        if (!stale()) setScanProgress(e.payload);
       });
 
       try {
         const results = await invoke<AlbumInfo[]>("scan_album_art", { path: musicPath });
-        if (!mountedRef.current) return;
+        if (stale()) return;
         setAlbums(results);
         const missing = results.filter((a) => !a.has_cover_file);
         setSelected(new Set(missing.map((a) => a.folder_path)));
@@ -63,7 +59,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
           setResult({ total: 0, fixed: 0, already_ok: results.length, failed: 0, cancelled: false, errors: [] });
         }
       } catch (e) {
-        if (!mountedRef.current) return;
+        if (stale()) return;
         const msg = `${e}`;
         if (msg.includes("Cancelled")) {
           onCloseRef.current();
@@ -91,21 +87,17 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
       setFixProgress({ total: folders.length, completed: 0, current_album: "" });
 
       const unlisten = await listen<FixProgress>("albumart-progress", (e) => {
-        if (mountedRef.current) setFixProgress(e.payload);
+        setFixProgress(e.payload);
       });
 
       try {
         const res = await invoke<AlbumArtResult>("fix_album_art", { folders });
-        if (mountedRef.current) {
-          setResult(res);
-          setPhase("done");
-          bumpArtCache();
-        }
+        setResult(res);
+        setPhase("done");
+        bumpArtCache();
       } catch (e) {
-        if (mountedRef.current) {
-          setError(`${e}`);
-          setPhase("done");
-        }
+        setError(`${e}`);
+        setPhase("done");
       } finally {
         unlisten();
       }

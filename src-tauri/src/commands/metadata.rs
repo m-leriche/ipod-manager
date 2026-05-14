@@ -16,9 +16,7 @@ pub async fn scan_album_art(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<albumart::AlbumInfo>, AppError> {
-    log::info!("[art-scan] command invoked with path: {}", path);
     let flag = cancel.new_flag();
-    log::info!("[art-scan] got cancel flag, spawning blocking task");
 
     tauri::async_runtime::spawn_blocking(move || albumart::scan_albums(&path, app, flag))
         .await

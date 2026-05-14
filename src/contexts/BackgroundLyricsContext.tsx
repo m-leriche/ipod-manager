@@ -1,13 +1,8 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { ConfirmDialog } from "../components/atoms/ConfirmDialog/ConfirmDialog";
-
-interface LyricsProgress {
-  total: number;
-  completed: number;
-  current_track: string;
-}
+import { useBackgroundOperation } from "../hooks/useBackgroundOperation";
+import type { BackgroundOperationState } from "../hooks/useBackgroundOperation";
 
 interface LyricsFetchResult {
   total: number;
@@ -18,112 +13,73 @@ interface LyricsFetchResult {
   cancelled: boolean;
 }
 
-interface BackgroundLyricsState {
-  active: boolean;
-  total: number;
-  completed: number;
-  currentTrack: string;
-}
-
 interface BackgroundLyricsActions {
-  state: BackgroundLyricsState;
-  startFetch: () => void;
-  cancelFetch: () => void;
+  state: BackgroundOperationState;
+  start: () => void;
+  cancel: () => void;
 }
 
 const BackgroundLyricsContext = createContext<BackgroundLyricsActions>({
-  state: { active: false, total: 0, completed: 0, currentTrack: "" },
-  startFetch: () => {},
-  cancelFetch: () => {},
+  state: { active: false, total: 0, completed: 0, currentItem: "" },
+  start: () => {},
+  cancel: () => {},
 });
 
+const formatResultMessage = (r: LyricsFetchResult): string => {
+  if (r.cancelled) {
+    const parts = ["Lyrics fetch was cancelled."];
+    if (r.fetched > 0) parts.push(`${r.fetched} track${r.fetched !== 1 ? "s" : ""} fetched before cancellation.`);
+    if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped.`);
+    return parts.join(" ");
+  }
+  if (r.total === 0 && r.skipped_not_found === 0) {
+    return "All tracks in your library already have lyrics.";
+  }
+  if (r.total === 0 && r.skipped_not_found > 0) {
+    return `All remaining tracks already have lyrics. ${r.skipped_not_found} track${r.skipped_not_found !== 1 ? "s were" : " was"} previously not found and skipped.`;
+  }
+  const parts: string[] = [];
+  if (r.fetched > 0) parts.push(`${r.fetched} found`);
+  if (r.not_found > 0) parts.push(`${r.not_found} not found`);
+  if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped`);
+  if (parts.length === 0) return "No tracks needed lyrics.";
+  return `Lyrics fetch complete \u2014 ${parts.join(", ")}.`;
+};
+
 export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, setState] = useState<BackgroundLyricsState>({
-    active: false,
-    total: 0,
-    completed: 0,
-    currentTrack: "",
+  const { state, result, start, cancel, dismissResult } = useBackgroundOperation<LyricsFetchResult>({
+    progressEvent: "library-lyrics-progress",
+    progressItemKey: "current_track",
+    startCommand: "fetch_library_lyrics",
+    cancelCommand: "cancel_lyrics_fetch",
+    scanningLabel: "Scanning library...",
+    onError: () => ({
+      total: 0,
+      fetched: 0,
+      already_had: 0,
+      not_found: 0,
+      skipped_not_found: 0,
+      cancelled: false,
+    }),
   });
-  const [result, setResult] = useState<LyricsFetchResult | null>(null);
-  const activeRef = useRef(false);
 
-  const startFetch = useCallback(async () => {
-    if (activeRef.current) return;
-    activeRef.current = true;
-    setState({ active: true, total: 0, completed: 0, currentTrack: "Scanning library..." });
-
-    const unlisten = await listen<LyricsProgress>("library-lyrics-progress", (e) => {
-      setState({
-        active: true,
-        total: e.payload.total,
-        completed: e.payload.completed,
-        currentTrack: e.payload.current_track,
-      });
-    });
-
-    try {
-      const res = await invoke<LyricsFetchResult>("fetch_library_lyrics");
-      setResult(res);
-    } catch {
-      setResult({
-        total: 0,
-        fetched: 0,
-        already_had: 0,
-        not_found: 0,
-        skipped_not_found: 0,
-        cancelled: false,
-      });
-    } finally {
-      unlisten();
-      activeRef.current = false;
-      setState({ active: false, total: 0, completed: 0, currentTrack: "" });
-    }
-  }, []);
-
-  const cancelFetch = useCallback(() => {
-    invoke("cancel_lyrics_fetch").catch(() => {});
-  }, []);
-
-  const dismissResult = useCallback(() => setResult(null), []);
-
-  const showRetryOption = (r: LyricsFetchResult): boolean => r.skipped_not_found > 0 || r.not_found > 0;
+  const showRetryOption = result ? result.skipped_not_found > 0 || result.not_found > 0 : false;
 
   const handleRetryNotFound = useCallback(async () => {
     await invoke("reset_lyrics_not_found");
-    setResult(null);
-    startFetch();
-  }, [startFetch]);
-
-  const formatResultMessage = (r: LyricsFetchResult): string => {
-    if (r.cancelled) {
-      const parts = ["Lyrics fetch was cancelled."];
-      if (r.fetched > 0) parts.push(`${r.fetched} track${r.fetched !== 1 ? "s" : ""} fetched before cancellation.`);
-      if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped.`);
-      return parts.join(" ");
-    }
-    if (r.total === 0 && r.skipped_not_found === 0) {
-      return "All tracks in your library already have lyrics.";
-    }
-    if (r.total === 0 && r.skipped_not_found > 0) {
-      return `All remaining tracks already have lyrics. ${r.skipped_not_found} track${r.skipped_not_found !== 1 ? "s were" : " was"} previously not found and skipped.`;
-    }
-    const parts: string[] = [];
-    if (r.fetched > 0) parts.push(`${r.fetched} found`);
-    if (r.not_found > 0) parts.push(`${r.not_found} not found`);
-    if (r.skipped_not_found > 0) parts.push(`${r.skipped_not_found} previously unfound skipped`);
-    if (parts.length === 0) return "No tracks needed lyrics.";
-    return `Lyrics fetch complete — ${parts.join(", ")}.`;
-  };
+    dismissResult();
+    start();
+  }, [start, dismissResult]);
 
   return (
-    <BackgroundLyricsContext.Provider value={{ state, startFetch, cancelFetch }}>
+    <BackgroundLyricsContext.Provider value={{ state, start, cancel }}>
       {children}
       {result && (
         <ConfirmDialog
           title={result.cancelled ? "Fetch Cancelled" : "Lyrics Fetch"}
           message={formatResultMessage(result)}
           confirmLabel="OK"
-          hideCancel={!showRetryOption(result)}
+          hideCancel={!showRetryOption}
           cancelLabel="Retry Unfound"
           onConfirm={dismissResult}
           onCancel={handleRetryNotFound}

@@ -33,8 +33,8 @@ const formatDuration = (totalSecs: number): string => {
 
 export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
-  const { state: artRepair, cancelRepair } = useBackgroundArtRepair();
-  const { state: lyricsFetch, cancelFetch: cancelLyricsFetch } = useBackgroundLyrics();
+  const { state: artRepair, cancel: cancelRepair } = useBackgroundArtRepair();
+  const { state: lyricsFetch, cancel: cancelLyricsFetch } = useBackgroundLyrics();
 
   const stats = useMemo(() => {
     const count = selectedTracks.length;
@@ -107,12 +107,12 @@ export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: Library
               {artRepair.active ? (
                 <span className="text-text-secondary truncate">
                   Repairing art: {artRepair.completed}/{artRepair.total}
-                  {artRepair.currentAlbum && ` \u2014 ${artRepair.currentAlbum}`}
+                  {artRepair.currentItem && ` \u2014 ${artRepair.currentItem}`}
                 </span>
               ) : (
                 <span className="text-text-secondary truncate">
                   Fetching lyrics: {lyricsFetch.completed}/{lyricsFetch.total}
-                  {lyricsFetch.currentTrack && ` \u2014 ${lyricsFetch.currentTrack}`}
+                  {lyricsFetch.currentItem && ` \u2014 ${lyricsFetch.currentItem}`}
                 </span>
               )}
               <button

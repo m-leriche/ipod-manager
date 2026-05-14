@@ -30,8 +30,8 @@ const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
   const { width, onDragStart } = useResizableWidth();
   const { bumpArtCache } = useArtCache();
-  const { state: artRepairState, startRepair } = useBackgroundArtRepair();
-  const { state: lyricsState, startFetch: startLyricsFetch } = useBackgroundLyrics();
+  const { state: artRepairState, start: startRepair } = useBackgroundArtRepair();
+  const { state: lyricsState, start: startLyricsFetch } = useBackgroundLyrics();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 

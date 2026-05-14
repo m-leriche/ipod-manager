@@ -190,25 +190,37 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
 
 // ── Sub-views ──────────────────────────────────────────────────
 
-const ScanningView = ({ progress }: { progress: ScanProgress }) => (
-  <div className="flex flex-col items-center gap-3 py-6">
-    <div className="flex items-center gap-2 text-text-secondary text-xs">
-      <Spinner />
-      Scanning iPod for albums...
-    </div>
-    <div className="w-full bg-bg-card border border-border rounded-full h-2 overflow-hidden">
-      <div className="h-full bg-accent rounded-full animate-pulse w-full" />
-    </div>
-    {progress.albums_found > 0 && (
+const ScanningView = ({ progress }: { progress: ScanProgress }) => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  return (
+    <div className="flex flex-col items-center gap-3 py-6">
+      <div className="flex items-center gap-2 text-text-secondary text-xs">
+        <Spinner />
+        Scanning iPod for albums...
+      </div>
+      <div className="w-full bg-bg-card border border-border rounded-full h-2 overflow-hidden">
+        <div className="h-full bg-accent rounded-full animate-pulse w-full" />
+      </div>
       <p className="text-[11px] text-text-tertiary">
-        {progress.albums_found} album{progress.albums_found !== 1 ? "s" : ""} found
+        {progress.albums_found > 0
+          ? `${progress.albums_found} album${progress.albums_found !== 1 ? "s" : ""} found · ${timeStr}`
+          : timeStr}
       </p>
-    )}
-    {progress.current_folder && (
-      <p className="text-[11px] text-text-tertiary truncate max-w-full">{progress.current_folder}</p>
-    )}
-  </div>
-);
+      {progress.current_folder && (
+        <p className="text-[11px] text-text-tertiary truncate max-w-full">{progress.current_folder}</p>
+      )}
+    </div>
+  );
+};
 
 const SummaryView = ({ total, missing }: { total: number; missing: number }) => (
   <div className="py-4">

@@ -7,7 +7,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { pickFile } from "../../../utils/pickPath";
-import type { LibraryTrack, AlbumSummary } from "../../../types/library";
+import type { LibraryTrack, LibraryFilter, AlbumSummary } from "../../../types/library";
 
 export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks: LibraryTrack[]) => {
   const { playTrack, addToQueue } = usePlayback();
@@ -179,9 +179,25 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   );
 
   const handleColumnPlayAll = useCallback(
-    (action: { column: string; value: string }) => {
+    async (action: { column: string; value: string }) => {
       const matched = getTracksForColumnAction(action);
-      if (matched.length > 0) playTrack(matched[0], matched);
+      if (matched.length > 0) {
+        playTrack(matched[0], matched);
+        return;
+      }
+      try {
+        const filter: LibraryFilter = {
+          sort_by: "track_number",
+          sort_direction: "asc",
+          ...(action.column === "genre" ? { genre: [action.value] } : {}),
+          ...(action.column === "artist" ? { artist: [action.value] } : {}),
+          ...(action.column === "album" ? { album: [action.value] } : {}),
+        };
+        const fetched = await invoke<LibraryTrack[]>("get_library_tracks", { filter });
+        if (fetched.length > 0) playTrack(fetched[0], fetched);
+      } catch (e) {
+        console.error("Failed to fetch tracks for playback:", e);
+      }
     },
     [getTracksForColumnAction, playTrack],
   );

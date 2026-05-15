@@ -34,7 +34,9 @@ fn song_xml(tag: &str, t: &crate::library::types::LibraryTrack) -> String {
     s.push_str(&xml::attr("title", title));
     s.push_str(&xml::attr("artist", artist));
     s.push_str(&xml::attr("album", album));
-    s.push_str(&format!(" duration=\"{duration}\" isDir=\"false\" type=\"music\""));
+    s.push_str(&format!(
+        " duration=\"{duration}\" isDir=\"false\" type=\"music\""
+    ));
     s.push_str(&xml::opt_attr("track", &t.track_number));
     s.push_str(&xml::attr("suffix", suffix));
     s.push_str(&format!(" coverArt=\"{id}\""));

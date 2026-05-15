@@ -62,7 +62,9 @@ pub async fn get_album_list2(
     State(state): State<Arc<SubsonicState>>,
     Query(params): Query<AlbumListParams>,
 ) -> axum::response::Response {
-    let list_type = params.list_type.unwrap_or_else(|| "alphabeticalByName".to_string());
+    let list_type = params
+        .list_type
+        .unwrap_or_else(|| "alphabeticalByName".to_string());
     let size = params.size.unwrap_or(20).min(500);
     let offset = params.offset.unwrap_or(0);
 
@@ -92,7 +94,9 @@ pub async fn get_album_list2(
                 }
             }
         }
-        "alphabeticalByArtist" => albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase())),
+        "alphabeticalByArtist" => {
+            albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()))
+        }
         // "alphabeticalByName" is the default sort from the DB
         _ => {}
     }
@@ -120,9 +124,7 @@ pub async fn search3(
     let max_artists = params.artist_count.unwrap_or(20).min(100);
 
     if query.is_empty() {
-        return xml_response(xml::ok_response(
-            "<searchResult3></searchResult3>",
-        ));
+        return xml_response(xml::ok_response("<searchResult3></searchResult3>"));
     }
 
     let query_clone = query.clone();
@@ -258,9 +260,7 @@ pub async fn get_playlist(
 
     let (playlist, tracks) = match result {
         Ok(Ok(data)) => data,
-        Ok(Err(e)) => {
-            return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e))
-        }
+        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         Err(_) => return xml_response(xml::error_response(0, "Internal error")),
     };
 

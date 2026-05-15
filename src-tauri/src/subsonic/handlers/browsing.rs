@@ -13,10 +13,7 @@ pub struct IdParam {
 }
 
 /// Build the artist index XML (shared by getArtists and getIndexes).
-fn build_artist_index(
-    artists: &[library::types::ArtistSummary],
-    wrapper_tag: &str,
-) -> String {
+fn build_artist_index(artists: &[library::types::ArtistSummary], wrapper_tag: &str) -> String {
     let mut index_map: BTreeMap<char, Vec<&library::types::ArtistSummary>> = BTreeMap::new();
     for artist in artists {
         let first = artist
@@ -134,9 +131,7 @@ pub async fn get_song(
 
     let track = match result {
         Ok(Ok(t)) => t,
-        Ok(Err(e)) => {
-            return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e))
-        }
+        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         Err(_) => return xml_response(xml::error_response(0, "Internal error")),
     };
 
@@ -177,9 +172,7 @@ pub async fn get_artist(
 
     let (artist_name, albums) = match result {
         Ok(Ok(data)) => data,
-        Ok(Err(e)) => {
-            return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e))
-        }
+        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         Err(_) => return xml_response(xml::error_response(0, "Internal error")),
     };
 
@@ -253,9 +246,7 @@ pub async fn get_album(
 
     let (artist_name, album_name, year, tracks) = match result {
         Ok(Ok(data)) => data,
-        Ok(Err(e)) => {
-            return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e))
-        }
+        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         Err(_) => return xml_response(xml::error_response(0, "Internal error")),
     };
 

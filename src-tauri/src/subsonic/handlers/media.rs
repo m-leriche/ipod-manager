@@ -116,8 +116,7 @@ pub async fn get_cover_art(
                 .map_err(|e| format!("Query: {e}"))?;
 
             for (artist, album, folder) in rows.flatten() {
-                let candidate =
-                    super::stable_id("al", &format!("{artist}||{album}"));
+                let candidate = super::stable_id("al", &format!("{artist}||{album}"));
                 if candidate == id_str {
                     return Ok(folder);
                 }
@@ -153,12 +152,7 @@ pub async fn get_cover_art(
                 Ok(d) => d,
                 Err(_) => return (StatusCode::NOT_FOUND, "Read error").into_response(),
             };
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "image/jpeg")],
-                data,
-            )
-                .into_response()
+            (StatusCode::OK, [(header::CONTENT_TYPE, "image/jpeg")], data).into_response()
         }
         _ => (StatusCode::NOT_FOUND, "No cover art").into_response(),
     }

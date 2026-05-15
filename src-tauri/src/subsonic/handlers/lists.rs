@@ -94,9 +94,7 @@ pub async fn get_album_list2(
                 }
             }
         }
-        "alphabeticalByArtist" => {
-            albums.sort_by_key(|a| a.artist.to_lowercase())
-        }
+        "alphabeticalByArtist" => albums.sort_by_key(|a| a.artist.to_lowercase()),
         // "alphabeticalByName" is the default sort from the DB
         _ => {}
     }

@@ -97,6 +97,7 @@ pub fn start_server(
     api_routes = subsonic_route!(api_routes, "/getAlbum", handlers::get_album);
     api_routes = subsonic_route!(api_routes, "/getSong", handlers::get_song);
     api_routes = subsonic_route!(api_routes, "/getAlbumList2", handlers::get_album_list2);
+    api_routes = subsonic_route!(api_routes, "/getGenres", handlers::get_genres);
     api_routes = subsonic_route!(api_routes, "/search3", handlers::search3);
     api_routes = subsonic_route!(api_routes, "/getPlaylists", handlers::get_playlists);
     api_routes = subsonic_route!(api_routes, "/getPlaylist", handlers::get_playlist);

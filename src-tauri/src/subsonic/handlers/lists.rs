@@ -6,6 +6,33 @@ use super::{song_xml, stable_id, xml, xml_response};
 use crate::library;
 use crate::subsonic::SubsonicState;
 
+/// GET /rest/getGenres — list all genres with song/album counts.
+pub async fn get_genres(State(state): State<Arc<SubsonicState>>) -> axum::response::Response {
+    let db = state.db.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        library::get_genres(&conn)
+    })
+    .await;
+
+    let genres = match result {
+        Ok(Ok(g)) => g,
+        _ => return xml_response(xml::error_response(0, "Internal error")),
+    };
+
+    let mut inner = String::from("<genres>");
+    for genre in &genres {
+        inner.push_str(&format!(
+            "<genre songCount=\"{}\" albumCount=\"0\">{}</genre>",
+            genre.track_count,
+            xml::escape(&genre.name),
+        ));
+    }
+    inner.push_str("</genres>");
+
+    xml_response(xml::ok_response(&inner))
+}
+
 #[derive(serde::Deserialize)]
 pub struct PlaylistIdParam {
     pub id: Option<String>,
@@ -75,16 +102,7 @@ pub async fn get_album_list2(
 
     let mut inner = String::from("<albumList2>");
     for album in &page {
-        let album_id = stable_id("al", &format!("{}||{}", album.artist, album.name));
-        inner.push_str(&format!(
-            "<album{}{}{}{} songCount=\"{}\" duration=\"0\" coverArt=\"{}\"/>",
-            xml::attr("id", &album_id),
-            xml::attr("name", &album.name),
-            xml::attr("artist", &album.artist),
-            xml::opt_attr("year", &album.year),
-            album.track_count,
-            album_id,
-        ));
+        inner.push_str(&super::album_xml(album));
     }
     inner.push_str("</albumList2>");
 
@@ -156,16 +174,7 @@ pub async fn search3(
         if album.name.to_lowercase().contains(&query_lower)
             || album.artist.to_lowercase().contains(&query_lower)
         {
-            let album_id = stable_id("al", &format!("{}||{}", album.artist, album.name));
-            inner.push_str(&format!(
-                "<album{}{}{}{} songCount=\"{}\" duration=\"0\" coverArt=\"{}\"/>",
-                xml::attr("id", &album_id),
-                xml::attr("name", &album.name),
-                xml::attr("artist", &album.artist),
-                xml::opt_attr("year", &album.year),
-                album.track_count,
-                album_id,
-            ));
+            inner.push_str(&super::album_xml(album));
             album_count += 1;
         }
     }

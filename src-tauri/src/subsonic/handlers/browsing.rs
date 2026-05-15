@@ -192,16 +192,7 @@ pub async fn get_artist(
     );
 
     for album in &albums {
-        let album_id = stable_id("al", &format!("{}||{}", album.artist, album.name));
-        inner.push_str(&format!(
-            "<album{}{}{}{} songCount=\"{}\" duration=\"0\" coverArt=\"{}\"/>",
-            xml::attr("id", &album_id),
-            xml::attr("name", &album.name),
-            xml::attr("artist", &album.artist),
-            xml::opt_attr("year", &album.year),
-            album.track_count,
-            album_id,
-        ));
+        inner.push_str(&super::album_xml(album));
     }
     inner.push_str("</artist>");
 
@@ -270,11 +261,13 @@ pub async fn get_album(
 
     let total_duration: u64 = tracks.iter().map(|t| t.duration_secs as u64).sum();
 
+    let artist_id_str = stable_id("ar", &artist_name);
     let mut inner = format!(
-        "<album{}{}{}{} songCount=\"{}\" duration=\"{}\" coverArt=\"{}\">",
+        "<album{}{}{}{}{} songCount=\"{}\" duration=\"{}\" coverArt=\"{}\">",
         xml::attr("id", &album_id),
         xml::attr("name", &album_name),
         xml::attr("artist", &artist_name),
+        xml::attr("artistId", &artist_id_str),
         xml::opt_attr("year", &year),
         tracks.len(),
         total_duration,

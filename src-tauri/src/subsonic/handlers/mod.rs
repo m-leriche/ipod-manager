@@ -4,7 +4,7 @@ mod media;
 mod system;
 
 pub use browsing::{get_album, get_artist, get_artists, get_indexes, get_song};
-pub use lists::{get_album_list2, get_playlist, get_playlists, search3};
+pub use lists::{get_album_list2, get_genres, get_playlist, get_playlists, search3};
 pub use media::{get_cover_art, stream};
 pub use system::{get_license, get_music_directory, get_music_folders, get_user, ping};
 
@@ -76,6 +76,25 @@ fn format_content_type(format: &str) -> &str {
         "opus" => "audio/ogg",
         _ => "audio/mpeg",
     }
+}
+
+/// Helper: convert an `AlbumSummary` into an `<album>` XML element.
+fn album_xml(album: &crate::library::types::AlbumSummary) -> String {
+    let album_id = stable_id("al", &format!("{}||{}", album.artist, album.name));
+    let artist_id = stable_id("ar", &album.artist);
+    let mut s = String::from("<album");
+    s.push_str(&xml::attr("id", &album_id));
+    s.push_str(&xml::attr("name", &album.name));
+    s.push_str(&xml::attr("artist", &album.artist));
+    s.push_str(&xml::attr("artistId", &artist_id));
+    s.push_str(&xml::opt_attr("year", &album.year));
+    s.push_str(&format!(
+        " songCount=\"{}\" duration=\"0\"",
+        album.track_count
+    ));
+    s.push_str(&xml::attr("coverArt", &album_id));
+    s.push_str("/>");
+    s
 }
 
 /// Generate a stable numeric ID from a string (for artists/albums that

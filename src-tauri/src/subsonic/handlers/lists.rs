@@ -85,7 +85,7 @@ pub async fn get_album_list2(
     match list_type.as_str() {
         "newest" | "recent" => {
             // Sort by year descending; albums without a year go last
-            albums.sort_by(|a, b| b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)));
+            albums.sort_by_key(|a| std::cmp::Reverse(a.year.unwrap_or(0)));
         }
         "random" => {
             // Fisher-Yates shuffle

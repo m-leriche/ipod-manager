@@ -74,11 +74,7 @@ export const StreamingSettings = () => {
         <span className="text-xs text-text-secondary flex-1">
           {status ? `Running on port ${status.port}` : "Loading..."}
         </span>
-        {status && (
-          <span className="text-[10px] text-text-tertiary">
-            {status.username}
-          </span>
-        )}
+        {status && <span className="text-[10px] text-text-tertiary">{status.username}</span>}
       </div>
 
       {/* Connection URLs */}
@@ -88,10 +84,7 @@ export const StreamingSettings = () => {
             Server URL{status.urls.length > 1 ? "s" : ""}
           </span>
           {status.urls.map((u) => (
-            <div
-              key={u.url}
-              className="flex items-center gap-3 px-4 py-2.5 border border-border rounded-xl"
-            >
+            <div key={u.url} className="flex items-center gap-3 px-4 py-2.5 border border-border rounded-xl">
               <span className="text-[10px] text-text-tertiary shrink-0 w-16">{u.label}</span>
               <code className="text-xs text-text-primary font-mono flex-1 truncate">{u.url}</code>
               <button
@@ -151,9 +144,7 @@ export const StreamingSettings = () => {
               Cancel
             </button>
           </div>
-          <p className="text-[10px] text-text-tertiary px-1">
-            Credential changes take effect on next app restart.
-          </p>
+          <p className="text-[10px] text-text-tertiary px-1">Credential changes take effect on next app restart.</p>
         </div>
       ) : (
         <div className="mt-3 flex items-center gap-2">

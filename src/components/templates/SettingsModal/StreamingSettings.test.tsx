@@ -9,9 +9,7 @@ const defaultStatus = {
   enabled: true,
   port: 4533,
   username: "admin",
-  urls: [
-    { label: "Local WiFi", url: "http://192.168.2.176:4533" },
-  ],
+  urls: [{ label: "Local WiFi", url: "http://192.168.2.176:4533" }],
 };
 
 describe("StreamingSettings", () => {

@@ -117,6 +117,7 @@ dependencies = [
  "base64 0.22.1",
  "cpal",
  "crossbeam-channel",
+ "fastrand",
  "id3",
  "image",
  "lofty",
@@ -142,6 +143,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "ureq",
 ]
 

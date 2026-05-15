@@ -107,27 +107,9 @@ pub async fn get_music_directory(
 }
 
 async fn get_artist_directory(state: &SubsonicState, artist_id: &str) -> axum::response::Response {
-    let db = state.db.clone();
-    let artist_id = artist_id.to_string();
-    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let artists = library::get_artists(&conn)?;
-        let artist = artists
-            .iter()
-            .find(|a| stable_id("ar", &a.name) == artist_id);
-        let Some(artist) = artist else {
-            return Err("Artist not found".to_string());
-        };
-        let name = artist.name.clone();
-        let albums = library::get_albums(&conn, Some(&name))?;
-        Ok((name, albums))
-    })
-    .await;
-
-    let (name, albums) = match result {
-        Ok(Ok(data)) => data,
-        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
-        Err(_) => return xml_response(xml::error_response(0, "Internal error")),
+    let (name, albums) = match super::fetch_artist_with_albums(state, artist_id.to_string()).await {
+        Ok(data) => data,
+        Err(e) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
     };
 
     let mut inner = format!(
@@ -152,43 +134,11 @@ async fn get_artist_directory(state: &SubsonicState, artist_id: &str) -> axum::r
 }
 
 async fn get_album_directory(state: &SubsonicState, album_id: &str) -> axum::response::Response {
-    let db = state.db.clone();
-    let album_id_owned = album_id.to_string();
-    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let all_albums = library::get_albums(&conn, None)?;
-        let album = all_albums
-            .iter()
-            .find(|a| stable_id("al", &format!("{}||{}", a.artist, a.name)) == album_id_owned);
-        let Some(album) = album else {
-            return Err("Album not found".to_string());
+    let (artist_name, album_name, _year, tracks) =
+        match super::fetch_album_with_tracks(state, album_id.to_string()).await {
+            Ok(data) => data,
+            Err(e) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         };
-        let artist_name = album.artist.clone();
-        let album_name = album.name.clone();
-        let filter = library::types::LibraryFilter {
-            artist: Some(vec![artist_name.clone()]),
-            album: Some(vec![album_name.clone()]),
-            genre: None,
-            search: None,
-            sort_by: Some("track_number".to_string()),
-            sort_direction: Some("asc".to_string()),
-            flagged_only: None,
-            rating_min: None,
-            rating_max: None,
-            offset: None,
-            limit: None,
-            skip_count: None,
-        };
-        let tracks = library::get_tracks(&conn, &filter)?;
-        Ok((artist_name, album_name, tracks))
-    })
-    .await;
-
-    let (artist_name, album_name, tracks) = match result {
-        Ok(Ok(data)) => data,
-        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
-        Err(_) => return xml_response(xml::error_response(0, "Internal error")),
-    };
 
     let dir_id = stable_id("al", &format!("{artist_name}||{album_name}"));
     let parent_id = stable_id("ar", &artist_name);

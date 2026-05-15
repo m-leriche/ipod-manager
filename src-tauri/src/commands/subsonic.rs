@@ -11,6 +11,10 @@ pub struct SubsonicStatus {
     pub username: String,
 }
 
+/// Returns the current Subsonic server status.
+///
+/// Note: `enabled` is always `true` — the server starts with the app and
+/// cannot be toggled at runtime yet.
 #[tauri::command]
 pub async fn get_subsonic_status(
     db: State<'_, LibraryDb>,
@@ -39,6 +43,7 @@ pub async fn set_subsonic_credentials(
     Ok(())
 }
 
+/// Save a new port for the Subsonic server. Takes effect on next app restart.
 #[tauri::command]
 pub async fn set_subsonic_port(db: State<'_, LibraryDb>, port: u16) -> Result<(), AppError> {
     let conn = db.lock_conn()?;

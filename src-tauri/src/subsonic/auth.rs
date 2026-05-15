@@ -88,6 +88,9 @@ pub async fn auth_middleware(
 
 /// Decode a hex-encoded password (Subsonic `enc:` format).
 fn decode_hex_password(hex: &str) -> Option<String> {
+    if hex.len() % 2 != 0 {
+        return None;
+    }
     let bytes: Result<Vec<u8>, _> = (0..hex.len())
         .step_by(2)
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16))
@@ -116,6 +119,11 @@ mod tests {
     #[test]
     fn decode_hex_password_invalid() {
         assert_eq!(decode_hex_password("zzzz"), None);
+    }
+
+    #[test]
+    fn decode_hex_password_odd_length() {
+        assert_eq!(decode_hex_password("736"), None);
     }
 
     #[test]

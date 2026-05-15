@@ -5,6 +5,8 @@ use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio_util::io::ReaderStream;
 
 use super::{xml, xml_response};
 use crate::subsonic::SubsonicState;
@@ -159,6 +161,9 @@ pub async fn get_cover_art(
 }
 
 /// Serve a file with Range request support for audio streaming.
+///
+/// Uses streaming I/O so large files (FLAC, WAV) aren't buffered entirely
+/// in memory.
 async fn serve_file(file_path: &str, headers: &HeaderMap) -> Response {
     let path = Path::new(file_path);
     let metadata = match tokio::fs::metadata(path).await {
@@ -173,34 +178,42 @@ async fn serve_file(file_path: &str, headers: &HeaderMap) -> Response {
         if let Some((start, end)) = parse_range(range_val, file_size) {
             let length = end - start + 1;
 
-            let data = match read_range(file_path, start, length).await {
-                Ok(d) => d,
+            let mut file = match tokio::fs::File::open(path).await {
+                Ok(f) => f,
                 Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response(),
             };
+            if file.seek(std::io::SeekFrom::Start(start)).await.is_err() {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Seek error").into_response();
+            }
 
-            let actual_len = data.len() as u64;
+            let stream = ReaderStream::new(file.take(length));
+            let body = Body::from_stream(stream);
+
             return (
                 StatusCode::PARTIAL_CONTENT,
                 [
                     (header::CONTENT_TYPE, content_type.to_string()),
-                    (header::CONTENT_LENGTH, actual_len.to_string()),
+                    (header::CONTENT_LENGTH, length.to_string()),
                     (
                         header::CONTENT_RANGE,
-                        format!("bytes {}-{}/{}", start, start + actual_len - 1, file_size),
+                        format!("bytes {start}-{end}/{file_size}"),
                     ),
                     (header::ACCEPT_RANGES, "bytes".to_string()),
                 ],
-                Body::from(data),
+                body,
             )
                 .into_response();
         }
     }
 
-    // Full file
-    let data = match tokio::fs::read(path).await {
-        Ok(d) => d,
+    // Full file — stream instead of buffering
+    let file = match tokio::fs::File::open(path).await {
+        Ok(f) => f,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response(),
     };
+
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
 
     (
         StatusCode::OK,
@@ -209,19 +222,9 @@ async fn serve_file(file_path: &str, headers: &HeaderMap) -> Response {
             (header::CONTENT_LENGTH, file_size.to_string()),
             (header::ACCEPT_RANGES, "bytes".to_string()),
         ],
-        Body::from(data),
+        body,
     )
         .into_response()
-}
-
-async fn read_range(path: &str, start: u64, length: u64) -> Result<Vec<u8>, std::io::Error> {
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
-    let mut file = tokio::fs::File::open(path).await?;
-    file.seek(std::io::SeekFrom::Start(start)).await?;
-    let mut buf = vec![0u8; length as usize];
-    let n = file.read(&mut buf).await?;
-    buf.truncate(n);
-    Ok(buf)
 }
 
 fn parse_range(header: &str, file_size: u64) -> Option<(u64, u64)> {

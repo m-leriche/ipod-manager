@@ -107,25 +107,7 @@ pub async fn get_song(
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let filter = library::types::LibraryFilter {
-            artist: None,
-            album: None,
-            genre: None,
-            search: None,
-            sort_by: None,
-            sort_direction: None,
-            flagged_only: None,
-            rating_min: None,
-            rating_max: None,
-            offset: None,
-            limit: None,
-            skip_count: None,
-        };
-        let tracks = library::get_tracks(&conn, &filter)?;
-        tracks
-            .into_iter()
-            .find(|t| t.id == track_id)
-            .ok_or_else(|| "Song not found".to_string())
+        library::get_track_by_id(&conn, track_id)
     })
     .await;
 
@@ -150,30 +132,9 @@ pub async fn get_artist(
         ));
     };
 
-    let db = state.db.clone();
-    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-
-        // Find artist name by matching the stable ID
-        let artists = library::get_artists(&conn)?;
-        let artist = artists
-            .iter()
-            .find(|a| stable_id("ar", &a.name) == artist_id);
-
-        let Some(artist) = artist else {
-            return Err("Artist not found".to_string());
-        };
-
-        let artist_name = artist.name.clone();
-        let albums = library::get_albums(&conn, Some(&artist_name))?;
-        Ok((artist_name, albums))
-    })
-    .await;
-
-    let (artist_name, albums) = match result {
-        Ok(Ok(data)) => data,
-        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
-        Err(_) => return xml_response(xml::error_response(0, "Internal error")),
+    let (artist_name, albums) = match super::fetch_artist_with_albums(&state, artist_id).await {
+        Ok(data) => data,
+        Err(e) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
     };
 
     let artist_id_str = stable_id("ar", &artist_name);
@@ -204,51 +165,11 @@ pub async fn get_album(
         ));
     };
 
-    let db = state.db.clone();
-    let album_id_clone = album_id.clone();
-    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-
-        // Find the album by matching stable IDs against all albums
-        let all_albums = library::get_albums(&conn, None)?;
-        let album = all_albums
-            .iter()
-            .find(|a| stable_id("al", &format!("{}||{}", a.artist, a.name)) == album_id_clone);
-
-        let Some(album) = album else {
-            return Err("Album not found".to_string());
+    let (artist_name, album_name, year, tracks) =
+        match super::fetch_album_with_tracks(&state, album_id.clone()).await {
+            Ok(data) => data,
+            Err(e) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
         };
-
-        let artist_name = album.artist.clone();
-        let album_name = album.name.clone();
-        let year = album.year;
-
-        // Get tracks for this specific album + artist
-        let filter = library::types::LibraryFilter {
-            artist: Some(vec![artist_name.clone()]),
-            album: Some(vec![album_name.clone()]),
-            genre: None,
-            search: None,
-            sort_by: Some("track_number".to_string()),
-            sort_direction: Some("asc".to_string()),
-            flagged_only: None,
-            rating_min: None,
-            rating_max: None,
-            offset: None,
-            limit: None,
-            skip_count: None,
-        };
-
-        let tracks = library::get_tracks(&conn, &filter)?;
-        Ok((artist_name, album_name, year, tracks))
-    })
-    .await;
-
-    let (artist_name, album_name, year, tracks) = match result {
-        Ok(Ok(data)) => data,
-        Ok(Err(e)) => return xml_response(xml::error_response(xml::error_codes::NOT_FOUND, &e)),
-        Err(_) => return xml_response(xml::error_response(0, "Internal error")),
-    };
 
     let total_duration: u64 = tracks.iter().map(|t| t.duration_secs as u64).sum();
 

@@ -8,7 +8,83 @@ pub use lists::{get_album_list2, get_genres, get_playlist, get_playlists, search
 pub use media::{get_cover_art, stream};
 pub use system::{get_license, get_music_directory, get_music_folders, get_user, ping};
 
+use crate::library;
+use crate::subsonic::SubsonicState;
+
 use super::xml;
+
+/// Look up an artist by stable ID and return (name, albums).
+/// Shared between getArtist (ID3 mode) and getMusicDirectory (directory mode).
+async fn fetch_artist_with_albums(
+    state: &SubsonicState,
+    artist_id: String,
+) -> Result<(String, Vec<library::types::AlbumSummary>), String> {
+    let db = state.db.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let artists = library::get_artists(&conn)?;
+        let artist = artists
+            .iter()
+            .find(|a| stable_id("ar", &a.name) == artist_id);
+        let Some(artist) = artist else {
+            return Err("Artist not found".to_string());
+        };
+        let name = artist.name.clone();
+        let albums = library::get_albums(&conn, Some(&name))?;
+        Ok((name, albums))
+    })
+    .await;
+    match result {
+        Ok(Ok(data)) => Ok(data),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("Internal error".to_string()),
+    }
+}
+
+/// Look up an album by stable ID and return (artist, album_name, tracks).
+/// Shared between getAlbum (ID3 mode) and getMusicDirectory (directory mode).
+async fn fetch_album_with_tracks(
+    state: &SubsonicState,
+    album_id: String,
+) -> Result<
+    (
+        String,
+        String,
+        Option<u32>,
+        Vec<library::types::LibraryTrack>,
+    ),
+    String,
+> {
+    let db = state.db.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let all_albums = library::get_albums(&conn, None)?;
+        let album = all_albums
+            .iter()
+            .find(|a| stable_id("al", &format!("{}||{}", a.artist, a.name)) == album_id);
+        let Some(album) = album else {
+            return Err("Album not found".to_string());
+        };
+        let artist_name = album.artist.clone();
+        let album_name = album.name.clone();
+        let year = album.year;
+        let filter = library::types::LibraryFilter {
+            artist: Some(vec![artist_name.clone()]),
+            album: Some(vec![album_name.clone()]),
+            sort_by: Some("track_number".to_string()),
+            sort_direction: Some("asc".to_string()),
+            ..Default::default()
+        };
+        let tracks = library::get_tracks(&conn, &filter)?;
+        Ok((artist_name, album_name, year, tracks))
+    })
+    .await;
+    match result {
+        Ok(Ok(data)) => Ok(data),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("Internal error".to_string()),
+    }
+}
 
 /// Helper: convert a `LibraryTrack` into a `<song>` or `<child>` XML element.
 ///
@@ -101,6 +177,9 @@ fn album_xml(album: &crate::library::types::AlbumSummary) -> String {
 
 /// Generate a stable numeric ID from a string (for artists/albums that
 /// don't have database IDs).
+///
+/// Uses 4 bytes of MD5 → u32 space (~4 billion values). Birthday paradox
+/// gives ~50% collision chance at ~77K entries — fine for typical libraries.
 pub fn stable_id(prefix: &str, name: &str) -> String {
     let hash = md5::compute(name.as_bytes());
     let bytes: [u8; 4] = hash[..4].try_into().expect("md5 is 16 bytes");

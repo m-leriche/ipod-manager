@@ -3,6 +3,16 @@ use rusqlite::Connection;
 use super::super::types::{LibraryFilter, LibraryTrack, PaginatedTracks};
 use super::{build_order_by, build_track_conditions, row_to_track, SELECT_COLUMNS};
 
+/// Look up a single track by its database ID.
+pub fn get_track_by_id(conn: &Connection, track_id: i64) -> Result<LibraryTrack, String> {
+    let sql = format!("SELECT {} FROM tracks WHERE id = ?1", SELECT_COLUMNS);
+    conn.query_row(&sql, rusqlite::params![track_id], row_to_track)
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => "Track not found".to_string(),
+            _ => format!("Query failed: {e}"),
+        })
+}
+
 pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
     let (where_clause, param_values) = build_track_conditions(filter);
     let order_by = build_order_by(filter);

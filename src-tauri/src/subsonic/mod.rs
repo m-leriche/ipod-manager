@@ -71,6 +71,13 @@ pub fn start_server(
     username: String,
     password: String,
 ) -> SubsonicServer {
+    if username == "admin" && password == "admin" {
+        log::warn!(
+            "Subsonic server using default credentials (admin/admin). \
+             Change them in Settings to secure your server."
+        );
+    }
+
     let state = Arc::new(SubsonicState {
         db,
         cache_dir,

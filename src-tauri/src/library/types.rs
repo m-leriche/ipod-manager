@@ -58,7 +58,7 @@ pub struct GenreSummary {
     pub track_count: usize,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct LibraryFilter {
     pub artist: Option<Vec<String>>,
     pub album: Option<Vec<String>>,

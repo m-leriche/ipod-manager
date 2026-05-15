@@ -27,8 +27,8 @@ pub use delete::delete_tracks;
 pub use folders::{add_folder, get_folders, remove_folder};
 pub use import::import_to_library;
 pub use queries::{
-    get_albums, get_artists, get_browser_data, get_browser_data_paginated, get_genres, get_tracks,
-    get_tracks_paginated, search_tracks,
+    get_albums, get_artists, get_browser_data, get_browser_data_paginated, get_genres,
+    get_track_by_id, get_tracks, get_tracks_paginated, search_tracks,
 };
 pub use reorganize::reorganize_library_file;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};

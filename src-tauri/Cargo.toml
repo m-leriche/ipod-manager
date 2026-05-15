@@ -46,6 +46,10 @@ souvlaki = "0.7"
 rustfft = "6"
 notify-debouncer-full = "0.6.0"
 md5 = "0.7"
+axum = "0.8"
+tokio = { version = "1", features = ["net"] }
+tokio-util = { version = "0.7", features = ["io"] }
+fastrand = "2"
 
 [dev-dependencies]
 tempfile = "3"

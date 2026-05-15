@@ -8,6 +8,7 @@ mod lyrics;
 mod media;
 mod metadata;
 mod playlists;
+mod subsonic;
 mod system;
 
 pub use audio::*;
@@ -20,4 +21,5 @@ pub use lyrics::*;
 pub use media::*;
 pub use metadata::*;
 pub use playlists::*;
+pub use subsonic::*;
 pub use system::*;

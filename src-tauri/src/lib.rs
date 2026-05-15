@@ -25,6 +25,7 @@ mod profiles;
 mod rockbox;
 mod sanitize;
 mod streaming;
+mod subsonic;
 mod thumbnail;
 mod volume_monitor;
 mod watcher;
@@ -91,6 +92,36 @@ pub fn run() {
             // Spawn native audio engine
             let audio_engine = audio::AudioEngine::spawn(app.handle().clone());
             app.manage(audio_engine);
+
+            // Start Subsonic-compatible streaming server
+            let subsonic_db = app.state::<LibraryDb>().conn_arc();
+            let cache_dir = app
+                .path()
+                .app_cache_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"))
+                .join("thumbnails");
+            let subsonic_port = {
+                let conn = subsonic_db.lock().map_err(|e| format!("DB lock: {e}"))?;
+                library::get_setting(&conn, "subsonic_port")
+                    .and_then(|v| v.parse::<u16>().ok())
+                    .unwrap_or(4533)
+            };
+            let (subsonic_user, subsonic_pass) = {
+                let conn = subsonic_db.lock().map_err(|e| format!("DB lock: {e}"))?;
+                let user = library::get_setting(&conn, "subsonic_username")
+                    .unwrap_or_else(|| "admin".to_string());
+                let pass = library::get_setting(&conn, "subsonic_password")
+                    .unwrap_or_else(|| "admin".to_string());
+                (user, pass)
+            };
+            let subsonic_server = subsonic::start_server(
+                subsonic_db,
+                cache_dir,
+                subsonic_port,
+                subsonic_user,
+                subsonic_pass,
+            );
+            app.manage(subsonic_server);
 
             // Initialize system media key handling (Now Playing integration)
             match mediakeys::init(app.handle()) {
@@ -295,6 +326,9 @@ pub fn run() {
             commands::get_health_issue_tracks,
             commands::export_library,
             commands::import_library,
+            commands::get_subsonic_status,
+            commands::set_subsonic_credentials,
+            commands::set_subsonic_port,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

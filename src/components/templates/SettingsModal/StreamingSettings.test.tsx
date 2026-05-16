@@ -141,6 +141,29 @@ describe("StreamingSettings", () => {
     });
   });
 
+  it("shows error when credential save fails", async () => {
+    mockInvoke
+      .mockResolvedValueOnce(defaultStatus) // initial load
+      .mockRejectedValueOnce(new Error("Database error")); // save fails
+
+    render(<StreamingSettings />);
+    await waitFor(() => {
+      expect(screen.getByTestId("change-credentials")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("change-credentials"));
+
+    fireEvent.change(screen.getByTestId("username-input"), { target: { value: "user" } });
+    fireEvent.change(screen.getByTestId("password-input"), { target: { value: "pass" } });
+    fireEvent.click(screen.getByTestId("save-credentials"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("save-error")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Database error")).toBeInTheDocument();
+    // Should still be in editing mode
+    expect(screen.getByTestId("username-input")).toBeInTheDocument();
+  });
+
   it("shows green status dot when enabled", async () => {
     render(<StreamingSettings />);
     await waitFor(() => {

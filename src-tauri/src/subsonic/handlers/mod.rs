@@ -54,11 +54,16 @@ fn with_id_cache<T>(
             return Ok(lookup(c));
         }
     }
-    // Cache miss: build it with a fresh connection
+    // Cache miss: build under write lock.
+    // Another thread may have populated the cache between dropping the read
+    // lock and acquiring the write lock — check again to avoid redundant work.
+    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
+    if let Some(c) = cache.as_ref() {
+        return Ok(lookup(c));
+    }
     let conn = crate::subsonic::open_read_conn(&state.db_path)?;
     let new_cache = build_id_cache(&conn)?;
     let result = lookup(&new_cache);
-    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
     *cache = Some(new_cache);
     Ok(result)
 }

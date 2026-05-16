@@ -49,8 +49,10 @@ pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(|e| format!("DB open: {e}"))?;
-    conn.execute_batch("PRAGMA journal_mode=WAL;")
-        .map_err(|e| format!("WAL pragma: {e}"))?;
+    // WAL mode is already set by init_db on the main connection.
+    // query_only prevents accidental writes from read-only handlers.
+    conn.execute_batch("PRAGMA query_only = ON;")
+        .map_err(|e| format!("pragma: {e}"))?;
     crate::library::register_sort_key(&conn)?;
     Ok(conn)
 }

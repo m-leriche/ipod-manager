@@ -118,6 +118,13 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
 
 // ── Subsonic-optimized queries ────────────────────────────────
 
+/// Escape `%` and `_` LIKE wildcards so user input is matched literally.
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Return a page of albums sorted by the given Subsonic list type.
 /// Pushes sorting and pagination to SQL instead of loading all albums.
 pub fn get_albums_sorted(
@@ -127,6 +134,9 @@ pub fn get_albums_sorted(
     offset: usize,
 ) -> Result<Vec<AlbumSummary>, String> {
     let order_clause = match sort_type {
+        // TODO: Subsonic spec defines "newest" as most-recently-added and "recent"
+        // as most-recently-played. We approximate both with year DESC since we don't
+        // yet track an "added to library" timestamp per album or album-level play dates.
         "newest" | "recent" => "ORDER BY year IS NULL, year DESC",
         "random" => "ORDER BY RANDOM()",
         "alphabeticalByArtist" => {
@@ -171,7 +181,7 @@ pub fn search_artists(
     query: &str,
     limit: usize,
 ) -> Result<Vec<ArtistSummary>, String> {
-    let like = format!("%{query}%");
+    let like = format!("%{}%", escape_like(query));
     let sql = "SELECT
             COALESCE(album_artist, artist) as display_artist,
             COUNT(*) as track_count,
@@ -179,7 +189,7 @@ pub fn search_artists(
         FROM tracks
         WHERE COALESCE(album_artist, artist) IS NOT NULL
             AND COALESCE(album_artist, artist) != ''
-            AND COALESCE(album_artist, artist) LIKE ?1 COLLATE NOCASE
+            AND COALESCE(album_artist, artist) LIKE ?1 ESCAPE '\\' COLLATE NOCASE
         GROUP BY display_artist
         ORDER BY sort_key(display_artist)
         LIMIT ?2";
@@ -208,14 +218,14 @@ pub fn search_albums(
     query: &str,
     limit: usize,
 ) -> Result<Vec<AlbumSummary>, String> {
-    let like = format!("%{query}%");
+    let like = format!("%{}%", escape_like(query));
     let sql = "SELECT album, COALESCE(album_artist, artist) as display_artist,
             MIN(year) as year, COUNT(*) as track_count,
             MIN(folder_path) as folder_path
         FROM tracks
         WHERE album IS NOT NULL AND album != ''
-            AND (album LIKE ?1 COLLATE NOCASE
-                 OR COALESCE(album_artist, artist) LIKE ?1 COLLATE NOCASE)
+            AND (album LIKE ?1 ESCAPE '\\' COLLATE NOCASE
+                 OR COALESCE(album_artist, artist) LIKE ?1 ESCAPE '\\' COLLATE NOCASE)
         GROUP BY album, display_artist
         ORDER BY sort_key(album)
         LIMIT ?2";

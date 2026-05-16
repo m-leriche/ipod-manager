@@ -10,6 +10,7 @@ import type { ThemeName } from "../../../contexts/ThemeContext";
 import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
 import { LastfmSettings } from "./LastfmSettings";
+import { StreamingSettings } from "./StreamingSettings";
 import type { SettingsModalProps } from "./types";
 
 const THEMES: { id: ThemeName; label: string; description: string; preview: [string, string, string] }[] = [
@@ -185,6 +186,9 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
               <span className="text-[10px] text-text-tertiary shrink-0">12s</span>
             </div>
           </div>
+
+          {/* Streaming */}
+          <StreamingSettings />
 
           {/* Last.fm */}
           <LastfmSettings />

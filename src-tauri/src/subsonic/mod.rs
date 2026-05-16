@@ -2,9 +2,10 @@ mod auth;
 mod handlers;
 pub mod xml;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use axum::extract::Request;
 use axum::middleware::{self, Next};
@@ -13,12 +14,25 @@ use axum::routing::{any, get};
 use axum::Router;
 use rusqlite::Connection;
 
+/// Cached mapping of stable IDs → names, built lazily on first use.
+/// Avoids repeated full-table scans when Subsonic clients sync
+/// thousands of artists/albums.
+pub struct StableIdCache {
+    /// Maps "ar123456" → "The Beatles"
+    pub artists: HashMap<String, String>,
+    /// Maps "al789012" → ("The Beatles", "Abbey Road")
+    pub albums: HashMap<String, (String, String)>,
+    /// Maps "al789012" → "/path/to/folder"
+    pub album_folders: HashMap<String, String>,
+}
+
 /// Shared state for the Subsonic HTTP server.
 pub struct SubsonicState {
     pub db: Arc<Mutex<Connection>>,
     pub cache_dir: PathBuf,
     pub username: String,
     pub password: String,
+    pub id_cache: RwLock<Option<StableIdCache>>,
 }
 
 /// Handle returned from `start_server` so we can shut it down later.
@@ -83,6 +97,7 @@ pub fn start_server(
         cache_dir,
         username,
         password,
+        id_cache: RwLock::new(None),
     });
 
     // Each Subsonic endpoint is available at /rest/<method>

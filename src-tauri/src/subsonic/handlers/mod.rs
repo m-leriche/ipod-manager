@@ -8,10 +8,95 @@ pub use lists::{get_album_list2, get_genres, get_playlist, get_playlists, search
 pub use media::{get_cover_art, stream};
 pub use system::{get_license, get_music_directory, get_music_folders, get_user, ping};
 
+use std::collections::HashMap;
+
 use crate::library;
-use crate::subsonic::SubsonicState;
+use crate::subsonic::{StableIdCache, SubsonicState};
 
 use super::xml;
+
+/// Build the stable ID cache from the database. Called once, then reused
+/// for all subsequent lookups during sync.
+fn build_id_cache(conn: &rusqlite::Connection) -> Result<StableIdCache, String> {
+    let artists = library::get_artists(conn)?;
+    let albums = library::get_albums(conn, None)?;
+
+    let mut artist_map = HashMap::with_capacity(artists.len());
+    for a in &artists {
+        artist_map.insert(stable_id("ar", &a.name), a.name.clone());
+    }
+
+    let mut album_map = HashMap::with_capacity(albums.len());
+    let mut folder_map = HashMap::with_capacity(albums.len());
+    for a in &albums {
+        let key = format!("{}||{}", a.artist, a.name);
+        let id = stable_id("al", &key);
+        album_map.insert(id.clone(), (a.artist.clone(), a.name.clone()));
+        folder_map.insert(id, a.folder_path.clone());
+    }
+
+    Ok(StableIdCache {
+        artists: artist_map,
+        albums: album_map,
+        album_folders: folder_map,
+    })
+}
+
+/// Ensure the stable ID cache is populated, then look up an artist name.
+fn cached_artist_name(state: &SubsonicState, artist_id: &str) -> Result<Option<String>, String> {
+    // Fast path: read lock
+    {
+        let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
+        if let Some(c) = cache.as_ref() {
+            return Ok(c.artists.get(artist_id).cloned());
+        }
+    }
+    // Cache miss: build it
+    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
+    let new_cache = build_id_cache(&conn)?;
+    let result = new_cache.artists.get(artist_id).cloned();
+    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
+    *cache = Some(new_cache);
+    Ok(result)
+}
+
+/// Ensure the stable ID cache is populated, then look up album artist+name.
+fn cached_album_info(
+    state: &SubsonicState,
+    album_id: &str,
+) -> Result<Option<(String, String)>, String> {
+    {
+        let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
+        if let Some(c) = cache.as_ref() {
+            return Ok(c.albums.get(album_id).cloned());
+        }
+    }
+    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
+    let new_cache = build_id_cache(&conn)?;
+    let result = new_cache.albums.get(album_id).cloned();
+    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
+    *cache = Some(new_cache);
+    Ok(result)
+}
+
+/// Ensure the stable ID cache is populated, then look up album folder path.
+pub fn cached_album_folder(
+    state: &SubsonicState,
+    album_id: &str,
+) -> Result<Option<String>, String> {
+    {
+        let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
+        if let Some(c) = cache.as_ref() {
+            return Ok(c.album_folders.get(album_id).cloned());
+        }
+    }
+    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
+    let new_cache = build_id_cache(&conn)?;
+    let result = new_cache.album_folders.get(album_id).cloned();
+    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
+    *cache = Some(new_cache);
+    Ok(result)
+}
 
 /// Look up an artist by stable ID and return (name, albums).
 /// Shared between getArtist (ID3 mode) and getMusicDirectory (directory mode).
@@ -19,29 +104,29 @@ async fn fetch_artist_with_albums(
     state: &SubsonicState,
     artist_id: String,
 ) -> Result<(String, Vec<library::types::AlbumSummary>), String> {
+    // Resolve artist name from cache (no full-table scan)
+    let artist_name =
+        cached_artist_name(state, &artist_id)?.ok_or_else(|| "Artist not found".to_string())?;
+
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let artists = library::get_artists(&conn)?;
-        let artist = artists
-            .iter()
-            .find(|a| stable_id("ar", &a.name) == artist_id);
-        let Some(artist) = artist else {
-            return Err("Artist not found".to_string());
-        };
-        let name = artist.name.clone();
-        let albums = library::get_albums(&conn, Some(&name))?;
-        Ok((name, albums))
+        library::get_albums(&conn, Some(&artist_name))
     })
     .await;
     match result {
-        Ok(Ok(data)) => Ok(data),
+        Ok(Ok(albums)) => {
+            // Re-derive name from the cache lookup we already did
+            let name = cached_artist_name(state, &artist_id)?
+                .ok_or_else(|| "Artist not found".to_string())?;
+            Ok((name, albums))
+        }
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Internal error".to_string()),
     }
 }
 
-/// Look up an album by stable ID and return (artist, album_name, tracks).
+/// Look up an album by stable ID and return (artist, album_name, year, tracks).
 /// Shared between getAlbum (ID3 mode) and getMusicDirectory (directory mode).
 async fn fetch_album_with_tracks(
     state: &SubsonicState,
@@ -55,32 +140,39 @@ async fn fetch_album_with_tracks(
     ),
     String,
 > {
+    // Resolve artist+album names from cache (no full-table scan)
+    let (artist_name, album_name) =
+        cached_album_info(state, &album_id)?.ok_or_else(|| "Album not found".to_string())?;
+
     let db = state.db.clone();
+    let an = artist_name.clone();
+    let aln = album_name.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let all_albums = library::get_albums(&conn, None)?;
-        let album = all_albums
-            .iter()
-            .find(|a| stable_id("al", &format!("{}||{}", a.artist, a.name)) == album_id);
-        let Some(album) = album else {
-            return Err("Album not found".to_string());
-        };
-        let artist_name = album.artist.clone();
-        let album_name = album.name.clone();
-        let year = album.year;
+
+        // Get year from a quick query
+        let year: Option<u32> = conn
+            .query_row(
+                "SELECT MIN(year) FROM tracks WHERE (album_artist = ?1 OR artist = ?1) AND album = ?2",
+                rusqlite::params![&an, &aln],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+
         let filter = library::types::LibraryFilter {
-            artist: Some(vec![artist_name.clone()]),
-            album: Some(vec![album_name.clone()]),
+            artist: Some(vec![an]),
+            album: Some(vec![aln]),
             sort_by: Some("track_number".to_string()),
             sort_direction: Some("asc".to_string()),
             ..Default::default()
         };
         let tracks = library::get_tracks(&conn, &filter)?;
-        Ok((artist_name, album_name, year, tracks))
+        Ok((year, tracks))
     })
     .await;
     match result {
-        Ok(Ok(data)) => Ok(data),
+        Ok(Ok((year, tracks))) => Ok((artist_name, album_name, year, tracks)),
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Internal error".to_string()),
     }

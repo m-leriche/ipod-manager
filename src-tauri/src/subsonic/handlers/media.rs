@@ -84,55 +84,31 @@ pub async fn get_cover_art(
         return (StatusCode::NOT_FOUND, "Missing id").into_response();
     };
 
-    let db = state.db.clone();
-    let folder_path = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-
-        if let Ok(track_id) = id_str.parse::<i64>() {
-            // Numeric ID → look up track's folder
+    let folder_path = if let Ok(track_id) = id_str.parse::<i64>() {
+        // Numeric ID → look up track's folder directly
+        let db = state.db.clone();
+        let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+            let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
             conn.query_row(
                 "SELECT folder_path FROM tracks WHERE id = ?1",
                 rusqlite::params![track_id],
                 |row| row.get::<_, String>(0),
             )
             .map_err(|_| "Not found".to_string())
-        } else if id_str.starts_with("al") {
-            // Album ID → find any track in that album by matching stable IDs
-            // We need to find a folder for this album. Query all distinct
-            // album+artist combos and match the stable ID.
-            let mut stmt = conn
-                .prepare(
-                    "SELECT DISTINCT COALESCE(album_artist, artist), album, folder_path \
-                     FROM tracks WHERE album IS NOT NULL AND album != ''",
-                )
-                .map_err(|e| format!("Query: {e}"))?;
-
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                    ))
-                })
-                .map_err(|e| format!("Query: {e}"))?;
-
-            for (artist, album, folder) in rows.flatten() {
-                let candidate = super::stable_id("al", &format!("{artist}||{album}"));
-                if candidate == id_str {
-                    return Ok(folder);
-                }
-            }
-            Err("Not found".to_string())
-        } else {
-            Err("Invalid cover art id".to_string())
+        })
+        .await;
+        match result {
+            Ok(Ok(p)) => p,
+            _ => return (StatusCode::NOT_FOUND, "Cover art not found").into_response(),
         }
-    })
-    .await;
-
-    let folder_path = match folder_path {
-        Ok(Ok(p)) => p,
-        _ => return (StatusCode::NOT_FOUND, "Cover art not found").into_response(),
+    } else if id_str.starts_with("al") {
+        // Album ID → resolve folder from cache (no full-table scan)
+        match super::cached_album_folder(&state, &id_str) {
+            Ok(Some(f)) => f,
+            _ => return (StatusCode::NOT_FOUND, "Cover art not found").into_response(),
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, "Invalid cover art id").into_response();
     };
 
     // Determine thumbnail size from requested size

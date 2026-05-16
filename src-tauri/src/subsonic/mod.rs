@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::Router;
 use rusqlite::{Connection, OpenFlags};
+use tower_http::compression::CompressionLayer;
 
 /// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
 /// Avoids repeated full-table scans when Subsonic clients sync thousands of
@@ -159,6 +160,7 @@ pub fn start_server(
         .route("/", any(|| async { "Crate Subsonic Server" }))
         .nest("/rest", api_routes)
         .fallback(fallback)
+        .layer(CompressionLayer::new().gzip(true))
         .layer(middleware::from_fn(log_request));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

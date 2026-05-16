@@ -1,6 +1,16 @@
 use image::imageops::FilterType;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Per-path locks to prevent duplicate concurrent thumbnail generation.
+/// When multiple requests ask for the same cover art simultaneously,
+/// only one thread generates the thumbnail while others wait.
+fn path_locks() -> &'static Mutex<HashMap<String, Arc<Mutex<()>>>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// Available thumbnail sizes.
 #[derive(Debug, Clone, Copy)]
@@ -72,17 +82,44 @@ fn find_cover(folder: &Path) -> Option<PathBuf> {
 
 /// Get or generate a cached thumbnail. Returns the path to the cached file,
 /// or `None` if no cover image exists in the folder.
+///
+/// Uses a per-path lock so concurrent requests for the same folder only
+/// generate the thumbnail once — the rest wait and return the cached file.
 pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Option<PathBuf> {
     let source = find_cover(Path::new(folder_path))?;
     let thumb_path = cache_path(cache_dir, folder_path, size);
 
-    // Return cached thumbnail if it's newer than the source
+    // Fast path: return cached thumbnail if it's newer than the source
     if thumb_path.exists() {
         let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
         let thumb_mtime = fs::metadata(&thumb_path).and_then(|m| m.modified()).ok();
 
         if let (Some(src_t), Some(thumb_t)) = (source_mtime, thumb_mtime) {
             if thumb_t >= src_t {
+                return Some(thumb_path);
+            }
+        }
+    }
+
+    // Acquire per-path lock so only one thread generates this thumbnail
+    let lock_key = format!("{}:{}", folder_path, size.suffix());
+    let lock = {
+        let mut locks = path_locks().lock().ok()?;
+        locks.entry(lock_key.clone()).or_default().clone()
+    };
+    let _guard = lock.lock().ok()?;
+
+    // Re-check after acquiring the lock — another thread may have generated it
+    if thumb_path.exists() {
+        let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
+        let thumb_mtime = fs::metadata(&thumb_path).and_then(|m| m.modified()).ok();
+
+        if let (Some(src_t), Some(thumb_t)) = (source_mtime, thumb_mtime) {
+            if thumb_t >= src_t {
+                // Clean up the lock entry since generation is done
+                if let Ok(mut locks) = path_locks().lock() {
+                    locks.remove(&lock_key);
+                }
                 return Some(thumb_path);
             }
         }
@@ -95,6 +132,11 @@ pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Op
 
     fs::create_dir_all(cache_dir).ok()?;
     thumb.save(&thumb_path).ok()?;
+
+    // Clean up the lock entry
+    if let Ok(mut locks) = path_locks().lock() {
+        locks.remove(&lock_key);
+    }
 
     Some(thumb_path)
 }

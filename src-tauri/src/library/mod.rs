@@ -181,6 +181,10 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(rating)");
     let _ = conn
         .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_modified_at ON tracks(modified_at)");
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_tracks_album_artist_album \
+         ON tracks(album_artist COLLATE NOCASE, album COLLATE NOCASE)",
+    );
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN lyrics TEXT");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
     let _ = conn

@@ -9,11 +9,19 @@ pub use media::{get_cover_art, stream};
 pub use system::{get_license, get_music_directory, get_music_folders, get_user, ping};
 
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use crate::library;
 use crate::subsonic::{StableIdCache, SubsonicState};
 
 use super::xml;
+
+/// Memoization cache for `stable_id()`. Avoids recomputing MD5 hashes
+/// for the same artist/album strings on every XML response.
+fn stable_id_cache() -> &'static Mutex<HashMap<String, String>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// Build the stable ID cache from the database. Called once, then reused
 /// for all subsequent lookups during sync.
@@ -137,16 +145,6 @@ async fn fetch_album_with_tracks(
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = crate::subsonic::open_read_conn(&db_path)?;
 
-        // Get year from a quick query
-        let year: Option<u32> = conn
-            .query_row(
-                "SELECT MIN(year) FROM tracks WHERE (album_artist = ?1 OR artist = ?1) AND album = ?2",
-                rusqlite::params![&artist, &album],
-                |row| row.get(0),
-            )
-            .ok()
-            .flatten();
-
         let filter = library::types::LibraryFilter {
             artist: Some(vec![artist]),
             album: Some(vec![album]),
@@ -155,6 +153,14 @@ async fn fetch_album_with_tracks(
             ..Default::default()
         };
         let tracks = library::get_tracks(&conn, &filter)?;
+
+        // Derive year from track data instead of a separate query
+        let year = tracks
+            .iter()
+            .filter_map(|t| t.year)
+            .filter(|&y| y > 0)
+            .min();
+
         Ok((year, tracks))
     })
     .await;
@@ -259,11 +265,23 @@ fn album_xml(album: &crate::library::types::AlbumSummary) -> String {
 ///
 /// Uses 4 bytes of MD5 → u32 space (~4 billion values). Birthday paradox
 /// gives ~50% collision chance at ~77K entries — fine for typical libraries.
+///
+/// Results are memoized so the same (prefix, name) pair never recomputes MD5.
 pub fn stable_id(prefix: &str, name: &str) -> String {
+    let key = format!("{prefix}\0{name}");
+    if let Ok(cache) = stable_id_cache().lock() {
+        if let Some(id) = cache.get(&key) {
+            return id.clone();
+        }
+    }
     let hash = md5::compute(name.as_bytes());
     let bytes: [u8; 4] = hash[..4].try_into().expect("md5 is 16 bytes");
     let id = u32::from_le_bytes(bytes);
-    format!("{prefix}{id}")
+    let result = format!("{prefix}{id}");
+    if let Ok(mut cache) = stable_id_cache().lock() {
+        cache.insert(key, result.clone());
+    }
+    result
 }
 
 /// XML response with correct content-type header.

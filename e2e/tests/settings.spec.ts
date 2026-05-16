@@ -22,7 +22,7 @@ test.describe("Settings Modal", () => {
     });
 
     await expect(page.getByText("/music/library")).toBeVisible();
-    await expect(page.getByText("Change")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Change", exact: true })).toBeVisible();
   });
 
   test("shows 'Not configured' when no library set", async ({ page }) => {

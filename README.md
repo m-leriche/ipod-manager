@@ -28,6 +28,7 @@ Full music library browser with three browsing modes: column browser (Genre/Arti
 - **Audio Extractor** — YouTube audio downloading (via yt-dlp) and local video audio extraction (via ffmpeg). Pick format (FLAC or MP3 320kbps), auto-detect chapters, and split into individual tracks.
 - **Duplicates** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison.
 - **Converter** — Batch audio format conversion.
+- **Streaming Server** — Built-in Subsonic-compatible server for streaming your library to any Subsonic client (Amperfy, Symfonium, DSub, etc.) over WiFi or Tailscale. See [Streaming Server](#streaming-server-wifi-sync) for setup.
 
 ## Prerequisites
 
@@ -208,6 +209,52 @@ sudo mount -t msdos /dev/disk6s1 /Volumes/IPOD
 ```
 
 The Rust backend runs these via `sudo -S`, piping your password through stdin. Your password is never stored — it's cleared from memory immediately after the mount command completes.
+
+## Streaming Server (WiFi Sync)
+
+Crate runs a built-in [Subsonic](http://www.subsonic.org/pages/api.jsp)-compatible server so you can stream your library to any Subsonic client on your phone or other devices. No cloud, no subscriptions — everything stays on your local network.
+
+### Quick Start
+
+1. **Open Settings** (gear icon) and scroll to **Streaming Server**
+2. The server starts automatically when the app launches — you'll see a green dot and `Running on port 4533`
+3. **Copy the Server URL** shown under "Local WiFi" (e.g. `http://192.168.1.42:4533`)
+4. **Open your Subsonic client** (Amperfy, play:Sub, Symfonium, DSub, etc.) and add a new server:
+   - **Server URL:** paste the URL from step 3
+   - **Username:** `admin` (default)
+   - **Password:** `admin` (default)
+5. Your full library appears in the client — browse, search, and stream
+
+### Changing Credentials
+
+Click **Change credentials** in Settings to set a custom username and password. Changes take effect on the next app restart.
+
+### Network & Remote Access
+
+The settings panel shows a labeled URL for each detected network interface:
+
+| Label | When it appears |
+|-------|-----------------|
+| **Local WiFi** | Connected to a home/office network (192.168.x.x or 10.x.x.x) |
+| **Tailscale** | Tailscale VPN is running (100.64.x.x range) — use this to stream from anywhere |
+| **Local Network** | Other private network (172.16–31.x.x) |
+
+Your phone and computer must be on the **same network** for Local WiFi URLs to work. For streaming outside your home network, install [Tailscale](https://tailscale.com/) on both devices and use the Tailscale URL.
+
+### Supported Clients
+
+Any app that speaks the Subsonic API works. Tested with:
+- **iOS:** Amperfy, play:Sub
+- **Android:** Symfonium, DSub, Ultrasonic
+- **Desktop:** Submariner, Sonixd
+
+### Details
+
+- **Default port:** 4533 (configurable in Settings, restart required)
+- **Protocol:** HTTP with Subsonic API v1.16.1
+- **Auth:** Username/password or token-based (MD5), per the Subsonic spec
+- **Compression:** XML responses are gzip-compressed; audio streams are not
+- **Concurrent access:** Each request gets its own read-only SQLite connection (WAL mode), so multiple clients can sync simultaneously without blocking
 
 ## TODO
 

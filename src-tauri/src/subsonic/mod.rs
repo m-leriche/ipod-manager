@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::Router;
 use rusqlite::{Connection, OpenFlags};
+use tower_http::compression::CompressionLayer;
 
 /// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
 /// Avoids repeated full-table scans when Subsonic clients sync thousands of
@@ -125,30 +126,37 @@ pub fn start_server(
     // Each Subsonic endpoint is available at /rest/<method>
     // and /rest/<method>.view (some clients append .view).
     // Both GET and POST are accepted — clients vary.
-    let mut api_routes = Router::new();
-    api_routes = subsonic_route!(api_routes, "/ping", handlers::ping);
-    api_routes = subsonic_route!(api_routes, "/getLicense", handlers::get_license);
-    api_routes = subsonic_route!(api_routes, "/getMusicFolders", handlers::get_music_folders);
-    api_routes = subsonic_route!(
-        api_routes,
+    //
+    // XML routes get gzip compression; binary routes (stream, coverArt)
+    // skip it since audio/image formats are already compressed.
+    let mut xml_routes = Router::new();
+    xml_routes = subsonic_route!(xml_routes, "/ping", handlers::ping);
+    xml_routes = subsonic_route!(xml_routes, "/getLicense", handlers::get_license);
+    xml_routes = subsonic_route!(xml_routes, "/getMusicFolders", handlers::get_music_folders);
+    xml_routes = subsonic_route!(
+        xml_routes,
         "/getMusicDirectory",
         handlers::get_music_directory
     );
-    api_routes = subsonic_route!(api_routes, "/getUser", handlers::get_user);
-    api_routes = subsonic_route!(api_routes, "/getArtists", handlers::get_artists);
-    api_routes = subsonic_route!(api_routes, "/getIndexes", handlers::get_indexes);
-    api_routes = subsonic_route!(api_routes, "/getArtist", handlers::get_artist);
-    api_routes = subsonic_route!(api_routes, "/getAlbum", handlers::get_album);
-    api_routes = subsonic_route!(api_routes, "/getSong", handlers::get_song);
-    api_routes = subsonic_route!(api_routes, "/getAlbumList2", handlers::get_album_list2);
-    api_routes = subsonic_route!(api_routes, "/getGenres", handlers::get_genres);
-    api_routes = subsonic_route!(api_routes, "/search3", handlers::search3);
-    api_routes = subsonic_route!(api_routes, "/getPlaylists", handlers::get_playlists);
-    api_routes = subsonic_route!(api_routes, "/getPlaylist", handlers::get_playlist);
-    api_routes = subsonic_route!(api_routes, "/stream", handlers::stream);
-    api_routes = subsonic_route!(api_routes, "/getCoverArt", handlers::get_cover_art);
+    xml_routes = subsonic_route!(xml_routes, "/getUser", handlers::get_user);
+    xml_routes = subsonic_route!(xml_routes, "/getArtists", handlers::get_artists);
+    xml_routes = subsonic_route!(xml_routes, "/getIndexes", handlers::get_indexes);
+    xml_routes = subsonic_route!(xml_routes, "/getArtist", handlers::get_artist);
+    xml_routes = subsonic_route!(xml_routes, "/getAlbum", handlers::get_album);
+    xml_routes = subsonic_route!(xml_routes, "/getSong", handlers::get_song);
+    xml_routes = subsonic_route!(xml_routes, "/getAlbumList2", handlers::get_album_list2);
+    xml_routes = subsonic_route!(xml_routes, "/getGenres", handlers::get_genres);
+    xml_routes = subsonic_route!(xml_routes, "/search3", handlers::search3);
+    xml_routes = subsonic_route!(xml_routes, "/getPlaylists", handlers::get_playlists);
+    xml_routes = subsonic_route!(xml_routes, "/getPlaylist", handlers::get_playlist);
 
-    let api_routes = api_routes
+    let mut binary_routes = Router::new();
+    binary_routes = subsonic_route!(binary_routes, "/stream", handlers::stream);
+    binary_routes = subsonic_route!(binary_routes, "/getCoverArt", handlers::get_cover_art);
+
+    let api_routes = xml_routes
+        .layer(CompressionLayer::new().gzip(true))
+        .merge(binary_routes)
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

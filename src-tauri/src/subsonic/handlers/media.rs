@@ -78,6 +78,7 @@ pub async fn stream(
 /// For albums, we look for any track matching the album and use its folder.
 pub async fn get_cover_art(
     State(state): State<Arc<SubsonicState>>,
+    headers: HeaderMap,
     Query(params): Query<CoverArtParams>,
 ) -> Response {
     let Some(id_str) = params.id else {
@@ -126,11 +127,57 @@ pub async fn get_cover_art(
 
     match thumb {
         Ok(Some(path)) => {
+            // Build ETag from file mtime for cache validation
+            let etag = tokio::fs::metadata(&path)
+                .await
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| format!("\"{}\"", d.as_secs()));
+
+            // Return 304 Not Modified if client already has this version
+            if let Some(ref etag_val) = etag {
+                if let Some(inm) = headers
+                    .get(header::IF_NONE_MATCH)
+                    .and_then(|v| v.to_str().ok())
+                {
+                    if inm == etag_val {
+                        let mut resp = StatusCode::NOT_MODIFIED.into_response();
+                        let h = resp.headers_mut();
+                        h.insert(
+                            header::CACHE_CONTROL,
+                            "public, max-age=86400"
+                                .parse()
+                                .expect("static header value"),
+                        );
+                        if let Ok(val) = etag_val.parse() {
+                            h.insert(header::ETAG, val);
+                        }
+                        return resp;
+                    }
+                }
+            }
+
             let data = match tokio::fs::read(&path).await {
                 Ok(d) => d,
                 Err(_) => return (StatusCode::NOT_FOUND, "Read error").into_response(),
             };
-            (StatusCode::OK, [(header::CONTENT_TYPE, "image/jpeg")], data).into_response()
+
+            let mut response =
+                (StatusCode::OK, [(header::CONTENT_TYPE, "image/jpeg")], data).into_response();
+            let headers = response.headers_mut();
+            headers.insert(
+                header::CACHE_CONTROL,
+                "public, max-age=86400"
+                    .parse()
+                    .expect("static header value"),
+            );
+            if let Some(etag_val) = etag {
+                if let Ok(val) = etag_val.parse() {
+                    headers.insert(header::ETAG, val);
+                }
+            }
+            response
         }
         _ => (StatusCode::NOT_FOUND, "No cover art").into_response(),
     }

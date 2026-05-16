@@ -1,6 +1,30 @@
 use image::imageops::FilterType;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Per-path locks to prevent duplicate concurrent thumbnail generation.
+/// When multiple requests ask for the same cover art simultaneously,
+/// only one thread generates the thumbnail while others wait.
+fn path_locks() -> &'static Mutex<HashMap<String, Arc<Mutex<()>>>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// RAII guard that removes a key from `path_locks()` on drop,
+/// ensuring cleanup even when thumbnail generation fails.
+struct LockCleanup {
+    key: String,
+}
+
+impl Drop for LockCleanup {
+    fn drop(&mut self) {
+        if let Ok(mut locks) = path_locks().lock() {
+            locks.remove(&self.key);
+        }
+    }
+}
 
 /// Available thumbnail sizes.
 #[derive(Debug, Clone, Copy)]
@@ -72,11 +96,36 @@ fn find_cover(folder: &Path) -> Option<PathBuf> {
 
 /// Get or generate a cached thumbnail. Returns the path to the cached file,
 /// or `None` if no cover image exists in the folder.
+///
+/// Uses a per-path lock so concurrent requests for the same folder only
+/// generate the thumbnail once — the rest wait and return the cached file.
 pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Option<PathBuf> {
     let source = find_cover(Path::new(folder_path))?;
     let thumb_path = cache_path(cache_dir, folder_path, size);
 
-    // Return cached thumbnail if it's newer than the source
+    // Fast path: return cached thumbnail if it's newer than the source
+    if thumb_path.exists() {
+        let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
+        let thumb_mtime = fs::metadata(&thumb_path).and_then(|m| m.modified()).ok();
+
+        if let (Some(src_t), Some(thumb_t)) = (source_mtime, thumb_mtime) {
+            if thumb_t >= src_t {
+                return Some(thumb_path);
+            }
+        }
+    }
+
+    // Acquire per-path lock so only one thread generates this thumbnail
+    let lock_key = format!("{}:{}", folder_path, size.suffix());
+    let lock = {
+        let mut locks = path_locks().lock().ok()?;
+        locks.entry(lock_key.clone()).or_default().clone()
+    };
+    let _guard = lock.lock().ok()?;
+    // RAII cleanup — removes the lock entry on drop, even if generation fails
+    let _cleanup = LockCleanup { key: lock_key };
+
+    // Re-check after acquiring the lock — another thread may have generated it
     if thumb_path.exists() {
         let source_mtime = fs::metadata(&source).and_then(|m| m.modified()).ok();
         let thumb_mtime = fs::metadata(&thumb_path).and_then(|m| m.modified()).ok();

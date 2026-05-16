@@ -1,17 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-
-interface ServerUrl {
-  label: string;
-  url: string;
-}
-
-interface SubsonicStatus {
-  enabled: boolean;
-  port: number;
-  username: string;
-  urls: ServerUrl[];
-}
+import { SubsonicStatus } from "./types";
 
 export const StreamingSettings = () => {
   const [status, setStatus] = useState<SubsonicStatus | null>(null);
@@ -19,7 +8,24 @@ export const StreamingSettings = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  const safeTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timersRef.current.delete(id);
+      fn();
+    }, ms);
+    timersRef.current.add(id);
+  }, []);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, []);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -37,15 +43,16 @@ export const StreamingSettings = () => {
 
   const handleSave = async () => {
     if (!username.trim() || !password.trim()) return;
+    setSaveError(null);
     try {
       await invoke("set_subsonic_credentials", { username: username.trim(), password: password.trim() });
       setSaved(true);
       setEditing(false);
       setPassword("");
-      setTimeout(() => setSaved(false), 2000);
+      safeTimeout(() => setSaved(false), 2000);
       loadStatus();
-    } catch {
-      // Save failed
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save credentials");
     }
   };
 
@@ -53,7 +60,7 @@ export const StreamingSettings = () => {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(url);
-      setTimeout(() => setCopied(null), 2000);
+      safeTimeout(() => setCopied(null), 2000);
     } catch {
       // Clipboard not available
     }
@@ -137,6 +144,7 @@ export const StreamingSettings = () => {
               onClick={() => {
                 setEditing(false);
                 setPassword("");
+                setSaveError(null);
                 if (status) setUsername(status.username);
               }}
               className="text-[11px] px-4 py-2 text-text-tertiary hover:text-text-primary transition-colors"
@@ -144,6 +152,11 @@ export const StreamingSettings = () => {
               Cancel
             </button>
           </div>
+          {saveError && (
+            <p className="text-[10px] text-red-500 px-1" data-testid="save-error">
+              {saveError}
+            </p>
+          )}
           <p className="text-[10px] text-text-tertiary px-1">Credential changes take effect on next app restart.</p>
         </div>
       ) : (

@@ -20,6 +20,7 @@ mod mediakeys;
 mod metadata;
 mod metarepair;
 mod musicbrainz;
+mod network;
 mod playlist_export;
 mod profiles;
 mod rockbox;

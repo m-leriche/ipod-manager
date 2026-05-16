@@ -23,10 +23,10 @@ pub async fn get_license() -> axum::response::Response {
 pub async fn get_music_folders(
     State(state): State<Arc<SubsonicState>>,
 ) -> axum::response::Response {
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(
         move || -> Result<Vec<library::types::LibraryFolder>, String> {
-            let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+            let conn = crate::subsonic::open_read_conn(&db_path)?;
             library::get_folders(&conn)
         },
     )
@@ -157,9 +157,9 @@ async fn get_album_directory(state: &SubsonicState, album_id: &str) -> axum::res
 
 /// Music folder root → return all artists as child directories.
 async fn get_root_directory(state: &SubsonicState, folder_id: &str) -> axum::response::Response {
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::get_artists(&conn)
     })
     .await;

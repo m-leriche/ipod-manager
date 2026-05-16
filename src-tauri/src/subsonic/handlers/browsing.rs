@@ -51,9 +51,9 @@ fn build_artist_index(artists: &[library::types::ArtistSummary], wrapper_tag: &s
 }
 
 async fn fetch_artists(state: &SubsonicState) -> Result<Vec<library::types::ArtistSummary>, ()> {
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::get_artists(&conn)
     })
     .await;
@@ -104,9 +104,9 @@ pub async fn get_song(
         }
     };
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::get_track_by_id(&conn, track_id)
     })
     .await;

@@ -42,22 +42,30 @@ fn build_id_cache(conn: &rusqlite::Connection) -> Result<StableIdCache, String> 
     })
 }
 
-/// Ensure the stable ID cache is populated, then look up an artist name.
-fn cached_artist_name(state: &SubsonicState, artist_id: &str) -> Result<Option<String>, String> {
+/// Populate the ID cache if empty (one-time cost), then run a lookup.
+fn with_id_cache<T>(
+    state: &SubsonicState,
+    lookup: impl FnOnce(&StableIdCache) -> Option<T>,
+) -> Result<Option<T>, String> {
     // Fast path: read lock
     {
         let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
         if let Some(c) = cache.as_ref() {
-            return Ok(c.artists.get(artist_id).cloned());
+            return Ok(lookup(c));
         }
     }
-    // Cache miss: build it
-    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
+    // Cache miss: build it with a fresh connection
+    let conn = crate::subsonic::open_read_conn(&state.db_path)?;
     let new_cache = build_id_cache(&conn)?;
-    let result = new_cache.artists.get(artist_id).cloned();
+    let result = lookup(&new_cache);
     let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
     *cache = Some(new_cache);
     Ok(result)
+}
+
+/// Ensure the stable ID cache is populated, then look up an artist name.
+fn cached_artist_name(state: &SubsonicState, artist_id: &str) -> Result<Option<String>, String> {
+    with_id_cache(state, |c| c.artists.get(artist_id).cloned())
 }
 
 /// Ensure the stable ID cache is populated, then look up album artist+name.
@@ -65,18 +73,7 @@ fn cached_album_info(
     state: &SubsonicState,
     album_id: &str,
 ) -> Result<Option<(String, String)>, String> {
-    {
-        let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
-        if let Some(c) = cache.as_ref() {
-            return Ok(c.albums.get(album_id).cloned());
-        }
-    }
-    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
-    let new_cache = build_id_cache(&conn)?;
-    let result = new_cache.albums.get(album_id).cloned();
-    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
-    *cache = Some(new_cache);
-    Ok(result)
+    with_id_cache(state, |c| c.albums.get(album_id).cloned())
 }
 
 /// Ensure the stable ID cache is populated, then look up album folder path.
@@ -84,18 +81,7 @@ pub fn cached_album_folder(
     state: &SubsonicState,
     album_id: &str,
 ) -> Result<Option<String>, String> {
-    {
-        let cache = state.id_cache.read().map_err(|e| format!("Cache: {e}"))?;
-        if let Some(c) = cache.as_ref() {
-            return Ok(c.album_folders.get(album_id).cloned());
-        }
-    }
-    let conn = state.db.lock().map_err(|e| format!("DB lock: {e}"))?;
-    let new_cache = build_id_cache(&conn)?;
-    let result = new_cache.album_folders.get(album_id).cloned();
-    let mut cache = state.id_cache.write().map_err(|e| format!("Cache: {e}"))?;
-    *cache = Some(new_cache);
-    Ok(result)
+    with_id_cache(state, |c| c.album_folders.get(album_id).cloned())
 }
 
 /// Look up an artist by stable ID and return (name, albums).
@@ -108,10 +94,10 @@ async fn fetch_artist_with_albums(
     let artist_name =
         cached_artist_name(state, &artist_id)?.ok_or_else(|| "Artist not found".to_string())?;
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let artist_for_query = artist_name.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::get_albums(&conn, Some(&artist_for_query))
     })
     .await;
@@ -140,11 +126,11 @@ async fn fetch_album_with_tracks(
     let (artist_name, album_name) =
         cached_album_info(state, &album_id)?.ok_or_else(|| "Album not found".to_string())?;
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let artist = artist_name.clone();
     let album = album_name.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
 
         // Get year from a quick query
         let year: Option<u32> = conn

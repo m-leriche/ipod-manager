@@ -7,7 +7,8 @@ use rusqlite::Connection;
 use super::types::{LibraryFilter, LibraryTrack};
 
 pub use browser::{
-    get_albums, get_artists, get_browser_data, get_browser_data_paginated, get_genres,
+    get_albums, get_albums_sorted, get_artists, get_browser_data, get_browser_data_paginated,
+    get_genres, search_albums, search_artists,
 };
 pub use tracks::{get_track_by_id, get_tracks, get_tracks_paginated, search_tracks};
 

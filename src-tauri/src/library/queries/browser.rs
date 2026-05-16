@@ -116,6 +116,130 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
     Ok(results)
 }
 
+// ── Subsonic-optimized queries ────────────────────────────────
+
+/// Return a page of albums sorted by the given Subsonic list type.
+/// Pushes sorting and pagination to SQL instead of loading all albums.
+pub fn get_albums_sorted(
+    conn: &Connection,
+    sort_type: &str,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<AlbumSummary>, String> {
+    let order_clause = match sort_type {
+        "newest" | "recent" => "ORDER BY year IS NULL, year DESC",
+        "random" => "ORDER BY RANDOM()",
+        "alphabeticalByArtist" => {
+            "ORDER BY sort_key(COALESCE(album_artist, artist)), sort_key(album)"
+        }
+        _ => "ORDER BY sort_key(album), sort_key(COALESCE(album_artist, artist))",
+    };
+
+    let sql = format!(
+        "SELECT album, COALESCE(album_artist, artist) as display_artist,
+            MIN(year) as year, COUNT(*) as track_count,
+            MIN(folder_path) as folder_path
+         FROM tracks
+         WHERE album IS NOT NULL AND album != ''
+         GROUP BY album, display_artist
+         {order_clause} LIMIT ?1 OFFSET ?2"
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![limit as i64, offset as i64], |row| {
+            Ok(AlbumSummary {
+                name: row.get(0)?,
+                artist: row.get(1)?,
+                year: row.get(2)?,
+                track_count: row.get::<_, i64>(3).map(|v| v as usize)?,
+                folder_path: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))
+}
+
+/// Search artists by name using SQL LIKE (instead of loading all + filtering in memory).
+pub fn search_artists(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ArtistSummary>, String> {
+    let like = format!("%{query}%");
+    let sql = "SELECT
+            COALESCE(album_artist, artist) as display_artist,
+            COUNT(*) as track_count,
+            COUNT(DISTINCT album) as album_count
+        FROM tracks
+        WHERE COALESCE(album_artist, artist) IS NOT NULL
+            AND COALESCE(album_artist, artist) != ''
+            AND COALESCE(album_artist, artist) LIKE ?1 COLLATE NOCASE
+        GROUP BY display_artist
+        ORDER BY sort_key(display_artist)
+        LIMIT ?2";
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![like, limit as i64], |row| {
+            Ok(ArtistSummary {
+                name: row.get(0)?,
+                track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
+                album_count: row.get::<_, i64>(2).map(|v| v as usize)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))
+}
+
+/// Search albums by name or artist using SQL LIKE (instead of loading all + filtering in memory).
+pub fn search_albums(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<AlbumSummary>, String> {
+    let like = format!("%{query}%");
+    let sql = "SELECT album, COALESCE(album_artist, artist) as display_artist,
+            MIN(year) as year, COUNT(*) as track_count,
+            MIN(folder_path) as folder_path
+        FROM tracks
+        WHERE album IS NOT NULL AND album != ''
+            AND (album LIKE ?1 COLLATE NOCASE
+                 OR COALESCE(album_artist, artist) LIKE ?1 COLLATE NOCASE)
+        GROUP BY album, display_artist
+        ORDER BY sort_key(album)
+        LIMIT ?2";
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![like, limit as i64], |row| {
+            Ok(AlbumSummary {
+                name: row.get(0)?,
+                artist: row.get(1)?,
+                year: row.get(2)?,
+                track_count: row.get::<_, i64>(3).map(|v| v as usize)?,
+                folder_path: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))
+}
+
 // ── Browser data (combined endpoint for column browser) ────────
 
 /// Convert `Option<Vec<String>>` to the slice form needed by `build_filter_conditions`.

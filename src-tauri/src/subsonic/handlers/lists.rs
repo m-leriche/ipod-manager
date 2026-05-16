@@ -8,9 +8,9 @@ use crate::subsonic::SubsonicState;
 
 /// GET /rest/getGenres — list all genres with song/album counts.
 pub async fn get_genres(State(state): State<Arc<SubsonicState>>) -> axum::response::Response {
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::get_genres(&conn)
     })
     .await;
@@ -68,42 +68,20 @@ pub async fn get_album_list2(
     let size = params.size.unwrap_or(20).min(500);
     let offset = params.offset.unwrap_or(0);
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        let albums = library::get_albums(&conn, None)?;
-        Ok(albums)
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
+        library::get_albums_sorted(&conn, &list_type, size, offset)
     })
     .await;
 
-    let mut albums = match result {
+    let albums = match result {
         Ok(Ok(a)) => a,
         _ => return xml_response(xml::error_response(0, "Internal error")),
     };
 
-    // Sort by requested type
-    match list_type.as_str() {
-        "newest" | "recent" => {
-            // Sort by year descending; albums without a year go last
-            albums.sort_by_key(|a| std::cmp::Reverse(a.year.unwrap_or(0)));
-        }
-        "random" => {
-            // Fisher-Yates shuffle
-            let len = albums.len();
-            for i in (1..len).rev() {
-                albums.swap(i, fastrand::usize(..=i));
-            }
-        }
-        "alphabeticalByArtist" => albums.sort_by_key(|a| a.artist.to_lowercase()),
-        // "alphabeticalByName" is the default sort from the DB
-        _ => {}
-    }
-
-    // Paginate
-    let page: Vec<_> = albums.into_iter().skip(offset).take(size).collect();
-
     let mut inner = String::from("<albumList2>");
-    for album in &page {
+    for album in &albums {
         inner.push_str(&super::album_xml(album));
     }
     inner.push_str("</albumList2>");
@@ -125,62 +103,47 @@ pub async fn search3(
         return xml_response(xml::ok_response("<searchResult3></searchResult3>"));
     }
 
+    let db_path = state.db_path.clone();
     let query_clone = query.clone();
-    let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
 
-        let tracks = library::search_tracks(&conn, &query_clone)?;
-        let artists = library::get_artists(&conn)?;
-        let albums = library::get_albums(&conn, None)?;
+        let artists = library::search_artists(&conn, &query_clone, max_artists)?;
+        let albums = library::search_albums(&conn, &query_clone, max_albums)?;
 
-        Ok((tracks, artists, albums))
+        let filter = library::types::LibraryFilter {
+            search: Some(query_clone),
+            limit: Some(max_songs),
+            ..Default::default()
+        };
+        let tracks = library::get_tracks_paginated(&conn, &filter)?.tracks;
+
+        Ok((artists, albums, tracks))
     })
     .await;
 
-    let (tracks, artists, albums) = match result {
+    let (artists, albums, tracks) = match result {
         Ok(Ok(data)) => data,
         _ => return xml_response(xml::error_response(0, "Internal error")),
     };
 
-    let query_lower = query.to_lowercase();
-
     let mut inner = String::from("<searchResult3>");
 
-    // Matching artists
-    let mut artist_count = 0;
     for artist in &artists {
-        if artist_count >= max_artists {
-            break;
-        }
-        if artist.name.to_lowercase().contains(&query_lower) {
-            let id = stable_id("ar", &artist.name);
-            inner.push_str(&format!(
-                "<artist{}{} albumCount=\"{}\"/>",
-                xml::attr("id", &id),
-                xml::attr("name", &artist.name),
-                artist.album_count,
-            ));
-            artist_count += 1;
-        }
+        let id = stable_id("ar", &artist.name);
+        inner.push_str(&format!(
+            "<artist{}{} albumCount=\"{}\"/>",
+            xml::attr("id", &id),
+            xml::attr("name", &artist.name),
+            artist.album_count,
+        ));
     }
 
-    // Matching albums
-    let mut album_count = 0;
     for album in &albums {
-        if album_count >= max_albums {
-            break;
-        }
-        if album.name.to_lowercase().contains(&query_lower)
-            || album.artist.to_lowercase().contains(&query_lower)
-        {
-            inner.push_str(&super::album_xml(album));
-            album_count += 1;
-        }
+        inner.push_str(&super::album_xml(album));
     }
 
-    // Matching songs
-    for track in tracks.iter().take(max_songs) {
+    for track in &tracks {
         inner.push_str(&super::song_xml("song", track));
     }
 
@@ -191,9 +154,9 @@ pub async fn search3(
 
 /// GET /rest/getPlaylists — list all playlists.
 pub async fn get_playlists(State(state): State<Arc<SubsonicState>>) -> axum::response::Response {
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         library::playlists::get_playlists(&conn)
     })
     .await;
@@ -240,9 +203,9 @@ pub async fn get_playlist(
         }
     };
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
 
         // Get playlist metadata
         let playlists = library::playlists::get_playlists(&conn)?;

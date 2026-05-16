@@ -95,20 +95,22 @@ pub fn run() {
             app.manage(audio_engine);
 
             // Start Subsonic-compatible streaming server
-            let subsonic_db = app.state::<LibraryDb>().conn_arc();
+            let subsonic_db_path = db_path.clone();
             let cache_dir = app
                 .path()
                 .app_cache_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"))
                 .join("thumbnails");
             let subsonic_port = {
-                let conn = subsonic_db.lock().map_err(|e| format!("DB lock: {e}"))?;
+                let db = app.state::<LibraryDb>();
+                let conn = db.lock_conn()?;
                 library::get_setting(&conn, "subsonic_port")
                     .and_then(|v| v.parse::<u16>().ok())
                     .unwrap_or(4533)
             };
             let (subsonic_user, subsonic_pass) = {
-                let conn = subsonic_db.lock().map_err(|e| format!("DB lock: {e}"))?;
+                let db = app.state::<LibraryDb>();
+                let conn = db.lock_conn()?;
                 let user = library::get_setting(&conn, "subsonic_username")
                     .unwrap_or_else(|| "admin".to_string());
                 let pass = library::get_setting(&conn, "subsonic_password")
@@ -116,7 +118,7 @@ pub fn run() {
                 (user, pass)
             };
             let subsonic_server = subsonic::start_server(
-                subsonic_db,
+                subsonic_db_path,
                 cache_dir,
                 subsonic_port,
                 subsonic_user,

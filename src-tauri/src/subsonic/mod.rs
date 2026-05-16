@@ -4,15 +4,15 @@ pub mod xml;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use axum::extract::Request;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::Router;
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 
 /// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
 /// Avoids repeated full-table scans when Subsonic clients sync thousands of
@@ -27,12 +27,32 @@ pub struct StableIdCache {
 }
 
 /// Shared state for the Subsonic HTTP server.
+///
+/// Uses `db_path` instead of a shared connection so each request can open its
+/// own read-only SQLite connection. WAL mode allows unlimited concurrent readers,
+/// eliminating the previous single-Mutex bottleneck.
 pub struct SubsonicState {
-    pub db: Arc<Mutex<Connection>>,
+    pub db_path: PathBuf,
     pub cache_dir: PathBuf,
     pub username: String,
     pub password: String,
     pub id_cache: RwLock<Option<StableIdCache>>,
+}
+
+/// Open a read-only SQLite connection for a Subsonic request.
+///
+/// Each call creates an independent connection so requests don't block each other.
+/// The `sort_key` SQL function is registered on each connection for ORDER BY support.
+pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open_with_flags(
+        db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|e| format!("DB open: {e}"))?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .map_err(|e| format!("WAL pragma: {e}"))?;
+    crate::library::register_sort_key(&conn)?;
+    Ok(conn)
 }
 
 /// Handle returned from `start_server` so we can shut it down later.
@@ -79,7 +99,7 @@ macro_rules! subsonic_route {
 /// Shares the library database with the Tauri app. Runs on the existing
 /// tokio runtime provided by Tauri.
 pub fn start_server(
-    db: Arc<Mutex<Connection>>,
+    db_path: PathBuf,
     cache_dir: PathBuf,
     port: u16,
     username: String,
@@ -93,7 +113,7 @@ pub fn start_server(
     }
 
     let state = Arc::new(SubsonicState {
-        db,
+        db_path,
         cache_dir,
         username,
         password,

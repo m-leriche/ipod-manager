@@ -225,6 +225,9 @@ The Rust backend runs these via `sudo -S`, piping your password through stdin. Y
 - [ ] **Alphabet scroll on album grid** — Vertical hovering alphabet scroll to quickly jump to albums by letter.
 - [ ] **Drag-to-reorder playlist tracks** — Reorder tracks within playlist detail view.
 
+### Subsonic Server Performance
+- [ ] **Remaining sync optimizations** — Add `Cache-Control`/`ETag` headers to cover art responses (avoid re-downloading every sync). Deduplicate concurrent thumbnail generation (per-path lock). Remove the extra year query in `fetch_album_with_tracks` (derive from track data). Add gzip compression middleware to XML responses. Add composite index on `(album_artist, album)`. Cache stable IDs instead of recomputing MD5 on every response.
+
 ### Infrastructure
 - [ ] **Swift disk helper binary** — Replace `diskutil` text parsing in `disk.rs` with a small Swift CLI tool (`crate-disk-helper`) that uses `DiskArbitration.framework`. Gives event-driven USB detection (no polling), typed disk properties (no text parsing), and native mount/unmount without `sudo` password piping. Ship as a helper binary alongside the `.app` bundle. The Swift tool outputs JSON to stdout, Rust deserializes with serde — replaces ~580 lines of brittle parsing with ~150 lines of Swift.
 - [ ] **tauri-specta typed bridge** — Add `specta` + `tauri-specta` to auto-generate TypeScript types and invoke wrappers from Rust command signatures. Eliminates manual type duplication across `src/types/*.ts` and Rust structs (~74 invoke calls, ~8 type files maintained in parallel). Add `#[derive(specta::Type)]` to all bridge types, register commands with specta builder, replace raw `invoke()` calls with generated typed wrappers, delete manual TS type files.

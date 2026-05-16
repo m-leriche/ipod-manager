@@ -46,9 +46,9 @@ pub async fn stream(
         }
     };
 
-    let db = state.db.clone();
+    let db_path = state.db_path.clone();
     let file_path = tokio::task::spawn_blocking(move || -> Result<_, String> {
-        let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+        let conn = crate::subsonic::open_read_conn(&db_path)?;
         conn.query_row(
             "SELECT file_path FROM tracks WHERE id = ?1",
             rusqlite::params![track_id],
@@ -86,9 +86,9 @@ pub async fn get_cover_art(
 
     let folder_path = if let Ok(track_id) = id_str.parse::<i64>() {
         // Numeric ID → look up track's folder directly
-        let db = state.db.clone();
+        let db_path = state.db_path.clone();
         let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
-            let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
+            let conn = crate::subsonic::open_read_conn(&db_path)?;
             conn.query_row(
                 "SELECT folder_path FROM tracks WHERE id = ?1",
                 rusqlite::params![track_id],

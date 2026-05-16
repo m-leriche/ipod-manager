@@ -14,9 +14,9 @@ use axum::routing::{any, get};
 use axum::Router;
 use rusqlite::Connection;
 
-/// Cached mapping of stable IDs → names, built lazily on first use.
-/// Avoids repeated full-table scans when Subsonic clients sync
-/// thousands of artists/albums.
+/// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
+/// Avoids repeated full-table scans when Subsonic clients sync thousands of
+/// artists/albums. Not invalidated on library changes — a server restart rebuilds it.
 pub struct StableIdCache {
     /// Maps "ar123456" → "The Beatles"
     pub artists: HashMap<String, String>,

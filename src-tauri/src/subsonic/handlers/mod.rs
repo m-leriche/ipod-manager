@@ -109,18 +109,14 @@ async fn fetch_artist_with_albums(
         cached_artist_name(state, &artist_id)?.ok_or_else(|| "Artist not found".to_string())?;
 
     let db = state.db.clone();
+    let artist_for_query = artist_name.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
-        library::get_albums(&conn, Some(&artist_name))
+        library::get_albums(&conn, Some(&artist_for_query))
     })
     .await;
     match result {
-        Ok(Ok(albums)) => {
-            // Re-derive name from the cache lookup we already did
-            let name = cached_artist_name(state, &artist_id)?
-                .ok_or_else(|| "Artist not found".to_string())?;
-            Ok((name, albums))
-        }
+        Ok(Ok(albums)) => Ok((artist_name, albums)),
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Internal error".to_string()),
     }
@@ -145,8 +141,8 @@ async fn fetch_album_with_tracks(
         cached_album_info(state, &album_id)?.ok_or_else(|| "Album not found".to_string())?;
 
     let db = state.db.clone();
-    let an = artist_name.clone();
-    let aln = album_name.clone();
+    let artist = artist_name.clone();
+    let album = album_name.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let conn = db.lock().map_err(|e| format!("DB lock: {e}"))?;
 
@@ -154,15 +150,15 @@ async fn fetch_album_with_tracks(
         let year: Option<u32> = conn
             .query_row(
                 "SELECT MIN(year) FROM tracks WHERE (album_artist = ?1 OR artist = ?1) AND album = ?2",
-                rusqlite::params![&an, &aln],
+                rusqlite::params![&artist, &album],
                 |row| row.get(0),
             )
             .ok()
             .flatten();
 
         let filter = library::types::LibraryFilter {
-            artist: Some(vec![an]),
-            album: Some(vec![aln]),
+            artist: Some(vec![artist]),
+            album: Some(vec![album]),
             sort_by: Some("track_number".to_string()),
             sort_direction: Some("asc".to_string()),
             ..Default::default()

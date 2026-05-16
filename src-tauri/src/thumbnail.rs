@@ -12,6 +12,20 @@ fn path_locks() -> &'static Mutex<HashMap<String, Arc<Mutex<()>>>> {
     LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// RAII guard that removes a key from `path_locks()` on drop,
+/// ensuring cleanup even when thumbnail generation fails.
+struct LockCleanup {
+    key: String,
+}
+
+impl Drop for LockCleanup {
+    fn drop(&mut self) {
+        if let Ok(mut locks) = path_locks().lock() {
+            locks.remove(&self.key);
+        }
+    }
+}
+
 /// Available thumbnail sizes.
 #[derive(Debug, Clone, Copy)]
 pub enum ThumbSize {
@@ -108,6 +122,8 @@ pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Op
         locks.entry(lock_key.clone()).or_default().clone()
     };
     let _guard = lock.lock().ok()?;
+    // RAII cleanup — removes the lock entry on drop, even if generation fails
+    let _cleanup = LockCleanup { key: lock_key };
 
     // Re-check after acquiring the lock — another thread may have generated it
     if thumb_path.exists() {
@@ -116,10 +132,6 @@ pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Op
 
         if let (Some(src_t), Some(thumb_t)) = (source_mtime, thumb_mtime) {
             if thumb_t >= src_t {
-                // Clean up the lock entry since generation is done
-                if let Ok(mut locks) = path_locks().lock() {
-                    locks.remove(&lock_key);
-                }
                 return Some(thumb_path);
             }
         }
@@ -132,11 +144,6 @@ pub fn get_or_create(cache_dir: &Path, folder_path: &str, size: ThumbSize) -> Op
 
     fs::create_dir_all(cache_dir).ok()?;
     thumb.save(&thumb_path).ok()?;
-
-    // Clean up the lock entry
-    if let Ok(mut locks) = path_locks().lock() {
-        locks.remove(&lock_key);
-    }
 
     Some(thumb_path)
 }

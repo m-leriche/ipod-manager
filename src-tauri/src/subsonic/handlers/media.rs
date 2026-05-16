@@ -142,7 +142,18 @@ pub async fn get_cover_art(
                     .and_then(|v| v.to_str().ok())
                 {
                     if inm == etag_val {
-                        return StatusCode::NOT_MODIFIED.into_response();
+                        let mut resp = StatusCode::NOT_MODIFIED.into_response();
+                        let h = resp.headers_mut();
+                        h.insert(
+                            header::CACHE_CONTROL,
+                            "public, max-age=86400"
+                                .parse()
+                                .expect("static header value"),
+                        );
+                        if let Ok(val) = etag_val.parse() {
+                            h.insert(header::ETAG, val);
+                        }
+                        return resp;
                     }
                 }
             }
@@ -157,7 +168,9 @@ pub async fn get_cover_art(
             let headers = response.headers_mut();
             headers.insert(
                 header::CACHE_CONTROL,
-                "public, max-age=86400".parse().unwrap(),
+                "public, max-age=86400"
+                    .parse()
+                    .expect("static header value"),
             );
             if let Some(etag_val) = etag {
                 if let Ok(val) = etag_val.parse() {

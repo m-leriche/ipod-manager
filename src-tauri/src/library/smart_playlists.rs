@@ -100,6 +100,8 @@ fn field_to_column(field: &str) -> Result<&'static str, String> {
         "format" => Ok("format"),
         "file_size" => Ok("file_size"),
         "created_at" => Ok("created_at"),
+        // COALESCE maps NULL (never played) to 0, so `greater_than 0` correctly
+        // excludes unplayed tracks and `equals 0` matches them.
         "last_played" => Ok("COALESCE(last_played, 0)"),
         "flagged" => Ok("flagged"),
         f => Err(format!("Unknown field: {}", f)),

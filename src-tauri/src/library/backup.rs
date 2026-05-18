@@ -84,7 +84,7 @@ pub fn list_backups(db_path: &Path) -> Result<Vec<BackupInfo>, String> {
         })
         .collect();
 
-    backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    backups.sort_by_key(|b| std::cmp::Reverse(b.created_at));
     Ok(backups)
 }
 
@@ -138,7 +138,7 @@ fn prune_old_backups(backup_dir: &Path) {
         })
         .collect();
 
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.1));
 
     for (path, _) in entries.iter().skip(MAX_BACKUPS) {
         let _ = fs::remove_file(path);

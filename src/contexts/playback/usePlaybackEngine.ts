@@ -450,6 +450,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     const nextTrack = s.queue[nextIdx];
     if (!nextTrack) return;
 
+    // Compute look-ahead BEFORE advanceShuffle mutates the position ref
+    const nextNextIdx = getNextIndexFrom(nextIdx);
+
     if (s.shuffle) {
       advanceShuffle(nextIdx);
     }
@@ -469,7 +472,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
     // Immediately preload the next-next track so continuous gapless
     // playback doesn't depend on the React effect cycle latency.
-    const nextNextIdx = getNextIndexFrom(nextIdx);
     if (nextNextIdx !== null && s.queue[nextNextIdx]) {
       invoke("audio_preload_next", { path: s.queue[nextNextIdx].file_path }).catch(() => {});
     }

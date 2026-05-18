@@ -247,6 +247,7 @@ pub fn run() {
             commands::get_library_stats,
             commands::get_ipod_info,
             commands::read_rockbox_playdata,
+            commands::write_rockbox_playdata,
             commands::check_library_available,
             commands::get_library_location,
             commands::set_library_location,

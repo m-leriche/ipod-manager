@@ -55,3 +55,16 @@ pub async fn read_rockbox_playdata(
         .map_err(|e| format!("Read failed: {}", e))?
         .map_err(Into::into)
 }
+
+#[tauri::command]
+pub async fn write_rockbox_playdata(
+    ipod_path: String,
+    updates: Vec<rockbox::RockboxTrackUpdate>,
+) -> Result<rockbox::WriteResult, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        rockbox::write_rockbox_playdata(&ipod_path, &updates)
+    })
+    .await
+    .map_err(|e| format!("Write failed: {}", e))?
+    .map_err(Into::into)
+}

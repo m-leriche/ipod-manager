@@ -32,6 +32,7 @@ pub use queries::{
     get_genres, get_track_by_id, get_tracks, get_tracks_paginated, search_albums, search_artists,
     search_tracks,
 };
+pub(crate) use queries::{row_to_track, SELECT_COLUMNS};
 pub use reorganize::reorganize_library_file;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
 pub use settings::{
@@ -221,6 +222,16 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         );",
     )
     .map_err(|e| format!("Failed to create scrobble_queue table: {}", e))?;
+
+    // Playback queue persistence table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS playback_queue (
+            position INTEGER PRIMARY KEY,
+            track_id INTEGER NOT NULL,
+            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE
+        );",
+    )
+    .map_err(|e| format!("Failed to create playback_queue table: {}", e))?;
 
     // Seed built-in smart playlists
     let now = now_epoch();

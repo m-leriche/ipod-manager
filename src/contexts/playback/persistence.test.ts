@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import {
   loadVolume,
   saveVolume,
@@ -9,6 +10,8 @@ import {
 } from "./persistence";
 import type { PlaybackState } from "./types";
 import type { LibraryTrack } from "../../types/library";
+
+const mockInvoke = invoke as ReturnType<typeof vi.fn>;
 
 const stubTrack: LibraryTrack = {
   id: 1,
@@ -41,6 +44,8 @@ const stubTrack: LibraryTrack = {
 describe("persistence", () => {
   beforeEach(() => {
     localStorage.clear();
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
   });
 
   // ── Volume ──────────────────────────────────────────────────
@@ -92,13 +97,56 @@ describe("persistence", () => {
     expect(loadCrossfade()).toBe(12);
   });
 
-  // ── Playback state ─────────────────────────────────────────
+  // ── Playback state (SQLite-backed) ─────────────────────────
 
-  it("loadPlaybackState returns null when not stored", () => {
-    expect(loadPlaybackState()).toBeNull();
+  it("loadPlaybackState returns null when backend returns null", async () => {
+    mockInvoke.mockResolvedValue(null);
+    expect(await loadPlaybackState()).toBeNull();
   });
 
-  it("savePlaybackState + loadPlaybackState roundtrip", () => {
+  it("loadPlaybackState returns null when backend returns empty tracks", async () => {
+    mockInvoke.mockResolvedValue({ tracks: [], queue_index: 0, shuffle: false, repeat: "off", position: 0 });
+    expect(await loadPlaybackState()).toBeNull();
+  });
+
+  it("loadPlaybackState resolves queue state from backend", async () => {
+    mockInvoke.mockResolvedValue({
+      tracks: [stubTrack],
+      queue_index: 0,
+      shuffle: true,
+      repeat: "all",
+      position: 120,
+    });
+
+    const loaded = await loadPlaybackState();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.queue).toHaveLength(1);
+    expect(loaded!.queueIndex).toBe(0);
+    expect(loaded!.shuffle).toBe(true);
+    expect(loaded!.repeat).toBe("all");
+    expect(loaded!.position).toBe(120);
+    expect(loaded!.currentTrack?.id).toBe(1);
+  });
+
+  it("loadPlaybackState clamps queue_index to valid range", async () => {
+    mockInvoke.mockResolvedValue({
+      tracks: [stubTrack],
+      queue_index: 5,
+      shuffle: false,
+      repeat: "off",
+      position: 0,
+    });
+
+    const loaded = await loadPlaybackState();
+    expect(loaded!.queueIndex).toBe(0);
+  });
+
+  it("loadPlaybackState returns null on invoke error", async () => {
+    mockInvoke.mockRejectedValue(new Error("DB error"));
+    expect(await loadPlaybackState()).toBeNull();
+  });
+
+  it("savePlaybackState calls save_playback_queue with track ids", () => {
     const state: PlaybackState = {
       currentTrack: stubTrack,
       isPlaying: true,
@@ -114,17 +162,16 @@ describe("persistence", () => {
     };
 
     savePlaybackState(state, 120);
-    const loaded = loadPlaybackState();
-    expect(loaded).not.toBeNull();
-    expect(loaded!.queueIndex).toBe(0);
-    expect(loaded!.shuffle).toBe(true);
-    expect(loaded!.repeat).toBe("all");
-    expect(loaded!.position).toBe(120);
-    expect(loaded!.currentTrack?.id).toBe(1);
+    expect(mockInvoke).toHaveBeenCalledWith("save_playback_queue", {
+      trackIds: [1],
+      queueIndex: 0,
+      shuffle: true,
+      repeat: "all",
+      position: 120,
+    });
   });
 
-  it("savePlaybackState removes state when no current track", () => {
-    saveCrossfade(4);
+  it("savePlaybackState calls clear when no current track", () => {
     const state: PlaybackState = {
       currentTrack: null,
       isPlaying: false,
@@ -139,11 +186,6 @@ describe("persistence", () => {
       playbackError: null,
     };
     savePlaybackState(state, 0);
-    expect(loadPlaybackState()).toBeNull();
-  });
-
-  it("loadPlaybackState returns null for malformed JSON", () => {
-    localStorage.setItem("crate-playback-state", "{bad json");
-    expect(loadPlaybackState()).toBeNull();
+    expect(mockInvoke).toHaveBeenCalledWith("clear_playback_queue");
   });
 });

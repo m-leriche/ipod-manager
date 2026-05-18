@@ -56,12 +56,11 @@ impl AudioDecoder {
         let channels = params.channels.map(|c| c.count() as u16).unwrap_or(2);
 
         let duration_secs = if let Some(n_frames) = params.n_frames {
-            n_frames as f64 / sample_rate as f64
-        } else if let Some(tb) = params.time_base {
-            if let Some(dur) = params.n_frames {
-                tb.calc_time(dur).seconds as f64 + tb.calc_time(dur).frac
+            if let Some(tb) = params.time_base {
+                let t = tb.calc_time(n_frames);
+                t.seconds as f64 + t.frac
             } else {
-                0.0
+                n_frames as f64 / sample_rate as f64
             }
         } else {
             0.0

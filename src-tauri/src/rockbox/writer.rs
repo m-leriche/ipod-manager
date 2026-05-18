@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 use super::parser::*;
 
 // ── Public Types ────────────────────────────────────────────────
-
-use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RockboxTrackUpdate {
@@ -15,12 +15,11 @@ pub struct RockboxTrackUpdate {
     pub rating: Option<i32>,
 }
 
-use serde::Serialize;
-
 #[derive(Debug, Clone, Serialize)]
 pub struct WriteResult {
     pub updated: usize,
     pub not_found: usize,
+    pub skipped_deleted: usize,
     pub errors: Vec<String>,
 }
 
@@ -39,6 +38,7 @@ pub fn write_rockbox_playdata(
         return Ok(WriteResult {
             updated: 0,
             not_found: 0,
+            skipped_deleted: 0,
             errors: Vec::new(),
         });
     }
@@ -77,6 +77,23 @@ pub fn write_rockbox_playdata(
     let mut errors = Vec::new();
 
     for update in updates {
+        // Validate values before accepting the update
+        if let Some(pc) = update.playcount {
+            if pc < 0 {
+                errors.push(format!("Invalid playcount {} for {}", pc, update.filename));
+                continue;
+            }
+        }
+        if let Some(r) = update.rating {
+            if !(0..=10).contains(&r) {
+                errors.push(format!(
+                    "Invalid rating {} for {} (must be 0-10)",
+                    r, update.filename
+                ));
+                continue;
+            }
+        }
+
         match name_to_offset.get(update.filename.as_str()) {
             Some(&offset) => {
                 update_by_offset.insert(offset, update);
@@ -95,6 +112,7 @@ pub fn write_rockbox_playdata(
     let entry_size = version.entry_size();
     let entry_count = header.entry_count as usize;
     let mut updated = 0;
+    let mut skipped_deleted = 0;
 
     // The filename tag offset is at index 4 in the tag_offsets array (5th i32)
     let filename_tag_byte_offset = 4 * 4; // 16 bytes into entry
@@ -105,31 +123,35 @@ pub fn write_rockbox_playdata(
             break;
         }
 
-        // Check flags — skip deleted entries
-        let flags = read_i32_le(&idx_data, offset + entry_size - 4);
-        if flags & FLAG_DELETED != 0 {
+        let fn_tag_offset = read_i32_le(&idx_data, offset + filename_tag_byte_offset);
+        if !update_by_offset.contains_key(&fn_tag_offset) {
             continue;
         }
 
-        let fn_tag_offset = read_i32_le(&idx_data, offset + filename_tag_byte_offset);
-        if let Some(update) = update_by_offset.get(&fn_tag_offset) {
-            let num_base = version.numeric_offset();
-            let extra = match version {
-                DbVersion::V10 => 4,
-                DbVersion::V0F => 0,
-            };
-
-            if let Some(playcount) = update.playcount {
-                let pc_offset = offset + num_base + 20 + extra;
-                write_i32_le(&mut idx_data, pc_offset, playcount);
-            }
-            if let Some(rating) = update.rating {
-                let rt_offset = offset + num_base + 24 + extra;
-                write_i32_le(&mut idx_data, rt_offset, rating);
-            }
-
-            updated += 1;
+        // Check flags — skip deleted entries
+        let flags = read_i32_le(&idx_data, offset + entry_size - 4);
+        if flags & FLAG_DELETED != 0 {
+            skipped_deleted += 1;
+            continue;
         }
+
+        let update = update_by_offset[&fn_tag_offset];
+        let num_base = version.numeric_offset();
+        let extra = match version {
+            DbVersion::V10 => 4,
+            DbVersion::V0F => 0,
+        };
+
+        if let Some(playcount) = update.playcount {
+            let pc_offset = offset + num_base + 20 + extra;
+            write_i32_le(&mut idx_data, pc_offset, playcount);
+        }
+        if let Some(rating) = update.rating {
+            let rt_offset = offset + num_base + 24 + extra;
+            write_i32_le(&mut idx_data, rt_offset, rating);
+        }
+
+        updated += 1;
     }
 
     if updated > 0 {
@@ -147,6 +169,7 @@ pub fn write_rockbox_playdata(
     Ok(WriteResult {
         updated,
         not_found,
+        skipped_deleted,
         errors,
     })
 }
@@ -281,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn write_skips_deleted_entries() {
+    fn write_skips_deleted_entries_and_reports() {
         let dir = tempfile::tempdir().unwrap();
         let rockbox_dir = dir.path().join(".rockbox");
         std::fs::create_dir_all(&rockbox_dir).unwrap();
@@ -319,11 +342,119 @@ mod tests {
         }];
 
         let result = write_rockbox_playdata(dir.path().to_str().unwrap(), &updates).unwrap();
-        // Entry is deleted, so nothing should be updated
         assert_eq!(result.updated, 0);
+        assert_eq!(result.skipped_deleted, 1);
 
         // Verify playcount was NOT changed
         let written = std::fs::read(rockbox_dir.join("database_idx.tcd")).unwrap();
         assert_eq!(read_i32_le(&written, HEADER_SIZE + 60), 10);
+    }
+
+    #[test]
+    fn write_playcount_and_rating_v0f() {
+        let dir = tempfile::tempdir().unwrap();
+        let rockbox_dir = dir.path().join(".rockbox");
+        std::fs::create_dir_all(&rockbox_dir).unwrap();
+
+        // V0F: 92 bytes/entry, no canonical_artist field
+        let mut idx = Vec::new();
+        idx.extend_from_slice(&make_le_i32(MAGIC_V0F));
+        idx.extend_from_slice(&make_le_i32(92));
+        idx.extend_from_slice(&make_le_i32(1));
+        idx.extend_from_slice(&make_le_i32(3)); // serial
+        idx.extend_from_slice(&make_le_i32(0));
+        idx.extend_from_slice(&make_le_i32(0));
+
+        let mut entry = vec![0u8; 92];
+        // tag_offsets[4] = filename offset = 0
+        entry[16..20].copy_from_slice(&make_le_i32(0));
+        // V0F: playcount at num_base(36) + 20 + extra(0) = 56
+        entry[56..60].copy_from_slice(&make_le_i32(7));
+        // V0F: rating at num_base(36) + 24 + extra(0) = 60
+        entry[60..64].copy_from_slice(&make_le_i32(2));
+        // flags at last 4 bytes = 0
+        idx.extend_from_slice(&entry);
+
+        std::fs::write(rockbox_dir.join("database_idx.tcd"), &idx).unwrap();
+
+        let mut db4 = Vec::new();
+        db4.extend_from_slice(&make_le_i32(MAGIC_V0F));
+        db4.extend_from_slice(&make_le_i32(20));
+        db4.extend_from_slice(&make_le_i32(1));
+        db4.extend_from_slice(&make_le_i32(10));
+        db4.extend_from_slice(&make_le_i32(0));
+        db4.extend_from_slice(b"song.flac\0");
+        std::fs::write(rockbox_dir.join("database_4.tcd"), &db4).unwrap();
+
+        let updates = vec![RockboxTrackUpdate {
+            filename: "song.flac".to_string(),
+            playcount: Some(100),
+            rating: Some(10),
+        }];
+
+        let result = write_rockbox_playdata(dir.path().to_str().unwrap(), &updates).unwrap();
+        assert_eq!(result.updated, 1);
+
+        let written = std::fs::read(rockbox_dir.join("database_idx.tcd")).unwrap();
+        // Serial incremented 3 → 4
+        assert_eq!(read_i32_le(&written, 12), 4);
+        // V0F playcount at HEADER_SIZE + 56
+        assert_eq!(read_i32_le(&written, HEADER_SIZE + 56), 100);
+        // V0F rating at HEADER_SIZE + 60
+        assert_eq!(read_i32_le(&written, HEADER_SIZE + 60), 10);
+    }
+
+    #[test]
+    fn rejects_negative_playcount() {
+        let result = validate_and_write(&[RockboxTrackUpdate {
+            filename: "test.mp3".to_string(),
+            playcount: Some(-5),
+            rating: None,
+        }]);
+        assert_eq!(result.updated, 0);
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0].contains("Invalid playcount"));
+    }
+
+    #[test]
+    fn rejects_out_of_range_rating() {
+        let result = validate_and_write(&[RockboxTrackUpdate {
+            filename: "test.mp3".to_string(),
+            playcount: None,
+            rating: Some(11),
+        }]);
+        assert_eq!(result.updated, 0);
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0].contains("Invalid rating"));
+    }
+
+    /// Helper: build a minimal V10 database with one track and run updates.
+    fn validate_and_write(updates: &[RockboxTrackUpdate]) -> WriteResult {
+        let dir = tempfile::tempdir().unwrap();
+        let rockbox_dir = dir.path().join(".rockbox");
+        std::fs::create_dir_all(&rockbox_dir).unwrap();
+
+        let mut idx = Vec::new();
+        idx.extend_from_slice(&make_le_i32(MAGIC_V10));
+        idx.extend_from_slice(&make_le_i32(96));
+        idx.extend_from_slice(&make_le_i32(1));
+        idx.extend_from_slice(&make_le_i32(1));
+        idx.extend_from_slice(&make_le_i32(0));
+        idx.extend_from_slice(&make_le_i32(0));
+        let mut entry = vec![0u8; 96];
+        entry[16..20].copy_from_slice(&make_le_i32(0));
+        idx.extend_from_slice(&entry);
+        std::fs::write(rockbox_dir.join("database_idx.tcd"), &idx).unwrap();
+
+        let mut db4 = Vec::new();
+        db4.extend_from_slice(&make_le_i32(MAGIC_V10));
+        db4.extend_from_slice(&make_le_i32(20));
+        db4.extend_from_slice(&make_le_i32(1));
+        db4.extend_from_slice(&make_le_i32(10));
+        db4.extend_from_slice(&make_le_i32(0));
+        db4.extend_from_slice(b"test.mp3\0\0");
+        std::fs::write(rockbox_dir.join("database_4.tcd"), &db4).unwrap();
+
+        write_rockbox_playdata(dir.path().to_str().unwrap(), updates).unwrap()
     }
 }

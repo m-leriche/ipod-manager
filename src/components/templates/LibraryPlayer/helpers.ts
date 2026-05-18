@@ -10,6 +10,7 @@ const CACHE_KEY = "browser-data";
 export interface CachedLibraryData {
   hasLibrary: boolean;
   browserData: BrowserData;
+  totalTrackCount?: number;
   cachedAt: number;
 }
 

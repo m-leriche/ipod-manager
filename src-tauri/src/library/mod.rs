@@ -222,6 +222,16 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Failed to create scrobble_queue table: {}", e))?;
 
+    // Playback queue persistence table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS playback_queue (
+            position INTEGER PRIMARY KEY,
+            track_id INTEGER NOT NULL,
+            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE
+        );",
+    )
+    .map_err(|e| format!("Failed to create playback_queue table: {}", e))?;
+
     // Seed built-in smart playlists
     let now = now_epoch();
     let seed_sql = "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)";

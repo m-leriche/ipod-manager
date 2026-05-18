@@ -332,6 +332,9 @@ pub fn run() {
             commands::get_subsonic_status,
             commands::set_subsonic_credentials,
             commands::set_subsonic_port,
+            commands::save_playback_queue,
+            commands::load_playback_queue,
+            commands::clear_playback_queue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

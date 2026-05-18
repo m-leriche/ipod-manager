@@ -1,9 +1,9 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../types/library";
 import type { PlaybackState, RepeatMode } from "./types";
 
 const VOLUME_KEY = "crate-playback-volume";
 const CROSSFADE_KEY = "crate-playback-crossfade";
-const PLAYBACK_STATE_KEY = "crate-playback-state";
 
 export const loadVolume = (): number => {
   const stored = localStorage.getItem(VOLUME_KEY);
@@ -40,33 +40,43 @@ export interface PersistedPlaybackState {
   position: number;
 }
 
+interface QueueState {
+  tracks: LibraryTrack[];
+  queue_index: number;
+  shuffle: boolean;
+  repeat: string;
+  position: number;
+}
+
 export const savePlaybackState = (state: PlaybackState, position: number) => {
   if (!state.currentTrack || state.queue.length === 0) {
-    localStorage.removeItem(PLAYBACK_STATE_KEY);
+    invoke("clear_playback_queue").catch(() => {});
     return;
   }
-  const persisted: PersistedPlaybackState = {
-    queue: state.queue,
+  const trackIds = state.queue.map((t) => t.id);
+  invoke("save_playback_queue", {
+    trackIds,
     queueIndex: state.queueIndex,
-    currentTrack: state.currentTrack,
     shuffle: state.shuffle,
     repeat: state.repeat,
     position,
-  };
-  try {
-    localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(persisted));
-  } catch {
-    // localStorage full — silently skip
-  }
+  }).catch(() => {});
 };
 
-export const loadPlaybackState = (): PersistedPlaybackState | null => {
+export const loadPlaybackState = async (): Promise<PersistedPlaybackState | null> => {
   try {
-    const stored = localStorage.getItem(PLAYBACK_STATE_KEY);
-    if (!stored) return null;
-    const parsed = JSON.parse(stored) as PersistedPlaybackState;
-    if (!parsed.currentTrack || !Array.isArray(parsed.queue) || parsed.queue.length === 0) return null;
-    return parsed;
+    const result = await invoke<QueueState | null>("load_playback_queue");
+    if (!result || result.tracks.length === 0) return null;
+
+    const queueIndex = Math.max(0, Math.min(result.queue_index, result.tracks.length - 1));
+    return {
+      queue: result.tracks,
+      queueIndex,
+      currentTrack: result.tracks[queueIndex] ?? null,
+      shuffle: result.shuffle,
+      repeat: (result.repeat as RepeatMode) || "off",
+      position: result.position,
+    };
   } catch {
     return null;
   }

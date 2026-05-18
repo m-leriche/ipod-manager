@@ -32,6 +32,7 @@ pub use queries::{
     get_genres, get_track_by_id, get_tracks, get_tracks_paginated, search_albums, search_artists,
     search_tracks,
 };
+pub(crate) use queries::{row_to_track, SELECT_COLUMNS};
 pub use reorganize::reorganize_library_file;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
 pub use settings::{

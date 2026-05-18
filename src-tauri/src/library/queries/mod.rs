@@ -155,13 +155,13 @@ pub(super) fn build_order_by(filter: &LibraryFilter) -> String {
     }
 }
 
-pub(super) const SELECT_COLUMNS: &str =
+pub(crate) const SELECT_COLUMNS: &str =
     "id, file_path, file_name, folder_path, title, artist, album, album_artist,
      sort_artist, sort_album_artist, track_number, track_total, disc_number,
      disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
      file_size, created_at, play_count, flagged, rating";
 
-pub(super) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
+pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
     Ok(LibraryTrack {
         id: row.get(0)?,
         file_path: row.get(1)?,

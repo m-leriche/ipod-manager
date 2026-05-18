@@ -50,7 +50,7 @@ interface QueueState {
 
 export const savePlaybackState = (state: PlaybackState, position: number) => {
   if (!state.currentTrack || state.queue.length === 0) {
-    invoke("clear_playback_queue").catch(() => {});
+    invoke("clear_playback_queue").catch((e) => console.warn("Failed to clear queue:", e));
     return;
   }
   const trackIds = state.queue.map((t) => t.id);
@@ -60,7 +60,7 @@ export const savePlaybackState = (state: PlaybackState, position: number) => {
     shuffle: state.shuffle,
     repeat: state.repeat,
     position,
-  }).catch(() => {});
+  }).catch((e) => console.warn("Failed to save queue:", e));
 };
 
 export const loadPlaybackState = async (): Promise<PersistedPlaybackState | null> => {

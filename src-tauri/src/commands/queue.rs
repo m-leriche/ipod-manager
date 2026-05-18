@@ -1,9 +1,10 @@
 use crate::error::AppError;
 use crate::library::types::LibraryTrack;
-use crate::library::{self, LibraryDb};
+use crate::library::{self, row_to_track, LibraryDb, SELECT_COLUMNS};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+/// Serialized wire format returned by load_playback_queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueState {
     pub tracks: Vec<LibraryTrack>,
@@ -23,6 +24,8 @@ pub async fn save_playback_queue(
     db: State<'_, LibraryDb>,
 ) -> Result<(), AppError> {
     db.with_db(move |conn| {
+        // unchecked_transaction is safe here: with_db holds an exclusive mutex
+        // lock on the connection, so no concurrent transaction can exist.
         let tx = conn
             .unchecked_transaction()
             .map_err(|e| format!("Transaction failed: {}", e))?;
@@ -40,7 +43,6 @@ pub async fn save_playback_queue(
         }
         drop(stmt);
 
-        // Store queue metadata in settings
         let meta = serde_json::json!({
             "queue_index": queue_index,
             "shuffle": shuffle,
@@ -67,17 +69,19 @@ pub async fn load_playback_queue(db: State<'_, LibraryDb>) -> Result<Option<Queu
         let meta: serde_json::Value = serde_json::from_str(&meta_json)
             .map_err(|e| format!("Invalid queue state JSON: {}", e))?;
 
-        let select_cols = "t.id, t.file_path, t.file_name, t.folder_path, t.title, t.artist,
-             t.album, t.album_artist, t.sort_artist, t.sort_album_artist, t.track_number,
-             t.track_total, t.disc_number, t.disc_total, t.year, t.genre, t.duration_secs,
-             t.sample_rate, t.bitrate_kbps, t.format, t.file_size, t.created_at,
-             t.play_count, t.flagged, t.rating";
+        // Prefix each column with "t." for the JOIN query
+        let prefixed_cols = SELECT_COLUMNS.replace('\n', "");
+        let prefixed_cols = prefixed_cols
+            .split(", ")
+            .map(|col| format!("t.{}", col.trim()))
+            .collect::<Vec<_>>()
+            .join(", ");
 
         let sql = format!(
             "SELECT {} FROM playback_queue pq
              JOIN tracks t ON t.id = pq.track_id
              ORDER BY pq.position",
-            select_cols
+            prefixed_cols
         );
 
         let mut stmt = conn
@@ -85,35 +89,7 @@ pub async fn load_playback_queue(db: State<'_, LibraryDb>) -> Result<Option<Queu
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let tracks: Vec<LibraryTrack> = stmt
-            .query_map([], |row| {
-                Ok(LibraryTrack {
-                    id: row.get(0)?,
-                    file_path: row.get(1)?,
-                    file_name: row.get(2)?,
-                    folder_path: row.get(3)?,
-                    title: row.get(4)?,
-                    artist: row.get(5)?,
-                    album: row.get(6)?,
-                    album_artist: row.get(7)?,
-                    sort_artist: row.get(8)?,
-                    sort_album_artist: row.get(9)?,
-                    track_number: row.get(10)?,
-                    track_total: row.get(11)?,
-                    disc_number: row.get(12)?,
-                    disc_total: row.get(13)?,
-                    year: row.get(14)?,
-                    genre: row.get(15)?,
-                    duration_secs: row.get(16)?,
-                    sample_rate: row.get(17)?,
-                    bitrate_kbps: row.get(18)?,
-                    format: row.get(19)?,
-                    file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
-                    created_at: row.get(21)?,
-                    play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-                    flagged: row.get(23)?,
-                    rating: row.get::<_, i64>(24).map(|v| v as u8)?,
-                })
-            })
+            .query_map([], row_to_track)
             .map_err(|e| format!("Query failed: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Row read failed: {}", e))?;

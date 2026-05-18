@@ -182,7 +182,12 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
           albums: data.albums,
         };
         unfilteredCacheRef.current = { data: browserData, sortBy, sortDirection };
-        setCachedLibrary({ hasLibrary: true, browserData, cachedAt: Date.now() });
+        setCachedLibrary({
+          hasLibrary: true,
+          browserData,
+          totalTrackCount: data.tracks.total_count,
+          cachedAt: Date.now(),
+        });
       }
       if (playAfterFetchRef.current && data.tracks.tracks.length > 0) {
         playAfterFetchRef.current = false;
@@ -274,6 +279,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       setHasLibrary(cached.hasLibrary);
       if (cached.hasLibrary) {
         setTracks(cached.browserData.tracks);
+        setTotalTrackCount(cached.totalTrackCount ?? cached.browserData.tracks.length);
         setGenreList(cached.browserData.genres);
         setArtistList(cached.browserData.artists);
         setAlbumList(cached.browserData.albums);

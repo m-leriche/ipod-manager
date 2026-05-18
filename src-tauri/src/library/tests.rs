@@ -37,6 +37,7 @@ fn test_db() -> Connection {
             scanned_at INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL DEFAULT 0,
             play_count INTEGER NOT NULL DEFAULT 0,
+            last_played INTEGER,
             flagged INTEGER NOT NULL DEFAULT 0,
             rating INTEGER NOT NULL DEFAULT 0,
             lyrics TEXT,

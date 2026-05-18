@@ -185,6 +185,9 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         "CREATE INDEX IF NOT EXISTS idx_tracks_album_artist_album \
          ON tracks(album_artist COLLATE NOCASE, album COLLATE NOCASE)",
     );
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN last_played INTEGER");
+    let _ = conn
+        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_last_played ON tracks(last_played)");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN lyrics TEXT");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
     let _ = conn
@@ -245,6 +248,19 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             "fire",
             r#"{"match":"all","rules":[{"field":"play_count","operator":"greater_than","value":"0"}]}"#,
             "play_count",
+            "desc",
+            100_i64,
+            now,
+            now
+        ],
+    );
+    let _ = conn.execute(
+        seed_sql,
+        rusqlite::params![
+            "Recently Played",
+            "headphones",
+            r#"{"match":"all","rules":[{"field":"last_played","operator":"greater_than","value":"0"}]}"#,
+            "last_played",
             "desc",
             100_i64,
             now,

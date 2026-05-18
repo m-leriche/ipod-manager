@@ -77,9 +77,13 @@ pub async fn rate_tracks(
 #[tauri::command]
 pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     db.with_db(move |conn| {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
         conn.execute(
-            "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?1",
-            rusqlite::params![track_id],
+            "UPDATE tracks SET play_count = play_count + 1, last_played = ?1 WHERE id = ?2",
+            rusqlite::params![now, track_id],
         )
         .map_err(|e| format!("Play count update failed: {}", e))?;
         Ok::<_, String>(())

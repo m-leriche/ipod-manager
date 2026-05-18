@@ -22,6 +22,7 @@ export interface LibraryTrack {
   file_size: number;
   created_at: number;
   play_count: number;
+  last_played: number | null;
   flagged: boolean;
   rating: number;
 }
@@ -121,6 +122,7 @@ export interface PlaylistTrack {
   file_size: number;
   created_at: number;
   play_count: number;
+  last_played: number | null;
   flagged: boolean;
   rating: number;
 }

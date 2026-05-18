@@ -126,6 +126,7 @@ mod tests {
                 file_size: 0,
                 created_at: 0,
                 play_count: 0,
+                last_played: None,
                 flagged: false,
                 rating: 0,
             },

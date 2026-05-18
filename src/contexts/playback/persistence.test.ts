@@ -34,6 +34,7 @@ const stubTrack: LibraryTrack = {
   format: "flac",
   created_at: 0,
   play_count: 0,
+  last_played: null,
   flagged: false,
   rating: 0,
 };

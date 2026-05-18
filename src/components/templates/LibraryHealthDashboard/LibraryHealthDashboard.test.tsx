@@ -33,6 +33,7 @@ const makeMockTrack = (id: number, fileName: string, artist: string): LibraryTra
   file_size: 30000000,
   created_at: 0,
   play_count: 0,
+  last_played: null,
   flagged: false,
   rating: 0,
 });

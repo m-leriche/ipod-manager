@@ -254,6 +254,33 @@ export const confidenceColor = (confidence: number): string => {
 export const totalIssueCount = (album: AlbumRepairReport): number =>
   album.issue_summary.error_count + album.issue_summary.warning_count + album.issue_summary.info_count;
 
+export const fieldLabel = (field: string): string => {
+  switch (field) {
+    case "title":
+      return "Title";
+    case "artist":
+      return "Artist";
+    case "album":
+      return "Album";
+    case "album_artist":
+      return "Album Artist";
+    case "sort_artist":
+      return "Sort Artist";
+    case "sort_album_artist":
+      return "Sort Album Artist";
+    case "track":
+      return "Track #";
+    case "track_total":
+      return "Track Total";
+    case "year":
+      return "Year";
+    case "genre":
+      return "Genre";
+    default:
+      return field;
+  }
+};
+
 export const allIssueKeys = (albums: AlbumRepairReport[]): Set<string> => {
   const keys = new Set<string>();
   for (const album of albums) {

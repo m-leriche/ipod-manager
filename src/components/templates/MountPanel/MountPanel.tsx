@@ -72,9 +72,9 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
     setStatus("mounting");
     setMessage({ text: "Mounting iPod...", type: "info" });
     try {
-      await invoke("mount_ipod", { identifier: diskInfo.identifier, password });
+      const mountedAt = await invoke<string>("mount_ipod", { identifier: diskInfo.identifier, password });
       setPassword("");
-      setMessage({ text: "Mounted at /Volumes/IPOD", type: "success" });
+      setMessage({ text: `Mounted at ${mountedAt}`, type: "success" });
       await detectIPod();
     } catch (err) {
       setMessage({ text: `${err}`, type: "error" });

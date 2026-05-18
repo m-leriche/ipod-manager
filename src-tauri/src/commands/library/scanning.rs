@@ -3,7 +3,7 @@ use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
 use crate::watcher;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn scan_library_stats(
@@ -118,6 +118,7 @@ pub async fn refresh_library(
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<(), AppError> {
+    auto_backup(&app, &db);
     let flag = cancel.new_flag();
     db.with_db(move |conn| library::rescan_all_folders(conn, &app, &flag))
         .await
@@ -129,6 +130,7 @@ pub async fn background_rescan(
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<library::BackgroundScanResult, AppError> {
+    auto_backup(&app, &db);
     let flag = cancel.new_flag();
     let result = db
         .with_db(move |conn| library::background_rescan_all_folders(conn, &flag))
@@ -173,4 +175,21 @@ pub async fn get_library_folders(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryFolder>, AppError> {
     db.with_db(library::get_folders).await
+}
+
+/// Best-effort automatic backup before destructive operations.
+/// Failures are logged but never block the caller.
+fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
+    let db_path = match app.path().app_data_dir() {
+        Ok(dir) => dir.join("library.db"),
+        Err(_) => return,
+    };
+    let conn = match db.lock_conn() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    match library::backup::create_backup(&conn, &db_path) {
+        Ok(info) => log::info!("Auto-backup created: {}", info.path),
+        Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
+    }
 }

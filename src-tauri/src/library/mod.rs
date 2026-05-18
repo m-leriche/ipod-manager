@@ -1,3 +1,4 @@
+pub mod backup;
 mod delete;
 pub mod duplicates;
 pub mod export;

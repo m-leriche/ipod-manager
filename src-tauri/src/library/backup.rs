@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 /// Maximum number of automatic backups to keep before pruning old ones.
@@ -16,6 +17,9 @@ pub struct BackupInfo {
 #[derive(Debug, Clone, Serialize)]
 pub struct RestoreResult {
     pub restored_from: String,
+    /// The app should be restarted after a restore so the live database
+    /// connection picks up the restored data.
+    pub restart_required: bool,
 }
 
 /// Create a timestamped backup of the library database using SQLite's
@@ -25,12 +29,14 @@ pub fn create_backup(conn: &Connection, db_path: &Path) -> Result<BackupInfo, St
     let backup_dir = backup_dir(db_path);
     fs::create_dir_all(&backup_dir).map_err(|e| format!("Failed to create backup dir: {}", e))?;
 
-    let timestamp = std::time::SystemTime::now()
+    // Use millisecond precision to avoid collisions when two backups
+    // are created within the same second (e.g. manual + auto-backup).
+    let timestamp_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
+        .as_millis() as i64;
 
-    let backup_name = format!("library_{}.db", timestamp);
+    let backup_name = format!("library_{}.db", timestamp_ms);
     let backup_path = backup_dir.join(&backup_name);
 
     // Use SQLite's backup API for a consistent snapshot
@@ -51,7 +57,7 @@ pub fn create_backup(conn: &Connection, db_path: &Path) -> Result<BackupInfo, St
     Ok(BackupInfo {
         path: backup_path.to_string_lossy().to_string(),
         size,
-        created_at: timestamp as i64,
+        created_at: timestamp_ms,
     })
 }
 
@@ -99,11 +105,15 @@ pub fn restore_backup(db_path: &Path, backup_path: &str) -> Result<RestoreResult
         return Err(format!("Backup file not found: {}", backup_path));
     }
 
-    // Validate it's a real SQLite database
-    let header = fs::read(backup).map_err(|e| format!("Failed to read backup: {}", e))?;
-    if header.len() < 16 || &header[..16] != b"SQLite format 3\0" {
+    // Validate the SQLite magic header (first 16 bytes only)
+    let mut header = [0u8; 16];
+    let mut file = fs::File::open(backup).map_err(|e| format!("Failed to open backup: {}", e))?;
+    file.read_exact(&mut header)
+        .map_err(|e| format!("Failed to read backup header: {}", e))?;
+    if header != *b"SQLite format 3\0" {
         return Err("Invalid backup file: not a SQLite database".to_string());
     }
+    drop(file);
 
     fs::copy(backup, db_path).map_err(|e| format!("Failed to restore backup: {}", e))?;
 
@@ -115,6 +125,7 @@ pub fn restore_backup(db_path: &Path, backup_path: &str) -> Result<RestoreResult
 
     Ok(RestoreResult {
         restored_from: backup_path.to_string(),
+        restart_required: true,
     })
 }
 
@@ -123,9 +134,15 @@ fn backup_dir(db_path: &Path) -> PathBuf {
 }
 
 fn prune_old_backups(backup_dir: &Path) {
-    let mut entries: Vec<(PathBuf, i64)> = fs::read_dir(backup_dir)
-        .into_iter()
-        .flatten()
+    let dir_iter = match fs::read_dir(backup_dir) {
+        Ok(iter) => iter,
+        Err(e) => {
+            log::warn!("Failed to read backup dir for pruning: {}", e);
+            return;
+        }
+    };
+
+    let mut entries: Vec<(PathBuf, i64)> = dir_iter
         .filter_map(|e| {
             let entry = e.ok()?;
             let name = entry.file_name().to_string_lossy().to_string();
@@ -237,15 +254,31 @@ mod tests {
     #[test]
     fn prune_keeps_max_backups() {
         let (_dir, db_path, conn) = setup_test_db();
+        let backup_dir = db_path.parent().unwrap().join("backups");
+        fs::create_dir_all(&backup_dir).unwrap();
 
-        // Create MAX_BACKUPS + 3 backups
-        for _ in 0..MAX_BACKUPS + 3 {
-            create_backup(&conn, &db_path).unwrap();
-            // Small delay so timestamps differ
-            std::thread::sleep(std::time::Duration::from_millis(10));
+        // Create MAX_BACKUPS + 3 backup files with distinct timestamps
+        // directly, to avoid relying on wall-clock millisecond gaps.
+        for i in 0..(MAX_BACKUPS + 3) {
+            let name = format!("library_{}.db", 1000 + i);
+            let path = backup_dir.join(&name);
+            // Write a minimal SQLite-like file so list_backups picks it up
+            fs::write(&path, b"placeholder").unwrap();
         }
 
+        // Verify all 13 exist before pruning
+        let before: Vec<_> = fs::read_dir(&backup_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(before.len(), MAX_BACKUPS + 3);
+
+        // Run a real backup which triggers prune
+        create_backup(&conn, &db_path).unwrap();
+
         let list = list_backups(&db_path).unwrap();
-        assert!(list.len() <= MAX_BACKUPS);
+        // MAX_BACKUPS + 3 pre-existing + 1 from create_backup = 14,
+        // pruned down to MAX_BACKUPS
+        assert_eq!(list.len(), MAX_BACKUPS);
     }
 }

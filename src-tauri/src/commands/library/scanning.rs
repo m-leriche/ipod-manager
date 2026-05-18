@@ -130,7 +130,7 @@ pub async fn refresh_library(
     cancel: State<'_, SyncCancel>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<(), AppError> {
-    auto_backup(&app, &db);
+    auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
     db.with_db(move |conn| library::rescan_all_folders(conn, &app, &flag))
         .await?;
@@ -145,7 +145,7 @@ pub async fn background_rescan(
     cancel: State<'_, SyncCancel>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<library::BackgroundScanResult, AppError> {
-    auto_backup(&app, &db);
+    auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
     let result = db
         .with_db(move |conn| library::background_rescan_all_folders(conn, &flag))
@@ -200,18 +200,23 @@ pub async fn get_library_folders(
 }
 
 /// Best-effort automatic backup before destructive operations.
+/// Runs on a blocking thread to avoid stalling the Tokio runtime.
 /// Failures are logged but never block the caller.
-fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
+async fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
     let db_path = match app.path().app_data_dir() {
         Ok(dir) => dir.join("library.db"),
         Err(_) => return,
     };
-    let conn = match db.lock_conn() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    match library::backup::create_backup(&conn, &db_path) {
-        Ok(info) => log::info!("Auto-backup created: {}", info.path),
-        Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
-    }
+    let conn_arc = db.conn_arc();
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let conn = match conn_arc.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        match library::backup::create_backup(&conn, &db_path) {
+            Ok(info) => log::info!("Auto-backup created: {}", info.path),
+            Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
+        }
+    })
+    .await;
 }

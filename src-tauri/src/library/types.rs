@@ -25,6 +25,7 @@ pub struct LibraryTrack {
     pub file_size: u64,
     pub created_at: i64,
     pub play_count: u32,
+    pub last_played: Option<i64>,
     pub flagged: bool,
     pub rating: u8,
 }

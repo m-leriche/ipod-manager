@@ -149,6 +149,9 @@ pub(super) fn build_order_by(filter: &LibraryFilter) -> String {
         Some("play_count") => {
             format!("play_count {dir}, {sk_artist}, {sk_album}, COALESCE(track_number, 0)")
         }
+        Some("last_played") => {
+            format!("COALESCE(last_played, 0) {dir}, {sk_artist}, {sk_album}, {disc_track}")
+        }
         Some("flagged") => format!("flagged {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("rating") => format!("rating {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         _ => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
@@ -159,7 +162,7 @@ pub(crate) const SELECT_COLUMNS: &str =
     "id, file_path, file_name, folder_path, title, artist, album, album_artist,
      sort_artist, sort_album_artist, track_number, track_total, disc_number,
      disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-     file_size, created_at, play_count, flagged, rating";
+     file_size, created_at, play_count, last_played, flagged, rating";
 
 pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
     Ok(LibraryTrack {
@@ -186,7 +189,8 @@ pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack
         file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
         created_at: row.get(21)?,
         play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-        flagged: row.get(23)?,
-        rating: row.get::<_, i64>(24).map(|v| v as u8)?,
+        last_played: row.get(23)?,
+        flagged: row.get(24)?,
+        rating: row.get::<_, i64>(25).map(|v| v as u8)?,
     })
 }

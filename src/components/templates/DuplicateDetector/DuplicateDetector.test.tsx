@@ -33,6 +33,7 @@ const MOCK_TRACK_A = {
   file_size: 43_000_000,
   created_at: 1700000000,
   play_count: 5,
+  last_played: null,
   flagged: false,
   rating: 4,
 };

@@ -343,7 +343,10 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   useEffect(() => {
     const handler = (e: Event) => {
       const { trackId } = (e as CustomEvent<{ trackId: number }>).detail;
-      setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, play_count: t.play_count + 1 } : t)));
+      const now = Math.floor(Date.now() / 1000);
+      setTracks((prev) =>
+        prev.map((t) => (t.id === trackId ? { ...t, play_count: t.play_count + 1, last_played: now } : t)),
+      );
     };
     window.addEventListener("play-count-updated", handler);
     return () => window.removeEventListener("play-count-updated", handler);

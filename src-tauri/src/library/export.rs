@@ -44,6 +44,7 @@ pub struct ExportTrack {
     pub format: String,
     pub rating: u8,
     pub play_count: u32,
+    pub last_played: Option<i64>,
     pub flagged: bool,
 }
 
@@ -163,10 +164,11 @@ fn import_library_inner(
 
         if exists {
             conn.execute(
-                "UPDATE tracks SET rating = ?1, play_count = ?2, flagged = ?3 WHERE file_path = ?4",
+                "UPDATE tracks SET rating = ?1, play_count = ?2, last_played = ?3, flagged = ?4 WHERE file_path = ?5",
                 rusqlite::params![
                     track.rating as i64,
                     track.play_count as i64,
+                    track.last_played,
                     track.flagged,
                     track.file_path,
                 ],
@@ -268,7 +270,7 @@ fn export_tracks(conn: &Connection) -> Result<Vec<ExportTrack>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT file_path, file_name, title, artist, album, album_artist, genre,
-                    year, track_number, disc_number, format, rating, play_count, flagged
+                    year, track_number, disc_number, format, rating, play_count, last_played, flagged
              FROM tracks ORDER BY file_path",
         )
         .map_err(|e| format!("DB error: {}", e))?;
@@ -289,7 +291,8 @@ fn export_tracks(conn: &Connection) -> Result<Vec<ExportTrack>, String> {
                 format: r.get::<_, Option<String>>(10)?.unwrap_or_default(),
                 rating: r.get::<_, i64>(11).map(|v| v as u8)?,
                 play_count: r.get::<_, i64>(12).map(|v| v as u32)?,
-                flagged: r.get(13)?,
+                last_played: r.get(13)?,
+                flagged: r.get(14)?,
             })
         })
         .map_err(|e| format!("DB error: {}", e))?;

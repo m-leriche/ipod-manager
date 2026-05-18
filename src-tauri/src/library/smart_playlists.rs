@@ -100,6 +100,9 @@ fn field_to_column(field: &str) -> Result<&'static str, String> {
         "format" => Ok("format"),
         "file_size" => Ok("file_size"),
         "created_at" => Ok("created_at"),
+        // COALESCE maps NULL (never played) to 0, so `greater_than 0` correctly
+        // excludes unplayed tracks and `equals 0` matches them.
+        "last_played" => Ok("COALESCE(last_played, 0)"),
         "flagged" => Ok("flagged"),
         f => Err(format!("Unknown field: {}", f)),
     }
@@ -116,6 +119,7 @@ fn field_type(field: &str) -> FieldType {
     match field {
         "title" | "artist" | "album" | "album_artist" | "genre" | "format" => FieldType::Text,
         "duration_secs" => FieldType::Float,
+        "last_played" => FieldType::Number,
         _ => FieldType::Number,
     }
 }
@@ -305,6 +309,7 @@ pub fn get_smart_playlist_tracks(conn: &Connection, id: i64) -> Result<Vec<Libra
         Some("play_count") => format!("play_count {dir}"),
         Some("duration") => format!("duration_secs {dir}"),
         Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
+        Some("last_played") => format!("COALESCE(last_played, 0) {dir}"),
         Some("date_added") | Some("created_at") => format!("created_at {dir}"),
         _ => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
     };
@@ -318,7 +323,7 @@ pub fn get_smart_playlist_tracks(conn: &Connection, id: i64) -> Result<Vec<Libra
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
                 disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size, created_at, play_count, flagged, rating
+                file_size, created_at, play_count, last_played, flagged, rating
          FROM tracks {} ORDER BY {}{}",
         where_clause, order_by, limit_clause
     );
@@ -355,8 +360,9 @@ pub fn get_smart_playlist_tracks(conn: &Connection, id: i64) -> Result<Vec<Libra
                 file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
                 created_at: row.get(21)?,
                 play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-                flagged: row.get(23)?,
-                rating: row.get::<_, i64>(24).map(|v| v as u8)?,
+                last_played: row.get(23)?,
+                flagged: row.get(24)?,
+                rating: row.get::<_, i64>(25).map(|v| v as u8)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?;

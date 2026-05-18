@@ -2,6 +2,7 @@ use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::libstats;
+use crate::subsonic::SubsonicCacheHandle;
 use crate::watcher;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -36,6 +37,7 @@ pub async fn set_library_location(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<(), AppError> {
     let conn_arc = db.conn_arc();
     let flag = cancel.new_flag();
@@ -54,6 +56,7 @@ pub async fn set_library_location(
     .await
     .map_err(|e| format!("Scan failed: {}", e))??;
 
+    cache.invalidate();
     Ok(())
 }
 
@@ -63,6 +66,7 @@ pub async fn import_to_library(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<library::ImportResult, AppError> {
     let conn_arc = db.conn_arc();
     let flag = cancel.new_flag();
@@ -74,7 +78,7 @@ pub async fn import_to_library(
         })?
     };
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let conn = conn_arc
             .lock()
             .map_err(|e| format!("DB lock failed: {}", e))?;
@@ -82,7 +86,12 @@ pub async fn import_to_library(
     })
     .await
     .map_err(|e| format!("Import failed: {}", e))?
-    .map_err(Into::into)
+    // AppError::Generic is equivalent to Into::into here (From<String> → AppError::Generic),
+    // but explicit because Rust can't infer the target type with multiple From impls.
+    .map_err(AppError::Generic)?;
+
+    cache.invalidate();
+    Ok(result)
 }
 
 #[tauri::command]
@@ -91,6 +100,7 @@ pub async fn add_library_folder(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<(), AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
@@ -109,6 +119,7 @@ pub async fn add_library_folder(
     .await
     .map_err(|e| format!("Scan failed: {}", e))??;
 
+    cache.invalidate();
     Ok(())
 }
 
@@ -117,11 +128,14 @@ pub async fn refresh_library(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<(), AppError> {
     auto_backup(&app, &db);
     let flag = cancel.new_flag();
     db.with_db(move |conn| library::rescan_all_folders(conn, &app, &flag))
-        .await
+        .await?;
+    cache.invalidate();
+    Ok(())
 }
 
 #[tauri::command]
@@ -129,6 +143,7 @@ pub async fn background_rescan(
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<library::BackgroundScanResult, AppError> {
     auto_backup(&app, &db);
     let flag = cancel.new_flag();
@@ -144,6 +159,7 @@ pub async fn background_rescan(
                 removed: result.removed,
             },
         );
+        cache.invalidate();
     }
 
     Ok(result)
@@ -165,9 +181,15 @@ pub async fn get_library_location(db: State<'_, LibraryDb>) -> Result<Option<Str
 }
 
 #[tauri::command]
-pub async fn remove_library_folder(path: String, db: State<'_, LibraryDb>) -> Result<(), AppError> {
+pub async fn remove_library_folder(
+    path: String,
+    db: State<'_, LibraryDb>,
+    cache: State<'_, SubsonicCacheHandle>,
+) -> Result<(), AppError> {
     db.with_db(move |conn| library::remove_folder(conn, &path))
-        .await
+        .await?;
+    cache.invalidate();
+    Ok(())
 }
 
 #[tauri::command]

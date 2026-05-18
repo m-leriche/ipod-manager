@@ -117,7 +117,7 @@ pub fn run() {
                     .unwrap_or_else(|| "admin".to_string());
                 (user, pass)
             };
-            let subsonic_server = subsonic::start_server(
+            let (subsonic_server, cache_handle) = subsonic::start_server(
                 subsonic_db_path,
                 cache_dir,
                 subsonic_port,
@@ -125,6 +125,7 @@ pub fn run() {
                 subsonic_pass,
             );
             app.manage(subsonic_server);
+            app.manage(cache_handle);
 
             // Initialize system media key handling (Now Playing integration)
             match mediakeys::init(app.handle()) {

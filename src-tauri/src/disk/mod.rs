@@ -6,7 +6,7 @@ mod tests;
 use serde::{Deserialize, Serialize};
 
 pub use detection::detect_ipod_disk;
-pub use mount::{mount_ipod_disk, unmount_ipod_disk};
+pub use mount::{mount_ipod_disk, unmount_ipod_disk, DEFAULT_MOUNT_POINT};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskInfo {

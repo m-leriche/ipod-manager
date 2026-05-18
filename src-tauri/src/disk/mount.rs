@@ -1,8 +1,12 @@
 use std::process::Command;
 
-/// Mount the iPod at /Volumes/IPOD using sudo mount -t msdos.
+/// Default mount point used when no volume name is available.
+pub const DEFAULT_MOUNT_POINT: &str = "/Volumes/IPOD";
+
+/// Mount the iPod using `sudo mount -t msdos`.
+/// `mount_point` controls where the volume appears (e.g. `/Volumes/IPOD`).
 /// Password is piped to sudo via stdin.
-pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
+pub fn mount_ipod_disk(identifier: &str, password: &str, mount_point: &str) -> Result<(), String> {
     fn sudo_run(password: &str, args: &[&str]) -> Result<String, String> {
         use std::io::Write;
         use std::process::Stdio;
@@ -44,7 +48,7 @@ pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
     );
 
     // Step 2: Create mount point
-    sudo_run(password, &["mkdir", "-p", "/Volumes/IPOD"])
+    sudo_run(password, &["mkdir", "-p", mount_point])
         .map_err(|e| format!("Failed to create mount point: {e}"))?;
 
     // Step 3: Mount as FAT32
@@ -55,7 +59,7 @@ pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
             "-t",
             "msdos",
             &format!("/dev/{}", identifier),
-            "/Volumes/IPOD",
+            mount_point,
         ],
     )
     .map_err(|e| format!("Mount failed: {e}"))?;
@@ -63,10 +67,10 @@ pub fn mount_ipod_disk(identifier: &str, password: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Unmount the iPod from /Volumes/IPOD.
-pub fn unmount_ipod_disk() -> Result<(), String> {
+/// Unmount the iPod at the given mount point.
+pub fn unmount_ipod_disk(mount_point: &str) -> Result<(), String> {
     let output = Command::new("diskutil")
-        .args(["unmount", "/Volumes/IPOD"])
+        .args(["unmount", mount_point])
         .output()
         .map_err(|e| format!("Failed to run diskutil: {e}"))?;
 

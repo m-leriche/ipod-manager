@@ -17,7 +17,7 @@ use tower_http::compression::CompressionLayer;
 
 /// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
 /// Avoids repeated full-table scans when Subsonic clients sync thousands of
-/// artists/albums. Not invalidated on library changes — a server restart rebuilds it.
+/// artists/albums. Invalidated when the library changes (scan, import, delete).
 pub struct StableIdCache {
     /// Maps "ar123456" → "The Beatles"
     pub artists: HashMap<String, String>,
@@ -38,6 +38,35 @@ pub struct SubsonicState {
     pub username: String,
     pub password: String,
     pub id_cache: RwLock<Option<StableIdCache>>,
+}
+
+impl SubsonicState {
+    /// Clear the cached ID mappings so they are rebuilt from the database
+    /// on the next Subsonic request. Call this after any library mutation
+    /// (scan, import, delete, rename) that adds/removes artists or albums.
+    pub fn invalidate_cache(&self) {
+        match self.id_cache.write() {
+            Ok(mut cache) => {
+                *cache = None;
+                log::info!("Subsonic ID cache invalidated");
+            }
+            Err(e) => {
+                log::error!("Failed to invalidate Subsonic cache (poisoned lock): {e}");
+            }
+        }
+    }
+}
+
+/// Handle stored in Tauri managed state so library commands can
+/// invalidate the Subsonic cache after mutations.
+pub struct SubsonicCacheHandle {
+    state: Arc<SubsonicState>,
+}
+
+impl SubsonicCacheHandle {
+    pub fn invalidate(&self) {
+        self.state.invalidate_cache();
+    }
 }
 
 /// Open a read-only SQLite connection for a Subsonic request.
@@ -107,7 +136,7 @@ pub fn start_server(
     port: u16,
     username: String,
     password: String,
-) -> SubsonicServer {
+) -> (SubsonicServer, SubsonicCacheHandle) {
     if username == "admin" && password == "admin" {
         log::warn!(
             "Subsonic server using default credentials (admin/admin). \
@@ -161,7 +190,11 @@ pub fn start_server(
             state.clone(),
             auth::auth_middleware,
         ))
-        .with_state(state);
+        .with_state(state.clone());
+
+    let cache_handle = SubsonicCacheHandle {
+        state: state.clone(),
+    };
 
     let app = Router::new()
         .route("/", any(|| async { "Crate Subsonic Server" }))
@@ -185,5 +218,41 @@ pub fn start_server(
         }
     });
 
-    SubsonicServer { port }
+    (SubsonicServer { port }, cache_handle)
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn make_state() -> SubsonicState {
+        SubsonicState {
+            db_path: PathBuf::from("/tmp/test.db"),
+            cache_dir: PathBuf::from("/tmp/cache"),
+            username: "admin".to_string(),
+            password: "admin".to_string(),
+            id_cache: RwLock::new(Some(StableIdCache {
+                artists: HashMap::from([("ar1".to_string(), "Artist".to_string())]),
+                albums: HashMap::new(),
+                album_folders: HashMap::new(),
+            })),
+        }
+    }
+
+    #[test]
+    fn invalidate_clears_cache() {
+        let state = make_state();
+        assert!(state.id_cache.read().unwrap().is_some());
+
+        state.invalidate_cache();
+        assert!(state.id_cache.read().unwrap().is_none());
+    }
+
+    #[test]
+    fn invalidate_is_idempotent() {
+        let state = make_state();
+        state.invalidate_cache();
+        state.invalidate_cache();
+        assert!(state.id_cache.read().unwrap().is_none());
+    }
 }

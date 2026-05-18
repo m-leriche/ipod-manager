@@ -45,9 +45,14 @@ impl SubsonicState {
     /// on the next Subsonic request. Call this after any library mutation
     /// (scan, import, delete, rename) that adds/removes artists or albums.
     pub fn invalidate_cache(&self) {
-        if let Ok(mut cache) = self.id_cache.write() {
-            *cache = None;
-            log::info!("Subsonic ID cache invalidated");
+        match self.id_cache.write() {
+            Ok(mut cache) => {
+                *cache = None;
+                log::info!("Subsonic ID cache invalidated");
+            }
+            Err(e) => {
+                log::error!("Failed to invalidate Subsonic cache (poisoned lock): {e}");
+            }
         }
     }
 }
@@ -214,4 +219,40 @@ pub fn start_server(
     });
 
     (SubsonicServer { port }, cache_handle)
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn make_state() -> SubsonicState {
+        SubsonicState {
+            db_path: PathBuf::from("/tmp/test.db"),
+            cache_dir: PathBuf::from("/tmp/cache"),
+            username: "admin".to_string(),
+            password: "admin".to_string(),
+            id_cache: RwLock::new(Some(StableIdCache {
+                artists: HashMap::from([("ar1".to_string(), "Artist".to_string())]),
+                albums: HashMap::new(),
+                album_folders: HashMap::new(),
+            })),
+        }
+    }
+
+    #[test]
+    fn invalidate_clears_cache() {
+        let state = make_state();
+        assert!(state.id_cache.read().unwrap().is_some());
+
+        state.invalidate_cache();
+        assert!(state.id_cache.read().unwrap().is_none());
+    }
+
+    #[test]
+    fn invalidate_is_idempotent() {
+        let state = make_state();
+        state.invalidate_cache();
+        state.invalidate_cache();
+        assert!(state.id_cache.read().unwrap().is_none());
+    }
 }

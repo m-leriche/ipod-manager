@@ -86,6 +86,8 @@ pub async fn import_to_library(
     })
     .await
     .map_err(|e| format!("Import failed: {}", e))?
+    // AppError::Generic is equivalent to Into::into here (From<String> → AppError::Generic),
+    // but explicit because Rust can't infer the target type with multiple From impls.
     .map_err(AppError::Generic)?;
 
     cache.invalidate();

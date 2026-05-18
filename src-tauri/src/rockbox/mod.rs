@@ -2,10 +2,12 @@ mod parser;
 mod reader;
 #[cfg(test)]
 mod tests;
+mod writer;
 
 use serde::Serialize;
 
 pub use reader::read_rockbox_playdata;
+pub use writer::{write_rockbox_playdata, RockboxTrackUpdate, WriteResult};
 
 // ── Public Types ────────────────────────────────────────────────
 

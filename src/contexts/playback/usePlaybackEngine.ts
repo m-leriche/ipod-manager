@@ -25,25 +25,23 @@ const shuffleIndices = (length: number, currentIndex: number): number[] => {
 
 // ── Initial state ───────────────────────────────────────────────
 
-const restoredState = loadPlaybackState();
-
 const initialState: PlaybackState = {
-  currentTrack: restoredState?.currentTrack ?? null,
+  currentTrack: null,
   isPlaying: false,
   volume: loadVolume(),
   speed: 1.0,
   crossfade: loadCrossfade(),
-  queue: restoredState?.queue ?? [],
-  queueIndex: restoredState?.queueIndex ?? -1,
-  shuffle: restoredState?.shuffle ?? false,
-  repeat: restoredState?.repeat ?? "off",
+  queue: [],
+  queueIndex: -1,
+  shuffle: false,
+  repeat: "off",
   libraryAvailable: true,
   playbackError: null,
 };
 
 const initialTime: PlaybackTimeState = {
-  currentTime: restoredState?.position ?? 0,
-  duration: restoredState?.currentTrack?.duration_secs ?? 0,
+  currentTime: 0,
+  duration: 0,
 };
 
 // ── Hook ────────────────────────────────────────────────────────
@@ -87,7 +85,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const trackStartedAtRef = useRef<number>(0);
 
   // Restored position for resume-from-where-you-left-off
-  const restoredPositionRef = useRef(restoredState?.position ?? 0);
+  const restoredPositionRef = useRef(0);
+
+  // Whether the queue has been restored from SQLite (prevents saving empty state on mount)
+  const queueRestoredRef = useRef(false);
 
   // ── Set initial volume and crossfade on the Rust engine ─────
   useEffect(() => {
@@ -96,15 +97,39 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Persist playback state to localStorage ──────────────────
+  // ── Restore queue from SQLite on mount ──────────────────────
   useEffect(() => {
-    savePlaybackState(state, timeRef.current.currentTime);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only persist on specific state changes
+    loadPlaybackState().then((restored) => {
+      queueRestoredRef.current = true;
+      if (!restored) return;
+      restoredPositionRef.current = restored.position;
+      setState((prev) => ({
+        ...prev,
+        queue: restored.queue,
+        queueIndex: restored.queueIndex,
+        currentTrack: restored.currentTrack,
+        shuffle: restored.shuffle,
+        repeat: restored.repeat,
+      }));
+      setTime({
+        currentTime: restored.position,
+        duration: restored.currentTrack?.duration_secs ?? 0,
+      });
+    });
+  }, []);
+
+  // ── Persist playback state to SQLite (debounced) ─────────────
+  useEffect(() => {
+    if (!queueRestoredRef.current) return;
+    const timer = setTimeout(() => {
+      savePlaybackState(stateRef.current, timeRef.current.currentTime);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [state.currentTrack, state.queue, state.queueIndex, state.shuffle, state.repeat]);
 
   // Also persist position periodically while playing
   useEffect(() => {
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || !queueRestoredRef.current) return;
     const interval = setInterval(() => {
       savePlaybackState(stateRef.current, timeRef.current.currentTime);
     }, 5000);

@@ -12,22 +12,32 @@ pub async fn detect_ipod() -> Result<Option<DiskInfo>, AppError> {
 }
 
 #[tauri::command]
-pub async fn mount_ipod(identifier: String, password: String) -> Result<(), AppError> {
+pub async fn mount_ipod(
+    identifier: String,
+    password: String,
+    mount_point: Option<String>,
+) -> Result<String, AppError> {
     if !identifier.starts_with("disk")
         || identifier.len() <= 4
         || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
     {
         return Err(AppError::InvalidInput("Invalid disk identifier".into()));
     }
-    tauri::async_runtime::spawn_blocking(move || disk::mount_ipod_disk(&identifier, &password))
-        .await
-        .map_err(|e| format!("Mount failed: {}", e))?
-        .map_err(Into::into)
+    let mp = mount_point.unwrap_or_else(|| disk::DEFAULT_MOUNT_POINT.to_string());
+    let mp_clone = mp.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        disk::mount_ipod_disk(&identifier, &password, &mp_clone)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("Mount failed: {}", e)))?
+    .map_err(AppError::Generic)?;
+    Ok(mp)
 }
 
 #[tauri::command]
-pub async fn unmount_ipod() -> Result<(), AppError> {
-    tauri::async_runtime::spawn_blocking(disk::unmount_ipod_disk)
+pub async fn unmount_ipod(mount_point: Option<String>) -> Result<(), AppError> {
+    let mp = mount_point.unwrap_or_else(|| disk::DEFAULT_MOUNT_POINT.to_string());
+    tauri::async_runtime::spawn_blocking(move || disk::unmount_ipod_disk(&mp))
         .await
         .map_err(|e| format!("Unmount failed: {}", e))?
         .map_err(Into::into)

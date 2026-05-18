@@ -1,18 +1,23 @@
 use crate::error::AppError;
 use crate::library::{self, LibraryDb};
+use crate::subsonic::SubsonicCacheHandle;
 use tauri::State;
 
 #[tauri::command]
 pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
     db: State<'_, LibraryDb>,
+    cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<usize, AppError> {
-    db.with_db(move |conn| {
-        let library_root = library::get_library_location(conn)
-            .ok_or_else(|| "No library location set".to_string())?;
-        library::delete_tracks(conn, &library_root, &track_ids)
-    })
-    .await
+    let result = db
+        .with_db(move |conn| {
+            let library_root = library::get_library_location(conn)
+                .ok_or_else(|| "No library location set".to_string())?;
+            library::delete_tracks(conn, &library_root, &track_ids)
+        })
+        .await?;
+    cache.invalidate();
+    Ok(result)
 }
 
 #[tauri::command]

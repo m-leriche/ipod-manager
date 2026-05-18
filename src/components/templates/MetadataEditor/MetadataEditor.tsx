@@ -21,7 +21,13 @@ import { useQualityActions } from "./useQualityActions";
 import { useIdentifyActions } from "./useIdentifyActions";
 import { IdentifyPanel } from "./IdentifyPanel";
 import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
-import type { TrackMetadata, MetadataSaveProgress, MetadataSaveResult, SanitizeResult } from "../../../types/metadata";
+import type {
+  TrackMetadata,
+  MetadataUpdate,
+  MetadataSaveProgress,
+  MetadataSaveResult,
+  SanitizeResult,
+} from "../../../types/metadata";
 import type { Phase, View, EditableFields, SanitizeModalOptions } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
@@ -58,6 +64,7 @@ export const MetadataEditor = ({
   const [repairingArt, setRepairingArt] = useState(false);
   const [artCacheBust, setArtCacheBust] = useState(0);
   const [sanitizerOpen, setSanitizerOpen] = useState(false);
+  const [undoOperations, setUndoOperations] = useState<MetadataUpdate[] | null>(null);
   const lastScanPaths = useRef<string[]>([]);
 
   const cancel = cancelSync;
@@ -94,6 +101,7 @@ export const MetadataEditor = ({
     failProgress,
     cancel,
     refreshTracks,
+    setUndoOperations,
   );
 
   const identify = useIdentifyActions(
@@ -106,6 +114,7 @@ export const MetadataEditor = ({
     cancel,
     refreshTracks,
     setView,
+    setUndoOperations,
   );
 
   const quality = useQualityActions(setPhase, setError, startProgress, finishProgress, failProgress, cancel, setView);
@@ -118,6 +127,7 @@ export const MetadataEditor = ({
     setPhase("scanning");
     setError(null);
     setSaveResult(null);
+    setUndoOperations(null);
     setTracks([]);
     setEditedTracks({});
     setSelected(new Set());
@@ -264,12 +274,14 @@ export const MetadataEditor = ({
     setPhase("saving");
     setSaveResult(null);
     setSaveProgress(null);
+    setUndoOperations(null);
     startProgress("Saving metadata...", cancel);
     try {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       setSaveProgress(null);
       setSaveResult(result);
       if (result.succeeded > 0) {
+        setUndoOperations(result.undo_operations);
         setTracks((prev) =>
           prev.map((t) => {
             const edited = editedTracks[t.file_path];
@@ -295,6 +307,31 @@ export const MetadataEditor = ({
       }
       setPhase("scanned");
       finishProgress(`Saved ${result.succeeded} of ${result.total} files`);
+    } catch (e) {
+      setError(`${e}`);
+      setPhase("scanned");
+      failProgress(`${e}`);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!undoOperations || undoOperations.length === 0) return;
+
+    const ops = undoOperations;
+    setUndoOperations(null);
+    setSaveResult(null);
+    setPhase("saving");
+    setSaveProgress(null);
+    startProgress("Undoing changes...", cancel);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
+      setSaveProgress(null);
+      setSaveResult(result);
+      setPhase("scanned");
+      finishProgress(`Undid ${result.succeeded} of ${result.total} files`);
+      if (result.succeeded > 0) {
+        refreshTracks();
+      }
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");
@@ -418,7 +455,9 @@ export const MetadataEditor = ({
         saveResult={saveResult}
         saveProgress={saveProgress}
         progressActive={progressState.active}
+        canUndo={undoOperations !== null && undoOperations.length > 0}
         onCancel={cancel}
+        onUndo={handleUndo}
       />
 
       {/* Main content */}

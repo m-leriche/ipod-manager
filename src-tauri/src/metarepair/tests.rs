@@ -22,6 +22,8 @@ fn make_track(
         sort_album_artist: None,
         track,
         track_total: None,
+        disc_number: None,
+        disc_total: None,
         year: Some(1969),
         genre: Some("Rock".to_string()),
     }

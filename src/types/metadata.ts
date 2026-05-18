@@ -47,6 +47,7 @@ export interface MetadataSaveResult {
   failed: number;
   cancelled: boolean;
   errors: string[];
+  undo_operations: MetadataUpdate[];
 }
 
 export interface SanitizeProgress {

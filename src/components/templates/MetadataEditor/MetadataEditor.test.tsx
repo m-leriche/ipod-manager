@@ -4,8 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MetadataEditor } from "./MetadataEditor";
+import { MetadataStatusBanners } from "./MetadataStatusBanners";
 import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
-import type { TrackMetadata } from "../../../types/metadata";
+import type { TrackMetadata, MetadataSaveResult } from "../../../types/metadata";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
@@ -227,5 +228,67 @@ describe("trackToEditable", () => {
     const edited = trackToEditable(TRACKS[0]);
     expect(edited.track).toBe("1");
     expect(edited.year).toBe("1969");
+  });
+});
+
+// ── Status banner undo button ──────────────────────────────────
+
+describe("MetadataStatusBanners undo", () => {
+  const baseBannerProps = {
+    view: "edit" as const,
+    phase: "scanned",
+    error: null,
+    repairReport: null,
+    identifyResults: null,
+    identifyMatchedCount: 0,
+    identifyChosenCount: 0,
+    qualityFiles: [],
+    qualityCounts: { lossless: 0, lossy: 0, suspect: 0 },
+    saveProgress: null,
+    progressActive: false,
+    onCancel: vi.fn(),
+    onUndo: vi.fn(),
+  };
+
+  it("shows undo button when canUndo is true", () => {
+    const saveResult: MetadataSaveResult = {
+      total: 3,
+      succeeded: 3,
+      failed: 0,
+      cancelled: false,
+      errors: [],
+      undo_operations: [{ file_path: "/a.mp3" }],
+    };
+    render(<MetadataStatusBanners {...baseBannerProps} saveResult={saveResult} canUndo={true} />);
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  it("hides undo button when canUndo is false", () => {
+    const saveResult: MetadataSaveResult = {
+      total: 3,
+      succeeded: 3,
+      failed: 0,
+      cancelled: false,
+      errors: [],
+      undo_operations: [],
+    };
+    render(<MetadataStatusBanners {...baseBannerProps} saveResult={saveResult} canUndo={false} />);
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("calls onUndo when undo button is clicked", async () => {
+    const user = userEvent.setup();
+    const onUndo = vi.fn();
+    const saveResult: MetadataSaveResult = {
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      cancelled: false,
+      errors: [],
+      undo_operations: [{ file_path: "/a.mp3" }],
+    };
+    render(<MetadataStatusBanners {...baseBannerProps} saveResult={saveResult} canUndo={true} onUndo={onUndo} />);
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onUndo).toHaveBeenCalledTimes(1);
   });
 });

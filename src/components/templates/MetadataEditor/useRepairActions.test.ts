@@ -60,6 +60,7 @@ const makeHookArgs = () => ({
   failProgress: vi.fn(),
   cancel: vi.fn().mockResolvedValue(undefined),
   refreshTracks: vi.fn().mockResolvedValue(undefined),
+  setUndoOperations: vi.fn(),
 });
 
 beforeEach(() => {
@@ -81,6 +82,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
     expect(result.current.report).toBeNull();
@@ -104,6 +106,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -132,6 +135,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -157,6 +161,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -182,6 +187,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -207,6 +213,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -235,6 +242,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -261,6 +269,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -290,6 +299,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -315,6 +325,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -327,7 +338,14 @@ describe("useRepairActions", () => {
   });
 
   it("handleApplyRepairs saves accepted fixes", async () => {
-    const saveResult: MetadataSaveResult = { total: 1, succeeded: 1, failed: 0, cancelled: false, errors: [] };
+    const saveResult: MetadataSaveResult = {
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      cancelled: false,
+      errors: [],
+      undo_operations: [],
+    };
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "repair_analyze") return report;
       if (cmd === "save_metadata") return saveResult;
@@ -346,6 +364,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 
@@ -378,6 +397,7 @@ describe("useRepairActions", () => {
         args.failProgress,
         args.cancel,
         args.refreshTracks,
+        args.setUndoOperations,
       ),
     );
 

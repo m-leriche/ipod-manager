@@ -33,6 +33,8 @@ pub fn read_track(path: &Path) -> TrackMetadata {
                 sort_album_artist: meta.sort_album_artist,
                 track: meta.track,
                 track_total: meta.track_total,
+                disc_number: meta.disc,
+                disc_total: meta.disc_total,
                 year: meta.year,
                 genre: meta.genre,
             };
@@ -58,6 +60,8 @@ pub fn read_track(path: &Path) -> TrackMetadata {
             .map(|s| s.to_string()),
         track: tag.track(),
         track_total: tag.track_total(),
+        disc_number: tag.disk(),
+        disc_total: tag.disk_total(),
         year: tag.year(),
         genre: tag.genre().map(|s| s.to_string()),
     }
@@ -75,6 +79,8 @@ pub(super) fn empty_track(file_path: String, file_name: String) -> TrackMetadata
         sort_album_artist: None,
         track: None,
         track_total: None,
+        disc_number: None,
+        disc_total: None,
         year: None,
         genre: None,
     }

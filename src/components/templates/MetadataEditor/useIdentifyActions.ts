@@ -13,6 +13,7 @@ export const useIdentifyActions = (
   cancel: () => Promise<void>,
   refreshTracks: () => Promise<void>,
   setView: (v: View) => void,
+  setUndoOperations: (ops: MetadataUpdate[] | null) => void,
 ) => {
   const [results, setResults] = useState<IdentifyResult[] | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -118,10 +119,14 @@ export const useIdentifyActions = (
 
     setPhase("saving");
     setSaveResult(null);
+    setUndoOperations(null);
     startProgress("Applying identified metadata...", cancel);
     try {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       setSaveResult(result);
+      if (result.succeeded > 0) {
+        setUndoOperations(result.undo_operations);
+      }
       finishProgress(`Applied metadata to ${result.succeeded} of ${result.total} files`);
       if (result.succeeded > 0) {
         refreshTracks();

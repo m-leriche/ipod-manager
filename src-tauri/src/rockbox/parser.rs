@@ -40,7 +40,7 @@ impl DbVersion {
         }
     }
 
-    fn numeric_offset(self) -> usize {
+    pub(super) fn numeric_offset(self) -> usize {
         // Byte offset within an entry where numeric fields start (after string tag offsets)
         match self {
             DbVersion::V0F => 9 * 4, // 36

@@ -399,11 +399,33 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     setTime({ currentTime: 0, duration: nextTrack.duration_secs });
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
+    trackStartedAtRef.current = Math.floor(Date.now() / 1000);
+    window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
 
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
   }, [getNextIndex, recordPlay, advanceShuffle]);
 
   // ── Gapless transition handler (engine already playing next track) ──
+
+  // Compute the next queue index relative to a given index (for look-ahead preloading)
+  const getNextIndexFrom = useCallback((fromIdx: number): number | null => {
+    const s = stateRef.current;
+    if (s.queue.length === 0) return null;
+
+    if (s.repeat === "one") return fromIdx;
+
+    if (s.shuffle) {
+      const nextPos = shufflePositionRef.current + 1;
+      if (nextPos < shuffleOrderRef.current.length) {
+        return shuffleOrderRef.current[nextPos];
+      }
+      return s.repeat === "all" ? shuffleOrderRef.current[0] : null;
+    }
+
+    const nextIdx = fromIdx + 1;
+    if (nextIdx < s.queue.length) return nextIdx;
+    return s.repeat === "all" ? 0 : null;
+  }, []);
 
   const handleGaplessTransition = useCallback(() => {
     const s = stateRef.current;
@@ -441,14 +463,17 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     setTime({ currentTime: 0, duration: nextTrack.duration_secs });
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
+    trackStartedAtRef.current = Math.floor(Date.now() / 1000);
+    window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
     // Don't invoke audio_play — the engine already transitioned seamlessly
 
-    // Re-preload for continuous seamless looping (preload effect won't re-fire
-    // since queueIndex didn't change)
-    if (s.repeat === "one") {
-      invoke("audio_preload_next", { path: nextTrack.file_path }).catch(() => {});
+    // Immediately preload the next-next track so continuous gapless
+    // playback doesn't depend on the React effect cycle latency.
+    const nextNextIdx = getNextIndexFrom(nextIdx);
+    if (nextNextIdx !== null && s.queue[nextNextIdx]) {
+      invoke("audio_preload_next", { path: s.queue[nextNextIdx].file_path }).catch(() => {});
     }
-  }, [getNextIndex, recordPlay, advanceShuffle]);
+  }, [getNextIndex, getNextIndexFrom, recordPlay, advanceShuffle]);
 
   // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;

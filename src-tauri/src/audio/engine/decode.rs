@@ -89,7 +89,20 @@ impl<R: Runtime> EngineState<R> {
                     filled += pushed;
                 }
                 Ok(None) => {
-                    // EOF
+                    // EOF — flush any leftover samples from the last decoded
+                    // packet into the ring buffer so they aren't lost during
+                    // the transition.
+                    if !self.leftover.is_empty() {
+                        let mut i = 0;
+                        while i < self.leftover.len() {
+                            if prod.try_push(self.leftover[i]).is_err() {
+                                break;
+                            }
+                            i += 1;
+                        }
+                        self.leftover.drain(..i);
+                    }
+
                     if self.crossfade.is_none() && self.preloaded.is_some() {
                         self.shared.set_position(self.source_pos_secs);
                         return (true, false);

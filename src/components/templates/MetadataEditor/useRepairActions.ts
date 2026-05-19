@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { sortAlbumsByIssues, issuesToUpdates, issueKey, allIssueKeys } from "./helpers";
 import type { RepairReport, AlbumRepairReport, Phase } from "./types";
-import type { MetadataSaveResult } from "../../../types/metadata";
+import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { TrackMetadata } from "../../../types/metadata";
 
 export const useRepairActions = (
@@ -16,6 +16,7 @@ export const useRepairActions = (
   failProgress: (msg: string) => void,
   cancel: () => Promise<void>,
   refreshTracks: () => Promise<void>,
+  setUndoOperations: (ops: MetadataUpdate[] | null) => void,
 ) => {
   const [report, setReport] = useState<RepairReport | null>(null);
   const [acceptedFixes, setAcceptedFixes] = useState<Set<string>>(new Set());
@@ -135,11 +136,15 @@ export const useRepairActions = (
     setPhase("saving");
     setSaveProgress(null);
     setSaveResult(null);
+    setUndoOperations(null);
     startProgress("Applying fixes...", cancel);
     try {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       setSaveResult(result);
       setSaveProgress(null);
+      if (result.succeeded > 0) {
+        setUndoOperations(result.undo_operations);
+      }
       finishProgress(`Applied fixes to ${result.succeeded} of ${result.total} files`);
       if (result.succeeded > 0) {
         refreshTracks();

@@ -157,4 +157,19 @@ describe("ProgressContext", () => {
 
     expect(cancelFn).toHaveBeenCalledOnce();
   });
+
+  it("cancel() is safe when no cancel function was provided", () => {
+    const { result } = renderHook(() => useProgress(), { wrapper });
+
+    act(() => {
+      result.current.start("Working");
+    });
+
+    // Should not throw
+    act(() => {
+      result.current.cancel();
+    });
+
+    expect(result.current.state.active).toBe(true);
+  });
 });

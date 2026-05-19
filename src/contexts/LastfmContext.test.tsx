@@ -187,12 +187,10 @@ describe("LastfmContext", () => {
       result.current.actions.connect();
     });
 
-    // Advance through all 40 poll attempts (40 * 3000ms = 120s)
-    for (let i = 0; i < 40; i++) {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3000);
-      });
-    }
+    // Advance through all 40 poll attempts (40 × 3000ms = 120s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
 
     expect(result.current.state.connecting).toBe(false);
     expect(result.current.state.connected).toBe(false);

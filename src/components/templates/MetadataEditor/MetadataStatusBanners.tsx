@@ -16,7 +16,9 @@ interface MetadataStatusBannersProps {
   saveResult: MetadataSaveResult | null;
   saveProgress: MetadataSaveProgress | null;
   progressActive: boolean;
+  canUndo: boolean;
   onCancel: () => void;
+  onUndo: () => void;
 }
 
 export const MetadataStatusBanners = ({
@@ -32,7 +34,9 @@ export const MetadataStatusBanners = ({
   saveResult,
   saveProgress,
   progressActive,
+  canUndo,
   onCancel,
+  onUndo,
 }: MetadataStatusBannersProps) => (
   <>
     {/* Repair summary */}
@@ -76,7 +80,7 @@ export const MetadataStatusBanners = ({
     {/* Save result */}
     {saveResult && (
       <div
-        className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed shrink-0 ${
+        className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed shrink-0 flex items-start justify-between gap-2 ${
           saveResult.cancelled
             ? "bg-warning/10 text-warning"
             : saveResult.failed > 0
@@ -84,16 +88,26 @@ export const MetadataStatusBanners = ({
               : "bg-success/10 text-success"
         }`}
       >
-        {saveResult.cancelled
-          ? `Cancelled \u2014 saved ${saveResult.succeeded} of ${saveResult.total} files before stopping`
-          : `Saved ${saveResult.succeeded} of ${saveResult.total} files`}
-        {!saveResult.cancelled && saveResult.failed > 0 && ` \u2014 ${saveResult.failed} failed`}
-        {saveResult.errors.length > 0 && (
-          <div className="mt-1 text-[10px] opacity-70">
-            {saveResult.errors.slice(0, 3).map((e, i) => (
-              <div key={i}>{e}</div>
-            ))}
-          </div>
+        <div>
+          {saveResult.cancelled
+            ? `Cancelled \u2014 saved ${saveResult.succeeded} of ${saveResult.total} files before stopping`
+            : `Saved ${saveResult.succeeded} of ${saveResult.total} files`}
+          {!saveResult.cancelled && saveResult.failed > 0 && ` \u2014 ${saveResult.failed} failed`}
+          {saveResult.errors.length > 0 && (
+            <div className="mt-1 text-[10px] opacity-70">
+              {saveResult.errors.slice(0, 3).map((e, i) => (
+                <div key={i}>{e}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        {canUndo && (
+          <button
+            onClick={onUndo}
+            className="shrink-0 px-3 py-1 bg-bg-card border border-border text-text-secondary rounded-lg text-[11px] font-medium hover:text-text-primary hover:border-border-active transition-all"
+          >
+            Undo
+          </button>
         )}
       </div>
     )}

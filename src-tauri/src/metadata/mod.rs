@@ -15,11 +15,13 @@ pub struct TrackMetadata {
     pub sort_album_artist: Option<String>,
     pub track: Option<u32>,
     pub track_total: Option<u32>,
+    pub disc_number: Option<u32>,
+    pub disc_total: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetadataUpdate {
     pub file_path: String,
     pub title: Option<String>,
@@ -57,6 +59,7 @@ pub struct MetadataSaveResult {
     pub failed: usize,
     pub cancelled: bool,
     pub errors: Vec<String>,
+    pub undo_operations: Vec<MetadataUpdate>,
 }
 
 pub use read::{scan_metadata, scan_metadata_paths};

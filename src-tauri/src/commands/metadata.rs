@@ -90,7 +90,7 @@ pub async fn save_metadata(
     watcher.stop();
 
     let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
-        let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut result = tauri::async_runtime::spawn_blocking(move || {
             Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
         })
         .await
@@ -123,15 +123,30 @@ pub async fn save_metadata(
             }
 
             if let Some(library_root) = library::get_library_location(&conn) {
+                // Track path changes so undo operations use the correct
+                // (post-reorganization) file paths.
+                let mut path_renames: Vec<(String, String)> = Vec::new();
+
                 for file_path in &file_paths {
                     if !file_path.starts_with(&library_root) {
                         continue;
                     }
                     match library::reorganize_library_file(&conn, &library_root, file_path) {
-                        Ok(Some(_)) => {}
+                        Ok(Some(new_path)) => {
+                            path_renames.push((file_path.clone(), new_path));
+                        }
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("Failed to reorganize {}: {}", file_path, e);
+                        }
+                    }
+                }
+
+                // Update undo operations with new file paths
+                for (old_path, new_path) in &path_renames {
+                    for undo_op in &mut result.undo_operations {
+                        if undo_op.file_path == *old_path {
+                            undo_op.file_path = new_path.clone();
                         }
                     }
                 }

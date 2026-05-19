@@ -64,7 +64,7 @@ export const RepairTrackRow = ({ trackMatch, acceptedFixes, onToggleFix }: Repai
   const [expanded, setExpanded] = useState(trackMatch.issues.length > 0);
 
   const diffFields = useMemo(() => buildDiffFields(trackMatch), [trackMatch]);
-  const issueFields = diffFields.filter((f) => f.issue !== null);
+  const issueFields = diffFields.filter((f): f is DiffField & { issue: TrackIssue } => f.issue !== null);
   const matchingFields = diffFields.filter((f) => f.issue === null);
 
   return (
@@ -74,7 +74,7 @@ export const RepairTrackRow = ({ trackMatch, acceptedFixes, onToggleFix }: Repai
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2 bg-bg-primary/50 hover:bg-bg-hover/50 transition-colors text-left"
       >
-        <span className="text-[10px] text-text-tertiary w-4 shrink-0">{expanded ? "\u25BE" : "\u25B8"}</span>
+        <span className="text-[10px] text-text-tertiary w-4 shrink-0">{expanded ? "▾" : "▸"}</span>
         <span className="text-[11px] text-text-tertiary w-6 text-right shrink-0">{local.track ?? "?"}</span>
         <span className="text-xs text-text-primary font-medium truncate flex-1">{local.title || fileName}</span>
         {trackMatch.issues.length > 0 && (
@@ -105,8 +105,8 @@ export const RepairTrackRow = ({ trackMatch, acceptedFixes, onToggleFix }: Repai
                   <DiffRow
                     key={df.field}
                     diff={df}
-                    accepted={df.issue ? acceptedFixes.has(issueKey(df.issue)) : false}
-                    onToggle={df.issue ? () => onToggleFix(issueKey(df.issue!)) : undefined}
+                    accepted={acceptedFixes.has(issueKey(df.issue))}
+                    onToggle={() => onToggleFix(issueKey(df.issue))}
                   />
                 ))}
               </tbody>
@@ -118,7 +118,7 @@ export const RepairTrackRow = ({ trackMatch, acceptedFixes, onToggleFix }: Repai
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 pl-6">
               {matchingFields.map((df) => (
                 <span key={df.field} className="text-[10px] text-text-tertiary">
-                  {df.label}: <span className="text-text-secondary">{df.localValue || "\u2014"}</span>
+                  {df.label}: <span className="text-text-secondary">{df.localValue || "—"}</span>
                 </span>
               ))}
             </div>
@@ -151,12 +151,12 @@ const DiffRow = ({ diff, accepted, onToggle }: { diff: DiffField; accepted: bool
         {diff.localValue ? (
           <span className={hasSuggestion ? "line-through opacity-60" : ""}>{diff.localValue}</span>
         ) : (
-          <span className="text-text-tertiary italic">{"\u2014"}</span>
+          <span className="text-text-tertiary italic">{"—"}</span>
         )}
       </td>
-      <td className="py-0.5 text-center text-text-tertiary">{hasSuggestion ? "\u2192" : ""}</td>
+      <td className="py-0.5 text-center text-text-tertiary">{hasSuggestion ? "→" : ""}</td>
       <td className="py-0.5 font-medium text-text-primary">
-        {diff.mbValue || <span className="text-text-tertiary italic">{"\u2014"}</span>}
+        {diff.mbValue || <span className="text-text-tertiary italic">{"—"}</span>}
       </td>
     </tr>
   );

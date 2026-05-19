@@ -18,6 +18,8 @@ const track: TrackMetadata = {
   sort_album_artist: null,
   track: 1,
   track_total: null,
+  disc_number: null,
+  disc_total: null,
   year: null,
   genre: null,
 };

@@ -9,6 +9,8 @@ export interface TrackMetadata {
   sort_album_artist: string | null;
   track: number | null;
   track_total: number | null;
+  disc_number: number | null;
+  disc_total: number | null;
   year: number | null;
   genre: string | null;
 }

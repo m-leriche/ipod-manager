@@ -77,6 +77,11 @@ pub fn save_metadata(
 /// captured in `snapshot`.  Only fields that were changed by the original
 /// update are included, so applying the undo operation writes back exactly
 /// the old values without touching anything else.
+///
+/// Note: if a snapshot field was `None` (no tag existed), undo writes an empty
+/// string or zero instead of removing the tag. The `MetadataUpdate` model has
+/// no way to represent "clear this tag" (`None` = "don't touch"), so undo is
+/// not perfectly lossless for previously-untagged fields.
 fn build_undo_operation(update: &MetadataUpdate, snapshot: &TrackMetadata) -> MetadataUpdate {
     MetadataUpdate {
         file_path: update.file_path.clone(),

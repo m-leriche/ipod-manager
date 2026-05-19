@@ -324,6 +324,7 @@ export const MetadataEditor = ({
     setSaveProgress(null);
     startProgress("Undoing changes...", cancel);
     try {
+      // Intentionally not storing undo from undo result (no redo support)
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
       setSaveProgress(null);
       setSaveResult(result);

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 export const useAppEventListeners = ({
@@ -10,32 +10,39 @@ export const useAppEventListeners = ({
   onLibraryChanged: () => void;
   onToggleShortcuts: () => void;
 }) => {
+  const onOpenSettingsRef = useRef(onOpenSettings);
+  onOpenSettingsRef.current = onOpenSettings;
+  const onLibraryChangedRef = useRef(onLibraryChanged);
+  onLibraryChangedRef.current = onLibraryChanged;
+  const onToggleShortcutsRef = useRef(onToggleShortcuts);
+  onToggleShortcutsRef.current = onToggleShortcuts;
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen("open-settings", () => onOpenSettings()).then((fn) => {
+    listen("open-settings", () => onOpenSettingsRef.current()).then((fn) => {
       unlisten = fn;
     });
     return () => unlisten?.();
-  }, [onOpenSettings]);
+  }, []);
 
   // Auto-refresh library when filesystem watcher detects changes
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen("library-changed", () => onLibraryChanged()).then((fn) => {
+    listen("library-changed", () => onLibraryChangedRef.current()).then((fn) => {
       unlisten = fn;
     });
     return () => unlisten?.();
-  }, [onLibraryChanged]);
+  }, []);
 
   // Global Cmd+/ to open keyboard shortcuts dialog
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "/") {
         e.preventDefault();
-        onToggleShortcuts();
+        onToggleShortcutsRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onToggleShortcuts]);
+  }, []);
 };

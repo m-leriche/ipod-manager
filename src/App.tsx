@@ -157,10 +157,11 @@ const AppContent = () => {
     prevMountedRef.current = ipodMounted;
   }, [ipodMounted]);
 
-  const onOpenSettings = useCallback(() => setSettingsOpen(true), []);
-  const onLibraryChanged = useCallback(() => libraryRefreshRef.current?.(), []);
-  const onToggleShortcuts = useCallback(() => setShortcutsOpen((prev) => !prev), []);
-  useAppEventListeners({ onOpenSettings, onLibraryChanged, onToggleShortcuts });
+  useAppEventListeners({
+    onOpenSettings: () => setSettingsOpen(true),
+    onLibraryChanged: () => libraryRefreshRef.current?.(),
+    onToggleShortcuts: () => setShortcutsOpen((prev) => !prev),
+  });
 
   const handleRescan = useCallback(async () => {
     startProgress("Rescanning library...", cancelSync);

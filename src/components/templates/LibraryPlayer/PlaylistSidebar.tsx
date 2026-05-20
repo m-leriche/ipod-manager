@@ -93,19 +93,21 @@ export const PlaylistSidebar = ({
     setContextMenu(null);
   }, []);
 
-  const confirmDelete = useCallback(async () => {
-    if (!pendingDelete) return;
-    try {
-      if (pendingDelete.type === "playlist") {
-        await deletePlaylist(pendingDelete.id);
-      } else {
-        await deleteSmartPlaylist(pendingDelete.id);
+  const confirmDelete = useCallback(
+    async (id: number, type: "playlist" | "smart") => {
+      try {
+        if (type === "playlist") {
+          await deletePlaylist(id);
+        } else {
+          await deleteSmartPlaylist(id);
+        }
+      } catch (e) {
+        toast.error(`Failed to delete ${type === "smart" ? "smart playlist" : "playlist"}: ${e}`);
       }
-    } catch (e) {
-      toast.error(`Failed to delete ${pendingDelete.type === "smart" ? "smart playlist" : "playlist"}: ${e}`);
-    }
-    setPendingDelete(null);
-  }, [pendingDelete, deletePlaylist, deleteSmartPlaylist, toast]);
+      setPendingDelete(null);
+    },
+    [deletePlaylist, deleteSmartPlaylist, toast],
+  );
 
   const handleExport = useCallback(
     async (playlistIds: number[]) => {
@@ -375,7 +377,7 @@ export const PlaylistSidebar = ({
           message={`Are you sure you want to delete "${pendingDelete.name}"? This cannot be undone.`}
           confirmLabel="Delete"
           danger
-          onConfirm={confirmDelete}
+          onConfirm={() => confirmDelete(pendingDelete.id, pendingDelete.type)}
           onCancel={() => setPendingDelete(null)}
         />
       )}

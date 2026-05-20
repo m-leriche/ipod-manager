@@ -110,8 +110,8 @@ export const SyncActions = ({
           confirmLabel="Delete"
           danger
           onConfirm={() => {
-            setPendingAction(null);
             onDeleteTarget();
+            setPendingAction(null);
           }}
           onCancel={() => setPendingAction(null)}
         />
@@ -124,8 +124,8 @@ export const SyncActions = ({
           confirmLabel="Mirror"
           danger
           onConfirm={() => {
-            setPendingAction(null);
             onMirrorToTarget();
+            setPendingAction(null);
           }}
           onCancel={() => setPendingAction(null)}
         />

@@ -61,12 +61,11 @@ const defaultProps = {
   onSmartPlaylistCreate: vi.fn(),
 };
 
-beforeEach(() => {
-  mockDeletePlaylist.mockReset();
-  mockDeleteSmartPlaylist.mockReset();
-});
-
 describe("PlaylistSidebar", () => {
+  beforeEach(() => {
+    mockDeletePlaylist.mockReset();
+    mockDeleteSmartPlaylist.mockReset();
+  });
   it("shows confirmation dialog when deleting a playlist via context menu", async () => {
     const user = userEvent.setup();
     render(<PlaylistSidebar {...defaultProps} />);

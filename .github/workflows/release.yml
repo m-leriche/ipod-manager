@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  # Allow manual trigger for testing the workflow
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Sign & Release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Write the App Store Connect API key to disk for notarization.
+      # The tauri-action handles keychain setup for code signing internally,
+      # but notarytool needs the API key as a file on disk.
+      - name: Write Apple API key
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          if [ -n "$APPLE_API_KEY_CONTENT" ]; then
+            mkdir -p /tmp/apple-keys
+            echo "$APPLE_API_KEY_CONTENT" > /tmp/apple-keys/AuthKey.p8
+          fi
+
+      - name: Build, sign, and create release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS notarization (App Store Connect API)
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: /tmp/apple-keys/AuthKey.p8
+        with:
+          tagName: v__VERSION__
+          releaseName: "Crate v__VERSION__"
+          releaseBody: "See the assets section below to download the installer."
+          releaseDraft: true
+          prerelease: false

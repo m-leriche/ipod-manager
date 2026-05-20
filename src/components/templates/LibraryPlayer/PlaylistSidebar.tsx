@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useToast } from "../../../contexts/ToastContext";
+import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { PlaylistContextMenu, SmartPlaylistIcon, formatExportResult } from "./PlaylistContextMenu";
 import type { PlaylistContextMenuState } from "./PlaylistContextMenu";
 import type { Playlist, SmartPlaylist } from "../../../types/library";
@@ -37,6 +38,9 @@ export const PlaylistSidebar = ({
   const [contextMenu, setContextMenu] = useState<PlaylistContextMenuState | null>(null);
   const [exportMsg, setExportMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string; type: "playlist" | "smart" } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (creating || editingId !== null) inputRef.current?.focus();
@@ -79,28 +83,30 @@ export const PlaylistSidebar = ({
     setEditingId(null);
   }, [inputValue, editingId, renamePlaylist, toast]);
 
-  const handleDelete = useCallback(
-    async (id: number) => {
-      try {
-        await deletePlaylist(id);
-      } catch (e) {
-        toast.error(`Failed to delete playlist: ${e}`);
-      }
-      setContextMenu(null);
-    },
-    [deletePlaylist, toast],
-  );
+  const handleDelete = useCallback((id: number, name: string) => {
+    setPendingDelete({ id, name, type: "playlist" });
+    setContextMenu(null);
+  }, []);
 
-  const handleDeleteSmart = useCallback(
-    async (id: number) => {
+  const handleDeleteSmart = useCallback((id: number, name: string) => {
+    setPendingDelete({ id, name, type: "smart" });
+    setContextMenu(null);
+  }, []);
+
+  const confirmDelete = useCallback(
+    async (id: number, type: "playlist" | "smart") => {
       try {
-        await deleteSmartPlaylist(id);
+        if (type === "playlist") {
+          await deletePlaylist(id);
+        } else {
+          await deleteSmartPlaylist(id);
+        }
       } catch (e) {
-        toast.error(`Failed to delete smart playlist: ${e}`);
+        toast.error(`Failed to delete ${type === "smart" ? "smart playlist" : "playlist"}: ${e}`);
       }
-      setContextMenu(null);
+      setPendingDelete(null);
     },
-    [deleteSmartPlaylist, toast],
+    [deletePlaylist, deleteSmartPlaylist, toast],
   );
 
   const handleExport = useCallback(
@@ -362,6 +368,17 @@ export const PlaylistSidebar = ({
           onDeleteSmart={handleDeleteSmart}
           onExport={handleExport}
           onEditSmartPlaylist={onSmartPlaylistEdit}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete ${pendingDelete.type === "smart" ? "Smart Playlist" : "Playlist"}`}
+          message={`Are you sure you want to delete "${pendingDelete.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => confirmDelete(pendingDelete.id, pendingDelete.type)}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </div>

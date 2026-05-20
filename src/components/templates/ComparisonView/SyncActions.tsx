@@ -1,5 +1,9 @@
+import { useState } from "react";
 import { useProgress } from "../../../contexts/ProgressContext";
+import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import type { SyncActionsProps } from "./types";
+
+type PendingAction = "delete" | "mirror" | null;
 
 export const SyncActions = ({
   syncing,
@@ -15,6 +19,7 @@ export const SyncActions = ({
   onCancel,
 }: SyncActionsProps) => {
   const { state: progressState } = useProgress();
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   return (
     <div className="shrink-0 flex flex-col gap-3">
@@ -50,7 +55,7 @@ export const SyncActions = ({
         <div className="flex gap-2.5 shrink-0">
           <button
             disabled={syncing || nMirror === 0}
-            onClick={onMirrorToTarget}
+            onClick={() => setPendingAction("mirror")}
             className="flex-1 py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
           >
             Mirror {nMirror} to iPod {"\u2192"}
@@ -71,7 +76,7 @@ export const SyncActions = ({
           </button>
           <button
             disabled={syncing || nTgt === 0}
-            onClick={onDeleteTarget}
+            onClick={() => setPendingAction("delete")}
             className="py-2.5 px-4 bg-transparent border border-danger/30 text-danger rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-danger/10 disabled:opacity-20 disabled:cursor-not-allowed"
           >
             Delete {nTgt}
@@ -96,6 +101,34 @@ export const SyncActions = ({
             </div>
           )}
         </div>
+      )}
+
+      {pendingAction === "delete" && (
+        <ConfirmDialog
+          title="Delete Files"
+          message={`This will permanently delete ${nTgt} file${nTgt !== 1 ? "s" : ""} from the iPod. This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => {
+            setPendingAction(null);
+            onDeleteTarget();
+          }}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
+
+      {pendingAction === "mirror" && (
+        <ConfirmDialog
+          title="Mirror to iPod"
+          message={`This will sync ${nMirror} file${nMirror !== 1 ? "s" : ""} to the iPod, copying new/modified files and deleting extra files to match the source. This cannot be undone.`}
+          confirmLabel="Mirror"
+          danger
+          onConfirm={() => {
+            setPendingAction(null);
+            onMirrorToTarget();
+          }}
+          onCancel={() => setPendingAction(null)}
+        />
       )}
     </div>
   );

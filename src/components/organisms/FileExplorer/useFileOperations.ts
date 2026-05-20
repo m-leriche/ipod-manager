@@ -38,16 +38,9 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
     [currentPath, reload],
   );
 
-  const handleDelete = useCallback(
+  const executeDelete = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return;
-      const label =
-        paths.length === 1
-          ? `Are you sure you want to delete "${paths[0].split("/").pop()}"?`
-          : `Are you sure you want to delete ${paths.length} items?`;
-      const ok = await confirm(label, { title: "Delete", kind: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
-      if (!ok) return;
-
       if (paths.length === 1) {
         try {
           await invoke("delete_entry", { path: paths[0] });
@@ -64,6 +57,20 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
       reload();
     },
     [reload],
+  );
+
+  const handleDelete = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return;
+      const label =
+        paths.length === 1
+          ? `Are you sure you want to delete "${paths[0].split("/").pop()}"?`
+          : `Are you sure you want to delete ${paths.length} items?`;
+      const ok = await confirm(label, { title: "Delete", kind: "warning", okLabel: "Delete", cancelLabel: "Cancel" });
+      if (!ok) return;
+      await executeDelete(paths);
+    },
+    [executeDelete],
   );
 
   const handlePaste = useCallback(
@@ -100,5 +107,5 @@ export const useFileOperations = (currentPath: string, entries: FileEntry[], rel
     [currentPath, entries, reload],
   );
 
-  return { handleRename, handleCreateFolder, handleDelete, handlePaste };
+  return { handleRename, handleCreateFolder, handleDelete, executeDelete, handlePaste };
 };

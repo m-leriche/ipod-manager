@@ -7,9 +7,17 @@ on:
 
   # Allow manual trigger for testing the workflow
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag (e.g. v0.1.0)"
+        required: true
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -24,6 +32,8 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -41,6 +51,8 @@ jobs:
           if [ -n "$APPLE_API_KEY_CONTENT" ]; then
             mkdir -p /tmp/apple-keys
             echo "$APPLE_API_KEY_CONTENT" > /tmp/apple-keys/AuthKey.p8
+          else
+            echo "::warning::APPLE_API_KEY_CONTENT not set — notarization will be skipped"
           fi
 
       - name: Build, sign, and create release
@@ -56,8 +68,13 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: /tmp/apple-keys/AuthKey.p8
         with:
-          tagName: v__VERSION__
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: "Crate v__VERSION__"
           releaseBody: "See the assets section below to download the installer."
           releaseDraft: true
           prerelease: false
+          args: --target universal-apple-darwin
+
+      - name: Clean up API key
+        if: always()
+        run: rm -rf /tmp/apple-keys/

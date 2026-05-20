@@ -12,12 +12,14 @@ use super::types::{CopyResult, SyncProgress};
 
 fn copy_pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    // OnceLock::get_or_init requires an infallible closure; thread pool creation
+    // with a fixed configuration is effectively infallible at runtime.
     POOL.get_or_init(|| {
         rayon::ThreadPoolBuilder::new()
             .num_threads(4)
             .thread_name(|i| format!("copy-worker-{}", i))
             .build()
-            .expect("failed to create copy thread pool")
+            .expect("static thread pool with fixed config")
     })
 }
 

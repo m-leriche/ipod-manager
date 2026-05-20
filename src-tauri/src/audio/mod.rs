@@ -26,7 +26,7 @@ pub struct AudioEngine {
 
 impl AudioEngine {
     /// Spawn the audio engine on a dedicated thread.
-    pub fn spawn<R: Runtime>(app_handle: AppHandle<R>) -> Self {
+    pub fn spawn<R: Runtime>(app_handle: AppHandle<R>) -> std::io::Result<Self> {
         let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
         let shared = Arc::new(SharedState::new());
         let shared_clone = Arc::clone(&shared);
@@ -35,10 +35,9 @@ impl AudioEngine {
             .name("audio-engine".into())
             .spawn(move || {
                 engine::run(cmd_rx, shared_clone, app_handle);
-            })
-            .expect("Failed to spawn audio engine thread");
+            })?;
 
-        Self { cmd_tx, shared }
+        Ok(Self { cmd_tx, shared })
     }
 
     fn send(&self, cmd: AudioCommand) {

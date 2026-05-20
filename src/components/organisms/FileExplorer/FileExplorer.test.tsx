@@ -165,6 +165,62 @@ describe("FileExplorer", () => {
     });
   });
 
+  it("shows confirmation dialog when deleting via context menu", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("song.mp3") });
+
+    await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
+    await user.click(screen.getByText("Delete"));
+
+    // Confirmation dialog should appear
+    expect(screen.getByText(/Are you sure you want to delete "song.mp3"/)).toBeInTheDocument();
+  });
+
+  it("does not delete files until confirmed", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("song.mp3") });
+
+    await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
+    await user.click(screen.getByText("Delete"));
+
+    // Should not have called delete_entry yet
+    expect(mockInvoke).not.toHaveBeenCalledWith("delete_entry", expect.anything());
+
+    // Confirm deletion
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    const confirmBtn = deleteButtons[deleteButtons.length - 1];
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("delete_entry", { path: "/test/song.mp3" });
+    });
+  });
+
+  it("does not delete files when cancel is clicked in confirm dialog", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(FILES);
+    render(<FileExplorer rootPath="/test" rootLabel="Test" allowDelete />);
+
+    await waitFor(() => screen.getByText("song.mp3"));
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("song.mp3") });
+
+    await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
+    await user.click(screen.getByText("Delete"));
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(mockInvoke).not.toHaveBeenCalledWith("delete_entry", expect.anything());
+    expect(screen.queryByText(/Are you sure you want to delete/)).not.toBeInTheDocument();
+  });
+
   it("shows context menu with Copy on right-click", async () => {
     const user = userEvent.setup();
     mockInvoke.mockResolvedValue(FILES);

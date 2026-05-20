@@ -105,45 +105,44 @@ describe("useFileOperations", () => {
     });
   });
 
-  describe("handleDelete", () => {
-    it("confirms and deletes single item", async () => {
+  describe("executeDelete", () => {
+    it("deletes single item", async () => {
       mockInvoke.mockResolvedValue(undefined);
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete(["/test/file1.txt"]);
+        await result.current.executeDelete(["/test/file1.txt"]);
       });
-      expect(mockConfirm).toHaveBeenCalledWith('Are you sure you want to delete "file1.txt"?', expect.any(Object));
       expect(mockInvoke).toHaveBeenCalledWith("delete_entry", { path: "/test/file1.txt" });
       expect(reload).toHaveBeenCalled();
     });
 
-    it("confirms and deletes multiple items", async () => {
+    it("deletes multiple items", async () => {
       mockInvoke.mockResolvedValue(undefined);
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete(["/test/file1.txt", "/test/file2.txt"]);
+        await result.current.executeDelete(["/test/file1.txt", "/test/file2.txt"]);
       });
-      expect(mockConfirm).toHaveBeenCalledWith("Are you sure you want to delete 2 items?", expect.any(Object));
       expect(mockInvoke).toHaveBeenCalledWith("delete_files", {
         paths: ["/test/file1.txt", "/test/file2.txt"],
       });
-    });
-
-    it("does nothing when user declines confirmation", async () => {
-      mockConfirm.mockResolvedValue(false);
-      const { result } = renderHook(() => useFileOperations("/test", entries, reload));
-      await act(async () => {
-        await result.current.handleDelete(["/test/file1.txt"]);
-      });
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(reload).toHaveBeenCalled();
     });
 
     it("does nothing for empty array", async () => {
       const { result } = renderHook(() => useFileOperations("/test", entries, reload));
       await act(async () => {
-        await result.current.handleDelete([]);
+        await result.current.executeDelete([]);
       });
-      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+
+    it("shows error message on failure", async () => {
+      mockInvoke.mockRejectedValue("permission denied");
+      const { result } = renderHook(() => useFileOperations("/test", entries, reload));
+      await act(async () => {
+        await result.current.executeDelete(["/test/file1.txt"]);
+      });
+      expect(mockMessage).toHaveBeenCalledWith("Delete failed: permission denied", expect.any(Object));
     });
   });
 

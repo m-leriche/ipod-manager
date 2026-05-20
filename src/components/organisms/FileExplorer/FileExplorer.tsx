@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { cancelSync } from "../../../utils/cancelSync";
 import { Spinner } from "../../atoms/Spinner/Spinner";
+import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useFileSelection } from "./useFileSelection";
 import { useClipboard } from "./useClipboard";
@@ -49,6 +50,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     const [renamingEntry, setRenamingEntry] = useState<string | null>(null);
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [filter, setFilter] = useState("");
+    const [pendingDeletePaths, setPendingDeletePaths] = useState<string[] | null>(null);
 
     // Inline tree expansion — expand folders without navigating
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -112,7 +114,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     }, []);
 
     const reload = useCallback(() => load(pathRef.current), [load]);
-    const { handleRename, handleCreateFolder, handleDelete, handlePaste } = useFileOperations(path, entries, reload);
+    const { handleRename, handleCreateFolder, executeDelete, handlePaste } = useFileOperations(path, entries, reload);
 
     useImperativeHandle(ref, () => ({ reload }), [reload]);
 
@@ -199,8 +201,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     }, [clipboard, handlePaste, clearClipboard]);
 
     const handleDeleteAction = useCallback(() => {
-      if (selected.size > 0 && allowDelete) handleDelete(selectedPaths);
-    }, [selected, allowDelete, handleDelete, selectedPaths]);
+      if (selected.size > 0 && allowDelete) setPendingDeletePaths(selectedPaths);
+    }, [selected, allowDelete, selectedPaths]);
 
     const handleRenameAction = useCallback(() => {
       if (selected.size !== 1) return;
@@ -470,6 +472,24 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
         {ctxMenu && contextMenuItems.length > 0 && (
           <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={contextMenuItems} onClose={() => setCtxMenu(null)} />
+        )}
+
+        {pendingDeletePaths && (
+          <ConfirmDialog
+            title="Delete"
+            message={
+              pendingDeletePaths.length === 1
+                ? `Are you sure you want to delete "${pendingDeletePaths[0].split("/").pop()}"?`
+                : `Are you sure you want to delete ${pendingDeletePaths.length} items?`
+            }
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => {
+              executeDelete(pendingDeletePaths);
+              setPendingDeletePaths(null);
+            }}
+            onCancel={() => setPendingDeletePaths(null)}
+          />
         )}
       </div>
     );

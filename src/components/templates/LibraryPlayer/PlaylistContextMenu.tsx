@@ -14,8 +14,8 @@ interface PlaylistContextMenuProps {
   exporting: boolean;
   onClose: () => void;
   onRename: (playlist: Playlist) => void;
-  onDelete: (id: number) => void;
-  onDeleteSmart: (id: number) => void;
+  onDelete: (id: number, name: string) => void;
+  onDeleteSmart: (id: number, name: string) => void;
   onExport: (playlistIds: number[]) => void;
   onEditSmartPlaylist: (sp: SmartPlaylist) => void;
 }
@@ -60,7 +60,7 @@ export const PlaylistContextMenu = ({
             Export to iPod
           </MenuButton>
           <div className="h-px bg-border my-1" />
-          <MenuButton onClick={() => onDelete(menu.playlist!.id)}>Delete</MenuButton>
+          <MenuButton onClick={() => onDelete(menu.playlist!.id, menu.playlist!.name)}>Delete</MenuButton>
         </>
       )}
       {menu.type === "smart" && menu.smartPlaylist && (
@@ -74,7 +74,9 @@ export const PlaylistContextMenu = ({
             Edit Rules
           </MenuButton>
           <div className="h-px bg-border my-1" />
-          <MenuButton onClick={() => onDeleteSmart(menu.smartPlaylist!.id)}>Delete</MenuButton>
+          <MenuButton onClick={() => onDeleteSmart(menu.smartPlaylist!.id, menu.smartPlaylist!.name)}>
+            Delete
+          </MenuButton>
         </>
       )}
     </div>

@@ -91,7 +91,8 @@ pub fn run() {
             app.manage(vol_monitor);
 
             // Spawn native audio engine
-            let audio_engine = audio::AudioEngine::spawn(app.handle().clone());
+            let audio_engine = audio::AudioEngine::spawn(app.handle().clone())
+                .map_err(|e| format!("Failed to spawn audio engine: {}", e))?;
             app.manage(audio_engine);
 
             // Start Subsonic-compatible streaming server

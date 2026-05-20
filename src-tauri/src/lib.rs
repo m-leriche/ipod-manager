@@ -138,12 +138,26 @@ pub fn run() {
                 }
             }
 
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
+            {
+                use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
+
+                let log_plugin = if cfg!(debug_assertions) {
+                    // Debug: log to stdout + log file at Info level
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
+                        .rotation_strategy(RotationStrategy::KeepOne)
+                        .max_file_size(1_000_000)
+                        .build()
+                } else {
+                    // Release: log to file only at Warn level for diagnostics
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Warn)
+                        .targets([Target::new(TargetKind::LogDir { file_name: None })])
+                        .rotation_strategy(RotationStrategy::KeepSome(3))
+                        .max_file_size(5_000_000)
+                        .build()
+                };
+                app.handle().plugin(log_plugin)?;
             }
 
             // ── Native macOS menu bar ───────────────────────────────────

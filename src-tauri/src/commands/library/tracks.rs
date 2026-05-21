@@ -57,9 +57,7 @@ pub async fn rate_tracks(
     if track_ids.is_empty() {
         return Ok(0);
     }
-    if rating > 5 {
-        return Err(AppError::InvalidInput("Rating must be 0-5".into()));
-    }
+    validate_rating(rating)?;
     db.with_db(move |conn| {
         let placeholders: Vec<String> = (0..track_ids.len())
             .map(|i| format!("?{}", i + 2))
@@ -79,6 +77,13 @@ pub async fn rate_tracks(
     .await
 }
 
+fn validate_rating(rating: u8) -> Result<(), AppError> {
+    if rating > 5 {
+        return Err(AppError::InvalidInput("Rating must be 0-5".into()));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Result<(), AppError> {
     db.with_db(move |conn| {
@@ -94,4 +99,22 @@ pub async fn increment_play_count(track_id: i64, db: State<'_, LibraryDb>) -> Re
         Ok::<_, String>(())
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_rating_accepts_valid_range() {
+        for r in 0..=5 {
+            assert!(validate_rating(r).is_ok(), "rating {} should be valid", r);
+        }
+    }
+
+    #[test]
+    fn validate_rating_rejects_above_five() {
+        assert!(validate_rating(6).is_err());
+        assert!(validate_rating(255).is_err());
+    }
 }

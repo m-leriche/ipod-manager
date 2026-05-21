@@ -17,12 +17,7 @@ pub async fn mount_ipod(
     password: String,
     mount_point: Option<String>,
 ) -> Result<String, AppError> {
-    if !identifier.starts_with("disk")
-        || identifier.len() <= 4
-        || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
-    {
-        return Err(AppError::InvalidInput("Invalid disk identifier".into()));
-    }
+    validate_disk_identifier(&identifier)?;
     let mount_path = mount_point.unwrap_or_else(|| disk::DEFAULT_MOUNT_POINT.to_string());
     validate_mount_point(&mount_path)?;
     let mp = mount_path.clone();
@@ -52,6 +47,17 @@ fn validate_mount_point(path: &str) -> Result<(), AppError> {
         return Err(AppError::InvalidInput(
             "Mount point must be under /Volumes/".into(),
         ));
+    }
+    Ok(())
+}
+
+/// Validate that a disk identifier matches the expected `diskNsN` pattern.
+fn validate_disk_identifier(identifier: &str) -> Result<(), AppError> {
+    if !identifier.starts_with("disk")
+        || identifier.len() <= 4
+        || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        return Err(AppError::InvalidInput("Invalid disk identifier".into()));
     }
     Ok(())
 }
@@ -90,4 +96,44 @@ pub async fn write_rockbox_playdata(
     .await
     .map_err(|e| format!("Write failed: {}", e))?
     .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_mount_point_accepts_volumes() {
+        assert!(validate_mount_point("/Volumes/IPOD").is_ok());
+        assert!(validate_mount_point("/Volumes/My iPod").is_ok());
+    }
+
+    #[test]
+    fn validate_mount_point_rejects_outside_volumes() {
+        assert!(validate_mount_point("/tmp/evil").is_err());
+        assert!(validate_mount_point("/etc/passwd").is_err());
+        assert!(validate_mount_point("relative/path").is_err());
+    }
+
+    #[test]
+    fn validate_mount_point_rejects_traversal() {
+        assert!(validate_mount_point("/Volumes/../etc").is_err());
+        assert!(validate_mount_point("/Volumes/IPOD/../../etc").is_err());
+    }
+
+    #[test]
+    fn validate_disk_identifier_accepts_valid() {
+        assert!(validate_disk_identifier("disk5s2").is_ok());
+        assert!(validate_disk_identifier("disk12s1").is_ok());
+        assert!(validate_disk_identifier("disk0").is_ok());
+    }
+
+    #[test]
+    fn validate_disk_identifier_rejects_invalid() {
+        assert!(validate_disk_identifier("disk").is_err());
+        assert!(validate_disk_identifier("notadisk").is_err());
+        assert!(validate_disk_identifier("").is_err());
+        assert!(validate_disk_identifier("disk/../../etc").is_err());
+        assert!(validate_disk_identifier("disk;rm -rf /").is_err());
+    }
 }

@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::library::{self, LibraryDb};
+use crate::localvideo;
 use crate::playlist_export;
 use tauri::State;
 
@@ -86,15 +87,14 @@ pub async fn export_playlists_to_ipod(
     music_subdir: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<playlist_export::PlaylistExportResult, AppError> {
+    localvideo::validate_output_dir(&output_dir)?;
     db.with_db(move |conn| {
         let library_root = library::get_library_location(conn).ok_or_else(|| {
             "No library location configured. Set one in Settings first.".to_string()
         })?;
 
         let sub = music_subdir.unwrap_or_else(|| "Music".to_string());
-        if sub.starts_with('/') || sub.split('/').any(|seg| seg == "..") {
-            return Err("Invalid music subdirectory name".to_string());
-        }
+        validate_music_subdir(&sub)?;
 
         let all_playlists = library::playlists::get_playlists(conn)?;
         let target: Vec<_> = if playlist_ids.is_empty() {
@@ -191,4 +191,36 @@ pub async fn get_smart_playlist_tracks(
 ) -> Result<Vec<library::LibraryTrack>, AppError> {
     db.with_db(move |conn| library::smart_playlists::get_smart_playlist_tracks(conn, id))
         .await
+}
+
+fn validate_music_subdir(sub: &str) -> Result<(), String> {
+    if sub.starts_with('/') || sub.split('/').any(|seg| seg == "..") {
+        return Err("Invalid music subdirectory name".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_music_subdir_accepts_valid() {
+        assert!(validate_music_subdir("Music").is_ok());
+        assert!(validate_music_subdir("Music/iPod").is_ok());
+        assert!(validate_music_subdir("audio").is_ok());
+    }
+
+    #[test]
+    fn validate_music_subdir_rejects_absolute() {
+        assert!(validate_music_subdir("/Music").is_err());
+        assert!(validate_music_subdir("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_music_subdir_rejects_traversal() {
+        assert!(validate_music_subdir("../escape").is_err());
+        assert!(validate_music_subdir("Music/../../etc").is_err());
+        assert!(validate_music_subdir("..").is_err());
+    }
 }

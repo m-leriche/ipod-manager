@@ -32,6 +32,7 @@ pub async fn download_audio(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, AppError> {
+    localvideo::validate_output_dir(&output_dir)?;
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -100,6 +101,7 @@ pub async fn extract_audio_from_video(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, AppError> {
+    localvideo::validate_output_dir(&output_dir)?;
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -131,6 +133,9 @@ pub async fn convert_audio(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<convert::ConvertResult, AppError> {
+    for req in &requests {
+        localvideo::validate_output_dir(&req.output_dir)?;
+    }
     let flag = cancel.new_flag();
 
     let result =
@@ -189,4 +194,24 @@ pub async fn generate_waveform(
         .await
         .map_err(|e| format!("Generation failed: {}", e))?
         .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::localvideo::validate_output_dir;
+
+    #[test]
+    fn download_rejects_traversal_in_output_dir() {
+        assert!(validate_output_dir("/safe/../../etc").is_err());
+    }
+
+    #[test]
+    fn download_rejects_relative_output_dir() {
+        assert!(validate_output_dir("relative/path").is_err());
+    }
+
+    #[test]
+    fn download_accepts_valid_output_dir() {
+        assert!(validate_output_dir("/Users/test/Downloads").is_ok());
+    }
 }

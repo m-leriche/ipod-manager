@@ -4,8 +4,8 @@ import { MOCK_FILE_ENTRIES } from "../fixtures/mock-data";
 test.describe("File Explorer (Browse mode)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
   });
 
   test("shows empty state prompt when no profile selected", async ({ page }) => {
@@ -29,8 +29,8 @@ test.describe("File Explorer (Browse mode)", () => {
     };
     await tauriMocks.override({ get_file_manager_profiles: profiles });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     const profileSelect = page.getByRole("combobox").first();
     await expect(profileSelect).toHaveValue("My Music");
@@ -56,8 +56,8 @@ test.describe("File Explorer (Browse mode)", () => {
       list_directory: MOCK_FILE_ENTRIES,
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     await expect(page.getByText("readme.txt")).toBeVisible();
     await expect(page.getByText("notes.md")).toBeVisible();
@@ -81,8 +81,8 @@ test.describe("File Explorer (Browse mode)", () => {
     };
     await tauriMocks.override({ get_file_manager_profiles: profiles, list_directory: [] });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     await expect(page.getByRole("button", { name: "Split" })).toBeVisible();
   });

@@ -24,6 +24,7 @@ export const PlaybackButton = ({
   <button
     onClick={onClick}
     title={title}
+    aria-label={title}
     disabled={disabled}
     className={`${sizeClasses[size]} rounded-full flex items-center justify-center transition-all ${
       disabled

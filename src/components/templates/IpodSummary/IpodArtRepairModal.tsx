@@ -136,10 +136,17 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
         className="absolute inset-0 bg-black/50"
         onClick={phase === "scanning" || phase === "fixing" ? undefined : onClose}
       />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[480px] max-w-[90vw] max-h-[80vh] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ipod-art-repair-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[480px] max-w-[90vw] max-h-[80vh] flex flex-col"
+      >
         {/* Header */}
         <div className="px-6 pt-5 pb-3 border-b border-border">
-          <h2 className="text-sm font-medium text-text-primary">iPod Album Art Repair</h2>
+          <h2 id="ipod-art-repair-title" className="text-sm font-medium text-text-primary">
+            iPod Album Art Repair
+          </h2>
         </div>
 
         {/* Body */}

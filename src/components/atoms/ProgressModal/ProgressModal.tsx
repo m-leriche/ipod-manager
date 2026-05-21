@@ -14,8 +14,15 @@ export const ProgressModal = () => {
       <div className="absolute inset-0 bg-black/50" />
 
       {/* Modal */}
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[400px] max-w-[90vw] p-6">
-        <div className="text-sm font-medium text-text-primary mb-4">{state.title}</div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="progress-modal-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[400px] max-w-[90vw] p-6"
+      >
+        <div id="progress-modal-title" className="text-sm font-medium text-text-primary mb-4">
+          {state.title}
+        </div>
 
         {!hasResult && (
           <>
@@ -32,7 +39,7 @@ export const ProgressModal = () => {
             </div>
 
             {/* Details */}
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex justify-between items-center mb-1" aria-live="polite">
               <span className="text-[11px] text-text-tertiary truncate max-w-[70%]">{state.currentItem}</span>
               {state.total > 0 && (
                 <span className="text-[11px] text-text-secondary font-medium shrink-0">

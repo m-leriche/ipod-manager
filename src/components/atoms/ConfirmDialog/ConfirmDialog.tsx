@@ -35,8 +35,15 @@ export const ConfirmDialog = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[380px] max-w-[90vw] p-6">
-        <div className="text-sm font-medium text-text-primary mb-2">{title}</div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[380px] max-w-[90vw] p-6"
+      >
+        <div id="confirm-dialog-title" className="text-sm font-medium text-text-primary mb-2">
+          {title}
+        </div>
         <div className="text-xs text-text-secondary leading-relaxed mb-6">{message}</div>
         <div className="flex justify-end gap-2">
           {!hideCancel && (

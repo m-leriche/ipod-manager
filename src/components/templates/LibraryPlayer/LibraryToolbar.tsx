@@ -60,6 +60,7 @@ export const LibraryToolbar = ({
       value={search}
       onChange={(e) => onSearchChange(e.target.value)}
       placeholder="Search... (⌘F)"
+      aria-label="Search library"
       className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
     />
     <button
@@ -168,6 +169,8 @@ const ViewToggle = ({
       active ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
     }`}
     title={title}
+    aria-label={title}
+    aria-pressed={active}
   >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
       {children}
@@ -227,6 +230,8 @@ const LyricsToggle = ({
             : "text-text-tertiary hover:text-text-secondary"
       }`}
       title={title}
+      aria-label={title}
+      aria-pressed={showLyricsPanel}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
         {isOverlay ? (

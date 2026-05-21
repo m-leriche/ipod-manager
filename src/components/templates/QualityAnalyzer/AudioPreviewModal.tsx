@@ -40,17 +40,25 @@ export const AudioPreviewModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} data-testid="preview-backdrop" />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[90vw] max-w-[1100px] max-h-[90vh] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="audio-preview-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[90vw] max-w-[1100px] max-h-[90vh] flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <h2 className="text-sm font-medium text-text-primary truncate">{file.file_name}</h2>
+            <h2 id="audio-preview-title" className="text-sm font-medium text-text-primary truncate">
+              {file.file_name}
+            </h2>
             <span className="text-[10px] text-text-tertiary uppercase tracking-wider shrink-0">
               {type === "spectrogram" ? "Spectrogram" : "Waveform"}
             </span>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-text-tertiary hover:text-text-primary transition-colors text-lg leading-none ml-3"
           >
             &times;

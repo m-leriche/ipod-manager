@@ -146,9 +146,9 @@ export const NowPlayingBar = ({
       }}
     >
       {/* Left — Now Playing Info or error */}
-      <div className="w-[240px] shrink-0">
+      <div className="w-[240px] shrink-0" aria-live="polite">
         {state.playbackError ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" role="alert">
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-red-400 shrink-0">
               <path
                 fillRule="evenodd"
@@ -204,6 +204,7 @@ export const NowPlayingBar = ({
               queueOpen ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
             }`}
             title="Queue"
+            aria-label="Queue"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h10" />
@@ -218,6 +219,7 @@ export const NowPlayingBar = ({
               miniPlayer ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
             }`}
             title={miniPlayer ? "Exit mini player" : "Mini player"}
+            aria-label={miniPlayer ? "Exit mini player" : "Mini player"}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
               {miniPlayer ? (
@@ -292,6 +294,7 @@ const MiniPlayerView = ({
               showLyrics ? "bg-accent/80 text-white" : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
             }`}
             title={showLyrics ? "Show album art" : "Show lyrics"}
+            aria-label={showLyrics ? "Show album art" : "Show lyrics"}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
               <path
@@ -306,6 +309,7 @@ const MiniPlayerView = ({
               onClick={onExpand}
               className="p-1.5 rounded-lg bg-black/40 text-white/80 hover:text-white hover:bg-black/60 transition-colors"
               title="Exit mini player"
+              aria-label="Exit mini player"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
                 <path
@@ -338,13 +342,18 @@ const MiniPlayerView = ({
 
       {/* Transport controls */}
       <div className="flex items-center justify-center gap-3 py-3 shrink-0">
-        <button onClick={onPrevious} className="text-text-secondary hover:text-text-primary transition-colors">
+        <button
+          onClick={onPrevious}
+          aria-label="Previous"
+          className="text-text-secondary hover:text-text-primary transition-colors"
+        >
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
             <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
           </svg>
         </button>
         <button
           onClick={onPlayPause}
+          aria-label={isPlaying ? "Pause" : "Play"}
           className="w-9 h-9 rounded-full bg-text-primary text-bg-primary flex items-center justify-center hover:opacity-90 transition-opacity"
         >
           {isPlaying ? (
@@ -357,7 +366,11 @@ const MiniPlayerView = ({
             </svg>
           )}
         </button>
-        <button onClick={onNext} className="text-text-secondary hover:text-text-primary transition-colors">
+        <button
+          onClick={onNext}
+          aria-label="Next"
+          className="text-text-secondary hover:text-text-primary transition-colors"
+        >
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
             <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
           </svg>
@@ -384,6 +397,7 @@ const PanelToggle = ({
       active ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
     }`}
     title={title}
+    aria-label={title}
   >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
       {children}

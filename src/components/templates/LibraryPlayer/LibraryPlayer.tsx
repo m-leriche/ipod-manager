@@ -356,10 +356,12 @@ export const LibraryPlayer = ({
           </ErrorBoundary>
         )}
 
-        <LibraryStatusBar
-          selectedTracks={data.selectedTracks}
-          hideSelectionStats={showAlbumGrid || showArtworkCarousel}
-        />
+        <ErrorBoundary name="Status Bar" compact>
+          <LibraryStatusBar
+            selectedTracks={data.selectedTracks}
+            hideSelectionStats={showAlbumGrid || showArtworkCarousel}
+          />
+        </ErrorBoundary>
       </div>
 
       {showInfoPanel && (

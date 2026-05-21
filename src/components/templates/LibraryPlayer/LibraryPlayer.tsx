@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorBoundary } from "../../atoms/ErrorBoundary/ErrorBoundary";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
 import { useResizableHeight } from "../../organisms/AlbumGrid/useResizableHeight";
@@ -184,12 +185,14 @@ export const LibraryPlayer = ({
         </div>
       )}
       {showPlaylistSidebar && (
-        <PlaylistSidebar
-          onPlaylistSelect={(id) => setActivePlaylist(id)}
-          activePlaylistId={activePlaylistId}
-          onSmartPlaylistEdit={(sp) => setSmartPlaylistEditing(sp)}
-          onSmartPlaylistCreate={() => setSmartPlaylistCreating(true)}
-        />
+        <ErrorBoundary name="Playlists" compact>
+          <PlaylistSidebar
+            onPlaylistSelect={(id) => setActivePlaylist(id)}
+            activePlaylistId={activePlaylistId}
+            onSmartPlaylistEdit={(sp) => setSmartPlaylistEditing(sp)}
+            onSmartPlaylistCreate={() => setSmartPlaylistCreating(true)}
+          />
+        </ErrorBoundary>
       )}
       <div className="flex-1 min-w-0 flex flex-col min-h-0 bg-bg-primary">
         {/* Library offline banner */}
@@ -247,19 +250,21 @@ export const LibraryPlayer = ({
                   style={showTrackList ? { height: `${carouselResize.fraction * 100}%` } : undefined}
                   className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
-                  <ArtworkCarousel
-                    albums={data.albumList}
-                    selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
-                    onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
-                    onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
-                    sortMode={data.albumSortMode}
-                    onSortModeChange={data.handleAlbumSortModeChange}
-                    artists={data.artistList}
-                    selectedArtist={data.selectedArtists.size === 1 ? [...data.selectedArtists][0] : null}
-                    onSelectArtist={(name) => data.handleSelectArtist(name ? new Set([name]) : new Set())}
-                    lyricsOverlay={lyricsOverlay}
-                    onLyricsOverlayDismiss={onLyricsOverlayDismiss}
-                  />
+                  <ErrorBoundary name="Artwork Carousel">
+                    <ArtworkCarousel
+                      albums={data.albumList}
+                      selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
+                      onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
+                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                      sortMode={data.albumSortMode}
+                      onSortModeChange={data.handleAlbumSortModeChange}
+                      artists={data.artistList}
+                      selectedArtist={data.selectedArtists.size === 1 ? [...data.selectedArtists][0] : null}
+                      onSelectArtist={(name) => data.handleSelectArtist(name ? new Set([name]) : new Set())}
+                      lyricsOverlay={lyricsOverlay}
+                      onLyricsOverlayDismiss={onLyricsOverlayDismiss}
+                    />
+                  </ErrorBoundary>
                 </div>
                 {showTrackList && <ResizeHandle onMouseDown={carouselResize.onDragStart} />}
               </>
@@ -270,18 +275,20 @@ export const LibraryPlayer = ({
                   style={showTrackList ? { height: `${gridResize.fraction * 100}%` } : undefined}
                   className={`${showTrackList ? "shrink-0 min-h-0" : "flex-1 min-h-0"} view-enter`}
                 >
-                  <AlbumGrid
-                    albums={data.albumList}
-                    selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
-                    onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
-                    onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
-                    onFixAlbumArt={actions.handleFixAlbumArtForAlbum}
-                    onUploadAlbumArt={actions.handleUploadAlbumArt}
-                    onFixAllAlbumArt={startArtRepair}
-                    isFixingAllArt={artRepairState.active}
-                    sortMode={data.albumSortMode}
-                    onSortModeChange={data.handleAlbumSortModeChange}
-                  />
+                  <ErrorBoundary name="Album Grid">
+                    <AlbumGrid
+                      albums={data.albumList}
+                      selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
+                      onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
+                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                      onFixAlbumArt={actions.handleFixAlbumArtForAlbum}
+                      onUploadAlbumArt={actions.handleUploadAlbumArt}
+                      onFixAllAlbumArt={startArtRepair}
+                      isFixingAllArt={artRepairState.active}
+                      sortMode={data.albumSortMode}
+                      onSortModeChange={data.handleAlbumSortModeChange}
+                    />
+                  </ErrorBoundary>
                 </div>
                 {showTrackList && <ResizeHandle onMouseDown={gridResize.onDragStart} />}
               </>
@@ -293,22 +300,24 @@ export const LibraryPlayer = ({
                     style={{ height: `${browserResize.fraction * 100}%` }}
                     className="shrink-0 min-h-0 view-enter bg-bg-primary"
                   >
-                    <ColumnBrowser
-                      genres={data.genreList}
-                      artists={data.artistList}
-                      albums={data.albumList}
-                      selectedGenres={data.selectedGenres}
-                      selectedArtists={data.selectedArtists}
-                      selectedAlbums={data.selectedAlbums}
-                      onSelectGenres={data.handleSelectGenre}
-                      onSelectArtists={data.handleSelectArtist}
-                      onSelectAlbums={data.handleSelectAlbum}
-                      onPlay={data.handlePlayColumn}
-                      onPlayAll={actions.handleColumnPlayAll}
-                      onAddAllToQueue={actions.handleColumnAddToQueue}
-                      onAddAllToPlaylist={actions.handleColumnAddToPlaylist}
-                      playlists={playlists}
-                    />
+                    <ErrorBoundary name="Column Browser">
+                      <ColumnBrowser
+                        genres={data.genreList}
+                        artists={data.artistList}
+                        albums={data.albumList}
+                        selectedGenres={data.selectedGenres}
+                        selectedArtists={data.selectedArtists}
+                        selectedAlbums={data.selectedAlbums}
+                        onSelectGenres={data.handleSelectGenre}
+                        onSelectArtists={data.handleSelectArtist}
+                        onSelectAlbums={data.handleSelectAlbum}
+                        onPlay={data.handlePlayColumn}
+                        onPlayAll={actions.handleColumnPlayAll}
+                        onAddAllToQueue={actions.handleColumnAddToQueue}
+                        onAddAllToPlaylist={actions.handleColumnAddToPlaylist}
+                        playlists={playlists}
+                      />
+                    </ErrorBoundary>
                   </div>
                   <ResizeHandle
                     onMouseDown={browserResize.onDragStart}
@@ -322,27 +331,29 @@ export const LibraryPlayer = ({
 
         {/* Track table */}
         {(!(showAlbumGrid || showArtworkCarousel) || showTrackList) && (
-          <TrackTable
-            tracks={data.displayedTracks}
-            totalTrackCount={!isPlaylistView ? data.totalTrackCount : undefined}
-            onLoadMore={!isPlaylistView ? data.loadMoreTracks : undefined}
-            sortBy={data.sortBy}
-            sortDirection={data.sortDirection}
-            onSort={data.handleSort}
-            onSelectionChange={data.handleSelectionChange}
-            onTracksDeleted={data.fetchBrowserData}
-            onFlagTracks={actions.handleFlagTracks}
-            onRateTracks={actions.handleRateTracks}
-            onRepairAlbumArt={actions.handleRepairAlbumArt}
-            onRepairAllAlbumArt={startArtRepair}
-            isRepairingAllArt={artRepairState.active}
-            onFetchLyrics={actions.handleFetchLyrics}
-            onRemoveLyrics={actions.handleRemoveLyrics}
-            onFetchAllLyrics={startLyricsFetch}
-            isFetchingAllLyrics={lyricsState.active}
-            onRepairMetadata={onRepairMetadata}
-            activePlaylistId={activePlaylistId}
-          />
+          <ErrorBoundary name="Track Table">
+            <TrackTable
+              tracks={data.displayedTracks}
+              totalTrackCount={!isPlaylistView ? data.totalTrackCount : undefined}
+              onLoadMore={!isPlaylistView ? data.loadMoreTracks : undefined}
+              sortBy={data.sortBy}
+              sortDirection={data.sortDirection}
+              onSort={data.handleSort}
+              onSelectionChange={data.handleSelectionChange}
+              onTracksDeleted={data.fetchBrowserData}
+              onFlagTracks={actions.handleFlagTracks}
+              onRateTracks={actions.handleRateTracks}
+              onRepairAlbumArt={actions.handleRepairAlbumArt}
+              onRepairAllAlbumArt={startArtRepair}
+              isRepairingAllArt={artRepairState.active}
+              onFetchLyrics={actions.handleFetchLyrics}
+              onRemoveLyrics={actions.handleRemoveLyrics}
+              onFetchAllLyrics={startLyricsFetch}
+              isFetchingAllLyrics={lyricsState.active}
+              onRepairMetadata={onRepairMetadata}
+              activePlaylistId={activePlaylistId}
+            />
+          </ErrorBoundary>
         )}
 
         <LibraryStatusBar
@@ -351,10 +362,16 @@ export const LibraryPlayer = ({
         />
       </div>
 
-      {showInfoPanel && <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} />}
+      {showInfoPanel && (
+        <ErrorBoundary name="Track Detail" compact>
+          <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} />
+        </ErrorBoundary>
+      )}
       {showStatsPanel && (
         <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden panel-slide-right">
-          <LibraryStats libraryPath={data.libraryPath} />
+          <ErrorBoundary name="Library Stats" compact>
+            <LibraryStats libraryPath={data.libraryPath} />
+          </ErrorBoundary>
         </div>
       )}
 

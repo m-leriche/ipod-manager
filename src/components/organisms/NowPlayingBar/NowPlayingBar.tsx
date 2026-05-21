@@ -398,6 +398,7 @@ const PanelToggle = ({
     }`}
     title={title}
     aria-label={title}
+    aria-pressed={active}
   >
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3.5 h-3.5">
       {children}

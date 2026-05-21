@@ -22,7 +22,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
 
     if (!filePath) {
       if (ownsPlaybackRef.current) {
-        invoke("audio_stop").catch(() => {});
+        invoke("audio_stop").catch((e) => console.warn("audio_stop failed:", e));
         ownsPlaybackRef.current = false;
       }
       return;
@@ -30,7 +30,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
 
     return () => {
       if (ownsPlaybackRef.current) {
-        invoke("audio_stop").catch(() => {});
+        invoke("audio_stop").catch((e) => console.warn("audio_stop failed:", e));
         ownsPlaybackRef.current = false;
       }
       cancelAnimationFrame(rafRef.current);
@@ -83,19 +83,21 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
   const play = useCallback(() => {
     if (!activePathRef.current) return;
     ownsPlaybackRef.current = true;
-    invoke("audio_play", { path: activePathRef.current, seekSecs: null }).catch(() => {});
+    invoke("audio_play", { path: activePathRef.current, seekSecs: null }).catch((e) =>
+      console.warn("audio_play failed:", e),
+    );
     lastPositionRef.current = 0;
     lastPositionTimeRef.current = performance.now();
     setIsPlaying(true);
   }, []);
 
   const pause = useCallback(() => {
-    invoke("audio_pause").catch(() => {});
+    invoke("audio_pause").catch((e) => console.warn("audio_pause failed:", e));
     setIsPlaying(false);
   }, []);
 
   const stop = useCallback(() => {
-    invoke("audio_stop").catch(() => {});
+    invoke("audio_stop").catch((e) => console.warn("audio_stop failed:", e));
     setIsPlaying(false);
     setCurrentTime(0);
   }, []);
@@ -104,7 +106,7 @@ export const useAudioPlayback = (filePath: string | null): AudioPlaybackState =>
     (fraction: number) => {
       const t = fraction * duration;
       if (isFinite(t)) {
-        invoke("audio_seek", { positionSecs: t }).catch(() => {});
+        invoke("audio_seek", { positionSecs: t }).catch((e) => console.warn("audio_seek failed:", e));
         lastPositionRef.current = t;
         lastPositionTimeRef.current = performance.now();
         setCurrentTime(t);

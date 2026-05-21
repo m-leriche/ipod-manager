@@ -274,7 +274,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     const cached = await getCachedLibrary();
     invoke<string | null>("get_library_location")
       .then((loc) => setLibraryPath(loc))
-      .catch(() => {});
+      .catch((e: unknown) => console.warn("Failed to get library location:", e));
     if (cached) {
       setHasLibrary(cached.hasLibrary);
       if (cached.hasLibrary) {

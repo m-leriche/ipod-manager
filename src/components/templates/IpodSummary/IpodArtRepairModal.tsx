@@ -106,7 +106,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
   );
 
   const handleCancel = useCallback(() => {
-    invoke("cancel_sync").catch(() => {});
+    invoke("cancel_sync").catch((e) => console.warn("cancel_sync failed:", e));
   }, []);
 
   const handleFixAll = () => runFix(missingAlbums.map((a) => a.folder_path));

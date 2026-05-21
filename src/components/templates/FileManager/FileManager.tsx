@@ -4,6 +4,7 @@ import { ProfileSelector } from "../../organisms/ProfileSelector/ProfileSelector
 import { FilterPanel } from "../../organisms/FilterPanel/FilterPanel";
 import { BrowseExplorer } from "../BrowseExplorer/BrowseExplorer";
 import { SyncManager } from "../SyncManager/SyncManager";
+import { useToast } from "../../../contexts/ToastContext";
 import { emptyFileManagerProfile } from "./helpers";
 import type { FileManagerProfile, FileManagerProfileStore } from "../../../types/profiles";
 import type { FileManagerMode } from "./types";
@@ -13,6 +14,7 @@ export const FileManager = () => {
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
   const [localProfile, setLocalProfile] = useState<FileManagerProfile>(emptyFileManagerProfile("", "browse"));
   const [showFilters, setShowFilters] = useState(false);
+  const toast = useToast();
 
   // Derive mode from the local profile — single source of truth
   const mode: FileManagerMode = localProfile.mode;
@@ -34,12 +36,13 @@ export const FileManager = () => {
     );
   }, [localProfile, savedProfile]);
 
-  const save = useCallback((store: FileManagerProfileStore) => {
-    setProfileStore(store);
-    invoke("save_file_manager_profiles", { store }).catch((e) =>
-      console.error("Failed to save file manager profiles:", e),
-    );
-  }, []);
+  const save = useCallback(
+    (store: FileManagerProfileStore) => {
+      setProfileStore(store);
+      invoke("save_file_manager_profiles", { store }).catch((e) => toast.error(`Failed to save profiles: ${e}`));
+    },
+    [toast],
+  );
 
   // Load profiles on mount
   useEffect(() => {
@@ -50,7 +53,8 @@ export const FileManager = () => {
           setActiveProfileName(store.active_profile);
         }
       })
-      .catch(() => {});
+      .catch((e) => toast.error(`Failed to load profiles: ${e}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync local profile when a saved profile is active

@@ -359,7 +359,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     trackStartedAtRef.current = Math.floor(Date.now() / 1000);
     window.dispatchEvent(new CustomEvent("track-started", { detail: track }));
 
-    invoke("audio_play", { path: track.file_path, seekSecs: null }).catch(() => {});
+    invoke("audio_play", { path: track.file_path, seekSecs: null }).catch((e) => console.warn("audio_play failed:", e));
   }, []);
 
   // ── Track-ended handler ──────────────────────────────────────
@@ -407,7 +407,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       lastPositionRef.current = 0;
       lastPositionTimeRef.current = performance.now();
       setTime({ currentTime: 0, duration: nextTrack.duration_secs });
-      invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
+      invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
+        console.warn("audio_play failed:", e),
+      );
       return;
     }
 
@@ -427,7 +429,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     trackStartedAtRef.current = Math.floor(Date.now() / 1000);
     window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
 
-    invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch(() => {});
+    invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
+      console.warn("audio_play failed:", e),
+    );
   }, [getNextIndex, recordPlay, advanceShuffle]);
 
   // ── Gapless transition handler (engine already playing next track) ──
@@ -582,7 +586,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   );
 
   const pause = useCallback(() => {
-    invoke("audio_pause").catch(() => {});
+    invoke("audio_pause").catch((e) => console.warn("audio_pause failed:", e));
     setState((prev) => ({ ...prev, isPlaying: false }));
   }, []);
 
@@ -596,11 +600,13 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
       lastPositionRef.current = seekPos ?? 0;
       lastPositionTimeRef.current = performance.now();
-      invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch(() => {});
+      invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch((e) =>
+        console.warn("audio_play failed:", e),
+      );
       restoredPositionRef.current = 0;
       return;
     }
-    invoke("audio_resume").catch(() => {});
+    invoke("audio_resume").catch((e) => console.warn("audio_resume failed:", e));
     // Reset interpolation reference to current position
     lastPositionRef.current = timeRef.current.currentTime;
     lastPositionTimeRef.current = performance.now();
@@ -609,7 +615,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   const stop = useCallback(() => {
     engineActiveRef.current = false;
-    invoke("audio_stop").catch(() => {});
+    invoke("audio_stop").catch((e) => console.warn("audio_stop failed:", e));
     setState((prev) => ({
       ...prev,
       isPlaying: false,
@@ -637,7 +643,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const previous = useCallback(() => {
     // If more than 3 seconds in, restart current track
     if (timeRef.current.currentTime > 3) {
-      invoke("audio_seek", { positionSecs: 0 }).catch(() => {});
+      invoke("audio_seek", { positionSecs: 0 }).catch((e) => console.warn("audio_seek failed:", e));
       lastPositionRef.current = 0;
       lastPositionTimeRef.current = performance.now();
       setTime((prev) => ({ ...prev, currentTime: 0 }));
@@ -674,10 +680,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     const s = stateRef.current;
     if (!s.currentTrack || !engineActiveRef.current) return;
     if (s.isPlaying) {
-      invoke("audio_pause").catch(() => {});
+      invoke("audio_pause").catch((e) => console.warn("audio_pause failed:", e));
       setState((prev) => ({ ...prev, isPlaying: false }));
     } else {
-      invoke("audio_resume").catch(() => {});
+      invoke("audio_resume").catch((e) => console.warn("audio_resume failed:", e));
       lastPositionRef.current = timeRef.current.currentTime;
       lastPositionTimeRef.current = performance.now();
       setState((prev) => ({ ...prev, isPlaying: true }));
@@ -686,7 +692,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   onMediaPlayRef.current = () => {
     const s = stateRef.current;
     if (!s.currentTrack || !engineActiveRef.current || s.isPlaying) return;
-    invoke("audio_resume").catch(() => {});
+    invoke("audio_resume").catch((e) => console.warn("audio_resume failed:", e));
     lastPositionRef.current = timeRef.current.currentTime;
     lastPositionTimeRef.current = performance.now();
     setState((prev) => ({ ...prev, isPlaying: true }));
@@ -694,7 +700,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   onMediaPauseRef.current = () => {
     const s = stateRef.current;
     if (!s.currentTrack || !s.isPlaying) return;
-    invoke("audio_pause").catch(() => {});
+    invoke("audio_pause").catch((e) => console.warn("audio_pause failed:", e));
     setState((prev) => ({ ...prev, isPlaying: false }));
   };
   onMediaNextRef.current = () => {
@@ -712,12 +718,12 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     lastPositionRef.current = t;
     lastPositionTimeRef.current = performance.now();
     setTime((prev) => ({ ...prev, currentTime: t }));
-    invoke("audio_seek", { positionSecs: t }).catch(() => {});
+    invoke("audio_seek", { positionSecs: t }).catch((e) => console.warn("audio_seek failed:", e));
   }, []);
 
   const setVolume = useCallback((volume: number) => {
     const clamped = Math.max(0, Math.min(1, volume));
-    invoke("audio_set_volume", { volume: clamped }).catch(() => {});
+    invoke("audio_set_volume", { volume: clamped }).catch((e) => console.warn("audio_set_volume failed:", e));
     saveVolume(clamped);
     setState((prev) => ({ ...prev, volume: clamped }));
   }, []);
@@ -795,13 +801,15 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   const setSpeed = useCallback((speed: number) => {
     const clamped = Math.max(0.25, Math.min(4, speed));
-    invoke("audio_set_speed", { speed: clamped }).catch(() => {});
+    invoke("audio_set_speed", { speed: clamped }).catch((e) => console.warn("audio_set_speed failed:", e));
     setState((prev) => ({ ...prev, speed: clamped }));
   }, []);
 
   const setCrossfade = useCallback((seconds: number) => {
     const clamped = Math.max(0, Math.min(12, seconds));
-    invoke("audio_set_crossfade", { durationSecs: clamped }).catch(() => {});
+    invoke("audio_set_crossfade", { durationSecs: clamped }).catch((e) =>
+      console.warn("audio_set_crossfade failed:", e),
+    );
     saveCrossfade(clamped);
     setState((prev) => ({ ...prev, crossfade: clamped }));
   }, []);

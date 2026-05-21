@@ -2,8 +2,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { ToastProvider } from "../../../contexts/ToastContext";
 import { FileManager } from "./FileManager";
 import type { FileManagerProfileStore } from "../../../types/profiles";
+
+const renderFileManager = () =>
+  render(
+    <ToastProvider>
+      <FileManager />
+    </ToastProvider>,
+  );
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -96,7 +104,7 @@ describe("FileManager", () => {
   // ── Rendering ─────────────────────────────────────────────────
 
   it("renders profile bar and mode toggle", async () => {
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => expect(screen.getByText("Profile")).toBeInTheDocument());
     const browseButtons = screen.getAllByRole("button", { name: "Browse" });
     expect(browseButtons.length).toBeGreaterThanOrEqual(1);
@@ -104,14 +112,14 @@ describe("FileManager", () => {
   });
 
   it("shows browse explorer when no profile is selected", async () => {
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => {
       expect(screen.getByText("Choose a folder to explore")).toBeInTheDocument();
     });
   });
 
   it("loads profiles from backend on mount", async () => {
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("get_file_manager_profiles");
     });
@@ -121,7 +129,7 @@ describe("FileManager", () => {
 
   it("defaults to Browse mode for browse profiles", async () => {
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => {
       expect(screen.getByText("/Users/test")).toBeInTheDocument();
     });
@@ -131,7 +139,7 @@ describe("FileManager", () => {
 
   it("auto-selects sync mode for sync profiles", async () => {
     mockStore(STORE_WITH_SYNC);
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => {
       expect(screen.getByText("Source")).toBeInTheDocument();
       expect(screen.getByText("Target")).toBeInTheDocument();
@@ -143,7 +151,7 @@ describe("FileManager", () => {
   it("switches from Browse to Sync mode", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -158,7 +166,7 @@ describe("FileManager", () => {
   it("switches from Sync to Browse mode", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_SYNC);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("Source")).toBeInTheDocument());
 
@@ -176,7 +184,7 @@ describe("FileManager", () => {
   it("paths carry over when switching modes", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_SYNC);
-    render(<FileManager />);
+    renderFileManager();
 
     // Wait for Sync mode to render
     await waitFor(() => expect(screen.getByText("/src")).toBeInTheDocument());
@@ -195,7 +203,7 @@ describe("FileManager", () => {
 
   it("creates a new profile in current mode", async () => {
     const user = userEvent.setup();
-    render(<FileManager />);
+    renderFileManager();
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("get_file_manager_profiles"));
 
     await user.click(screen.getByTitle("Create profile"));
@@ -218,7 +226,7 @@ describe("FileManager", () => {
   it("creates a sync profile when in sync mode", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -246,7 +254,7 @@ describe("FileManager", () => {
   it("deletes the active profile and resets to empty state", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -273,7 +281,7 @@ describe("FileManager", () => {
   it("renames the active profile", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -299,7 +307,7 @@ describe("FileManager", () => {
   it("duplicates a profile", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -330,7 +338,7 @@ describe("FileManager", () => {
   it("switches between profiles and auto-changes mode", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_MULTIPLE);
-    render(<FileManager />);
+    renderFileManager();
 
     // Starts on Browse One
     await waitFor(() => expect(screen.getByText("/folder-a")).toBeInTheDocument());
@@ -350,7 +358,7 @@ describe("FileManager", () => {
   it("deselects profile and shows browse explorer", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -368,7 +376,7 @@ describe("FileManager", () => {
   it("shows save/discard when profile is modified", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -384,7 +392,7 @@ describe("FileManager", () => {
   it("discard restores saved profile state and mode", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -405,7 +413,7 @@ describe("FileManager", () => {
   it("save persists the modified profile", async () => {
     const user = userEvent.setup();
     mockStore(STORE_WITH_BROWSE);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/Users/test")).toBeInTheDocument());
 
@@ -431,7 +439,7 @@ describe("FileManager", () => {
 
   it("shows filter toggle in sync mode when exclusions exist", async () => {
     mockStore(STORE_WITH_SYNC_EXCLUSIONS);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => {
       // Both ProfileSelector and SyncManager may show filter buttons
@@ -447,7 +455,7 @@ describe("FileManager", () => {
       active_profile: "Browse With Ex",
     };
     mockStore(store);
-    render(<FileManager />);
+    renderFileManager();
 
     await waitFor(() => expect(screen.getByText("/src")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /Filters/i })).not.toBeInTheDocument();
@@ -461,7 +469,7 @@ describe("FileManager", () => {
       return undefined;
     });
 
-    render(<FileManager />);
+    renderFileManager();
 
     // Should still render browse explorer without crashing
     await waitFor(() => {

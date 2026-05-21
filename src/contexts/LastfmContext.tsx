@@ -63,10 +63,10 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
           queueCount: status.queue_count,
         }));
       })
-      .catch(() => {});
+      .catch((e) => console.warn("Failed to load Last.fm status:", e));
 
     // Flush any offline scrobbles
-    invoke("lastfm_flush_queue").catch(() => {});
+    invoke("lastfm_flush_queue").catch((e) => console.warn("Failed to flush Last.fm queue:", e));
   }, []);
 
   // Listen for playback events
@@ -80,7 +80,7 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
         album: track.album ?? null,
         albumArtist: track.album_artist ?? null,
         durationSecs: track.duration_secs > 0 ? Math.round(track.duration_secs) : null,
-      }).catch(() => {});
+      }).catch((e) => console.warn("Failed to update Last.fm now playing:", e));
     };
 
     const onTrackScrobble = (e: Event) => {
@@ -93,7 +93,7 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
         albumArtist: track.album_artist ?? null,
         durationSecs: Math.round(track.duration_secs),
         timestamp: startedAt,
-      }).catch(() => {});
+      }).catch((e) => console.warn("Failed to scrobble to Last.fm:", e));
     };
 
     window.addEventListener("track-started", onTrackStarted);
@@ -125,7 +125,9 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     // Open browser for user authorization
-    invoke("lastfm_open_auth_url", { url: tokenResponse.auth_url }).catch(() => {});
+    invoke("lastfm_open_auth_url", { url: tokenResponse.auth_url }).catch((e) =>
+      toast.error(`Failed to open Last.fm auth page: ${e}`),
+    );
 
     // Poll for session (every 3s, max 2 minutes)
     let attempts = 0;
@@ -149,7 +151,7 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
         });
         toast.success(`Connected to Last.fm as ${username}`);
         // Flush any queued scrobbles now that we're authenticated
-        invoke("lastfm_flush_queue").catch(() => {});
+        invoke("lastfm_flush_queue").catch((e) => console.warn("Failed to flush Last.fm queue:", e));
       } catch {
         // User hasn't authorized yet — keep polling
         if (attempts >= maxAttempts) {
@@ -186,7 +188,7 @@ export const LastfmProvider = ({ children }: { children: React.ReactNode }) => {
   }, [toast]);
 
   const setScrobbleEnabled = useCallback((enabled: boolean) => {
-    invoke("lastfm_set_scrobble_enabled", { enabled }).catch(() => {});
+    invoke("lastfm_set_scrobble_enabled", { enabled }).catch((e) => console.warn("Failed to set scrobble enabled:", e));
     setState((prev) => ({ ...prev, scrobbleEnabled: enabled }));
   }, []);
 

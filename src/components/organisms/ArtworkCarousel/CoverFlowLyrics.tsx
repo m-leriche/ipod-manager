@@ -42,7 +42,7 @@ export const CoverFlowLyrics = () => {
       .then((result) => {
         if (result.lyrics || result.synced_lyrics) setLyrics(result);
       })
-      .catch(() => {})
+      .catch((e: unknown) => console.warn("Failed to fetch lyrics:", e))
       .finally(() => setLoading(false));
   }, [currentTrack]);
 

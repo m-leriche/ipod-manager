@@ -76,7 +76,7 @@ export const useBackgroundOperation = <TResult>(
   }, []);
 
   const cancel = useCallback(() => {
-    invoke(configRef.current.cancelCommand).catch(() => {});
+    invoke(configRef.current.cancelCommand).catch((e) => console.warn("Cancel command failed:", e));
   }, []);
 
   const dismissResult = useCallback(() => setResult(null), []);

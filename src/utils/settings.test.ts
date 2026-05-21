@@ -66,4 +66,36 @@ describe("settings", () => {
     expect(keys).toContain("sortBy");
     expect(keys).toContain("columnWidths");
   });
+
+  it("rejects invalid values for constrained str settings", () => {
+    localStorage.setItem(SETTINGS.sortDirection.key, "garbage");
+    expect(getSetting("sortDirection")).toBe("asc"); // Falls back to default
+
+    localStorage.setItem(SETTINGS.albumSortMode.key, "invalid");
+    expect(getSetting("albumSortMode")).toBe("album"); // Falls back to default
+  });
+
+  it("accepts valid values for constrained str settings", () => {
+    setSetting("sortDirection", "desc");
+    expect(getSetting("sortDirection")).toBe("desc");
+
+    setSetting("albumSortMode", "year");
+    expect(getSetting("albumSortMode")).toBe("year");
+  });
+
+  it("validates JSON settings with custom validators", () => {
+    // columnWidths rejects non-object
+    localStorage.setItem(SETTINGS.columnWidths.key, '"not-an-object"');
+    expect(getSetting("columnWidths")).toEqual({});
+
+    // browserColumnWidths rejects non-number arrays
+    localStorage.setItem(SETTINGS.browserColumnWidths.key, '["a","b"]');
+    expect(getSetting("browserColumnWidths")).toEqual([]);
+  });
+
+  it("lyricsOverlaySize defaults to 1 (multiplier)", () => {
+    expect(getSetting("lyricsOverlaySize")).toBe(1);
+    setSetting("lyricsOverlaySize", 1.5);
+    expect(getSetting("lyricsOverlaySize")).toBe(1.5);
+  });
 });

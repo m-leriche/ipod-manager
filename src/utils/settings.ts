@@ -32,10 +32,10 @@ const num = (key: string, defaultValue: number, min: number, max: number): Setti
   serialize: String,
 });
 
-const str = (key: string, defaultValue: string): SettingDef<string> => ({
+const str = (key: string, defaultValue: string, allowed?: string[]): SettingDef<string> => ({
   key,
   defaultValue,
-  parse: (raw) => raw,
+  parse: (raw) => (allowed ? (allowed.includes(raw) ? raw : undefined) : raw),
   serialize: (v) => v,
 });
 
@@ -55,6 +55,28 @@ const json = <T>(key: string, defaultValue: T, validate?: (parsed: unknown) => T
 
 // ── All settings ────────────────────────────────────────────────
 
+/** Validate that parsed JSON is a Record<string, number>. */
+const validateNumberRecord = (parsed: unknown): Record<string, number> | undefined => {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+  const obj = parsed as Record<string, unknown>;
+  for (const v of Object.values(obj)) {
+    if (typeof v !== "number") return undefined;
+  }
+  return obj as Record<string, number>;
+};
+
+/** Validate that parsed JSON is a string[]. */
+const validateStringArray = (parsed: unknown): string[] | undefined => {
+  if (!Array.isArray(parsed) || !parsed.every((v) => typeof v === "string")) return undefined;
+  return parsed as string[];
+};
+
+/** Validate that parsed JSON is a number[]. */
+const validateNumberArray = (parsed: unknown): number[] | undefined => {
+  if (!Array.isArray(parsed) || !parsed.every((v) => typeof v === "number" && isFinite(v))) return undefined;
+  return parsed as number[];
+};
+
 export const SETTINGS = {
   // Theme
   theme: str("crate-theme", "dark"),
@@ -64,9 +86,15 @@ export const SETTINGS = {
   crossfade: num("crate-playback-crossfade", 0, 0, 12),
   speed: num("crate-playback-speed", 1.0, 0.25, 4),
 
-  // Equalizer
-  equalizer: json("crate-equalizer", null as unknown),
-  equalizerPresets: json("crate-equalizer-presets", [] as unknown[]),
+  // Equalizer — stored as opaque JSON blobs; callers validate structure on read
+  equalizer: json<Record<string, unknown> | null>("crate-equalizer", null, (parsed) =>
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined,
+  ),
+  equalizerPresets: json<EqPresetStored[]>("crate-equalizer-presets", [], (parsed) =>
+    Array.isArray(parsed) ? (parsed as EqPresetStored[]) : undefined,
+  ),
 
   // Panel visibility
   showColumnBrowser: bool("crate-show-column-browser", true),
@@ -82,19 +110,26 @@ export const SETTINGS = {
 
   // Library sorting/filtering
   sortBy: str("crate-sort-by", "artist"),
-  sortDirection: str("crate-sort-direction", "asc"),
+  sortDirection: str("crate-sort-direction", "asc", ["asc", "desc"]),
   flaggedFilter: bool("crate-flagged-filter", false),
-  albumSortMode: str("crate-album-sort-mode", "album"),
+  albumSortMode: str("crate-album-sort-mode", "album", ["album", "artist", "year", "recent", "alpha"]),
 
   // Layout dimensions
-  columnWidths: json("crate-column-widths", {} as Record<string, number>),
-  columnOrder: json("crate-column-order", [] as string[]),
-  browserColumnWidths: json("crate-browser-column-widths", null as number[] | null),
+  columnWidths: json<Record<string, number>>("crate-column-widths", {}, validateNumberRecord),
+  columnOrder: json<string[]>("crate-column-order", [], validateStringArray),
+  browserColumnWidths: json<number[]>("crate-browser-column-widths", [], validateNumberArray),
   lyricsPanelWidth: num("crate-lyrics-panel-width", 280, 0, 10000),
   detailPanelWidth: num("crate-detail-panel-width", 220, 0, 10000),
-  albumGridHeight: num("crate-album-grid-height", 0.4, 0, 1),
-  lyricsOverlaySize: num("crate-lyrics-overlay-size", 18, 8, 72),
+  lyricsOverlaySize: num("crate-lyrics-overlay-size", 1, 0.5, 2),
 } as const;
+
+/** Stored shape for EQ presets (matches EqPreset from EqualizerPanel/types). */
+interface EqPresetStored {
+  name: string;
+  gains: number[];
+  preamp: number;
+  bandMode?: string;
+}
 
 // ── API ─────────────────────────────────────────────────────────
 

@@ -9,6 +9,7 @@ import {
   BUILT_IN_PRESETS,
   PARAMETRIC_PRESETS,
 } from "../components/organisms/EqualizerPanel/constants";
+import { getSetting, setSetting } from "../utils/settings";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -30,10 +31,8 @@ interface EqualizerContextValue {
 
 // ── Persistence ─────────────────────────────────────────────────
 
-import { getSetting, setSetting } from "../utils/settings";
-
 const loadState = (): EqualizerState => {
-  const p = getSetting("equalizer") as Record<string, unknown> | null;
+  const p = getSetting("equalizer");
   if (p) {
     return {
       enabled: (p.enabled as boolean) ?? false,
@@ -57,16 +56,17 @@ const loadState = (): EqualizerState => {
 };
 
 const loadCustomPresets = (): EqPreset[] => {
-  const stored = getSetting("equalizerPresets") as EqPreset[];
-  return Array.isArray(stored) ? stored : [];
+  const stored = getSetting("equalizerPresets");
+  return stored as EqPreset[];
 };
 
 const persist = (state: EqualizerState) => {
-  setSetting("equalizer", state as unknown);
+  // Serialize through JSON to convert EqualizerState → Record<string, unknown>
+  setSetting("equalizer", JSON.parse(JSON.stringify(state)));
 };
 
 const persistPresets = (presets: EqPreset[]) => {
-  setSetting("equalizerPresets", presets as unknown[]);
+  setSetting("equalizerPresets", presets);
 };
 
 // ── Helpers ─────────────────────────────────────────────────────

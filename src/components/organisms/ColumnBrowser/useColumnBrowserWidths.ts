@@ -6,14 +6,10 @@ const MIN_FRACTION = 0.15;
 
 const loadWidths = (): [number, number, number] => {
   const parsed = getSetting("browserColumnWidths");
-  if (
-    Array.isArray(parsed) &&
-    parsed.length === 3 &&
-    parsed.every((n: unknown) => typeof n === "number" && isFinite(n as number))
-  ) {
-    const clamped = parsed.map((f: number) => Math.max(MIN_FRACTION, f));
-    const total = clamped.reduce((a: number, b: number) => a + b, 0);
-    return clamped.map((f: number) => f / total) as [number, number, number];
+  if (parsed.length === 3) {
+    const clamped = parsed.map((f) => Math.max(MIN_FRACTION, f));
+    const total = clamped.reduce((a, b) => a + b, 0);
+    return clamped.map((f) => f / total) as [number, number, number];
   }
   return [...DEFAULT_WIDTHS] as [number, number, number];
 };
@@ -55,7 +51,7 @@ export const useColumnBrowserWidths = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       setWidths((w) => {
-        setSetting("browserColumnWidths", w as unknown as number[] | null);
+        setSetting("browserColumnWidths", [...w]);
         return w;
       });
     };

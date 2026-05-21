@@ -73,15 +73,23 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} data-testid="settings-backdrop" />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[520px] max-w-[95vw] max-h-[80vh] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[520px] max-w-[95vw] max-h-[80vh] flex flex-col"
+      >
         {/* Header */}
         <div className="retro-titlebar flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <RetroWindowDots />
-            <h2 className="text-sm font-medium text-text-primary">Settings</h2>
+            <h2 id="settings-dialog-title" className="text-sm font-medium text-text-primary">
+              Settings
+            </h2>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-text-tertiary hover:text-text-primary transition-colors text-lg leading-none"
           >
             &times;

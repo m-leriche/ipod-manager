@@ -188,7 +188,7 @@ const AppContent = () => {
       >
         <RetroWindowDots />
         <h1 className="text-sm font-medium tracking-tight text-text-secondary">Crate</h1>
-        <div className="flex gap-1">
+        <div className="flex gap-1" role="tablist" aria-label="Main navigation">
           <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>
             Library
           </TopTabButton>
@@ -251,7 +251,7 @@ const AppContent = () => {
                 <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
               </ErrorBoundary>
               <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex gap-1.5 shrink-0" role="tablist" aria-label="Tool tabs">
                   <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
                     iPod
                   </ToolTabButton>
@@ -403,6 +403,8 @@ const TopTabButton = ({
   children: React.ReactNode;
 }) => (
   <button
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
     className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
       active
@@ -426,6 +428,8 @@ const ToolTabButton = ({
   children: React.ReactNode;
 }) => (
   <button
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
     disabled={disabled}
     className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${

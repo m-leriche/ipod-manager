@@ -9,6 +9,7 @@ import {
   BUILT_IN_PRESETS,
   PARAMETRIC_PRESETS,
 } from "../components/organisms/EqualizerPanel/constants";
+import { getSetting, setSetting } from "../utils/settings";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -30,26 +31,18 @@ interface EqualizerContextValue {
 
 // ── Persistence ─────────────────────────────────────────────────
 
-const STORAGE_KEY = "crate-equalizer";
-const PRESETS_KEY = "crate-equalizer-presets";
-
 const loadState = (): EqualizerState => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const p = JSON.parse(stored);
-      return {
-        enabled: p.enabled ?? false,
-        bandMode: p.bandMode === "31" ? "31" : "10",
-        gains10: Array.isArray(p.gains10) && p.gains10.length === 10 ? p.gains10 : new Array(10).fill(0),
-        gains31: Array.isArray(p.gains31) && p.gains31.length === 31 ? p.gains31 : new Array(31).fill(0),
-        preamp: typeof p.preamp === "number" ? p.preamp : 0,
-        activePreset: p.activePreset ?? null,
-        parametricBands: Array.isArray(p.parametricBands) ? p.parametricBands : null,
-      };
-    }
-  } catch {
-    /* ignore corrupt storage */
+  const p = getSetting("equalizer");
+  if (p) {
+    return {
+      enabled: (p.enabled as boolean) ?? false,
+      bandMode: p.bandMode === "31" ? "31" : "10",
+      gains10: Array.isArray(p.gains10) && p.gains10.length === 10 ? p.gains10 : new Array(10).fill(0),
+      gains31: Array.isArray(p.gains31) && p.gains31.length === 31 ? p.gains31 : new Array(31).fill(0),
+      preamp: typeof p.preamp === "number" ? p.preamp : 0,
+      activePreset: (p.activePreset as string) ?? null,
+      parametricBands: Array.isArray(p.parametricBands) ? p.parametricBands : null,
+    };
   }
   return {
     enabled: false,
@@ -63,21 +56,17 @@ const loadState = (): EqualizerState => {
 };
 
 const loadCustomPresets = (): EqPreset[] => {
-  try {
-    const stored = localStorage.getItem(PRESETS_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [];
+  const stored = getSetting("equalizerPresets");
+  return stored as EqPreset[];
 };
 
 const persist = (state: EqualizerState) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // Serialize through JSON to convert EqualizerState → Record<string, unknown>
+  setSetting("equalizer", JSON.parse(JSON.stringify(state)));
 };
 
 const persistPresets = (presets: EqPreset[]) => {
-  localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  setSetting("equalizerPresets", presets);
 };
 
 // ── Helpers ─────────────────────────────────────────────────────

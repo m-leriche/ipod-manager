@@ -1,35 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../types/library";
 import type { PlaybackState, RepeatMode } from "./types";
+import { getSetting, setSetting } from "../../utils/settings";
 
-const VOLUME_KEY = "crate-playback-volume";
-const CROSSFADE_KEY = "crate-playback-crossfade";
+export const loadVolume = (): number => getSetting("volume");
+export const saveVolume = (volume: number) => setSetting("volume", volume);
 
-export const loadVolume = (): number => {
-  const stored = localStorage.getItem(VOLUME_KEY);
-  if (stored !== null) {
-    const v = parseFloat(stored);
-    if (isFinite(v) && v >= 0 && v <= 1) return v;
-  }
-  return 0.8;
-};
+export const loadCrossfade = (): number => getSetting("crossfade");
+export const saveCrossfade = (seconds: number) => setSetting("crossfade", seconds);
 
-export const saveVolume = (volume: number) => {
-  localStorage.setItem(VOLUME_KEY, String(volume));
-};
-
-export const loadCrossfade = (): number => {
-  const stored = localStorage.getItem(CROSSFADE_KEY);
-  if (stored !== null) {
-    const v = parseFloat(stored);
-    if (isFinite(v) && v >= 0 && v <= 12) return v;
-  }
-  return 0;
-};
-
-export const saveCrossfade = (seconds: number) => {
-  localStorage.setItem(CROSSFADE_KEY, String(seconds));
-};
+export const loadSpeed = (): number => getSetting("speed");
+export const saveSpeed = (speed: number) => setSetting("speed", speed);
 
 export interface PersistedPlaybackState {
   queue: LibraryTrack[];

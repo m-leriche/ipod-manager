@@ -16,12 +16,9 @@ import type {
 } from "../../../types/library";
 import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
+import { getSetting, setSetting } from "../../../utils/settings";
 
 const PAGE_SIZE = 500;
-const FLAGGED_FILTER_KEY = "crate-flagged-filter";
-const SORT_BY_KEY = "crate-sort-by";
-const SORT_DIR_KEY = "crate-sort-direction";
-const ALBUM_SORT_MODE_KEY = "crate-album-sort-mode";
 
 export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void) | null>) => {
   const { playTrack } = usePlayback();
@@ -35,13 +32,13 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const [selectedAlbums, setSelectedAlbums] = useState<Set<string>>(new Set());
 
   // Track table state (persisted)
-  const [sortBy, setSortBy] = useState(() => localStorage.getItem(SORT_BY_KEY) || "artist");
+  const [sortBy, setSortBy] = useState(() => getSetting("sortBy"));
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">(
-    () => (localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc",
+    () => getSetting("sortDirection") as "asc" | "desc",
   );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [flaggedOnly, setFlaggedOnly] = useState(() => localStorage.getItem(FLAGGED_FILTER_KEY) === "true");
+  const [flaggedOnly, setFlaggedOnly] = useState(() => getSetting("flaggedFilter"));
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<number>>(new Set());
 
   // Backend data
@@ -57,9 +54,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
-  const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(
-    () => (localStorage.getItem(ALBUM_SORT_MODE_KEY) as AlbumSortMode) || "album",
-  );
+  const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(() => getSetting("albumSortMode") as AlbumSortMode);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -285,8 +280,8 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
         setAlbumList(cached.browserData.albums);
         unfilteredCacheRef.current = {
           data: cached.browserData,
-          sortBy: localStorage.getItem(SORT_BY_KEY) || "artist",
-          sortDirection: localStorage.getItem(SORT_DIR_KEY) || "asc",
+          sortBy: getSetting("sortBy"),
+          sortDirection: getSetting("sortDirection"),
         };
         setDataLoaded(true);
         backgroundRescan();
@@ -368,8 +363,8 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       setSortBy("track_number");
       setSortDirection("asc");
     } else {
-      setSortBy(localStorage.getItem(SORT_BY_KEY) || "artist");
-      setSortDirection((localStorage.getItem(SORT_DIR_KEY) as "asc" | "desc") || "asc");
+      setSortBy(getSetting("sortBy"));
+      setSortDirection(getSetting("sortDirection") as "asc" | "desc");
     }
   }, []);
 
@@ -383,7 +378,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const toggleFlaggedOnly = useCallback(() => {
     setFlaggedOnly((prev) => {
       const next = !prev;
-      localStorage.setItem(FLAGGED_FILTER_KEY, String(next));
+      setSetting("flaggedFilter", next);
       return next;
     });
   }, []);
@@ -395,14 +390,14 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       if (key === sortBy) {
         setSortDirection((d) => {
           const next = d === "asc" ? "desc" : "asc";
-          localStorage.setItem(SORT_DIR_KEY, next);
+          setSetting("sortDirection", next);
           return next;
         });
       } else {
         setSortBy(key);
         setSortDirection("asc");
-        localStorage.setItem(SORT_BY_KEY, key);
-        localStorage.setItem(SORT_DIR_KEY, "asc");
+        setSetting("sortBy", key);
+        setSetting("sortDirection", "asc");
       }
     },
     [sortBy],
@@ -426,7 +421,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   const handleAlbumSortModeChange = useCallback((mode: AlbumSortMode) => {
     setAlbumSortMode(mode);
-    localStorage.setItem(ALBUM_SORT_MODE_KEY, mode);
+    setSetting("albumSortMode", mode);
   }, []);
 
   return {

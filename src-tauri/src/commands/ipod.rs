@@ -67,6 +67,7 @@ pub async fn get_ipod_info(
     mount_point: String,
     disk_info: DiskInfo,
 ) -> Result<ipod_info::IpodInfo, AppError> {
+    validate_mount_point(&mount_point)?;
     tauri::async_runtime::spawn_blocking(move || {
         ipod_info::read_ipod_info(&mount_point, &disk_info)
     })
@@ -79,6 +80,7 @@ pub async fn get_ipod_info(
 pub async fn read_rockbox_playdata(
     ipod_path: String,
 ) -> Result<rockbox::RockboxPlayData, AppError> {
+    validate_mount_point(&ipod_path)?;
     tauri::async_runtime::spawn_blocking(move || rockbox::read_rockbox_playdata(&ipod_path))
         .await
         .map_err(|e| format!("Read failed: {}", e))?
@@ -90,6 +92,7 @@ pub async fn write_rockbox_playdata(
     ipod_path: String,
     updates: Vec<rockbox::RockboxTrackUpdate>,
 ) -> Result<rockbox::WriteResult, AppError> {
+    validate_mount_point(&ipod_path)?;
     tauri::async_runtime::spawn_blocking(move || {
         rockbox::write_rockbox_playdata(&ipod_path, &updates)
     })

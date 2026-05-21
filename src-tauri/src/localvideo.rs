@@ -403,24 +403,6 @@ pub fn sanitize_filename(name: &str) -> String {
     sanitized
 }
 
-/// Validate that an output directory path is safe (absolute, no traversal components).
-pub fn validate_output_dir(output_dir: &str) -> Result<String, String> {
-    let path = std::path::Path::new(output_dir);
-    if !path.is_absolute() {
-        return Err(format!("Output directory must be absolute: {}", output_dir));
-    }
-    // Reject any ".." component to prevent traversal
-    for component in path.components() {
-        if let std::path::Component::ParentDir = component {
-            return Err(format!(
-                "Output directory must not contain '..': {}",
-                output_dir
-            ));
-        }
-    }
-    Ok(output_dir.to_string())
-}
-
 fn parse_ffmpeg_time(time_str: &str) -> Option<f64> {
     let parts: Vec<&str> = time_str.trim().split(':').collect();
     if parts.len() != 3 {
@@ -452,24 +434,6 @@ mod tests {
         assert_eq!(sanitize_filename(".."), "_");
         assert_eq!(sanitize_filename("."), "_");
         assert_eq!(sanitize_filename(""), "_");
-    }
-
-    #[test]
-    fn validate_output_dir_rejects_relative() {
-        assert!(validate_output_dir("relative/path").is_err());
-        assert!(validate_output_dir("../escape").is_err());
-    }
-
-    #[test]
-    fn validate_output_dir_rejects_traversal() {
-        assert!(validate_output_dir("/safe/../../etc").is_err());
-        assert!(validate_output_dir("/tmp/../../../etc").is_err());
-    }
-
-    #[test]
-    fn validate_output_dir_accepts_clean_path() {
-        assert!(validate_output_dir("/Users/test/output").is_ok());
-        assert!(validate_output_dir("/tmp").is_ok());
     }
 
     #[test]

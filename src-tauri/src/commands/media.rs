@@ -32,7 +32,7 @@ pub async fn download_audio(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, AppError> {
-    localvideo::validate_output_dir(&output_dir)?;
+    crate::validation::validate_output_dir(&output_dir)?;
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -101,7 +101,7 @@ pub async fn extract_audio_from_video(
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<youtube::DownloadResult, AppError> {
-    localvideo::validate_output_dir(&output_dir)?;
+    crate::validation::validate_output_dir(&output_dir)?;
     let flag = cancel.new_flag();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -134,7 +134,7 @@ pub async fn convert_audio(
     cancel: State<'_, SyncCancel>,
 ) -> Result<convert::ConvertResult, AppError> {
     for req in &requests {
-        localvideo::validate_output_dir(&req.output_dir)?;
+        crate::validation::validate_output_dir(&req.output_dir)?;
     }
     let flag = cancel.new_flag();
 
@@ -198,7 +198,7 @@ pub async fn generate_waveform(
 
 #[cfg(test)]
 mod tests {
-    use crate::localvideo::validate_output_dir;
+    use crate::validation::validate_output_dir;
 
     #[test]
     fn download_rejects_traversal_in_output_dir() {

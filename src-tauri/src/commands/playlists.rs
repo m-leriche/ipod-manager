@@ -1,6 +1,5 @@
 use crate::error::AppError;
 use crate::library::{self, LibraryDb};
-use crate::localvideo;
 use crate::playlist_export;
 use tauri::State;
 
@@ -87,7 +86,7 @@ pub async fn export_playlists_to_ipod(
     music_subdir: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<playlist_export::PlaylistExportResult, AppError> {
-    localvideo::validate_output_dir(&output_dir)?;
+    crate::validation::validate_output_dir(&output_dir)?;
     db.with_db(move |conn| {
         let library_root = library::get_library_location(conn).ok_or_else(|| {
             "No library location configured. Set one in Settings first.".to_string()

@@ -28,6 +28,7 @@ mod sanitize;
 mod streaming;
 mod subsonic;
 mod thumbnail;
+mod validation;
 mod volume_monitor;
 mod watcher;
 mod youtube;

@@ -389,12 +389,18 @@ fn extract_chapters(
 }
 
 pub fn sanitize_filename(name: &str) -> String {
-    name.chars()
+    let sanitized: String = name
+        .chars()
         .map(|c| match c {
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
             _ => c,
         })
-        .collect()
+        .collect();
+    // Reject directory traversal components
+    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
+        return "_".to_string();
+    }
+    sanitized
 }
 
 fn parse_ffmpeg_time(time_str: &str) -> Option<f64> {
@@ -421,6 +427,13 @@ mod tests {
     fn sanitize_removes_bad_chars() {
         assert_eq!(sanitize_filename("Song: \"Best\" <1>"), "Song_ _Best_ _1_");
         assert_eq!(sanitize_filename("normal name"), "normal name");
+    }
+
+    #[test]
+    fn sanitize_rejects_traversal() {
+        assert_eq!(sanitize_filename(".."), "_");
+        assert_eq!(sanitize_filename("."), "_");
+        assert_eq!(sanitize_filename(""), "_");
     }
 
     #[test]

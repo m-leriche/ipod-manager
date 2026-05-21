@@ -363,3 +363,25 @@ pub async fn invalidate_thumbnail(folder_path: String, app: AppHandle) -> Result
     crate::thumbnail::invalidate(&cache_dir, &folder_path);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::thumbnail::ThumbSize;
+
+    #[test]
+    fn thumb_size_parse_accepts_valid() {
+        assert!(ThumbSize::parse("small").is_some());
+        assert!(ThumbSize::parse("s").is_some());
+        assert!(ThumbSize::parse("medium").is_some());
+        assert!(ThumbSize::parse("m").is_some());
+        assert!(ThumbSize::parse("large").is_some());
+        assert!(ThumbSize::parse("l").is_some());
+    }
+
+    #[test]
+    fn thumb_size_parse_rejects_invalid() {
+        assert!(ThumbSize::parse("").is_none());
+        assert!(ThumbSize::parse("xl").is_none());
+        assert!(ThumbSize::parse("huge").is_none());
+    }
+}

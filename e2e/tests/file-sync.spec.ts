@@ -4,8 +4,8 @@ import { MOCK_FILE_MANAGER_SYNC_PROFILES, MOCK_COMPARE_ENTRIES } from "../fixtur
 test.describe("File Sync (Sync mode)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
   });
 
   test("shows empty state when no profile selected", async ({ page }) => {
@@ -17,8 +17,8 @@ test.describe("File Sync (Sync mode)", () => {
       get_file_manager_profiles: { ...MOCK_FILE_MANAGER_SYNC_PROFILES, active_profile: "iPod Sync" },
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     const profileSelect = page.getByRole("combobox").first();
     await expect(profileSelect).toHaveValue("iPod Sync");
@@ -31,8 +31,8 @@ test.describe("File Sync (Sync mode)", () => {
       get_file_manager_profiles: { ...MOCK_FILE_MANAGER_SYNC_PROFILES, active_profile: "iPod Sync" },
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     await expect(page.getByText("Source")).toBeVisible();
     await expect(page.getByText("Target")).toBeVisible();
@@ -43,8 +43,8 @@ test.describe("File Sync (Sync mode)", () => {
       get_file_manager_profiles: { ...MOCK_FILE_MANAGER_SYNC_PROFILES, active_profile: "iPod Sync" },
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     const compareBtn = page.getByRole("button", { name: "Compare Folders" });
     await expect(compareBtn).toBeVisible();
@@ -57,8 +57,8 @@ test.describe("File Sync (Sync mode)", () => {
       compare_directories: MOCK_COMPARE_ENTRIES,
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "File Manager" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "File Manager" }).click();
 
     await page.getByRole("button", { name: "Compare Folders" }).click();
 

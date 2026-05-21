@@ -3,8 +3,8 @@ import { test, expect } from "../fixtures/tauri-mocks";
 test.describe("AudioExtractor", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "Audio Extractor" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "Audio Extractor" }).click();
   });
 
   test("shows YouTube and Local Video toggle buttons", async ({ page }) => {

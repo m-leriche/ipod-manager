@@ -379,7 +379,9 @@ const AppContent = () => {
       )}
       {shortcutsOpen && (
         <Suspense fallback={null}>
-          <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+          <ErrorBoundary name="Keyboard Shortcuts">
+            <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+          </ErrorBoundary>
         </Suspense>
       )}
       {showFullscreenVisualizer && (

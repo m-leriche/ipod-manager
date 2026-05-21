@@ -63,7 +63,7 @@ test.describe("Settings Modal", () => {
 
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     // Click the X close button
-    await page.getByRole("button", { name: "×" }).click();
+    await page.getByRole("button", { name: "Close" }).click();
     await expect(page.getByRole("heading", { name: "Settings" })).not.toBeVisible();
   });
 });

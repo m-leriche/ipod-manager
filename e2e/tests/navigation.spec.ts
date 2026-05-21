@@ -10,8 +10,8 @@ test.describe("Navigation", () => {
   });
 
   test("shows Library and Tools top-level tabs", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Library", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Tools" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Library", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Tools" })).toBeVisible();
   });
 
   test("defaults to Library tab", async ({ page }) => {
@@ -19,38 +19,38 @@ test.describe("Navigation", () => {
   });
 
   test("switches to Tools tab and shows sub-tabs", async ({ page }) => {
-    await page.getByRole("button", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
 
-    await expect(page.getByRole("button", { name: "iPod" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "File Manager" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Metadata" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Audio Extractor" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "iPod" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "File Manager" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Metadata" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Audio Extractor" })).toBeVisible();
   });
 
   test("switches between tool sub-tabs", async ({ page }) => {
-    await page.getByRole("button", { name: "Tools" }).click();
+    await page.getByRole("tab", { name: "Tools" }).click();
 
     // Default tool tab is File Manager
     await expect(page.getByText("Choose a folder to explore")).toBeVisible();
 
     // Switch to Metadata
-    await page.getByRole("button", { name: "Metadata" }).click();
+    await page.getByRole("tab", { name: "Metadata" }).click();
     await expect(page.getByText("Drag from Finder to scan metadata")).toBeVisible();
 
     // Switch to Audio Extractor
-    await page.getByRole("button", { name: "Audio Extractor" }).click();
-    await expect(page.getByRole("button", { name: "Audio Extractor" })).toBeVisible();
+    await page.getByRole("tab", { name: "Audio Extractor" }).click();
+    await expect(page.getByRole("tab", { name: "Audio Extractor" })).toBeVisible();
 
     // Switch to iPod
-    await page.getByRole("button", { name: "iPod" }).click();
-    await expect(page.getByRole("button", { name: "iPod" })).toBeVisible();
+    await page.getByRole("tab", { name: "iPod" }).click();
+    await expect(page.getByRole("tab", { name: "iPod" })).toBeVisible();
   });
 
   test("can switch back to Library from Tools", async ({ page }) => {
-    await page.getByRole("button", { name: "Tools" }).click();
-    await expect(page.getByRole("button", { name: "File Manager" })).toBeVisible();
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await expect(page.getByRole("tab", { name: "File Manager" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page.getByRole("tab", { name: "Library", exact: true }).click();
     await expect(page.getByText("Add your music library")).toBeVisible();
   });
 

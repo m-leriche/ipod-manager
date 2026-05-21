@@ -106,6 +106,9 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
     smart_playlists_skipped: 0,
   },
 
+  // Playback queue
+  load_playback_queue: null,
+
   // Audio playback
   audio_play: null,
   audio_pause: null,
@@ -134,6 +137,9 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   // Library stats
   scan_library_stats: null,
   get_library_stats: null,
+
+  // Subsonic
+  get_subsonic_status: { enabled: false, port: 4533, username: "", urls: [] },
 
   // Last.fm
   lastfm_get_token: { token: "mock-token", auth_url: "https://www.last.fm/api/auth/" },

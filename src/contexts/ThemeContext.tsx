@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { getSetting, setSetting } from "../utils/settings";
 
 export type ThemeName = "dark" | "win95" | "classic" | "winamp" | "aqua" | "spotify";
 
@@ -7,15 +8,13 @@ interface ThemeContextValue {
   setTheme: (theme: ThemeName) => void;
 }
 
-const STORAGE_KEY = "crate-theme";
-
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+const VALID_THEMES: ThemeName[] = ["dark", "win95", "classic", "winamp", "aqua", "spotify"];
+
 const getStoredTheme = (): ThemeName => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const valid: ThemeName[] = ["dark", "win95", "classic", "winamp", "aqua", "spotify"];
-  if (valid.includes(stored as ThemeName)) return stored as ThemeName;
-  return "dark";
+  const stored = getSetting("theme") as ThemeName;
+  return VALID_THEMES.includes(stored) ? stored : "dark";
 };
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
@@ -23,7 +22,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(STORAGE_KEY, theme);
+    setSetting("theme", theme);
   }, [theme]);
 
   const setTheme = useCallback((t: ThemeName) => setThemeState(t), []);

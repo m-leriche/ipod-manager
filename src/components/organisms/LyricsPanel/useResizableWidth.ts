@@ -1,19 +1,12 @@
 import { useState, useCallback, useRef } from "react";
+import { getSetting, setSetting } from "../../../utils/settings";
 
-const STORAGE_KEY = "crate-lyrics-panel-width";
-const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 500;
 
 const loadWidth = (): number => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_WIDTH;
-    const w = parseInt(raw, 10);
-    return isFinite(w) ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, w)) : DEFAULT_WIDTH;
-  } catch {
-    return DEFAULT_WIDTH;
-  }
+  const w = getSetting("lyricsPanelWidth");
+  return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, w));
 };
 
 export const useResizableWidth = () => {
@@ -40,7 +33,7 @@ export const useResizableWidth = () => {
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
         setWidth((w) => {
-          localStorage.setItem(STORAGE_KEY, String(w));
+          setSetting("lyricsPanelWidth", w);
           return w;
         });
       };

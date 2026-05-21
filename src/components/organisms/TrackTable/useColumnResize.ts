@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { getSetting, setSetting } from "../../../utils/settings";
 
 export interface ColumnDef {
   key: string;
@@ -6,31 +7,14 @@ export interface ColumnDef {
   initialWidth: number;
 }
 
-const STORAGE_KEY = "crate-column-widths";
-
 const loadWidthMap = (columns: ColumnDef[]): Record<string, number> => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const map: Record<string, number> = {};
-      columns.forEach((c) => {
-        map[c.key] = c.initialWidth;
-      });
-      return map;
-    }
-    const saved = JSON.parse(raw) as Record<string, number>;
-    const map: Record<string, number> = {};
-    columns.forEach((c) => {
-      map[c.key] = saved[c.key] ?? c.initialWidth;
-    });
-    return map;
-  } catch {
-    const map: Record<string, number> = {};
-    columns.forEach((c) => {
-      map[c.key] = c.initialWidth;
-    });
-    return map;
-  }
+  const saved = getSetting("columnWidths");
+  const map: Record<string, number> = {};
+  columns.forEach((c) => {
+    map[c.key] =
+      (saved && typeof saved === "object" ? (saved as Record<string, number>)[c.key] : undefined) ?? c.initialWidth;
+  });
+  return map;
 };
 
 export const useColumnResize = (columns: ColumnDef[]) => {
@@ -39,7 +23,7 @@ export const useColumnResize = (columns: ColumnDef[]) => {
   const didDragRef = useRef(false);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(widthMap));
+    setSetting("columnWidths", widthMap);
   }, [widthMap]);
 
   const widths = useMemo(() => columns.map((c) => widthMap[c.key] ?? c.initialWidth), [columns, widthMap]);

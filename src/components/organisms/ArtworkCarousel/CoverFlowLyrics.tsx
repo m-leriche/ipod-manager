@@ -3,8 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePlayback, usePlaybackTime } from "../../../contexts/PlaybackContext";
 import { parseLrc, findActiveLine } from "../LyricsPanel/helpers";
 import type { TrackLyrics } from "../LyricsPanel/types";
+import { getSetting, setSetting } from "../../../utils/settings";
 
-const LYRICS_SIZE_KEY = "crate-lyrics-overlay-size";
 type LyricsSize = 1 | 1.25 | 1.5;
 const SIZES: LyricsSize[] = [1, 1.25, 1.5];
 const BASE_SIZE_PX = 14;
@@ -21,13 +21,13 @@ export const CoverFlowLyrics = () => {
   const [translateY, setTranslateY] = useState(0);
   const lastTrackIdRef = useRef<number | null>(null);
   const [size, setSize] = useState<LyricsSize>(() => {
-    const stored = localStorage.getItem(LYRICS_SIZE_KEY);
-    return stored && SIZES.includes(Number(stored) as LyricsSize) ? (Number(stored) as LyricsSize) : 1;
+    const stored = getSetting("lyricsOverlaySize");
+    return SIZES.includes(stored as LyricsSize) ? (stored as LyricsSize) : 1;
   });
 
   const handleSizeChange = (s: LyricsSize) => {
     setSize(s);
-    localStorage.setItem(LYRICS_SIZE_KEY, String(s));
+    setSetting("lyricsOverlaySize", s);
   };
 
   // Load lyrics when track changes

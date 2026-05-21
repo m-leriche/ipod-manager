@@ -1,21 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { TrackTableColumn } from "./constants";
-
-const STORAGE_KEY = "crate-column-order";
+import { getSetting, setSetting } from "../../../utils/settings";
 
 const loadOrder = (columns: TrackTableColumn[]): string[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return columns.map((c) => c.key);
-    const saved = JSON.parse(raw) as string[];
-    const defaultKeys = new Set(columns.map((c) => c.key));
-    if (saved.length !== defaultKeys.size || !saved.every((k) => defaultKeys.has(k))) {
-      return columns.map((c) => c.key);
-    }
-    return saved;
-  } catch {
+  const saved = getSetting("columnOrder");
+  if (!Array.isArray(saved) || saved.length === 0) return columns.map((c) => c.key);
+  const defaultKeys = new Set(columns.map((c) => c.key));
+  if (saved.length !== defaultKeys.size || !saved.every((k) => defaultKeys.has(k))) {
     return columns.map((c) => c.key);
   }
+  return saved;
 };
 
 interface DragState {
@@ -31,7 +25,7 @@ export const useColumnOrder = (columns: TrackTableColumn[]) => {
   const headerEls = useRef<(HTMLTableCellElement | null)[]>([]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
+    setSetting("columnOrder", order);
   }, [order]);
 
   const orderedColumns = useMemo(() => {

@@ -8,6 +8,8 @@ import {
   saveVolume,
   loadCrossfade,
   saveCrossfade,
+  loadSpeed,
+  saveSpeed,
   savePlaybackState,
   loadPlaybackState,
 } from "./persistence";
@@ -29,7 +31,7 @@ const initialState: PlaybackState = {
   currentTrack: null,
   isPlaying: false,
   volume: loadVolume(),
-  speed: 1.0,
+  speed: loadSpeed(),
   crossfade: loadCrossfade(),
   queue: [],
   queueIndex: -1,
@@ -90,10 +92,13 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Whether the queue has been restored from SQLite (prevents saving empty state on mount)
   const queueRestoredRef = useRef(false);
 
-  // ── Set initial volume and crossfade on the Rust engine ─────
+  // ── Set initial volume, crossfade, and speed on the Rust engine ─
   useEffect(() => {
     invoke("audio_set_volume", { volume: state.volume }).catch(() => {});
     invoke("audio_set_crossfade", { durationSecs: state.crossfade }).catch(() => {});
+    if (state.speed !== 1.0) {
+      invoke("audio_set_speed", { speed: state.speed }).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -802,6 +807,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const setSpeed = useCallback((speed: number) => {
     const clamped = Math.max(0.25, Math.min(4, speed));
     invoke("audio_set_speed", { speed: clamped }).catch((e) => console.warn("audio_set_speed failed:", e));
+    saveSpeed(clamped);
     setState((prev) => ({ ...prev, speed: clamped }));
   }, []);
 

@@ -49,12 +49,20 @@ export const StatsDetailModal = ({ filter, files, onClose }: StatsDetailModalPro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} data-testid="modal-backdrop" />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[800px] max-w-[95vw] max-h-[80vh] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stats-detail-title"
+        className="relative bg-bg-secondary border border-border rounded-2xl shadow-xl w-[800px] max-w-[95vw] max-h-[80vh] flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h2 className="text-sm font-medium text-text-primary">{filter.displayLabel}</h2>
+          <h2 id="stats-detail-title" className="text-sm font-medium text-text-primary">
+            {filter.displayLabel}
+          </h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-text-tertiary hover:text-text-primary transition-colors text-lg leading-none"
           >
             &times;

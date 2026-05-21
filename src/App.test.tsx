@@ -29,8 +29,8 @@ describe("App", () => {
 
   it("shows Library and Tools top-level tabs", () => {
     render(<App />);
-    expect(screen.getByRole("button", { name: "Library" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tools" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Library" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Tools" })).toBeInTheDocument();
   });
 
   it("defaults to Library tab with empty state", async () => {
@@ -41,15 +41,15 @@ describe("App", () => {
   it("switches to Tools tab and shows tool sub-tabs", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Tools" }));
-    expect(screen.getByRole("button", { name: "File Manager" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Metadata" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Tools" }));
+    expect(screen.getByRole("tab", { name: "File Manager" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Metadata" })).toBeInTheDocument();
   });
 
   it("shows File Manager content within Tools tab", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("tab", { name: "Tools" }));
     expect(await screen.findByText("Choose a folder to explore")).toBeInTheDocument();
   });
 });

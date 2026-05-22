@@ -1,13 +1,34 @@
 export const isValidYouTubeUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
-    return (
-      parsed.hostname.includes("youtube.com") ||
-      parsed.hostname === "youtu.be" ||
-      parsed.hostname === "music.youtube.com"
-    );
+    return parsed.hostname.includes("youtube.com") || parsed.hostname === "youtu.be";
   } catch {
     return false;
+  }
+};
+
+export const cleanYouTubeUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname.includes("youtube.com")) {
+      const videoId = parsed.searchParams.get("v");
+      if (videoId) {
+        parsed.search = `?v=${videoId}`;
+        return parsed.toString();
+      }
+      parsed.search = "";
+      return parsed.toString();
+    }
+
+    if (parsed.hostname === "youtu.be") {
+      parsed.search = "";
+      return parsed.toString();
+    }
+
+    return url;
+  } catch {
+    return url;
   }
 };
 

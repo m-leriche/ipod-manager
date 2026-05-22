@@ -100,6 +100,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       setSelectedIds(new Set([trackId]));
     }
     lastClickedRef.current = trackId;
+    setAutoTitleStatus(null);
   };
 
   const isMissingTitle = issue.id === "missing_title";

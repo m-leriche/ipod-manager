@@ -140,6 +140,15 @@ pub fn build_codec_args(format: &str) -> Vec<String> {
     .collect()
 }
 
+/// Returns the correct metadata key for track number based on output format.
+/// FLAC uses Vorbis comments (`TRACKNUMBER`), MP3/ID3 uses `track`.
+pub fn track_number_key(format: &str) -> &'static str {
+    match format {
+        "flac" => "TRACKNUMBER",
+        _ => "track",
+    }
+}
+
 fn extract_single(
     path: &str,
     output_dir: &str,
@@ -333,7 +342,7 @@ fn extract_chapters(
         args.extend(build_codec_args(format));
         args.extend([
             "-metadata".to_string(),
-            format!("track={}/{}", i + 1, total),
+            format!("{}={}/{}", track_number_key(format), i + 1, total),
             "-metadata".to_string(),
             format!("title={}", chapter.title),
             "-y".to_string(),

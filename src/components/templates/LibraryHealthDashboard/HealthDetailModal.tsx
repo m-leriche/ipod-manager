@@ -54,6 +54,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       if (e.key === "a" && (e.metaKey || e.ctrlKey) && tracks && tracks.length > 0) {
         e.preventDefault();
         setSelectedIds(new Set(tracks.map((t) => t.id)));
+        setAutoTitleStatus(null);
       }
     };
     window.addEventListener("keydown", onKey);

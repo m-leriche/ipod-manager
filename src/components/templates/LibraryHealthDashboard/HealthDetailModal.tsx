@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
@@ -9,6 +10,12 @@ import { extractTitleFromFileName, extractTrackInfoFromFileName, extractYearFrom
 import { YearLookupModal } from "./YearLookupModal";
 
 const ROW_HEIGHT = 32;
+
+interface YearLookupProgress {
+  completed: number;
+  total: number;
+  current: string;
+}
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
@@ -30,6 +37,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const [autoFixStatus, setAutoFixStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [yearLookupResults, setYearLookupResults] = useState<AlbumYearResult[] | null>(null);
+  const [lookupProgress, setLookupProgress] = useState<YearLookupProgress | null>(null);
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
@@ -235,14 +243,22 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     }
 
     setSaving(true);
-    setAutoFixStatus(`Looking up ${needsLookup.length} album${needsLookup.length !== 1 ? "s" : ""}...`);
+    setAutoFixStatus(null);
+    setLookupProgress({ completed: 0, total: needsLookup.length, current: "" });
+
+    let unlisten: UnlistenFn | undefined;
     try {
+      unlisten = await listen<YearLookupProgress>("year-lookup-progress", (e) => {
+        setLookupProgress(e.payload);
+      });
       const apiResults = await invoke<AlbumYearResult[]>("lookup_album_years", { albums: needsLookup });
       setYearLookupResults([...extracted, ...apiResults]);
       setAutoFixStatus(null);
     } catch (e) {
       setAutoFixStatus(`Error: ${e}`);
     } finally {
+      unlisten?.();
+      setLookupProgress(null);
       setSaving(false);
     }
   };
@@ -378,8 +394,26 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
         <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
           <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
           {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
-          {autoFixStatus && <span className="text-[11px] text-text-secondary">{autoFixStatus}</span>}
-          <div className="flex-1" />
+          {lookupProgress && (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="w-32 bg-bg-card border border-border rounded-full h-1.5 overflow-hidden shrink-0">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-300"
+                  style={{
+                    width: `${lookupProgress.total > 0 ? Math.round((lookupProgress.completed / lookupProgress.total) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] text-text-tertiary shrink-0">
+                {lookupProgress.completed}/{lookupProgress.total}
+              </span>
+              {lookupProgress.current && (
+                <span className="text-[11px] text-text-tertiary truncate min-w-0">{lookupProgress.current}</span>
+              )}
+            </div>
+          )}
+          {!lookupProgress && autoFixStatus && <span className="text-[11px] text-text-secondary">{autoFixStatus}</span>}
+          {!lookupProgress && <div className="flex-1" />}
           {isMissingTitle && selectedCount > 0 && (
             <button
               onClick={handleAutoTitle}

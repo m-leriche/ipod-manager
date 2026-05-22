@@ -343,21 +343,16 @@ struct YearLookupProgress {
     current: String,
 }
 
-/// Try to find the release year for an album via MusicBrainz release-groups.
-/// Strategy: strict artist+album query first, then a looser album-only fallback.
+/// Try to find the release year for an album via MusicBrainz.
+/// Strategy: release-group search first (canonical album with `first-release-date`),
+/// then individual release search as fallback. Both use artist+album queries.
+/// Note: the fallback incurs an extra 1.1s rate-limit sleep per miss.
 fn lookup_year(
     artist_norm: &str,
     album_norm: &str,
     orig_artist: &str,
     orig_album: &str,
 ) -> AlbumYearResult {
-    let empty = || AlbumYearResult {
-        artist: orig_artist.to_string(),
-        album: orig_album.to_string(),
-        suggested_year: None,
-        release_title: None,
-    };
-
     let make_result = |rg: &musicbrainz::MbReleaseGroup| -> Option<AlbumYearResult> {
         let year = rg
             .first_release_date
@@ -398,7 +393,12 @@ fn lookup_year(
         }
     }
 
-    empty()
+    AlbumYearResult {
+        artist: orig_artist.to_string(),
+        album: orig_album.to_string(),
+        suggested_year: None,
+        release_title: None,
+    }
 }
 
 #[tauri::command]

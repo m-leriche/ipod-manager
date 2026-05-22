@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
-import type { HealthIssue } from "./types";
+import type { HealthIssue, AlbumYearQuery, AlbumYearResult } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
+import { YearLookupModal } from "./YearLookupModal";
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
@@ -25,6 +26,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [autoFixStatus, setAutoFixStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [yearLookupResults, setYearLookupResults] = useState<AlbumYearResult[] | null>(null);
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
@@ -110,7 +112,8 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
 
   const isMissingTitle = issue.id === "missing_title";
   const isMissingTrackNumber = issue.id === "missing_track_number";
-  const hasAutoFix = isMissingTitle || isMissingTrackNumber;
+  const isMissingYear = issue.id === "missing_year";
+  const hasAutoFix = isMissingTitle || isMissingTrackNumber || isMissingYear;
 
   const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -191,6 +194,75 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       ];
       if (result.failed > 0) parts.push(`${result.failed} failed`);
       if (skipped > 0) parts.push(`${skipped} skipped`);
+      setAutoFixStatus(parts.join(", "));
+      setSelectedIds(new Set());
+      await loadTracks();
+      onDataChanged?.();
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleYearLookup = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    // Group tracks by artist+album to get unique album queries
+    const seen = new Set<string>();
+    const albums: AlbumYearQuery[] = [];
+    for (const t of selected) {
+      const artist = t.artist || "Unknown Artist";
+      const album = t.album || "Unknown Album";
+      const key = `${artist}::${album}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        albums.push({ artist, album });
+      }
+    }
+
+    setSaving(true);
+    setAutoFixStatus(`Looking up ${albums.length} album${albums.length !== 1 ? "s" : ""}...`);
+    try {
+      const results = await invoke<AlbumYearResult[]>("lookup_album_years", { albums });
+      setYearLookupResults(results);
+      setAutoFixStatus(null);
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleYearApply = async (accepted: AlbumYearResult[]) => {
+    if (!tracks) return;
+    setYearLookupResults(null);
+
+    // Build a map from artist::album → year for quick lookup
+    const yearMap = new Map<string, number>();
+    for (const r of accepted) {
+      if (r.suggested_year) yearMap.set(`${r.artist}::${r.album}`, r.suggested_year);
+    }
+
+    // Build updates for all selected tracks that match accepted albums
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    const updates: MetadataUpdate[] = [];
+    for (const t of selected) {
+      const key = `${t.artist || "Unknown Artist"}::${t.album || "Unknown Album"}`;
+      const year = yearMap.get(key);
+      if (year) updates.push({ file_path: t.file_path, year });
+    }
+
+    if (updates.length === 0) return;
+
+    setSaving(true);
+    setAutoFixStatus(null);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const parts: string[] = [`Applied year to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
       setAutoFixStatus(parts.join(", "));
       setSelectedIds(new Set());
       await loadTracks();
@@ -306,6 +378,15 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
               {saving ? "Applying..." : "Auto-track number from filename"}
             </button>
           )}
+          {isMissingYear && selectedCount > 0 && (
+            <button
+              onClick={handleYearLookup}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Looking up..." : "Look up year"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -336,6 +417,17 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
                   },
                 ]
               : []),
+            ...(isMissingYear
+              ? [
+                  {
+                    label: `Look up year (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleYearLookup();
+                    },
+                  },
+                ]
+              : []),
             ...(onRepairMetadata
               ? [
                   {
@@ -346,6 +438,14 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
               : []),
           ]}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {yearLookupResults && (
+        <YearLookupModal
+          results={yearLookupResults}
+          onApply={handleYearApply}
+          onCancel={() => setYearLookupResults(null)}
         />
       )}
     </div>

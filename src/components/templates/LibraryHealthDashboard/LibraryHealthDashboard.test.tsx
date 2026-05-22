@@ -626,6 +626,95 @@ describe("drill-down", () => {
       expect(screen.getByText("Applied track numbers to 2 tracks")).toBeInTheDocument();
     });
   });
+
+  it("shows look-up-year button when tracks are selected in missing_year view", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing year")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing year"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Look up year")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("track_1.flac"));
+
+    expect(screen.getByText("Look up year")).toBeInTheDocument();
+  });
+
+  it("shows year confirmation modal after lookup and applies on confirm", async () => {
+    const user = userEvent.setup();
+    const yearTracks = [makeMockTrack(1, "01-01 Song.flac", "The Beatles")];
+    // Override album for the mock track
+    yearTracks[0].album = "Abbey Road";
+
+    mockInvoke
+      .mockResolvedValueOnce(MOCK_REPORT) // get_library_health
+      .mockResolvedValueOnce(yearTracks) // get_health_issue_tracks
+      .mockResolvedValueOnce([
+        // lookup_album_years
+        {
+          artist: "The Beatles",
+          album: "Abbey Road",
+          suggested_year: 1969,
+          release_title: "Abbey Road",
+        },
+      ])
+      .mockResolvedValueOnce({
+        // save_metadata
+        total: 1,
+        succeeded: 1,
+        failed: 0,
+        cancelled: false,
+        errors: [],
+        undo_operations: [],
+      })
+      .mockResolvedValueOnce([]) // get_health_issue_tracks (refresh)
+      .mockResolvedValueOnce(MOCK_REPORT); // get_library_health (onDataChanged)
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing year")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing year"));
+
+    await waitFor(() => {
+      expect(screen.getByText("01-01 Song.flac")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("01-01 Song.flac"));
+    await user.click(screen.getByText("Look up year"));
+
+    // Confirmation modal should appear
+    await waitFor(() => {
+      expect(screen.getByText("Confirm Year Suggestions")).toBeInTheDocument();
+    });
+    expect(screen.getByText("1969")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 album selected")).toBeInTheDocument();
+
+    // Click Apply
+    await user.click(screen.getByText(/^Apply/));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("save_metadata", {
+        updates: [{ file_path: "/music/01-01 Song.flac", year: 1969 }],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Applied year to 1 track")).toBeInTheDocument();
+    });
+  });
 });
 
 describe("helpers", () => {

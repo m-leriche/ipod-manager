@@ -255,6 +255,7 @@ pub fn run() {
             commands::save_metadata,
             commands::repair_analyze,
             commands::repair_compare_release,
+            commands::lookup_album_years,
             commands::scan_audio_quality,
             commands::scan_audio_quality_paths,
             commands::generate_spectrogram,

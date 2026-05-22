@@ -4,7 +4,7 @@ import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { HealthIssue } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
-import { extractTitleFromFileName } from "./helpers";
+import { extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
@@ -23,7 +23,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [autoTitleStatus, setAutoTitleStatus] = useState<string | null>(null);
+  const [autoFixStatus, setAutoFixStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
@@ -54,7 +54,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       if (e.key === "a" && (e.metaKey || e.ctrlKey) && tracks && tracks.length > 0) {
         e.preventDefault();
         setSelectedIds(new Set(tracks.map((t) => t.id)));
-        setAutoTitleStatus(null);
+        setAutoFixStatus(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -105,14 +105,16 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       setSelectedIds(new Set([trackId]));
     }
     lastClickedRef.current = trackId;
-    setAutoTitleStatus(null);
+    setAutoFixStatus(null);
   };
 
   const isMissingTitle = issue.id === "missing_title";
+  const isMissingTrackNumber = issue.id === "missing_track_number";
+  const hasAutoFix = isMissingTitle || isMissingTrackNumber;
 
   const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!onRepairMetadata && !isMissingTitle) return;
+    if (!onRepairMetadata && !hasAutoFix) return;
     if (!selectedIds.has(trackId)) {
       setSelectedIds(new Set([trackId]));
       lastClickedRef.current = trackId;
@@ -140,24 +142,61 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     }
 
     if (updates.length === 0) {
-      setAutoTitleStatus("Could not extract titles from selected filenames");
+      setAutoFixStatus("Could not extract titles from selected filenames");
       return;
     }
 
     setSaving(true);
-    setAutoTitleStatus(null);
+    setAutoFixStatus(null);
     try {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       const skipped = selected.length - updates.length;
       const parts: string[] = [`Applied titles to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
       if (result.failed > 0) parts.push(`${result.failed} failed`);
       if (skipped > 0) parts.push(`${skipped} skipped`);
-      setAutoTitleStatus(parts.join(", "));
+      setAutoFixStatus(parts.join(", "));
       setSelectedIds(new Set());
       await loadTracks();
       onDataChanged?.();
     } catch (e) {
-      setAutoTitleStatus(`Error: ${e}`);
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAutoTrackNumber = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    const updates: MetadataUpdate[] = [];
+    for (const track of selected) {
+      const info = extractTrackInfoFromFileName(track.file_name);
+      if (info) updates.push({ file_path: track.file_path, track: info.trackNumber, disc_number: info.discNumber });
+    }
+
+    if (updates.length === 0) {
+      setAutoFixStatus("Could not extract track numbers from selected filenames");
+      return;
+    }
+
+    setSaving(true);
+    setAutoFixStatus(null);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const skipped = selected.length - updates.length;
+      const parts: string[] = [
+        `Applied track numbers to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`,
+      ];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (skipped > 0) parts.push(`${skipped} skipped`);
+      setAutoFixStatus(parts.join(", "));
+      setSelectedIds(new Set());
+      await loadTracks();
+      onDataChanged?.();
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
     } finally {
       setSaving(false);
     }
@@ -247,7 +286,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
         <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
           <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
           {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
-          {autoTitleStatus && <span className="text-[11px] text-text-secondary">{autoTitleStatus}</span>}
+          {autoFixStatus && <span className="text-[11px] text-text-secondary">{autoFixStatus}</span>}
           <div className="flex-1" />
           {isMissingTitle && selectedCount > 0 && (
             <button
@@ -256,6 +295,15 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
               className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
             >
               {saving ? "Applying..." : "Auto-title from filename"}
+            </button>
+          )}
+          {isMissingTrackNumber && selectedCount > 0 && (
+            <button
+              onClick={handleAutoTrackNumber}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Applying..." : "Auto-track number from filename"}
             </button>
           )}
         </div>
@@ -273,6 +321,17 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
                     onClick: () => {
                       setContextMenu(null);
                       handleAutoTitle();
+                    },
+                  },
+                ]
+              : []),
+            ...(isMissingTrackNumber
+              ? [
+                  {
+                    label: `Auto-track number from filename (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleAutoTrackNumber();
                     },
                   },
                 ]

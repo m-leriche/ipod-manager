@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryHealthDashboard } from "./LibraryHealthDashboard";
-import { issuePercentage, issueSeverity, extractTitleFromFileName } from "./helpers";
+import { issuePercentage, issueSeverity, extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
 import type { HealthReport, HealthIssue } from "./types";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -550,6 +550,82 @@ describe("drill-down", () => {
 
     expect(screen.getByText("3 selected")).toBeInTheDocument();
   });
+
+  it("shows auto-track-number button when tracks are selected in missing_track_number view", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing track number")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing track number"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Auto-track number from filename")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("track_1.flac"));
+
+    expect(screen.getByText("Auto-track number from filename")).toBeInTheDocument();
+  });
+
+  it("calls save_metadata with extracted track numbers when auto-track-number is clicked", async () => {
+    const user = userEvent.setup();
+    const numberedTracks = [
+      makeMockTrack(1, "01-03 Song One.flac", "Artist A"),
+      makeMockTrack(2, "02-07 Song Two.mp3", "Artist B"),
+    ];
+    mockInvoke
+      .mockResolvedValueOnce(MOCK_REPORT)
+      .mockResolvedValueOnce(numberedTracks)
+      .mockResolvedValueOnce({
+        total: 2,
+        succeeded: 2,
+        failed: 0,
+        cancelled: false,
+        errors: [],
+        undo_operations: [],
+      })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(MOCK_REPORT);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing track number")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing track number"));
+
+    await waitFor(() => {
+      expect(screen.getByText("01-03 Song One.flac")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("01-03 Song One.flac"));
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByText("02-07 Song Two.mp3"));
+    await user.keyboard("{/Shift}");
+
+    await user.click(screen.getByText("Auto-track number from filename"));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("save_metadata", {
+        updates: [
+          { file_path: "/music/01-03 Song One.flac", track: 3, disc_number: 1 },
+          { file_path: "/music/02-07 Song Two.mp3", track: 7, disc_number: 2 },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Applied track numbers to 2 tracks")).toBeInTheDocument();
+    });
+  });
 });
 
 describe("helpers", () => {
@@ -667,6 +743,40 @@ describe("helpers", () => {
 
     it("normalizes underscores to spaces in result", () => {
       expect(extractTitleFromFileName("My_Great_Song.flac")).toBe("My Great Song");
+    });
+  });
+
+  describe("extractTrackInfoFromFileName", () => {
+    it("extracts disc and track from DD-TT format", () => {
+      expect(extractTrackInfoFromFileName("01-02 Song Title.flac")).toEqual({ discNumber: 1, trackNumber: 2 });
+    });
+
+    it("extracts disc and track with underscore separator", () => {
+      expect(extractTrackInfoFromFileName("02-05_Song.mp3")).toEqual({ discNumber: 2, trackNumber: 5 });
+    });
+
+    it("handles single-digit disc and track", () => {
+      expect(extractTrackInfoFromFileName("1-3 Song.flac")).toEqual({ discNumber: 1, trackNumber: 3 });
+    });
+
+    it("returns null for plain track number without disc", () => {
+      expect(extractTrackInfoFromFileName("03 Song Title.mp3")).toBeNull();
+    });
+
+    it("returns null for no number prefix", () => {
+      expect(extractTrackInfoFromFileName("Song Title.mp3")).toBeNull();
+    });
+
+    it("returns null for track number 0", () => {
+      expect(extractTrackInfoFromFileName("01-00 Intro.flac")).toBeNull();
+    });
+
+    it("defaults disc to 1 when disc is 0", () => {
+      expect(extractTrackInfoFromFileName("00-05 Song.mp3")).toEqual({ discNumber: 1, trackNumber: 5 });
+    });
+
+    it("returns null for filename without DD-TT prefix", () => {
+      expect(extractTrackInfoFromFileName("03. Song Title.mp3")).toBeNull();
     });
   });
 });

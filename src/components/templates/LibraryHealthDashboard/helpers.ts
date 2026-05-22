@@ -57,3 +57,15 @@ export const extractTitleFromFileName = (fileName: string): string | null => {
 
   return name;
 };
+
+const DISC_TRACK_EXACT = /^(\d{1,2})-(\d{1,2})[\s_]/;
+
+export const extractTrackInfoFromFileName = (fileName: string): { discNumber: number; trackNumber: number } | null => {
+  const name = fileName.replace(AUDIO_EXT, "").trim();
+  const m = name.match(DISC_TRACK_EXACT);
+  if (!m) return null;
+  const disc = parseInt(m[1], 10);
+  const track = parseInt(m[2], 10);
+  if (track === 0) return null;
+  return { discNumber: disc || 1, trackNumber: track };
+};

@@ -5,7 +5,7 @@ import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { HealthIssue, AlbumYearQuery, AlbumYearResult } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
-import { extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
+import { extractTitleFromFileName, extractTrackInfoFromFileName, extractYearFromAlbumTitle } from "./helpers";
 import { YearLookupModal } from "./YearLookupModal";
 
 const ROW_HEIGHT = 32;
@@ -203,29 +203,42 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     const selected = tracks.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) return;
 
+    // Group by unique artist+album, try extracting year from album title first
     const seen = new Set<string>();
-    const albums: AlbumYearQuery[] = [];
+    const extracted: AlbumYearResult[] = [];
+    const needsLookup: AlbumYearQuery[] = [];
     for (const t of selected) {
       const artist = t.artist || "";
       const album = t.album || "";
       if (!artist || !album) continue;
       const key = `${artist}::${album}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        albums.push({ artist, album });
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const year = extractYearFromAlbumTitle(album);
+      if (year) {
+        extracted.push({ artist, album, suggested_year: year, release_title: `from album title` });
+      } else {
+        needsLookup.push({ artist, album });
       }
     }
 
-    if (albums.length === 0) {
+    if (extracted.length === 0 && needsLookup.length === 0) {
       setAutoFixStatus("Selected tracks have no artist/album info to look up");
       return;
     }
 
+    // If everything was extracted from titles, skip the API call
+    if (needsLookup.length === 0) {
+      setYearLookupResults(extracted);
+      return;
+    }
+
     setSaving(true);
-    setAutoFixStatus(`Looking up ${albums.length} album${albums.length !== 1 ? "s" : ""}...`);
+    setAutoFixStatus(`Looking up ${needsLookup.length} album${needsLookup.length !== 1 ? "s" : ""}...`);
     try {
-      const results = await invoke<AlbumYearResult[]>("lookup_album_years", { albums });
-      setYearLookupResults(results);
+      const apiResults = await invoke<AlbumYearResult[]>("lookup_album_years", { albums: needsLookup });
+      setYearLookupResults([...extracted, ...apiResults]);
       setAutoFixStatus(null);
     } catch (e) {
       setAutoFixStatus(`Error: ${e}`);

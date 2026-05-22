@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryHealthDashboard } from "./LibraryHealthDashboard";
-import { issuePercentage, issueSeverity, extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
+import {
+  issuePercentage,
+  issueSeverity,
+  extractTitleFromFileName,
+  extractTrackInfoFromFileName,
+  extractYearFromAlbumTitle,
+} from "./helpers";
 import type { HealthReport, HealthIssue } from "./types";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -874,6 +880,37 @@ describe("helpers", () => {
 
     it("returns null for filename without DD-TT prefix", () => {
       expect(extractTrackInfoFromFileName("03. Song Title.mp3")).toBeNull();
+    });
+  });
+
+  describe("extractYearFromAlbumTitle", () => {
+    it("extracts year from YYYY-MM-DD format", () => {
+      expect(extractYearFromAlbumTitle("1984-04-30")).toBe(1984);
+    });
+
+    it("extracts year from YYYY.MM.DD format", () => {
+      expect(extractYearFromAlbumTitle("1984.04.30")).toBe(1984);
+    });
+
+    it("extracts year from YYYY/MM/DD format", () => {
+      expect(extractYearFromAlbumTitle("1984/04/30")).toBe(1984);
+    });
+
+    it("extracts year when date is followed by venue info", () => {
+      expect(extractYearFromAlbumTitle("1973-07-31 - Roslyn, NY")).toBe(1973);
+    });
+
+    it("returns null for plain year without date separators", () => {
+      expect(extractYearFromAlbumTitle("1984")).toBeNull();
+    });
+
+    it("returns null for non-date album names", () => {
+      expect(extractYearFromAlbumTitle("Abbey Road")).toBeNull();
+    });
+
+    it("returns null for year outside reasonable range", () => {
+      expect(extractYearFromAlbumTitle("1899-01-01")).toBeNull();
+      expect(extractYearFromAlbumTitle("2100-01-01")).toBeNull();
     });
   });
 });

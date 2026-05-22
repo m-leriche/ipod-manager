@@ -4,10 +4,13 @@ use crate::files::{ArtRepairCancel, SyncCancel};
 use crate::library::{self, LibraryDb};
 use crate::metadata;
 use crate::metarepair;
+use crate::musicbrainz;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
@@ -317,6 +320,98 @@ pub async fn upload_album_art(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AlbumYearQuery {
+    pub artist: String,
+    pub album: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AlbumYearResult {
+    pub artist: String,
+    pub album: String,
+    pub suggested_year: Option<u32>,
+    pub release_title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct YearLookupProgress {
+    completed: usize,
+    total: usize,
+    current: String,
+}
+
+#[tauri::command]
+pub async fn lookup_album_years(
+    albums: Vec<AlbumYearQuery>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<Vec<AlbumYearResult>, AppError> {
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let total = albums.len();
+        let mut results = Vec::with_capacity(total);
+
+        for (i, query) in albums.iter().enumerate() {
+            if flag.load(Ordering::Relaxed) {
+                break;
+            }
+
+            let _ = app.emit(
+                "year-lookup-progress",
+                YearLookupProgress {
+                    completed: i,
+                    total,
+                    current: format!("{} - {}", query.artist, query.album),
+                },
+            );
+
+            let artist_norm = musicbrainz::normalize_for_search(&query.artist);
+            let album_norm = musicbrainz::normalize_for_search(&query.album);
+
+            let result = match musicbrainz::search_releases(&artist_norm, &album_norm) {
+                Ok(releases) if !releases.is_empty() => {
+                    let best = &releases[0];
+                    let year = best
+                        .date
+                        .as_ref()
+                        .and_then(|d| d.split('-').next())
+                        .and_then(|y| y.parse::<u32>().ok());
+                    AlbumYearResult {
+                        artist: query.artist.clone(),
+                        album: query.album.clone(),
+                        suggested_year: year,
+                        release_title: Some(best.title.clone()),
+                    }
+                }
+                _ => AlbumYearResult {
+                    artist: query.artist.clone(),
+                    album: query.album.clone(),
+                    suggested_year: None,
+                    release_title: None,
+                },
+            };
+
+            results.push(result);
+        }
+
+        let _ = app.emit(
+            "year-lookup-progress",
+            YearLookupProgress {
+                completed: results.len(),
+                total,
+                current: String::new(),
+            },
+        );
+
+        Ok::<_, String>(results)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]

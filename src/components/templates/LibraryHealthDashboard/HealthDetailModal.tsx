@@ -1,54 +1,74 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { LibraryTrack } from "../../../types/library";
-import type { HealthIssue } from "./types";
+import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
+import type { HealthIssue, AlbumYearQuery, AlbumYearResult } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import { extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
+import { YearLookupModal } from "./YearLookupModal";
+
+const ROW_HEIGHT = 32;
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
   onClose: () => void;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
+  onDataChanged?: () => void;
 }
 
 type SortKey = "file_path" | "artist" | "album" | "title";
 type SortDir = "asc" | "desc";
 
-export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDetailModalProps) => {
+export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChanged }: HealthDetailModalProps) => {
   const [tracks, setTracks] = useState<LibraryTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("file_path");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [autoFixStatus, setAutoFixStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [yearLookupResults, setYearLookupResults] = useState<AlbumYearResult[] | null>(null);
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
+  const yearLookupResultsRef = useRef(yearLookupResults);
+  yearLookupResultsRef.current = yearLookupResults;
+
+  const loadTracks = useCallback(async () => {
+    try {
+      const data = await invoke<LibraryTrack[]>("get_health_issue_tracks", { issueId: issue.id });
+      setTracks(data);
+    } catch (e) {
+      setError(`${e}`);
+    }
+  }, [issue.id]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await invoke<LibraryTrack[]>("get_health_issue_tracks", { issueId: issue.id });
-        setTracks(data);
-      } catch (e) {
-        setError(`${e}`);
-      }
-    };
-    load();
-  }, [issue.id]);
+    loadTracks();
+  }, [loadTracks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (contextMenuRef.current) {
           setContextMenu(null);
+        } else if (yearLookupResultsRef.current) {
+          setYearLookupResults(null);
         } else {
           onClose();
         }
       }
+      if (e.key === "a" && (e.metaKey || e.ctrlKey) && tracks && tracks.length > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set(tracks.map((t) => t.id)));
+        setAutoFixStatus(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, tracks]);
 
   const sorted = useMemo(
     () =>
@@ -94,11 +114,17 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
       setSelectedIds(new Set([trackId]));
     }
     lastClickedRef.current = trackId;
+    setAutoFixStatus(null);
   };
+
+  const isMissingTitle = issue.id === "missing_title";
+  const isMissingTrackNumber = issue.id === "missing_track_number";
+  const isMissingYear = issue.id === "missing_year";
+  const hasAutoFix = isMissingTitle || isMissingTrackNumber || isMissingYear;
 
   const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!onRepairMetadata) return;
+    if (!onRepairMetadata && !hasAutoFix) return;
     if (!selectedIds.has(trackId)) {
       setSelectedIds(new Set([trackId]));
       lastClickedRef.current = trackId;
@@ -114,6 +140,122 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     onClose();
   };
 
+  const applySaveUpdates = async (updates: MetadataUpdate[], label: string, totalSelected: number) => {
+    setSaving(true);
+    setAutoFixStatus(null);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const skipped = totalSelected - updates.length;
+      const parts: string[] = [`Applied ${label} to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (skipped > 0) parts.push(`${skipped} skipped`);
+      setAutoFixStatus(parts.join(", "));
+      setSelectedIds(new Set());
+      await loadTracks();
+      onDataChanged?.();
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAutoTitle = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    const updates: MetadataUpdate[] = [];
+    for (const track of selected) {
+      const title = extractTitleFromFileName(track.file_name);
+      if (title) updates.push({ file_path: track.file_path, title });
+    }
+
+    if (updates.length === 0) {
+      setAutoFixStatus("Could not extract titles from selected filenames");
+      return;
+    }
+
+    await applySaveUpdates(updates, "titles", selected.length);
+  };
+
+  const handleAutoTrackNumber = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    const updates: MetadataUpdate[] = [];
+    for (const track of selected) {
+      const info = extractTrackInfoFromFileName(track.file_name);
+      if (info) updates.push({ file_path: track.file_path, track: info.trackNumber, disc_number: info.discNumber });
+    }
+
+    if (updates.length === 0) {
+      setAutoFixStatus("Could not extract track numbers from selected filenames");
+      return;
+    }
+
+    await applySaveUpdates(updates, "track numbers", selected.length);
+  };
+
+  const handleYearLookup = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    const seen = new Set<string>();
+    const albums: AlbumYearQuery[] = [];
+    for (const t of selected) {
+      const artist = t.artist || "";
+      const album = t.album || "";
+      if (!artist || !album) continue;
+      const key = `${artist}::${album}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        albums.push({ artist, album });
+      }
+    }
+
+    if (albums.length === 0) {
+      setAutoFixStatus("Selected tracks have no artist/album info to look up");
+      return;
+    }
+
+    setSaving(true);
+    setAutoFixStatus(`Looking up ${albums.length} album${albums.length !== 1 ? "s" : ""}...`);
+    try {
+      const results = await invoke<AlbumYearResult[]>("lookup_album_years", { albums });
+      setYearLookupResults(results);
+      setAutoFixStatus(null);
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleYearApply = async (accepted: AlbumYearResult[]) => {
+    if (!tracks) return;
+    setYearLookupResults(null);
+
+    const yearMap = new Map<string, number>();
+    for (const r of accepted) {
+      if (r.suggested_year) yearMap.set(`${r.artist}::${r.album}`, r.suggested_year);
+    }
+
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    const updates: MetadataUpdate[] = [];
+    for (const t of selected) {
+      const key = `${t.artist || ""}::${t.album || ""}`;
+      const year = yearMap.get(key);
+      if (year) updates.push({ file_path: t.file_path, year });
+    }
+
+    if (updates.length === 0) return;
+
+    await applySaveUpdates(updates, "year", selected.length);
+  };
+
   const arrow = (key: SortKey) => {
     if (key !== sortKey) return null;
     return sortDir === "asc" ? " \u25B2" : " \u25BC";
@@ -125,6 +267,19 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     { key: "album", label: "Album" },
     { key: "title", label: "Title" },
   ];
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 20,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems[0]?.start ?? 0;
+  const paddingBottom =
+    virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   const selectedCount = selectedIds.size;
 
@@ -150,7 +305,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
           {error && <p className="text-danger text-xs p-4">{error}</p>}
           {!tracks && !error && <p className="text-text-tertiary text-xs p-4">Loading tracks...</p>}
           {tracks && (
@@ -170,11 +325,18 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((track) => {
+                {paddingTop > 0 && (
+                  <tr>
+                    <td style={{ height: paddingTop, padding: 0 }} colSpan={4} />
+                  </tr>
+                )}
+                {virtualItems.map((virtualRow) => {
+                  const track = sorted[virtualRow.index];
                   const isSelected = selectedIds.has(track.id);
                   return (
                     <tr
                       key={track.id}
+                      style={{ height: ROW_HEIGHT }}
                       onClick={(e) => handleRowClick(track.id, e)}
                       onContextMenu={(e) => handleContextMenu(track.id, e)}
                       className={`border-t border-border-subtle cursor-default select-none transition-colors ${
@@ -190,6 +352,11 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
                     </tr>
                   );
                 })}
+                {paddingBottom > 0 && (
+                  <tr>
+                    <td style={{ height: paddingBottom, padding: 0 }} colSpan={4} />
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
@@ -198,6 +365,35 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
         <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
           <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
           {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
+          {autoFixStatus && <span className="text-[11px] text-text-secondary">{autoFixStatus}</span>}
+          <div className="flex-1" />
+          {isMissingTitle && selectedCount > 0 && (
+            <button
+              onClick={handleAutoTitle}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Applying..." : "Auto-title from filename"}
+            </button>
+          )}
+          {isMissingTrackNumber && selectedCount > 0 && (
+            <button
+              onClick={handleAutoTrackNumber}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Applying..." : "Auto-track number from filename"}
+            </button>
+          )}
+          {isMissingYear && selectedCount > 0 && (
+            <button
+              onClick={handleYearLookup}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Looking up..." : "Look up year"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -206,12 +402,57 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            {
-              label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
-              onClick: handleEditMetadata,
-            },
+            ...(isMissingTitle
+              ? [
+                  {
+                    label: `Auto-title from filename (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleAutoTitle();
+                    },
+                  },
+                ]
+              : []),
+            ...(isMissingTrackNumber
+              ? [
+                  {
+                    label: `Auto-track number from filename (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleAutoTrackNumber();
+                    },
+                  },
+                ]
+              : []),
+            ...(isMissingYear
+              ? [
+                  {
+                    label: `Look up year (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleYearLookup();
+                    },
+                  },
+                ]
+              : []),
+            ...(onRepairMetadata
+              ? [
+                  {
+                    label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: handleEditMetadata,
+                  },
+                ]
+              : []),
           ]}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {yearLookupResults && (
+        <YearLookupModal
+          results={yearLookupResults}
+          onApply={handleYearApply}
+          onCancel={() => setYearLookupResults(null)}
         />
       )}
     </div>

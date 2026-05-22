@@ -60,6 +60,38 @@ export const LibraryHealthDashboard = ({ onRepairMetadata }: LibraryHealthDashbo
 
   const allClear = !report.issues.some((i) => i.count > 0 && i.id !== "never_played" && i.id !== "unrated");
 
+  const missingIssues = report.issues.filter((i) => i.id.startsWith("missing_"));
+  const otherIssues = report.issues.filter((i) => !i.id.startsWith("missing_"));
+  const otherMid = Math.ceil(otherIssues.length / 2);
+
+  const renderCard = (issue: HealthIssue) => {
+    const severity = issueSeverity(issue, report.total_tracks);
+    const clickable = issue.count > 0;
+    return (
+      <div
+        key={issue.id}
+        onClick={clickable ? () => setActiveIssue(issue) : undefined}
+        className={`bg-bg-card border rounded-xl px-4 py-3 ${
+          severity === "critical" ? "border-danger/30" : severity === "warning" ? "border-warning/30" : "border-border"
+        } ${clickable ? "cursor-pointer hover:border-border-active transition-all" : ""}`}
+      >
+        <div className="flex items-baseline justify-between mb-1">
+          <span className="text-[11px] font-medium text-text-secondary">{issue.label}</span>
+          <span
+            className={`text-lg font-semibold tabular-nums ${
+              severity === "critical" ? "text-danger" : severity === "warning" ? "text-warning" : "text-success"
+            }`}
+          >
+            {issue.count.toLocaleString()}
+          </span>
+        </div>
+        <span className="text-[10px] text-text-tertiary">
+          {issuePercentage(issue.count, report.total_tracks)} of library
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border shrink-0">
@@ -78,38 +110,10 @@ export const LibraryHealthDashboard = ({ onRepairMetadata }: LibraryHealthDashbo
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
-          {report.issues.map((issue) => {
-            const severity = issueSeverity(issue, report.total_tracks);
-            const clickable = issue.count > 0;
-            return (
-              <div
-                key={issue.id}
-                onClick={clickable ? () => setActiveIssue(issue) : undefined}
-                className={`bg-bg-card border rounded-xl px-4 py-3 ${
-                  severity === "critical"
-                    ? "border-danger/30"
-                    : severity === "warning"
-                      ? "border-warning/30"
-                      : "border-border"
-                } ${clickable ? "cursor-pointer hover:border-border-active transition-all" : ""}`}
-              >
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-[11px] font-medium text-text-secondary">{issue.label}</span>
-                  <span
-                    className={`text-lg font-semibold tabular-nums ${
-                      severity === "critical" ? "text-danger" : severity === "warning" ? "text-warning" : "text-success"
-                    }`}
-                  >
-                    {issue.count.toLocaleString()}
-                  </span>
-                </div>
-                <span className="text-[10px] text-text-tertiary">
-                  {issuePercentage(issue.count, report.total_tracks)} of library
-                </span>
-              </div>
-            );
-          })}
+        <div className="flex gap-3">
+          <div className="flex-1 flex flex-col gap-3">{missingIssues.map(renderCard)}</div>
+          <div className="flex-1 flex flex-col gap-3">{otherIssues.slice(0, otherMid).map(renderCard)}</div>
+          <div className="flex-1 flex flex-col gap-3">{otherIssues.slice(otherMid).map(renderCard)}</div>
         </div>
       </div>
 
@@ -118,6 +122,7 @@ export const LibraryHealthDashboard = ({ onRepairMetadata }: LibraryHealthDashbo
           issue={activeIssue}
           onClose={() => setActiveIssue(null)}
           onRepairMetadata={onRepairMetadata}
+          onDataChanged={load}
         />
       )}
     </div>

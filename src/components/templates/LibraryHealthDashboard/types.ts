@@ -10,3 +10,15 @@ export interface HealthReport {
 }
 
 export type Phase = "idle" | "loading" | "loaded";
+
+export interface AlbumYearQuery {
+  artist: string;
+  album: string;
+}
+
+export interface AlbumYearResult {
+  artist: string;
+  album: string;
+  suggested_year: number | null;
+  release_title: string | null;
+}

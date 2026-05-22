@@ -466,4 +466,10 @@ mod tests {
         assert!(parse_ffmpeg_time("").is_none());
         assert!(parse_ffmpeg_time("12:34").is_none());
     }
+
+    #[test]
+    fn track_number_key_by_format() {
+        assert_eq!(track_number_key("flac"), "TRACKNUMBER");
+        assert_eq!(track_number_key("mp3"), "track");
+    }
 }

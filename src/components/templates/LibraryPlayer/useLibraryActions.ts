@@ -78,24 +78,6 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
       const eligible = selectedTracks.filter((t) => t.artist || t.title);
       if (eligible.length === 0) return;
 
-      if (eligible.length === 1) {
-        const track = eligible[0];
-        try {
-          await invoke("fetch_lyrics", {
-            trackId: track.id,
-            artist: track.artist || "",
-            title: track.title || track.file_name,
-            album: track.album,
-            durationSecs: track.duration_secs || null,
-            filePath: track.file_path,
-          });
-          toast.success(`Lyrics fetched for "${track.title || track.file_name}"`);
-        } catch {
-          toast.error(`No lyrics found for "${track.title || track.file_name}"`);
-        }
-        return;
-      }
-
       let fetched = 0;
       let failed = 0;
       for (const track of eligible) {
@@ -113,28 +95,20 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
           failed++;
         }
       }
-      if (fetched > 0) toast.success(`Lyrics fetched for ${fetched} track${fetched === 1 ? "" : "s"}`);
-      if (failed > 0) toast.error(`No lyrics found for ${failed} track${failed === 1 ? "" : "s"}`);
+      if (eligible.length === 1) {
+        const name = eligible[0].title || eligible[0].file_name;
+        if (fetched) toast.success(`Lyrics fetched for "${name}"`);
+        else toast.error(`No lyrics found for "${name}"`);
+      } else {
+        if (fetched > 0) toast.success(`Lyrics fetched for ${fetched} track${fetched === 1 ? "" : "s"}`);
+        if (failed > 0) toast.error(`No lyrics found for ${failed} track${failed === 1 ? "" : "s"}`);
+      }
     },
     [toast],
   );
 
   const handleRemoveLyrics = useCallback(
     async (selectedTracks: LibraryTrack[]) => {
-      if (selectedTracks.length === 1) {
-        const track = selectedTracks[0];
-        try {
-          await invoke("remove_lyrics", {
-            trackId: track.id,
-            filePath: track.file_path,
-          });
-          toast.success(`Lyrics removed for "${track.title || track.file_name}"`);
-        } catch (e) {
-          toast.error(`Failed to remove lyrics: ${e}`);
-        }
-        return;
-      }
-
       let removed = 0;
       let failed = 0;
       for (const track of selectedTracks) {
@@ -148,8 +122,14 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
           failed++;
         }
       }
-      if (removed > 0) toast.success(`Lyrics removed for ${removed} track${removed === 1 ? "" : "s"}`);
-      if (failed > 0) toast.error(`Failed to remove lyrics for ${failed} track${failed === 1 ? "" : "s"}`);
+      if (selectedTracks.length === 1) {
+        const name = selectedTracks[0].title || selectedTracks[0].file_name;
+        if (removed) toast.success(`Lyrics removed for "${name}"`);
+        else toast.error(`Failed to remove lyrics for "${name}"`);
+      } else {
+        if (removed > 0) toast.success(`Lyrics removed for ${removed} track${removed === 1 ? "" : "s"}`);
+        if (failed > 0) toast.error(`Failed to remove lyrics for ${failed} track${failed === 1 ? "" : "s"}`);
+      }
     },
     [toast],
   );

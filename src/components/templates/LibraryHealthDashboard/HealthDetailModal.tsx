@@ -37,7 +37,7 @@ type SortDir = "asc" | "desc";
 export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChanged }: HealthDetailModalProps) => {
   const [tracks, setTracks] = useState<LibraryTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("file_path");
+  const [sortKey, setSortKey] = useState<SortKey>("artist");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);

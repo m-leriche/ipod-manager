@@ -15,8 +15,8 @@ interface UseTrackContextMenuOptions {
   onRepairAlbumArt?: (tracks: LibraryTrack[]) => void;
   onRepairAllAlbumArt?: () => void;
   isRepairingAllArt?: boolean;
-  onFetchLyrics?: (track: LibraryTrack) => void;
-  onRemoveLyrics?: (track: LibraryTrack) => void;
+  onFetchLyrics?: (tracks: LibraryTrack[]) => void;
+  onRemoveLyrics?: (tracks: LibraryTrack[]) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
@@ -167,25 +167,23 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
-      ...(onFetchLyrics && !isMulti
+      ...(onFetchLyrics
         ? [
             {
-              label: "Fetch Lyrics",
+              label: isMulti ? `Fetch Lyrics for ${ids.length} Tracks` : "Fetch Lyrics",
               onClick: () => {
-                const track = tracks.find((t) => t.id === ids[0]);
-                if (track) onFetchLyrics(track);
+                onFetchLyrics(tracks.filter((t) => ids.includes(t.id)));
                 onClose();
               },
             },
           ]
         : []),
-      ...(onRemoveLyrics && !isMulti
+      ...(onRemoveLyrics
         ? [
             {
-              label: "Remove Lyrics",
+              label: isMulti ? `Remove Lyrics from ${ids.length} Tracks` : "Remove Lyrics",
               onClick: () => {
-                const track = tracks.find((t) => t.id === ids[0]);
-                if (track) onRemoveLyrics(track);
+                onRemoveLyrics(tracks.filter((t) => ids.includes(t.id)));
                 onClose();
               },
             },

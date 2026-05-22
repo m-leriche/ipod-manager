@@ -251,7 +251,12 @@ pub fn download_audio(
             ffmpeg_args.extend(localvideo::build_codec_args(format));
             ffmpeg_args.extend([
                 "-metadata".to_string(),
-                format!("track={}/{}", i + 1, total),
+                format!(
+                    "{}={}/{}",
+                    localvideo::track_number_key(format),
+                    i + 1,
+                    total
+                ),
                 "-metadata".to_string(),
                 format!("title={}", chapter.title),
                 "-y".to_string(),

@@ -37,8 +37,8 @@ interface TrackTableProps {
   onRepairAlbumArt?: (tracks: LibraryTrack[]) => void;
   onRepairAllAlbumArt?: () => void;
   isRepairingAllArt?: boolean;
-  onFetchLyrics?: (track: LibraryTrack) => void;
-  onRemoveLyrics?: (track: LibraryTrack) => void;
+  onFetchLyrics?: (tracks: LibraryTrack[]) => void;
+  onRemoveLyrics?: (tracks: LibraryTrack[]) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
+import { isValidYouTubeUrl, cleanYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 import { FormatButton } from "../../atoms/FormatButton/FormatButton";
 import type { AudioFormat, DownloadProgress, DownloadResult, Phase, VideoInfo } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
@@ -58,7 +58,7 @@ export const YouTubeDownloader = () => {
     setError(null);
     setVideoInfo(null);
     try {
-      const info = await invoke<VideoInfo>("fetch_video_info", { url });
+      const info = await invoke<VideoInfo>("fetch_video_info", { url: cleanYouTubeUrl(url) });
       setVideoInfo(info);
       setPhase("ready");
     } catch (e) {
@@ -76,7 +76,7 @@ export const YouTubeDownloader = () => {
     startProgress("Downloading audio...", cancelSync);
     try {
       const res = await invoke<DownloadResult>("download_audio", {
-        url,
+        url: cleanYouTubeUrl(url),
         outputDir,
         format,
         chapters: videoInfo?.chapters ?? [],

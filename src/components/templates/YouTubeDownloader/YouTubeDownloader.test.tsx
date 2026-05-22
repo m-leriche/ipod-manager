@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { YouTubeDownloader } from "./YouTubeDownloader";
-import { isValidYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
+import { isValidYouTubeUrl, cleanYouTubeUrl, formatSeconds, fileNameFromPath } from "./helpers";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
@@ -126,6 +126,34 @@ describe("YouTubeDownloader", () => {
     await user.type(
       screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
       "https://www.youtube.com/watch?v=test123",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("fetch_video_info", {
+        url: "https://www.youtube.com/watch?v=test123",
+      });
+    });
+  });
+
+  it("cleans URL before fetching video info", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/output");
+    mockInvoke.mockImplementation((cmd) => {
+      if (cmd === "check_yt_dependencies") return Promise.resolve();
+      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO);
+      return Promise.resolve();
+    });
+
+    render(<YouTubeDownloader />);
+    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
+
+    await user.type(
+      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
+      "https://www.youtube.com/watch?v=test123&list=RDtest123&start_radio=1&t=100s",
     );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
@@ -419,6 +447,46 @@ describe("isValidYouTubeUrl", () => {
   it("rejects invalid URLs", () => {
     expect(isValidYouTubeUrl("not a url")).toBe(false);
     expect(isValidYouTubeUrl("")).toBe(false);
+  });
+});
+
+describe("cleanYouTubeUrl", () => {
+  it("strips playlist and radio params from youtube.com watch URL", () => {
+    expect(
+      cleanYouTubeUrl("https://www.youtube.com/watch?v=Jfrmng_5t_0&list=RDJfrmng_5t_0&start_radio=1&t=1435s"),
+    ).toBe("https://www.youtube.com/watch?v=Jfrmng_5t_0");
+  });
+
+  it("strips timestamp param from youtube.com watch URL", () => {
+    expect(cleanYouTubeUrl("https://www.youtube.com/watch?v=abc123&t=120s")).toBe(
+      "https://www.youtube.com/watch?v=abc123",
+    );
+  });
+
+  it("preserves clean youtube.com watch URL", () => {
+    expect(cleanYouTubeUrl("https://www.youtube.com/watch?v=abc123")).toBe("https://www.youtube.com/watch?v=abc123");
+  });
+
+  it("strips params from youtu.be short URLs", () => {
+    expect(cleanYouTubeUrl("https://youtu.be/abc123?t=30")).toBe("https://youtu.be/abc123");
+  });
+
+  it("preserves clean youtu.be URL", () => {
+    expect(cleanYouTubeUrl("https://youtu.be/abc123")).toBe("https://youtu.be/abc123");
+  });
+
+  it("strips params from music.youtube.com watch URL", () => {
+    expect(cleanYouTubeUrl("https://music.youtube.com/watch?v=abc123&list=OLAK5uy")).toBe(
+      "https://music.youtube.com/watch?v=abc123",
+    );
+  });
+
+  it("preserves youtube.com shorts URL", () => {
+    expect(cleanYouTubeUrl("https://www.youtube.com/shorts/abc123")).toBe("https://www.youtube.com/shorts/abc123");
+  });
+
+  it("returns invalid URLs unchanged", () => {
+    expect(cleanYouTubeUrl("not a url")).toBe("not a url");
   });
 });
 

@@ -7,6 +7,14 @@ import { issuePercentage, issueSeverity, extractTitleFromFileName, extractTrackI
 import type { HealthReport, HealthIssue } from "./types";
 import type { LibraryTrack } from "../../../types/library";
 
+// Mock the virtualizer so all rows render without needing real DOM layout
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () => Array.from({ length: count }, (_, i) => ({ index: i, start: i * 32, end: (i + 1) * 32 })),
+    getTotalSize: () => count * 32,
+  }),
+}));
+
 const mockInvoke = vi.mocked(invoke);
 
 const makeMockTrack = (id: number, fileName: string, artist: string): LibraryTrack => ({

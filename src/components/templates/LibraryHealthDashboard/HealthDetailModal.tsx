@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { HealthIssue, AlbumYearQuery, AlbumYearResult } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { extractTitleFromFileName, extractTrackInfoFromFileName } from "./helpers";
 import { YearLookupModal } from "./YearLookupModal";
+
+const ROW_HEIGHT = 32;
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
@@ -286,6 +289,19 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     { key: "title", label: "Title" },
   ];
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 20,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems[0]?.start ?? 0;
+  const paddingBottom =
+    virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
+
   const selectedCount = selectedIds.size;
 
   return (
@@ -310,7 +326,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
           {error && <p className="text-danger text-xs p-4">{error}</p>}
           {!tracks && !error && <p className="text-text-tertiary text-xs p-4">Loading tracks...</p>}
           {tracks && (
@@ -330,11 +346,18 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((track) => {
+                {paddingTop > 0 && (
+                  <tr>
+                    <td style={{ height: paddingTop, padding: 0 }} colSpan={4} />
+                  </tr>
+                )}
+                {virtualItems.map((virtualRow) => {
+                  const track = sorted[virtualRow.index];
                   const isSelected = selectedIds.has(track.id);
                   return (
                     <tr
                       key={track.id}
+                      style={{ height: ROW_HEIGHT }}
                       onClick={(e) => handleRowClick(track.id, e)}
                       onContextMenu={(e) => handleContextMenu(track.id, e)}
                       className={`border-t border-border-subtle cursor-default select-none transition-colors ${
@@ -350,6 +373,11 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
                     </tr>
                   );
                 })}
+                {paddingBottom > 0 && (
+                  <tr>
+                    <td style={{ height: paddingBottom, padding: 0 }} colSpan={4} />
+                  </tr>
+                )}
               </tbody>
             </table>
           )}

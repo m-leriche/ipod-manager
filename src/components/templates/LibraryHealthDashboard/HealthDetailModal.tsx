@@ -6,7 +6,14 @@ import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { HealthIssue, AlbumYearQuery, AlbumYearResult } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
-import { extractTitleFromFileName, extractTrackInfoFromFileName, extractYearFromAlbumTitle } from "./helpers";
+import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
+import {
+  extractTitleFromFileName,
+  extractTrackInfoFromFileName,
+  extractYearFromAlbumTitle,
+  buildTrackLetterMap,
+  getTrackLetter,
+} from "./helpers";
 import { YearLookupModal } from "./YearLookupModal";
 
 const ROW_HEIGHT = 32;
@@ -310,6 +317,29 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const paddingBottom =
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
+  const sortField = sortKey === "file_path" ? "file_name" : sortKey;
+  const letterMap = useMemo(() => buildTrackLetterMap(sorted, sortField), [sorted, sortField]);
+  const [activeLetter, setActiveLetter] = useState<string | undefined>();
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || sorted.length === 0) return;
+    const onScroll = () => {
+      const topIndex = Math.min(Math.floor(el.scrollTop / ROW_HEIGHT), sorted.length - 1);
+      if (topIndex >= 0) setActiveLetter(getTrackLetter(sorted[topIndex], sortField));
+    };
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [sorted, sortField]);
+
+  const handleLetterSelect = useCallback(
+    (_letter: string, index: number) => {
+      virtualizer.scrollToIndex(index, { align: "start" });
+    },
+    [virtualizer],
+  );
+
   const selectedCount = selectedIds.size;
 
   return (
@@ -334,60 +364,67 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
           </button>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-          {error && <p className="text-danger text-xs p-4">{error}</p>}
-          {!tracks && !error && <p className="text-text-tertiary text-xs p-4">Loading tracks...</p>}
-          {tracks && (
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-bg-secondary z-10">
-                <tr className="text-left text-[10px] text-text-tertiary uppercase tracking-wider">
-                  {COLUMNS.map((col) => (
-                    <th
-                      key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      className="px-4 py-2.5 font-medium cursor-pointer hover:text-text-secondary transition-colors select-none"
-                    >
-                      {col.label}
-                      {arrow(col.key)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paddingTop > 0 && (
-                  <tr>
-                    <td style={{ height: paddingTop, padding: 0 }} colSpan={4} />
+        <div className="flex-1 flex min-h-0">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+            {error && <p className="text-danger text-xs p-4">{error}</p>}
+            {!tracks && !error && <p className="text-text-tertiary text-xs p-4">Loading tracks...</p>}
+            {tracks && (
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-bg-secondary z-10">
+                  <tr className="text-left text-[10px] text-text-tertiary uppercase tracking-wider">
+                    {COLUMNS.map((col) => (
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        className="px-4 py-2.5 font-medium cursor-pointer hover:text-text-secondary transition-colors select-none"
+                      >
+                        {col.label}
+                        {arrow(col.key)}
+                      </th>
+                    ))}
                   </tr>
-                )}
-                {virtualItems.map((virtualRow) => {
-                  const track = sorted[virtualRow.index];
-                  const isSelected = selectedIds.has(track.id);
-                  return (
-                    <tr
-                      key={track.id}
-                      style={{ height: ROW_HEIGHT }}
-                      onClick={(e) => handleRowClick(track.id, e)}
-                      onContextMenu={(e) => handleContextMenu(track.id, e)}
-                      className={`border-t border-border-subtle cursor-default select-none transition-colors ${
-                        isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
-                      }`}
-                    >
-                      <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
-                        {track.file_name}
-                      </td>
-                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.artist || "—"}</td>
-                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.album || "—"}</td>
-                      <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.title || "—"}</td>
+                </thead>
+                <tbody>
+                  {paddingTop > 0 && (
+                    <tr>
+                      <td style={{ height: paddingTop, padding: 0 }} colSpan={4} />
                     </tr>
-                  );
-                })}
-                {paddingBottom > 0 && (
-                  <tr>
-                    <td style={{ height: paddingBottom, padding: 0 }} colSpan={4} />
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                  {virtualItems.map((virtualRow) => {
+                    const track = sorted[virtualRow.index];
+                    const isSelected = selectedIds.has(track.id);
+                    return (
+                      <tr
+                        key={track.id}
+                        style={{ height: ROW_HEIGHT }}
+                        onClick={(e) => handleRowClick(track.id, e)}
+                        onContextMenu={(e) => handleContextMenu(track.id, e)}
+                        className={`border-t border-border-subtle cursor-default select-none transition-colors ${
+                          isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
+                        }`}
+                      >
+                        <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
+                          {track.file_name}
+                        </td>
+                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.artist || "—"}</td>
+                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.album || "—"}</td>
+                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.title || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                  {paddingBottom > 0 && (
+                    <tr>
+                      <td style={{ height: paddingBottom, padding: 0 }} colSpan={4} />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {sorted.length > 0 && (
+            <div className="shrink-0 flex items-center border-l border-border">
+              <AlphabetScroller letterMap={letterMap} activeLetter={activeLetter} onLetterSelect={handleLetterSelect} />
+            </div>
           )}
         </div>
 

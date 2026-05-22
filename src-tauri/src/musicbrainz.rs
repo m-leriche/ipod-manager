@@ -22,6 +22,15 @@ pub struct MbRelease {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct MbReleaseGroup {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub first_release_date: Option<String>,
+    pub score: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct MbTrack {
     pub position: u32,
     pub title: String,
@@ -98,6 +107,59 @@ pub fn search_releases(artist: &str, album: &str) -> Result<Vec<MbRelease>, Stri
             artist,
             date,
             track_count,
+            score,
+        });
+    }
+
+    Ok(results)
+}
+
+/// Search MusicBrainz for release-groups (the canonical "album" concept).
+/// More reliable than release search for year lookups since there's one
+/// release-group per album and it carries `first-release-date`.
+pub fn search_release_groups(artist: &str, album: &str) -> Result<Vec<MbReleaseGroup>, String> {
+    rate_limit();
+
+    let query = format!(
+        "artist:\"{}\" AND releasegroup:\"{}\"",
+        artist.replace('"', "\\\""),
+        album.replace('"', "\\\""),
+    );
+
+    let resp = ureq::get(&format!("{}/release-group/", BASE_URL))
+        .query("query", &query)
+        .query("fmt", "json")
+        .query("limit", "5")
+        .set("User-Agent", USER_AGENT)
+        .call()
+        .map_err(|e| format!("Search failed: {}", e))?;
+
+    let body: serde_json::Value = {
+        let text = resp
+            .into_string()
+            .map_err(|e| format!("Read failed: {}", e))?;
+        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
+    };
+
+    let groups = body["release-groups"]
+        .as_array()
+        .ok_or_else(|| "No results from MusicBrainz".to_string())?;
+
+    let mut results = Vec::new();
+    for rg in groups {
+        let Some(id) = rg["id"].as_str() else {
+            continue;
+        };
+        let title = rg["title"].as_str().unwrap_or("").to_string();
+        let artist = extract_artist_credit(&rg["artist-credit"]);
+        let first_release_date = rg["first-release-date"].as_str().map(|s| s.to_string());
+        let score = rg["score"].as_u64().unwrap_or(0) as u32;
+
+        results.push(MbReleaseGroup {
+            id: id.to_string(),
+            title,
+            artist,
+            first_release_date,
             score,
         });
     }

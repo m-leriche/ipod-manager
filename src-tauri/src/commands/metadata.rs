@@ -343,6 +343,64 @@ struct YearLookupProgress {
     current: String,
 }
 
+/// Try to find the release year for an album via MusicBrainz.
+/// Strategy: release-group search first (canonical album with `first-release-date`),
+/// then individual release search as fallback. Both use artist+album queries.
+/// Note: the fallback incurs an extra 1.1s rate-limit sleep per miss.
+fn lookup_year(
+    artist_norm: &str,
+    album_norm: &str,
+    orig_artist: &str,
+    orig_album: &str,
+) -> AlbumYearResult {
+    let make_result = |rg: &musicbrainz::MbReleaseGroup| -> Option<AlbumYearResult> {
+        let year = rg
+            .first_release_date
+            .as_ref()
+            .and_then(|d| d.split('-').next())
+            .and_then(|y| y.parse::<u32>().ok())?;
+        Some(AlbumYearResult {
+            artist: orig_artist.to_string(),
+            album: orig_album.to_string(),
+            suggested_year: Some(year),
+            release_title: Some(rg.title.clone()),
+        })
+    };
+
+    // Try release-group search (best for year lookups)
+    if let Ok(groups) = musicbrainz::search_release_groups(artist_norm, album_norm) {
+        if let Some(result) = groups.first().and_then(make_result) {
+            return result;
+        }
+    }
+
+    // Fallback: release search (sometimes has results release-group misses)
+    if let Ok(releases) = musicbrainz::search_releases(artist_norm, album_norm) {
+        if let Some(best) = releases.first() {
+            let year = best
+                .date
+                .as_ref()
+                .and_then(|d| d.split('-').next())
+                .and_then(|y| y.parse::<u32>().ok());
+            if year.is_some() {
+                return AlbumYearResult {
+                    artist: orig_artist.to_string(),
+                    album: orig_album.to_string(),
+                    suggested_year: year,
+                    release_title: Some(best.title.clone()),
+                };
+            }
+        }
+    }
+
+    AlbumYearResult {
+        artist: orig_artist.to_string(),
+        album: orig_album.to_string(),
+        suggested_year: None,
+        release_title: None,
+    }
+}
+
 #[tauri::command]
 pub async fn lookup_album_years(
     albums: Vec<AlbumYearQuery>,
@@ -372,28 +430,7 @@ pub async fn lookup_album_years(
             let artist_norm = musicbrainz::normalize_for_search(&query.artist);
             let album_norm = musicbrainz::normalize_for_search(&query.album);
 
-            let result = match musicbrainz::search_releases(&artist_norm, &album_norm) {
-                Ok(releases) if !releases.is_empty() => {
-                    let best = &releases[0];
-                    let year = best
-                        .date
-                        .as_ref()
-                        .and_then(|d| d.split('-').next())
-                        .and_then(|y| y.parse::<u32>().ok());
-                    AlbumYearResult {
-                        artist: query.artist.clone(),
-                        album: query.album.clone(),
-                        suggested_year: year,
-                        release_title: Some(best.title.clone()),
-                    }
-                }
-                _ => AlbumYearResult {
-                    artist: query.artist.clone(),
-                    album: query.album.clone(),
-                    suggested_year: None,
-                    release_title: None,
-                },
-            };
+            let result = lookup_year(&artist_norm, &album_norm, &query.artist, &query.album);
 
             results.push(result);
         }

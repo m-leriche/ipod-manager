@@ -43,6 +43,12 @@ pub fn get_library_health(conn: &Connection) -> Result<HealthReport, String> {
         query_issue(conn, "missing_album", "Missing album", MISSING_ALBUM_WHERE)?,
         query_issue(conn, "missing_genre", "Missing genre", MISSING_GENRE_WHERE)?,
         query_issue(conn, "missing_year", "Missing year", MISSING_YEAR_WHERE)?,
+        query_issue(
+            conn,
+            "missing_track_number",
+            "Missing track number",
+            MISSING_TRACK_NUMBER_WHERE,
+        )?,
         query_issue(conn, "unrated", "Unrated", UNRATED_WHERE)?,
         query_issue(
             conn,
@@ -120,6 +126,7 @@ const MISSING_ARTIST_WHERE: &str = "artist IS NULL OR TRIM(artist) = ''";
 const MISSING_ALBUM_WHERE: &str = "album IS NULL OR TRIM(album) = ''";
 const MISSING_GENRE_WHERE: &str = "genre IS NULL OR TRIM(genre) = ''";
 const MISSING_YEAR_WHERE: &str = "year IS NULL OR year = 0";
+const MISSING_TRACK_NUMBER_WHERE: &str = "track_number IS NULL OR track_number = 0";
 const UNRATED_WHERE: &str = "rating = 0";
 const LOW_BITRATE_WHERE: &str =
     "bitrate_kbps IS NOT NULL AND bitrate_kbps > 0 AND bitrate_kbps < 128";
@@ -133,6 +140,7 @@ fn issue_where_clause(issue_id: &str) -> Result<&'static str, String> {
         "missing_album" => Ok(MISSING_ALBUM_WHERE),
         "missing_genre" => Ok(MISSING_GENRE_WHERE),
         "missing_year" => Ok(MISSING_YEAR_WHERE),
+        "missing_track_number" => Ok(MISSING_TRACK_NUMBER_WHERE),
         "unrated" => Ok(UNRATED_WHERE),
         "low_bitrate" => Ok(LOW_BITRATE_WHERE),
         "flagged" => Ok(FLAGGED_WHERE),
@@ -216,9 +224,39 @@ mod tests {
         rating: u8,
         play_count: u32,
     ) {
+        insert_track_full(
+            conn,
+            id,
+            title,
+            artist,
+            album,
+            genre,
+            year,
+            bitrate,
+            flagged,
+            rating,
+            play_count,
+            Some(id as u32),
+        );
+    }
+
+    fn insert_track_full(
+        conn: &Connection,
+        id: i64,
+        title: Option<&str>,
+        artist: Option<&str>,
+        album: Option<&str>,
+        genre: Option<&str>,
+        year: Option<u32>,
+        bitrate: Option<u32>,
+        flagged: bool,
+        rating: u8,
+        play_count: u32,
+        track_number: Option<u32>,
+    ) {
         conn.execute(
-            "INSERT INTO tracks (id, file_path, file_name, folder_path, title, artist, album, genre, year, bitrate_kbps, flagged, rating, play_count, format)
-             VALUES (?1, ?2, ?3, '/music', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'FLAC')",
+            "INSERT INTO tracks (id, file_path, file_name, folder_path, title, artist, album, genre, year, bitrate_kbps, flagged, rating, play_count, track_number, format)
+             VALUES (?1, ?2, ?3, '/music', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'FLAC')",
             rusqlite::params![
                 id,
                 format!("/music/track_{}.flac", id),
@@ -231,7 +269,8 @@ mod tests {
                 bitrate,
                 flagged,
                 rating,
-                play_count
+                play_count,
+                track_number
             ],
         )
         .unwrap();
@@ -278,7 +317,9 @@ mod tests {
     fn detects_missing_metadata() {
         let conn = setup_db();
         // Track with all metadata missing
-        insert_track(&conn, 1, None, None, None, None, None, None, false, 0, 0);
+        insert_track_full(
+            &conn, 1, None, None, None, None, None, None, false, 0, 0, None,
+        );
         // Track with all metadata present
         insert_track(
             &conn,
@@ -304,6 +345,7 @@ mod tests {
         assert_eq!(find("missing_album").count, 1);
         assert_eq!(find("missing_genre").count, 1);
         assert_eq!(find("missing_year").count, 1);
+        assert_eq!(find("missing_track_number").count, 1);
     }
 
     #[test]
@@ -411,7 +453,7 @@ mod tests {
     #[test]
     fn returns_correct_issue_count() {
         let conn = setup_db();
-        let report_issues_len = 9; // number of issue categories
+        let report_issues_len = 10; // number of issue categories
         insert_track(
             &conn,
             1,

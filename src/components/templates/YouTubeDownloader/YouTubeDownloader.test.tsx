@@ -167,6 +167,42 @@ describe("YouTubeDownloader", () => {
     });
   });
 
+  it("cleans URL before downloading audio", async () => {
+    const user = userEvent.setup();
+    mockOpen.mockResolvedValue("/output");
+    mockInvoke.mockImplementation((cmd) => {
+      if (cmd === "check_yt_dependencies") return Promise.resolve();
+      if (cmd === "fetch_video_info") return Promise.resolve(VIDEO_INFO);
+      if (cmd === "download_audio")
+        return Promise.resolve({ success: true, cancelled: false, file_paths: ["/output/test.flac"], error: null });
+      return Promise.resolve();
+    });
+
+    render(<YouTubeDownloader />);
+    await waitFor(() => screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."));
+
+    await user.type(
+      screen.getByPlaceholderText("https://www.youtube.com/watch?v=..."),
+      "https://www.youtube.com/watch?v=test123&list=PLabc&t=60s",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Download" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() => screen.getByRole("button", { name: "Download as FLAC" }));
+    await user.click(screen.getByRole("button", { name: "Download as FLAC" }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("download_audio", {
+        url: "https://www.youtube.com/watch?v=test123",
+        outputDir: "/output",
+        format: "flac",
+        chapters: [],
+      });
+    });
+  });
+
   it("shows video info after fetch", async () => {
     const user = userEvent.setup();
     mockOpen.mockResolvedValue("/output");
@@ -483,6 +519,12 @@ describe("cleanYouTubeUrl", () => {
 
   it("preserves youtube.com shorts URL", () => {
     expect(cleanYouTubeUrl("https://www.youtube.com/shorts/abc123")).toBe("https://www.youtube.com/shorts/abc123");
+  });
+
+  it("strips params from youtube.com shorts URL", () => {
+    expect(cleanYouTubeUrl("https://www.youtube.com/shorts/abc123?feature=share")).toBe(
+      "https://www.youtube.com/shorts/abc123",
+    );
   });
 
   it("returns invalid URLs unchanged", () => {

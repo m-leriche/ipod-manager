@@ -1,3 +1,4 @@
+import type { LibraryTrack } from "../../../types/library";
 import type { HealthIssue } from "./types";
 
 export const issuePercentage = (count: number, total: number): string => {
@@ -66,6 +67,32 @@ export const extractYearFromAlbumTitle = (album: string): number | null => {
   const year = parseInt(m[1], 10);
   if (year < 1900 || year > 2099) return null;
   return year;
+};
+
+/** Get the first letter for a track field value, matching the AlphabetScroller convention. */
+export const getTrackLetter = (track: LibraryTrack, field: keyof LibraryTrack): string => {
+  const val = (track[field] as string) ?? "";
+  const trimmed = val.trim();
+  const withoutThe = /^the /i.test(trimmed) ? trimmed.slice(4) : trimmed;
+  const clean = withoutThe.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  if (!clean) return "#";
+  const first = clean[0];
+  return /[a-z]/.test(first) ? first.toUpperCase() : "#";
+};
+
+/** Build a letter → first-row-index map from a sorted track list. */
+export const buildTrackLetterMap = (
+  sortedTracks: LibraryTrack[],
+  sortField: keyof LibraryTrack,
+): Map<string, number> => {
+  const map = new Map<string, number>();
+  for (let i = 0; i < sortedTracks.length; i++) {
+    const letter = getTrackLetter(sortedTracks[i], sortField);
+    if (!map.has(letter)) {
+      map.set(letter, i);
+    }
+  }
+  return map;
 };
 
 const DISC_TRACK_EXACT = /^(\d{1,2})-(\d{1,2})[\s_]/;

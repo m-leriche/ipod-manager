@@ -336,6 +336,13 @@ pub struct AlbumYearResult {
     pub release_title: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct YearLookupProgress {
+    completed: usize,
+    total: usize,
+    current: String,
+}
+
 #[tauri::command]
 pub async fn lookup_album_years(
     albums: Vec<AlbumYearQuery>,
@@ -355,11 +362,11 @@ pub async fn lookup_album_years(
 
             let _ = app.emit(
                 "year-lookup-progress",
-                serde_json::json!({
-                    "completed": i,
-                    "total": total,
-                    "current": format!("{} - {}", query.artist, query.album),
-                }),
+                YearLookupProgress {
+                    completed: i,
+                    total,
+                    current: format!("{} - {}", query.artist, query.album),
+                },
             );
 
             let artist_norm = musicbrainz::normalize_for_search(&query.artist);
@@ -393,11 +400,11 @@ pub async fn lookup_album_years(
 
         let _ = app.emit(
             "year-lookup-progress",
-            serde_json::json!({
-                "completed": results.len(),
-                "total": total,
-                "current": "",
-            }),
+            YearLookupProgress {
+                completed: results.len(),
+                total,
+                current: String::new(),
+            },
         );
 
         Ok::<_, String>(results)

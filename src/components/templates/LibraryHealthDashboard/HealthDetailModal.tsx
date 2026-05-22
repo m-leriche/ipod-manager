@@ -33,6 +33,8 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
+  const yearLookupResultsRef = useRef(yearLookupResults);
+  yearLookupResultsRef.current = yearLookupResults;
 
   const loadTracks = useCallback(async () => {
     try {
@@ -52,6 +54,8 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       if (e.key === "Escape") {
         if (contextMenuRef.current) {
           setContextMenu(null);
+        } else if (yearLookupResultsRef.current) {
+          setYearLookupResults(null);
         } else {
           onClose();
         }
@@ -136,6 +140,26 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     onClose();
   };
 
+  const applySaveUpdates = async (updates: MetadataUpdate[], label: string, totalSelected: number) => {
+    setSaving(true);
+    setAutoFixStatus(null);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const skipped = totalSelected - updates.length;
+      const parts: string[] = [`Applied ${label} to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (skipped > 0) parts.push(`${skipped} skipped`);
+      setAutoFixStatus(parts.join(", "));
+      setSelectedIds(new Set());
+      await loadTracks();
+      onDataChanged?.();
+    } catch (e) {
+      setAutoFixStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAutoTitle = async () => {
     if (!tracks || saving) return;
     const selected = tracks.filter((t) => selectedIds.has(t.id));
@@ -152,23 +176,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       return;
     }
 
-    setSaving(true);
-    setAutoFixStatus(null);
-    try {
-      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
-      const skipped = selected.length - updates.length;
-      const parts: string[] = [`Applied titles to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
-      if (result.failed > 0) parts.push(`${result.failed} failed`);
-      if (skipped > 0) parts.push(`${skipped} skipped`);
-      setAutoFixStatus(parts.join(", "));
-      setSelectedIds(new Set());
-      await loadTracks();
-      onDataChanged?.();
-    } catch (e) {
-      setAutoFixStatus(`Error: ${e}`);
-    } finally {
-      setSaving(false);
-    }
+    await applySaveUpdates(updates, "titles", selected.length);
   };
 
   const handleAutoTrackNumber = async () => {
@@ -187,25 +195,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
       return;
     }
 
-    setSaving(true);
-    setAutoFixStatus(null);
-    try {
-      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
-      const skipped = selected.length - updates.length;
-      const parts: string[] = [
-        `Applied track numbers to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`,
-      ];
-      if (result.failed > 0) parts.push(`${result.failed} failed`);
-      if (skipped > 0) parts.push(`${skipped} skipped`);
-      setAutoFixStatus(parts.join(", "));
-      setSelectedIds(new Set());
-      await loadTracks();
-      onDataChanged?.();
-    } catch (e) {
-      setAutoFixStatus(`Error: ${e}`);
-    } finally {
-      setSaving(false);
-    }
+    await applySaveUpdates(updates, "track numbers", selected.length);
   };
 
   const handleYearLookup = async () => {
@@ -213,17 +203,22 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     const selected = tracks.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) return;
 
-    // Group tracks by artist+album to get unique album queries
     const seen = new Set<string>();
     const albums: AlbumYearQuery[] = [];
     for (const t of selected) {
-      const artist = t.artist || "Unknown Artist";
-      const album = t.album || "Unknown Album";
+      const artist = t.artist || "";
+      const album = t.album || "";
+      if (!artist || !album) continue;
       const key = `${artist}::${album}`;
       if (!seen.has(key)) {
         seen.add(key);
         albums.push({ artist, album });
       }
+    }
+
+    if (albums.length === 0) {
+      setAutoFixStatus("Selected tracks have no artist/album info to look up");
+      return;
     }
 
     setSaving(true);
@@ -243,38 +238,22 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     if (!tracks) return;
     setYearLookupResults(null);
 
-    // Build a map from artist::album → year for quick lookup
     const yearMap = new Map<string, number>();
     for (const r of accepted) {
       if (r.suggested_year) yearMap.set(`${r.artist}::${r.album}`, r.suggested_year);
     }
 
-    // Build updates for all selected tracks that match accepted albums
     const selected = tracks.filter((t) => selectedIds.has(t.id));
     const updates: MetadataUpdate[] = [];
     for (const t of selected) {
-      const key = `${t.artist || "Unknown Artist"}::${t.album || "Unknown Album"}`;
+      const key = `${t.artist || ""}::${t.album || ""}`;
       const year = yearMap.get(key);
       if (year) updates.push({ file_path: t.file_path, year });
     }
 
     if (updates.length === 0) return;
 
-    setSaving(true);
-    setAutoFixStatus(null);
-    try {
-      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
-      const parts: string[] = [`Applied year to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
-      if (result.failed > 0) parts.push(`${result.failed} failed`);
-      setAutoFixStatus(parts.join(", "));
-      setSelectedIds(new Set());
-      await loadTracks();
-      onDataChanged?.();
-    } catch (e) {
-      setAutoFixStatus(`Error: ${e}`);
-    } finally {
-      setSaving(false);
-    }
+    await applySaveUpdates(updates, "year", selected.length);
   };
 
   const arrow = (key: SortKey) => {

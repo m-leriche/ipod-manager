@@ -527,6 +527,27 @@ describe("drill-down", () => {
       expect(screen.getByText("Edit Metadata (1 track)")).toBeInTheDocument();
     });
   });
+
+  it("selects all tracks with Cmd+A", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS_MULTI);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    await user.keyboard("{Meta>}a{/Meta}");
+
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+  });
 });
 
 describe("helpers", () => {
@@ -628,6 +649,22 @@ describe("helpers", () => {
 
     it("does not strip ordinal-looking track numbers like 1st, 2nd, 3rd", () => {
       expect(extractTitleFromFileName("1st Avenue.mp3")).toBe("1st Avenue");
+    });
+
+    it("handles underscore-separated filenames", () => {
+      expect(extractTitleFromFileName("01_Song_Title.mp3")).toBe("Song Title");
+    });
+
+    it("handles underscore dash separator", () => {
+      expect(extractTitleFromFileName("03_-_Song_Title.mp3")).toBe("Song Title");
+    });
+
+    it("handles disc-track with underscores", () => {
+      expect(extractTitleFromFileName("01-02_Song_Title.flac")).toBe("Song Title");
+    });
+
+    it("normalizes underscores to spaces in result", () => {
+      expect(extractTitleFromFileName("My_Great_Song.flac")).toBe("My Great Song");
     });
   });
 });

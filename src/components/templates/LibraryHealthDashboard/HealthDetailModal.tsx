@@ -51,10 +51,14 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
           onClose();
         }
       }
+      if (e.key === "a" && (e.metaKey || e.ctrlKey) && tracks && tracks.length > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set(tracks.map((t) => t.id)));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, tracks]);
 
   const sorted = useMemo(
     () =>

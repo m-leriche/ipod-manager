@@ -1,40 +1,46 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryTrack } from "../../../types/library";
+import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { HealthIssue } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
+import { extractTitleFromFileName } from "./helpers";
 
 interface HealthDetailModalProps {
   issue: HealthIssue;
   onClose: () => void;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
+  onDataChanged?: () => void;
 }
 
 type SortKey = "file_path" | "artist" | "album" | "title";
 type SortDir = "asc" | "desc";
 
-export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDetailModalProps) => {
+export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChanged }: HealthDetailModalProps) => {
   const [tracks, setTracks] = useState<LibraryTrack[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("file_path");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [autoTitleStatus, setAutoTitleStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await invoke<LibraryTrack[]>("get_health_issue_tracks", { issueId: issue.id });
-        setTracks(data);
-      } catch (e) {
-        setError(`${e}`);
-      }
-    };
-    load();
+  const loadTracks = useCallback(async () => {
+    try {
+      const data = await invoke<LibraryTrack[]>("get_health_issue_tracks", { issueId: issue.id });
+      setTracks(data);
+    } catch (e) {
+      setError(`${e}`);
+    }
   }, [issue.id]);
+
+  useEffect(() => {
+    loadTracks();
+  }, [loadTracks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -96,9 +102,11 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     lastClickedRef.current = trackId;
   };
 
+  const isMissingTitle = issue.id === "missing_title";
+
   const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!onRepairMetadata) return;
+    if (!onRepairMetadata && !isMissingTitle) return;
     if (!selectedIds.has(trackId)) {
       setSelectedIds(new Set([trackId]));
       lastClickedRef.current = trackId;
@@ -112,6 +120,41 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
     if (selected.length === 0) return;
     onRepairMetadata(selected);
     onClose();
+  };
+
+  const handleAutoTitle = async () => {
+    if (!tracks || saving) return;
+    const selected = tracks.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) return;
+
+    const updates: MetadataUpdate[] = [];
+    for (const track of selected) {
+      const title = extractTitleFromFileName(track.file_name);
+      if (title) updates.push({ file_path: track.file_path, title });
+    }
+
+    if (updates.length === 0) {
+      setAutoTitleStatus("Could not extract titles from selected filenames");
+      return;
+    }
+
+    setSaving(true);
+    setAutoTitleStatus(null);
+    try {
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const skipped = selected.length - updates.length;
+      const parts: string[] = [`Applied titles to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (skipped > 0) parts.push(`${skipped} skipped`);
+      setAutoTitleStatus(parts.join(", "));
+      setSelectedIds(new Set());
+      await loadTracks();
+      onDataChanged?.();
+    } catch (e) {
+      setAutoTitleStatus(`Error: ${e}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const arrow = (key: SortKey) => {
@@ -198,6 +241,17 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
         <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
           <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
           {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
+          {autoTitleStatus && <span className="text-[11px] text-text-secondary">{autoTitleStatus}</span>}
+          <div className="flex-1" />
+          {isMissingTitle && selectedCount > 0 && (
+            <button
+              onClick={handleAutoTitle}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Applying..." : "Auto-title from filename"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -206,10 +260,25 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata }: HealthDe
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            {
-              label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
-              onClick: handleEditMetadata,
-            },
+            ...(isMissingTitle
+              ? [
+                  {
+                    label: `Auto-title from filename (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: () => {
+                      setContextMenu(null);
+                      handleAutoTitle();
+                    },
+                  },
+                ]
+              : []),
+            ...(onRepairMetadata
+              ? [
+                  {
+                    label: `Edit Metadata (${selectedCount} track${selectedCount !== 1 ? "s" : ""})`,
+                    onClick: handleEditMetadata,
+                  },
+                ]
+              : []),
           ]}
           onClose={() => setContextMenu(null)}
         />

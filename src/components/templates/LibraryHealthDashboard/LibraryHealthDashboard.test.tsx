@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryHealthDashboard } from "./LibraryHealthDashboard";
-import { issuePercentage, issueSeverity } from "./helpers";
+import { issuePercentage, issueSeverity, extractTitleFromFileName } from "./helpers";
 import type { HealthReport, HealthIssue } from "./types";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -400,6 +400,133 @@ describe("drill-down", () => {
     expect(screen.queryByText(/— 0 tracks/)).not.toBeInTheDocument();
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
+
+  it("shows auto-title button when tracks are selected in missing_title view", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    // No button before selection
+    expect(screen.queryByText("Auto-title from filename")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("track_1.flac"));
+
+    expect(screen.getByText("Auto-title from filename")).toBeInTheDocument();
+  });
+
+  it("does not show auto-title button for non-missing-title issues", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing artist")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing artist"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("track_1.flac"));
+
+    expect(screen.queryByText("Auto-title from filename")).not.toBeInTheDocument();
+  });
+
+  it("calls save_metadata with extracted titles when auto-title is clicked", async () => {
+    const user = userEvent.setup();
+    const titledTracks = [
+      makeMockTrack(1, "01-02 Song One.flac", "Artist A"),
+      makeMockTrack(2, "03 Song Two.mp3", "Artist B"),
+    ];
+    mockInvoke
+      .mockResolvedValueOnce(MOCK_REPORT) // get_library_health
+      .mockResolvedValueOnce(titledTracks) // get_health_issue_tracks (initial)
+      .mockResolvedValueOnce({
+        // save_metadata
+        total: 2,
+        succeeded: 2,
+        failed: 0,
+        cancelled: false,
+        errors: [],
+        undo_operations: [],
+      })
+      .mockResolvedValueOnce([]) // get_health_issue_tracks (refresh)
+      .mockResolvedValueOnce(MOCK_REPORT); // get_library_health (onDataChanged)
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("01-02 Song One.flac")).toBeInTheDocument();
+    });
+
+    // Select first track, then shift-click second
+    await user.click(screen.getByText("01-02 Song One.flac"));
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByText("03 Song Two.mp3"));
+    await user.keyboard("{/Shift}");
+
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Auto-title from filename"));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("save_metadata", {
+        updates: [
+          { file_path: "/music/01-02 Song One.flac", title: "Song One" },
+          { file_path: "/music/03 Song Two.mp3", title: "Song Two" },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Applied titles to 2 tracks")).toBeInTheDocument();
+    });
+  });
+
+  it("shows auto-title option in context menu for missing_title issue", async () => {
+    const user = userEvent.setup();
+    const onRepair = vi.fn();
+    mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
+
+    render(<LibraryHealthDashboard onRepairMetadata={onRepair} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing title")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing title"));
+
+    await waitFor(() => {
+      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+    });
+
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("track_1.flac") });
+
+    await waitFor(() => {
+      expect(screen.getByText("Auto-title from filename (1 track)")).toBeInTheDocument();
+      expect(screen.getByText("Edit Metadata (1 track)")).toBeInTheDocument();
+    });
+  });
 });
 
 describe("helpers", () => {
@@ -443,6 +570,64 @@ describe("helpers", () => {
 
     it("warns when informational issues exceed 80%", () => {
       expect(issueSeverity(makeIssue("unrated", 90), 100)).toBe("warning");
+    });
+  });
+
+  describe("extractTitleFromFileName", () => {
+    it("extracts title from disc-track format", () => {
+      expect(extractTitleFromFileName("01-02 Song Title.flac")).toBe("Song Title");
+    });
+
+    it("extracts title from track number with dot", () => {
+      expect(extractTitleFromFileName("03. Song Title.mp3")).toBe("Song Title");
+    });
+
+    it("extracts title from track number with paren", () => {
+      expect(extractTitleFromFileName("03) Song Title.mp3")).toBe("Song Title");
+    });
+
+    it("extracts title from track number with dash", () => {
+      expect(extractTitleFromFileName("03 - Song Title.mp3")).toBe("Song Title");
+    });
+
+    it("extracts title from plain track number", () => {
+      expect(extractTitleFromFileName("03 Song Title.mp3")).toBe("Song Title");
+    });
+
+    it("handles doubled disc-track prefix", () => {
+      expect(extractTitleFromFileName("01-02 01-02 Song Title.flac")).toBe("Song Title");
+    });
+
+    it("preserves ordinal numbers at start of title", () => {
+      expect(extractTitleFromFileName("01-02 4th of July.mp3")).toBe("4th of July");
+    });
+
+    it("preserves ordinal after stripping disc-track and track number", () => {
+      expect(extractTitleFromFileName("01-02 2 4th of July, Ashbury Park.mp3")).toBe("4th of July, Ashbury Park");
+    });
+
+    it("uses full name when no track prefix exists", () => {
+      expect(extractTitleFromFileName("Song Title.flac")).toBe("Song Title");
+    });
+
+    it("returns null for empty result", () => {
+      expect(extractTitleFromFileName(".mp3")).toBeNull();
+    });
+
+    it("returns null for extension-only filename", () => {
+      expect(extractTitleFromFileName("01-02.flac")).toBeNull();
+    });
+
+    it("handles m4a extension", () => {
+      expect(extractTitleFromFileName("01-01 My Song.m4a")).toBe("My Song");
+    });
+
+    it("handles wav extension", () => {
+      expect(extractTitleFromFileName("05 Track Five.wav")).toBe("Track Five");
+    });
+
+    it("does not strip ordinal-looking track numbers like 1st, 2nd, 3rd", () => {
+      expect(extractTitleFromFileName("1st Avenue.mp3")).toBe("1st Avenue");
     });
   });
 });

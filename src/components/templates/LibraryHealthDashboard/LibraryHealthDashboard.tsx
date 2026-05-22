@@ -118,6 +118,7 @@ export const LibraryHealthDashboard = ({ onRepairMetadata }: LibraryHealthDashbo
           issue={activeIssue}
           onClose={() => setActiveIssue(null)}
           onRepairMetadata={onRepairMetadata}
+          onDataChanged={load}
         />
       )}
     </div>

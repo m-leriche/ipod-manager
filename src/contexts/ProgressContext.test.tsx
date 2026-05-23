@@ -11,6 +11,11 @@ vi.mock("@tauri-apps/api/window", () => ({
   ProgressBarStatus: { None: 0, Normal: 1, Indeterminate: 2 },
 }));
 
+const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
+vi.mock("./ToastContext", () => ({
+  useToast: () => mockToast,
+}));
+
 import { ProgressProvider, useProgress } from "./ProgressContext";
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <ProgressProvider>{children}</ProgressProvider>;
@@ -29,7 +34,6 @@ describe("ProgressContext", () => {
     expect(result.current.state.total).toBe(0);
     expect(result.current.state.currentItem).toBe("");
     expect(result.current.state.canCancel).toBe(false);
-    expect(result.current.state.result).toBeNull();
   });
 
   it("start(title) sets active=true and title, resets progress", () => {
@@ -88,7 +92,7 @@ describe("ProgressContext", () => {
     expect(result.current.state.currentItem).toBe("song.flac");
   });
 
-  it("finish(message) sets success result", () => {
+  it("finish(message) resets state and shows success toast", () => {
     const { result } = renderHook(() => useProgress(), { wrapper });
 
     act(() => {
@@ -99,11 +103,12 @@ describe("ProgressContext", () => {
       result.current.finish("All done!");
     });
 
-    expect(result.current.state.result).toEqual({ message: "All done!", success: true });
-    expect(result.current.state.canCancel).toBe(false);
+    expect(result.current.state.active).toBe(false);
+    expect(result.current.state.title).toBe("");
+    expect(mockToast.success).toHaveBeenCalledWith("All done!");
   });
 
-  it("fail(message) sets failure result", () => {
+  it("fail(message) resets state and shows error toast", () => {
     const { result } = renderHook(() => useProgress(), { wrapper });
 
     act(() => {
@@ -114,33 +119,9 @@ describe("ProgressContext", () => {
       result.current.fail("Something went wrong");
     });
 
-    expect(result.current.state.result).toEqual({
-      message: "Something went wrong",
-      success: false,
-    });
-    expect(result.current.state.canCancel).toBe(false);
-  });
-
-  it("dismiss() resets to initial state", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
-
-    act(() => {
-      result.current.start("Working");
-      result.current.update(5, 10, "file.txt");
-      result.current.finish("Done");
-    });
-
-    act(() => {
-      result.current.dismiss();
-    });
-
     expect(result.current.state.active).toBe(false);
     expect(result.current.state.title).toBe("");
-    expect(result.current.state.completed).toBe(0);
-    expect(result.current.state.total).toBe(0);
-    expect(result.current.state.currentItem).toBe("");
-    expect(result.current.state.canCancel).toBe(false);
-    expect(result.current.state.result).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledWith("Something went wrong");
   });
 
   it("cancel() calls the stored cancel function", () => {

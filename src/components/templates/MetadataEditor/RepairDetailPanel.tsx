@@ -1,7 +1,13 @@
 import { useMemo } from "react";
 import { RepairTrackRow } from "./RepairTrackRow";
-import { confidenceLabel, confidenceColor, issueKey, totalIssueCount } from "./helpers";
+import { confidenceLabel, confidenceColor, issueKey, totalIssueCount, fieldLabel } from "./helpers";
 import type { AlbumRepairReport, MbRelease } from "./types";
+
+interface FieldToggleStats {
+  field: string;
+  total: number;
+  accepted: number;
+}
 
 interface RepairDetailPanelProps {
   album: AlbumRepairReport;
@@ -9,6 +15,7 @@ interface RepairDetailPanelProps {
   onToggleFix: (key: string) => void;
   onAcceptAll: () => void;
   onClearAll: () => void;
+  onToggleField: (field: string) => void;
   onSwitchRelease: (mbid: string) => void;
   switching: boolean;
 }
@@ -19,6 +26,7 @@ export const RepairDetailPanel = ({
   onToggleFix,
   onAcceptAll,
   onClearAll,
+  onToggleField,
   onSwitchRelease,
   switching,
 }: RepairDetailPanelProps) => {
@@ -43,6 +51,25 @@ export const RepairDetailPanel = ({
       }
     }
     return count;
+  }, [album, acceptedFixes]);
+
+  // Compute per-field stats for toggle chips
+  const fieldStats = useMemo(() => {
+    const map = new Map<string, { total: number; accepted: number }>();
+    for (const tm of album.track_matches) {
+      for (const issue of tm.issues) {
+        if (!issue.suggested_value) continue;
+        const entry = map.get(issue.field) ?? { total: 0, accepted: 0 };
+        entry.total++;
+        if (acceptedFixes.has(issueKey(issue))) entry.accepted++;
+        map.set(issue.field, entry);
+      }
+    }
+    const stats: FieldToggleStats[] = [];
+    for (const [field, counts] of map) {
+      stats.push({ field, ...counts });
+    }
+    return stats;
   }, [album, acceptedFixes]);
 
   return (
@@ -115,6 +142,32 @@ export const RepairDetailPanel = ({
             </span>
           </div>
         )}
+
+        {/* Per-field toggle chips */}
+        {fieldStats.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {fieldStats.map((fs) => {
+              const allAccepted = fs.accepted === fs.total;
+              const someAccepted = fs.accepted > 0 && !allAccepted;
+              return (
+                <button
+                  key={fs.field}
+                  onClick={() => onToggleField(fs.field)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-all ${
+                    allAccepted
+                      ? "bg-accent/15 border-accent/30 text-accent"
+                      : someAccepted
+                        ? "bg-accent/8 border-accent/20 text-accent/80"
+                        : "bg-bg-card border-border text-text-tertiary hover:text-text-secondary hover:border-border-active"
+                  }`}
+                >
+                  <FieldCheckbox all={allAccepted} some={someAccepted} />
+                  {fieldLabel(fs.field)} ({fs.accepted}/{fs.total})
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Track list */}
@@ -153,3 +206,39 @@ export const RepairDetailPanel = ({
     </div>
   );
 };
+
+const FieldCheckbox = ({ all, some }: { all: boolean; some: boolean }) => (
+  <svg viewBox="0 0 16 16" className="w-3 h-3 shrink-0" fill="none">
+    <rect
+      x="1"
+      y="1"
+      width="14"
+      height="14"
+      rx="3"
+      className={all || some ? "fill-accent/20 stroke-accent" : "fill-none stroke-current opacity-40"}
+      strokeWidth="1.5"
+    />
+    {all && (
+      <path
+        d="M4.5 8.5L7 11L11.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-accent"
+      />
+    )}
+    {some && (
+      <line
+        x1="4.5"
+        y1="8"
+        x2="11.5"
+        y2="8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        className="text-accent"
+      />
+    )}
+  </svg>
+);

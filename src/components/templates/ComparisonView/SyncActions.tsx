@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useProgress } from "../../../contexts/ProgressContext";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import type { SyncActionsProps } from "./types";
 
@@ -18,12 +17,11 @@ export const SyncActions = ({
   onDeleteTarget,
   onCancel,
 }: SyncActionsProps) => {
-  const { state: progressState } = useProgress();
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   return (
     <div className="shrink-0 flex flex-col gap-3">
-      {syncing && progress && !progressState.active ? (
+      {syncing && progress ? (
         <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3.5 shrink-0">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-medium text-text-primary">

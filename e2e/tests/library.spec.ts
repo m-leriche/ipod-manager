@@ -27,7 +27,7 @@ test.describe("Library — with data", () => {
   });
 
   test("shows track count", async ({ page }) => {
-    await expect(page.getByText("5 tracks")).toBeVisible();
+    await expect(page.getByRole("main").getByText("5 tracks")).toBeVisible();
   });
 
   test("renders column browser with genres, artists, albums", async ({ page }) => {
@@ -59,7 +59,7 @@ test.describe("Library — with data", () => {
     // Should show filtered artists and albums
     await expect(page.getByText("All Artists (1)")).toBeVisible();
     await expect(page.getByText("All Albums (1)")).toBeVisible();
-    await expect(page.getByText("2 tracks")).toBeVisible();
+    await expect(page.getByRole("main").getByText("2 tracks")).toBeVisible();
   });
 
   test("search input filters tracks", async ({ page, tauriMocks }) => {
@@ -74,7 +74,7 @@ test.describe("Library — with data", () => {
 
     await page.getByPlaceholder("Search...").fill("first");
     // After debounce, should re-fetch with search filter
-    await expect(page.getByText("1 tracks")).toBeVisible({ timeout: 2000 });
+    await expect(page.getByRole("main").getByText("1 tracks")).toBeVisible({ timeout: 2000 });
   });
 
   test("shows search input with keyboard shortcut hint", async ({ page }) => {

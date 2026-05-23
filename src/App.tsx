@@ -17,8 +17,8 @@ import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairConte
 import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
 import { ErrorBoundary } from "./components/atoms/ErrorBoundary/ErrorBoundary";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
-import { ProgressModal } from "./components/atoms/ProgressModal/ProgressModal";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
+import { StatusBar } from "./components/molecules/StatusBar/StatusBar";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
@@ -28,6 +28,7 @@ import { useResizableWidth as useLyricsPanelWidth } from "./components/organisms
 import type { LibraryScanProgress, LibraryTrack } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
+import type { LibrarySummary } from "./components/molecules/StatusBar/types";
 
 // Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
 const FileManager = lazy(() =>
@@ -81,7 +82,6 @@ const App = () => (
                   <PlaybackProvider>
                     <PlaylistProvider>
                       <AppContent />
-                      <ProgressModal />
                       <ToastContainer />
                     </PlaylistProvider>
                   </PlaybackProvider>
@@ -130,6 +130,7 @@ const AppContent = () => {
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);
+  const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
   const prevMountedRef = useRef(false);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const libraryRefreshRef = useRef<(() => void) | null>(null);
@@ -215,6 +216,7 @@ const AppContent = () => {
                 onRefreshRef={libraryRefreshRef}
                 isActive={topTab === "library"}
                 onRepairMetadata={handleRepairMetadata}
+                onLibrarySummaryChange={setLibrarySummary}
                 showColumnBrowser={showColumnBrowser}
                 showInfoPanel={showInfoPanel}
                 showStatsPanel={showStatsPanel}
@@ -343,6 +345,8 @@ const AppContent = () => {
           </ErrorBoundary>
         )}
       </main>
+
+      {!miniPlayer && <StatusBar librarySummary={librarySummary} ipodConnected={ipodMounted} />}
 
       <ErrorBoundary name="Now Playing" compact>
         <NowPlayingBar

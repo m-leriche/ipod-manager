@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { getCurrentWindow, ProgressBarStatus } from "@tauri-apps/api/window";
+import { useToast } from "./ToastContext";
 
 interface ProgressState {
   active: boolean;
@@ -8,7 +9,6 @@ interface ProgressState {
   total: number;
   currentItem: string;
   canCancel: boolean;
-  result: { message: string; success: boolean } | null;
 }
 
 interface ProgressContextValue {
@@ -17,7 +17,6 @@ interface ProgressContextValue {
   update: (completed: number, total: number, currentItem?: string) => void;
   finish: (message: string) => void;
   fail: (message: string) => void;
-  dismiss: () => void;
   cancel: () => void;
 }
 
@@ -28,7 +27,6 @@ const initial: ProgressState = {
   total: 0,
   currentItem: "",
   canCancel: false,
-  result: null,
 };
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -38,6 +36,7 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
   const cancelRef = useRef<(() => void) | null>(null);
   const lastDockPercentRef = useRef<number | null>(null);
   const generationRef = useRef(0);
+  const toast = useToast();
 
   const win = getCurrentWindow();
 
@@ -69,7 +68,6 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
         total: 0,
         currentItem: "",
         canCancel: !!cancelFn,
-        result: null,
       });
       setDockIndicator(-1);
     },
@@ -100,15 +98,12 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
     (message: string) => {
       generationRef.current++;
       cancelRef.current = null;
-      lastDockPercentRef.current = 100;
-      setState((prev) => ({
-        ...prev,
-        canCancel: false,
-        result: { message, success: true },
-      }));
-      setDockIndicator(100);
+      lastDockPercentRef.current = null;
+      setState(initial);
+      setDockIndicator();
+      toast.success(message);
     },
-    [setDockIndicator],
+    [setDockIndicator, toast],
   );
 
   const fail = useCallback(
@@ -116,22 +111,12 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
       generationRef.current++;
       cancelRef.current = null;
       lastDockPercentRef.current = null;
-      setState((prev) => ({
-        ...prev,
-        canCancel: false,
-        result: { message, success: false },
-      }));
+      setState(initial);
       setDockIndicator();
+      toast.error(message);
     },
-    [setDockIndicator],
+    [setDockIndicator, toast],
   );
-
-  const dismiss = useCallback(() => {
-    cancelRef.current = null;
-    lastDockPercentRef.current = null;
-    setState(initial);
-    setDockIndicator();
-  }, [setDockIndicator]);
 
   const cancel = useCallback(() => {
     cancelRef.current?.();
@@ -139,7 +124,7 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   return (
-    <ProgressContext.Provider value={{ state, start, update, finish, fail, dismiss, cancel }}>
+    <ProgressContext.Provider value={{ state, start, update, finish, fail, cancel }}>
       {children}
     </ProgressContext.Provider>
   );

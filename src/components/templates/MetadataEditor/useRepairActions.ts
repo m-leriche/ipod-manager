@@ -102,6 +102,26 @@ export const useRepairActions = (
     });
   }, []);
 
+  const toggleFieldForAlbum = useCallback((album: AlbumRepairReport, field: string) => {
+    setAcceptedFixes((prev) => {
+      const next = new Set(prev);
+      const fieldKeys: string[] = [];
+      for (const tm of album.track_matches) {
+        for (const issue of tm.issues) {
+          if (issue.field === field && issue.suggested_value) {
+            fieldKeys.push(issueKey(issue));
+          }
+        }
+      }
+      const allAccepted = fieldKeys.every((k) => next.has(k));
+      for (const k of fieldKeys) {
+        if (allAccepted) next.delete(k);
+        else next.add(k);
+      }
+      return next;
+    });
+  }, []);
+
   const handleSwitchRelease = useCallback(
     async (mbid: string) => {
       if (!selectedAlbumData) return;
@@ -181,6 +201,7 @@ export const useRepairActions = (
     toggleFix,
     acceptAllForAlbum,
     clearAllForAlbum,
+    toggleFieldForAlbum,
     handleSwitchRelease,
     handleApplyRepairs,
     handleAcceptAllRepairs,

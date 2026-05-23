@@ -190,6 +190,8 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN last_played INTEGER");
     let _ = conn
         .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_last_played ON tracks(last_played)");
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN replay_gain_track_db REAL");
+    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN replay_gain_album_db REAL");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN lyrics TEXT");
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
     let _ = conn

@@ -75,7 +75,8 @@ pub fn get_health_issue_tracks(
         "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number, disc_total,
                 year, genre, duration_secs, sample_rate, bitrate_kbps, format, file_size,
-                created_at, play_count, last_played, flagged, rating
+                created_at, play_count, last_played, flagged, rating,
+                replay_gain_track_db, replay_gain_album_db
          FROM tracks WHERE {} ORDER BY file_path",
         where_clause
     );
@@ -111,6 +112,8 @@ pub fn get_health_issue_tracks(
                 last_played: r.get(23)?,
                 flagged: r.get(24)?,
                 rating: r.get::<_, i64>(25).map(|v| v as u8)?,
+                replay_gain_track_db: r.get(26)?,
+                replay_gain_album_db: r.get(27)?,
             })
         })
         .map_err(|e| format!("DB error: {}", e))?;
@@ -204,7 +207,9 @@ mod tests {
                 play_count INTEGER NOT NULL DEFAULT 0,
                 last_played INTEGER,
                 flagged INTEGER NOT NULL DEFAULT 0,
-                rating INTEGER NOT NULL DEFAULT 0
+                rating INTEGER NOT NULL DEFAULT 0,
+                replay_gain_track_db REAL,
+                replay_gain_album_db REAL
             );",
         )
         .unwrap();

@@ -41,7 +41,9 @@ fn test_db() -> Connection {
             flagged INTEGER NOT NULL DEFAULT 0,
             rating INTEGER NOT NULL DEFAULT 0,
             lyrics TEXT,
-            synced_lyrics TEXT
+            synced_lyrics TEXT,
+            replay_gain_track_db REAL,
+            replay_gain_album_db REAL
         );
         CREATE TABLE IF NOT EXISTS library_folders (
             id INTEGER PRIMARY KEY,
@@ -81,6 +83,8 @@ fn make_track_data(overrides: TrackDataOverrides) -> TrackData {
         file_size: 5_000_000,
         play_count: None,
         lyrics: None,
+        replay_gain_track_db: None,
+        replay_gain_album_db: None,
     }
 }
 

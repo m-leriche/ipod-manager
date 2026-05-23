@@ -132,4 +132,17 @@ describe("SettingsModal", () => {
     expect(slider.step).toBe("1");
     expect(slider.value).toBe("0");
   });
+
+  it("renders ReplayGain toggle unchecked by default", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    const toggle = screen.getByTestId("replay-gain-toggle") as HTMLInputElement;
+    expect(toggle).toBeInTheDocument();
+    expect(toggle.checked).toBe(false);
+  });
+
+  it("hides mode selector when ReplayGain is disabled", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    expect(screen.queryByText("Track gain")).not.toBeInTheDocument();
+    expect(screen.queryByText("Album gain")).not.toBeInTheDocument();
+  });
 });

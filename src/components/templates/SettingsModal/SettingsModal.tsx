@@ -7,6 +7,7 @@ import { cancelSync } from "../../../utils/cancelSync";
 import { pickFolder } from "../../../utils/pickPath";
 import { useTheme } from "../../../contexts/ThemeContext";
 import type { ThemeName } from "../../../contexts/ThemeContext";
+import type { ReplayGainMode } from "../../../contexts/playback/types";
 import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
 import { LastfmSettings } from "./LastfmSettings";
@@ -32,7 +33,7 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   const [loading, setLoading] = useState(true);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { theme, setTheme } = useTheme();
-  const { state: playbackState, setCrossfade } = usePlayback();
+  const { state: playbackState, setCrossfade, setReplayGain } = usePlayback();
 
   useEffect(() => {
     invoke<string | null>("get_library_location")
@@ -192,6 +193,54 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
                 data-testid="crossfade-slider"
               />
               <span className="text-[10px] text-text-tertiary shrink-0">12s</span>
+            </div>
+          </div>
+
+          {/* Volume Normalization */}
+          <div className="mt-6">
+            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-1">
+              Volume Normalization
+            </span>
+            <p className="text-[10px] text-text-tertiary mb-3">
+              Adjust playback volume using ReplayGain tags so all tracks play at a consistent level. Does not modify
+              your files.
+            </p>
+
+            <div className="flex flex-col gap-3 px-4 py-3 border border-border rounded-xl">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={playbackState.replayGainEnabled}
+                  onChange={(e) => setReplayGain(e.target.checked)}
+                  className="accent-accent w-3.5 h-3.5"
+                  data-testid="replay-gain-toggle"
+                />
+                <span className="text-[11px] text-text-primary">Enable ReplayGain</span>
+              </label>
+
+              {playbackState.replayGainEnabled && (
+                <div className="flex flex-col gap-2 pl-6">
+                  <div className="flex items-center gap-4">
+                    {(["track", "album"] as ReplayGainMode[]).map((mode) => (
+                      <label key={mode} className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="replayGainMode"
+                          value={mode}
+                          checked={playbackState.replayGainMode === mode}
+                          onChange={() => setReplayGain(true, mode)}
+                          className="accent-accent w-3 h-3"
+                        />
+                        <span className="text-[11px] text-text-secondary capitalize">{mode} gain</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-text-tertiary leading-snug">
+                    Track: every song at the same level — best for shuffle. Album: preserves volume differences between
+                    songs on the same album — best for full-album listening.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

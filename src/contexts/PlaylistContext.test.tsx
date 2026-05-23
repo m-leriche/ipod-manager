@@ -34,6 +34,8 @@ const mockTrack = {
   last_played: null,
   flagged: false,
   rating: 0,
+  replay_gain_track_db: null,
+  replay_gain_album_db: null,
 };
 const mockSmartPlaylist = {
   id: 1,

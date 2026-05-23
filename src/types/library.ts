@@ -25,6 +25,8 @@ export interface LibraryTrack {
   last_played: number | null;
   flagged: boolean;
   rating: number;
+  replay_gain_track_db: number | null;
+  replay_gain_album_db: number | null;
 }
 
 export interface LibraryFolder {
@@ -125,6 +127,8 @@ export interface PlaylistTrack {
   last_played: number | null;
   flagged: boolean;
   rating: number;
+  replay_gain_track_db: number | null;
+  replay_gain_album_db: number | null;
 }
 
 export interface SmartPlaylistRule {

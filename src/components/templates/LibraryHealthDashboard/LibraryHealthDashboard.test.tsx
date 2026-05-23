@@ -52,6 +52,8 @@ const makeMockTrack = (id: number, fileName: string, artist: string): LibraryTra
   last_played: null,
   flagged: false,
   rating: 0,
+  replay_gain_track_db: null,
+  replay_gain_album_db: null,
 });
 
 const MOCK_TRACKS: LibraryTrack[] = [makeMockTrack(1, "track_1.flac", "Artist A")];

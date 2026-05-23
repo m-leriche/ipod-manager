@@ -9,6 +9,7 @@ pub struct SharedState {
     pub duration: Arc<AtomicU64>,     // f64 bits: seconds
     pub state: Arc<AtomicU8>,         // PlayState as u8
     pub volume: Arc<AtomicU64>,       // f32 bits stored as u64 for atomic access
+    pub replay_gain: Arc<AtomicU64>,  // f32 bits: linear gain multiplier (1.0 = no change)
     pub out_samples: Arc<AtomicU64>,  // samples actually played by cpal callback
     pub out_channels: Arc<AtomicU64>, // output channel count (for position calc)
     pub out_rate: Arc<AtomicU64>,     // output sample rate (for position calc)
@@ -21,6 +22,7 @@ impl SharedState {
             duration: Arc::new(AtomicU64::new(0)),
             state: Arc::new(AtomicU8::new(PlayState::Stopped as u8)),
             volume: Arc::new(AtomicU64::new(f32::to_bits(0.8) as u64)),
+            replay_gain: Arc::new(AtomicU64::new(f32::to_bits(1.0) as u64)),
             out_samples: Arc::new(AtomicU64::new(0)),
             out_channels: Arc::new(AtomicU64::new(2)),
             out_rate: Arc::new(AtomicU64::new(44100)),
@@ -54,5 +56,13 @@ impl SharedState {
     pub fn set_volume(&self, vol: f32) {
         self.volume
             .store(f32::to_bits(vol) as u64, Ordering::Relaxed);
+    }
+
+    pub fn set_replay_gain(&self, gain: f32) {
+        // Clamp to [0, 4] (~+12 dB max) to prevent dangerously loud output
+        // from corrupted or unusual ReplayGain tags.
+        let clamped = gain.clamp(0.0, 4.0);
+        self.replay_gain
+            .store(f32::to_bits(clamped) as u64, Ordering::Relaxed);
     }
 }

@@ -56,6 +56,7 @@ impl<R: Runtime> EngineState<R> {
                     self.output_channels,
                     cons,
                     Arc::clone(&self.shared.volume),
+                    Arc::clone(&self.shared.replay_gain),
                     Arc::clone(&self.shared.out_samples),
                 ) {
                     Ok(stream) => {
@@ -127,6 +128,7 @@ impl<R: Runtime> EngineState<R> {
                 self.output_channels,
                 cons,
                 Arc::clone(&self.shared.volume),
+                Arc::clone(&self.shared.replay_gain),
                 Arc::clone(&self.shared.out_samples),
             ) {
                 Ok(stream) => {

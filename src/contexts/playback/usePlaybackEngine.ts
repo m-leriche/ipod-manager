@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { LibraryTrack } from "../../types/library";
-import type { PlaybackState, PlaybackTimeState, PlaybackContextValue, RepeatMode } from "./types";
+import type { PlaybackState, PlaybackTimeState, PlaybackContextValue, RepeatMode, ReplayGainMode } from "./types";
 import {
   loadVolume,
   saveVolume,
@@ -12,6 +12,10 @@ import {
   saveSpeed,
   savePlaybackState,
   loadPlaybackState,
+  loadReplayGainEnabled,
+  saveReplayGainEnabled,
+  loadReplayGainMode,
+  saveReplayGainMode,
 } from "./persistence";
 
 // ── Shuffle helpers ─────────────────────────────────────────────
@@ -33,12 +37,24 @@ const initialState: PlaybackState = {
   volume: loadVolume(),
   speed: loadSpeed(),
   crossfade: loadCrossfade(),
+  replayGainEnabled: loadReplayGainEnabled(),
+  replayGainMode: loadReplayGainMode() as ReplayGainMode,
   queue: [],
   queueIndex: -1,
   shuffle: false,
   repeat: "off",
   libraryAvailable: true,
   playbackError: null,
+};
+
+/** Convert a ReplayGain dB value to a linear amplitude multiplier. */
+const dbToLinear = (db: number): number => Math.pow(10, db / 20);
+
+/** Compute the linear gain for a track based on current ReplayGain settings. */
+const computeReplayGain = (track: LibraryTrack | null, enabled: boolean, mode: ReplayGainMode): number => {
+  if (!enabled || !track) return 1.0;
+  const db = mode === "album" ? (track.replay_gain_album_db ?? track.replay_gain_track_db) : track.replay_gain_track_db;
+  return db != null ? dbToLinear(db) : 1.0;
 };
 
 const initialTime: PlaybackTimeState = {
@@ -337,35 +353,49 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     }
   }, []);
 
+  // ── ReplayGain helper ────────────────────────────────────────
+
+  const sendReplayGain = useCallback((track: LibraryTrack | null) => {
+    const s = stateRef.current;
+    const gain = computeReplayGain(track, s.replayGainEnabled, s.replayGainMode);
+    invoke("audio_set_replay_gain", { gain }).catch(() => {});
+  }, []);
+
   // ── Play a track via the native audio engine ─────────────────
 
-  const playFile = useCallback((track: LibraryTrack) => {
-    engineActiveRef.current = true;
-    if (!stateRef.current.libraryAvailable) {
+  const playFile = useCallback(
+    (track: LibraryTrack) => {
+      engineActiveRef.current = true;
+      if (!stateRef.current.libraryAvailable) {
+        setState((prev) => ({
+          ...prev,
+          currentTrack: track,
+          isPlaying: false,
+          playbackError: "Library offline \u2014 connect your drive to play music",
+        }));
+        return;
+      }
+
       setState((prev) => ({
         ...prev,
         currentTrack: track,
-        isPlaying: false,
-        playbackError: "Library offline \u2014 connect your drive to play music",
+        isPlaying: true,
+        playbackError: null,
       }));
-      return;
-    }
+      setTime({ currentTime: 0, duration: track.duration_secs });
+      lastPositionRef.current = 0;
+      lastPositionTimeRef.current = performance.now();
 
-    setState((prev) => ({
-      ...prev,
-      currentTrack: track,
-      isPlaying: true,
-      playbackError: null,
-    }));
-    setTime({ currentTime: 0, duration: track.duration_secs });
-    lastPositionRef.current = 0;
-    lastPositionTimeRef.current = performance.now();
+      trackStartedAtRef.current = Math.floor(Date.now() / 1000);
+      window.dispatchEvent(new CustomEvent("track-started", { detail: track }));
 
-    trackStartedAtRef.current = Math.floor(Date.now() / 1000);
-    window.dispatchEvent(new CustomEvent("track-started", { detail: track }));
-
-    invoke("audio_play", { path: track.file_path, seekSecs: null }).catch((e) => console.warn("audio_play failed:", e));
-  }, []);
+      sendReplayGain(track);
+      invoke("audio_play", { path: track.file_path, seekSecs: null }).catch((e) =>
+        console.warn("audio_play failed:", e),
+      );
+    },
+    [sendReplayGain],
+  );
 
   // ── Track-ended handler ──────────────────────────────────────
 
@@ -412,6 +442,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       lastPositionRef.current = 0;
       lastPositionTimeRef.current = performance.now();
       setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+      sendReplayGain(nextTrack);
       invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
@@ -434,10 +465,11 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     trackStartedAtRef.current = Math.floor(Date.now() / 1000);
     window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
 
+    sendReplayGain(nextTrack);
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
       console.warn("audio_play failed:", e),
     );
-  }, [getNextIndex, recordPlay, advanceShuffle]);
+  }, [getNextIndex, recordPlay, advanceShuffle, sendReplayGain]);
 
   // ── Gapless transition handler (engine already playing next track) ──
 
@@ -502,6 +534,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     lastPositionTimeRef.current = performance.now();
     trackStartedAtRef.current = Math.floor(Date.now() / 1000);
     window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
+    sendReplayGain(nextTrack);
     // Don't invoke audio_play — the engine already transitioned seamlessly
 
     // Immediately preload the next-next track so continuous gapless
@@ -509,7 +542,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     if (nextNextIdx !== null && s.queue[nextNextIdx]) {
       invoke("audio_preload_next", { path: s.queue[nextNextIdx].file_path }).catch(() => {});
     }
-  }, [getNextIndex, getNextIndexFrom, recordPlay, advanceShuffle]);
+  }, [getNextIndex, getNextIndexFrom, recordPlay, advanceShuffle, sendReplayGain]);
 
   // Keep refs in sync so event listeners always call the latest handler
   onTrackEndedRef.current = handleTrackEnded;
@@ -605,6 +638,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
       lastPositionRef.current = seekPos ?? 0;
       lastPositionTimeRef.current = performance.now();
+      sendReplayGain(s.currentTrack);
       invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
@@ -616,7 +650,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     lastPositionRef.current = timeRef.current.currentTime;
     lastPositionTimeRef.current = performance.now();
     setState((prev) => ({ ...prev, isPlaying: true }));
-  }, []);
+  }, [sendReplayGain]);
 
   const stop = useCallback(() => {
     engineActiveRef.current = false;
@@ -820,6 +854,15 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     setState((prev) => ({ ...prev, crossfade: clamped }));
   }, []);
 
+  const setReplayGain = useCallback((enabled: boolean, mode?: ReplayGainMode) => {
+    const newMode = mode ?? stateRef.current.replayGainMode;
+    saveReplayGainEnabled(enabled);
+    saveReplayGainMode(newMode);
+    setState((prev) => ({ ...prev, replayGainEnabled: enabled, replayGainMode: newMode }));
+    const gain = computeReplayGain(stateRef.current.currentTrack, enabled, newMode);
+    invoke("audio_set_replay_gain", { gain }).catch(() => {});
+  }, []);
+
   const clearPlaybackError = useCallback(() => {
     setState((prev) => (prev.playbackError ? { ...prev, playbackError: null } : prev));
   }, []);
@@ -846,6 +889,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       cycleRepeat,
       setSpeed,
       setCrossfade,
+      setReplayGain,
       clearPlaybackError,
     }),
     [
@@ -868,6 +912,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       cycleRepeat,
       setSpeed,
       setCrossfade,
+      setReplayGain,
       clearPlaybackError,
     ],
   );

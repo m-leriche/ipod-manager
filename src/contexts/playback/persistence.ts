@@ -12,6 +12,12 @@ export const saveCrossfade = (seconds: number) => setSetting("crossfade", second
 export const loadSpeed = (): number => getSetting("speed");
 export const saveSpeed = (speed: number) => setSetting("speed", speed);
 
+export const loadReplayGainEnabled = (): boolean => getSetting("replayGainEnabled");
+export const saveReplayGainEnabled = (enabled: boolean) => setSetting("replayGainEnabled", enabled);
+
+export const loadReplayGainMode = (): string => getSetting("replayGainMode");
+export const saveReplayGainMode = (mode: string) => setSetting("replayGainMode", mode);
+
 export interface PersistedPlaybackState {
   queue: LibraryTrack[];
   queueIndex: number;

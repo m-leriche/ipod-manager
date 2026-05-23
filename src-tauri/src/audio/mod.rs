@@ -83,6 +83,10 @@ impl AudioEngine {
         self.send(AudioCommand::SetCrossfade { duration_secs });
     }
 
+    pub fn set_replay_gain(&self, gain: f32) {
+        self.send(AudioCommand::SetReplayGain { gain });
+    }
+
     pub fn get_status(&self) -> PlaybackStatus {
         let state = match self.shared.get_state() {
             PlayState::Playing => "playing",

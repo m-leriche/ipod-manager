@@ -85,6 +85,8 @@ export const SETTINGS = {
   volume: num("crate-playback-volume", 0.8, 0, 1),
   crossfade: num("crate-playback-crossfade", 0, 0, 12),
   speed: num("crate-playback-speed", 1.0, 0.25, 4),
+  replayGainEnabled: bool("crate-replay-gain-enabled", false),
+  replayGainMode: str("crate-replay-gain-mode", "track", ["track", "album"]),
 
   // Equalizer — stored as opaque JSON blobs; callers validate structure on read
   equalizer: json<Record<string, unknown> | null>("crate-equalizer", null, (parsed) =>

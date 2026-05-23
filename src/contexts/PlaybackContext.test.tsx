@@ -11,6 +11,8 @@ const mockValue = {
     volume: 0.8,
     speed: 1.0,
     crossfade: 0,
+    replayGainEnabled: false,
+    replayGainMode: "track" as const,
     queue: [],
     queueIndex: -1,
     shuffle: false,
@@ -36,6 +38,7 @@ const mockValue = {
   cycleRepeat: vi.fn(),
   setSpeed: vi.fn(),
   setCrossfade: vi.fn(),
+  setReplayGain: vi.fn(),
   clearPlaybackError: vi.fn(),
 };
 

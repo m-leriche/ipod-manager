@@ -61,6 +61,7 @@ pub(super) fn create_output_stream(
     channels: u16,
     mut consumer: ringbuf::HeapCons<f32>,
     volume: Arc<AtomicU64>,
+    replay_gain: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
 ) -> Result<Stream, String> {
     let device = host
@@ -78,10 +79,12 @@ pub(super) fn create_output_stream(
             &config,
             move |data: &mut [f32], _info: &cpal::OutputCallbackInfo| {
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
+                let rg = f32::from_bits(replay_gain.load(Ordering::Relaxed) as u32);
+                let combined = vol * rg;
                 let mut played: u64 = 0;
                 for sample in data.iter_mut() {
                     let s = consumer.try_pop().unwrap_or(0.0);
-                    *sample = s * vol;
+                    *sample = s * combined;
                     played += 1;
                 }
                 out_samples.fetch_add(played, Ordering::Relaxed);

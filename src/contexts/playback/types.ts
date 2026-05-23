@@ -2,12 +2,16 @@ import type { LibraryTrack } from "../../types/library";
 
 export type RepeatMode = "off" | "all" | "one";
 
+export type ReplayGainMode = "track" | "album";
+
 export interface PlaybackState {
   currentTrack: LibraryTrack | null;
   isPlaying: boolean;
   volume: number;
   speed: number;
   crossfade: number;
+  replayGainEnabled: boolean;
+  replayGainMode: ReplayGainMode;
   queue: LibraryTrack[];
   queueIndex: number;
   shuffle: boolean;
@@ -41,5 +45,6 @@ export interface PlaybackContextValue {
   cycleRepeat: () => void;
   setSpeed: (speed: number) => void;
   setCrossfade: (seconds: number) => void;
+  setReplayGain: (enabled: boolean, mode?: ReplayGainMode) => void;
   clearPlaybackError: () => void;
 }

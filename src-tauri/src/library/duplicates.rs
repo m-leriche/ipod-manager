@@ -283,7 +283,8 @@ fn load_all_tracks(conn: &Connection) -> Result<Vec<LibraryTrack>, String> {
     let sql = "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
                 sort_artist, sort_album_artist, track_number, track_total, disc_number,
                 disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size, created_at, play_count, last_played, flagged, rating
+                file_size, created_at, play_count, last_played, flagged, rating,
+                replay_gain_track_db, replay_gain_album_db
          FROM tracks";
 
     let mut stmt = conn
@@ -319,6 +320,8 @@ fn load_all_tracks(conn: &Connection) -> Result<Vec<LibraryTrack>, String> {
                 last_played: row.get(23)?,
                 flagged: row.get(24)?,
                 rating: row.get::<_, i64>(25).map(|v| v as u8)?,
+                replay_gain_track_db: row.get(26)?,
+                replay_gain_album_db: row.get(27)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?;

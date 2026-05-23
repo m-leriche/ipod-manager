@@ -76,6 +76,12 @@ pub fn audio_set_crossfade(
     Ok(())
 }
 
+#[tauri::command]
+pub fn audio_set_replay_gain(gain: f32, engine: State<'_, AudioEngine>) -> Result<(), AppError> {
+    engine.set_replay_gain(gain);
+    Ok(())
+}
+
 // ── Media key / Now Playing commands ─────────────────────────────
 
 #[tauri::command]

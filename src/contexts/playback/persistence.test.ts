@@ -40,6 +40,8 @@ const stubTrack: LibraryTrack = {
   last_played: null,
   flagged: false,
   rating: 0,
+  replay_gain_track_db: null,
+  replay_gain_album_db: null,
 };
 
 describe("persistence", () => {
@@ -154,6 +156,8 @@ describe("persistence", () => {
       volume: 0.7,
       speed: 1.0,
       crossfade: 4,
+      replayGainEnabled: false,
+      replayGainMode: "track",
       queue: [stubTrack],
       queueIndex: 0,
       shuffle: true,
@@ -179,6 +183,8 @@ describe("persistence", () => {
       volume: 0.8,
       speed: 1.0,
       crossfade: 0,
+      replayGainEnabled: false,
+      replayGainMode: "track",
       queue: [],
       queueIndex: -1,
       shuffle: false,

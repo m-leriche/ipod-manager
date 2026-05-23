@@ -28,6 +28,10 @@ pub enum AudioCommand {
     SetCrossfade {
         duration_secs: f64,
     },
+    SetReplayGain {
+        /// Linear gain multiplier (1.0 = no change). Frontend converts dB → linear.
+        gain: f32,
+    },
     Shutdown,
 }
 

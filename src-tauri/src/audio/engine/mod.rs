@@ -144,6 +144,9 @@ pub fn run<R: Runtime>(
                 AudioCommand::SetCrossfade { duration_secs } => {
                     state.crossfade_duration_secs = duration_secs.clamp(0.0, 12.0);
                 }
+                AudioCommand::SetReplayGain { gain } => {
+                    state.shared.set_replay_gain(gain);
+                }
                 AudioCommand::Shutdown => {
                     if let Some(stream) = state.current_stream.take() {
                         stream.pause().ok();

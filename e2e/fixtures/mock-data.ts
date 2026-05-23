@@ -33,6 +33,8 @@ export const MOCK_TRACKS = [
     last_played: null,
     flagged: false,
     rating: 0,
+    replay_gain_track_db: null,
+    replay_gain_album_db: null,
   },
   {
     id: 2,
@@ -61,6 +63,8 @@ export const MOCK_TRACKS = [
     last_played: null,
     flagged: false,
     rating: 0,
+    replay_gain_track_db: null,
+    replay_gain_album_db: null,
   },
   {
     id: 3,
@@ -89,6 +93,8 @@ export const MOCK_TRACKS = [
     last_played: null,
     flagged: true,
     rating: 0,
+    replay_gain_track_db: null,
+    replay_gain_album_db: null,
   },
   {
     id: 4,
@@ -117,6 +123,8 @@ export const MOCK_TRACKS = [
     last_played: null,
     flagged: false,
     rating: 0,
+    replay_gain_track_db: null,
+    replay_gain_album_db: null,
   },
   {
     id: 5,
@@ -145,6 +153,8 @@ export const MOCK_TRACKS = [
     last_played: null,
     flagged: false,
     rating: 0,
+    replay_gain_track_db: null,
+    replay_gain_album_db: null,
   },
 ];
 

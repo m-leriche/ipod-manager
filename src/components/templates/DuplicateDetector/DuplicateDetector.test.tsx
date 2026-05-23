@@ -36,6 +36,8 @@ const MOCK_TRACK_A = {
   last_played: null,
   flagged: false,
   rating: 4,
+  replay_gain_track_db: null,
+  replay_gain_album_db: null,
 };
 
 const MOCK_TRACK_B = {

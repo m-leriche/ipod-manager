@@ -69,6 +69,8 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
                 file_size,
                 play_count: None,
                 lyrics: None,
+                replay_gain_track_db: None,
+                replay_gain_album_db: None,
             };
         }
     }
@@ -97,6 +99,8 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
         genre,
         play_count,
         lyrics,
+        replay_gain_track_db,
+        replay_gain_album_db,
     ) = if let Some(tag) = tag {
         // Try reading play count from common tag fields:
         // - TXXX:FMPS_PLAYCOUNT (MediaMonkey, Clementine, etc.)
@@ -110,6 +114,13 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
                 tag.get_string(&ItemKey::Popularimeter)
                     .and_then(|s| s.trim().parse::<u32>().ok())
             });
+
+        let rg_track = tag
+            .get_string(&ItemKey::ReplayGainTrackGain)
+            .and_then(parse_replay_gain);
+        let rg_album = tag
+            .get_string(&ItemKey::ReplayGainAlbumGain)
+            .and_then(parse_replay_gain);
 
         let embedded_lyrics = tag.get_string(&ItemKey::Lyrics).and_then(|s| {
             let trimmed = s.trim();
@@ -137,10 +148,13 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
             tag.genre().and_then(|s| trim_tag(&s)),
             pc,
             embedded_lyrics,
+            rg_track,
+            rg_album,
         )
     } else {
         (
             None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None,
         )
     };
 
@@ -167,7 +181,19 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
         file_size,
         play_count,
         lyrics,
+        replay_gain_track_db,
+        replay_gain_album_db,
     }
+}
+
+/// Parse a ReplayGain tag value like "-3.2 dB" or "+1.5 dB" into an f32.
+fn parse_replay_gain(s: &str) -> Option<f32> {
+    let s = s.trim();
+    let s = s
+        .strip_suffix("dB")
+        .or_else(|| s.strip_suffix("db"))
+        .unwrap_or(s);
+    s.trim().parse::<f32>().ok()
 }
 
 pub(crate) fn upsert_track(
@@ -182,10 +208,11 @@ pub(crate) fn upsert_track(
             file_path, file_name, folder_path, title, artist, album, album_artist,
             sort_artist, sort_album_artist, track_number, track_total, disc_number,
             disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-            file_size, modified_at, scanned_at, created_at, play_count, lyrics
+            file_size, modified_at, scanned_at, created_at, play_count, lyrics,
+            replay_gain_track_db, replay_gain_album_db
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25
+            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
         )
         ON CONFLICT(file_path) DO UPDATE SET
             file_name=excluded.file_name, folder_path=excluded.folder_path,
@@ -199,7 +226,9 @@ pub(crate) fn upsert_track(
             file_size=excluded.file_size, modified_at=excluded.modified_at,
             scanned_at=excluded.scanned_at,
             play_count=MAX(play_count, excluded.play_count),
-            lyrics=COALESCE(excluded.lyrics, lyrics)",
+            lyrics=COALESCE(excluded.lyrics, lyrics),
+            replay_gain_track_db=excluded.replay_gain_track_db,
+            replay_gain_album_db=excluded.replay_gain_album_db",
         params![
             t.file_path,
             t.file_name,
@@ -226,6 +255,8 @@ pub(crate) fn upsert_track(
             now,
             tag_play_count,
             t.lyrics,
+            t.replay_gain_track_db,
+            t.replay_gain_album_db,
         ],
     )
     .map_err(|e| format!("Failed to upsert track: {}", e))?;

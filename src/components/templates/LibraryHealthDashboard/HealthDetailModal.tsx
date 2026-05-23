@@ -45,6 +45,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
   const [saving, setSaving] = useState(false);
   const [yearLookupResults, setYearLookupResults] = useState<AlbumYearResult[] | null>(null);
   const [lookupProgress, setLookupProgress] = useState<YearLookupProgress | null>(null);
+  const [activeLetter, setActiveLetter] = useState<string | undefined>();
   const lastClickedRef = useRef<number | null>(null);
   const contextMenuRef = useRef(contextMenu);
   contextMenuRef.current = contextMenu;
@@ -319,7 +320,6 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
 
   const sortField = sortKey === "file_path" ? "file_name" : sortKey;
   const letterMap = useMemo(() => buildTrackLetterMap(sorted, sortField), [sorted, sortField]);
-  const [activeLetter, setActiveLetter] = useState<string | undefined>();
 
   useEffect(() => {
     const el = scrollRef.current;

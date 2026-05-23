@@ -32,7 +32,7 @@ export const ALPHABET = [
 ];
 
 /** Sort key matching the backend: strip "The ", remove non-alphanumeric, lowercase. */
-const sortKey = (s: string): string => {
+export const sortKey = (s: string): string => {
   const trimmed = s.trim();
   const withoutThe = /^the /i.test(trimmed) ? trimmed.slice(4) : trimmed;
   return withoutThe.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();

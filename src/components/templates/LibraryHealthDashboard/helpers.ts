@@ -1,4 +1,5 @@
 import type { LibraryTrack } from "../../../types/library";
+import { sortKey } from "../../atoms/AlphabetScroller/helpers";
 import type { HealthIssue } from "./types";
 
 export const issuePercentage = (count: number, total: number): string => {
@@ -72,11 +73,9 @@ export const extractYearFromAlbumTitle = (album: string): number | null => {
 /** Get the first letter for a track field value, matching the AlphabetScroller convention. */
 export const getTrackLetter = (track: LibraryTrack, field: keyof LibraryTrack): string => {
   const val = (track[field] as string) ?? "";
-  const trimmed = val.trim();
-  const withoutThe = /^the /i.test(trimmed) ? trimmed.slice(4) : trimmed;
-  const clean = withoutThe.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  if (!clean) return "#";
-  const first = clean[0];
+  const key = sortKey(val);
+  if (!key) return "#";
+  const first = key[0];
   return /[a-z]/.test(first) ? first.toUpperCase() : "#";
 };
 

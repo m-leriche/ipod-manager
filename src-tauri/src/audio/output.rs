@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Host, Stream, StreamConfig};
-use ringbuf::traits::{Consumer, Producer};
+use ringbuf::traits::Consumer;
 
 use super::crossfade::CrossfadeState;
 
@@ -55,7 +55,6 @@ pub(super) fn adapt_channels(samples: &[f32], src_ch: u16, out_ch: u16) -> Vec<f
 /// Create a cpal output stream that reads from a ring buffer consumer.
 /// Re-queries the default output device each time so audio follows
 /// macOS system routing (e.g. Bluetooth speaker selection changes).
-#[allow(clippy::too_many_arguments)]
 pub(super) fn create_output_stream(
     host: &Host,
     sample_rate: u32,
@@ -63,20 +62,10 @@ pub(super) fn create_output_stream(
     mut consumer: ringbuf::HeapCons<f32>,
     volume: Arc<AtomicU64>,
     out_samples: Arc<AtomicU64>,
-    mut analysis_prod: ringbuf::HeapProd<f32>,
-    output_latency_us: Arc<AtomicU64>,
 ) -> Result<Stream, String> {
     let device = host
         .default_output_device()
         .ok_or_else(|| "No audio output device found".to_string())?;
-
-    // Detect wireless output by checking if it's NOT a built-in device.
-    // Built-in speakers/headphone jacks report as "MacBook Pro Speakers" etc.
-    // Everything else (Bluetooth, AirPlay, USB DAC) gets the latency offset.
-    let device_name = device.name().unwrap_or_default();
-    let is_builtin = is_builtin_device(&device_name);
-    let bt_offset = if is_builtin { 0u64 } else { 180_000 };
-    output_latency_us.store(bt_offset, Ordering::Relaxed);
 
     let config = StreamConfig {
         channels,
@@ -87,23 +76,12 @@ pub(super) fn create_output_stream(
     let stream = device
         .build_output_stream(
             &config,
-            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                // CPAL timestamp captures local buffer latency.
-                // Capped at 500ms to discard garbage; max with bt_offset.
-                let ts = info.timestamp();
-                if let Some(latency) = ts.playback.duration_since(&ts.callback) {
-                    let us = latency.as_micros() as u64;
-                    if us < 500_000 {
-                        output_latency_us.store(us.max(bt_offset), Ordering::Relaxed);
-                    }
-                }
-
+            move |data: &mut [f32], _info: &cpal::OutputCallbackInfo| {
                 let vol = f32::from_bits(volume.load(Ordering::Relaxed) as u32);
                 let mut played: u64 = 0;
                 for sample in data.iter_mut() {
                     let s = consumer.try_pop().unwrap_or(0.0);
                     *sample = s * vol;
-                    let _ = analysis_prod.try_push(*sample);
                     played += 1;
                 }
                 out_samples.fetch_add(played, Ordering::Relaxed);
@@ -116,17 +94,4 @@ pub(super) fn create_output_stream(
         .map_err(|e| format!("Failed to build output stream: {}", e))?;
 
     Ok(stream)
-}
-
-/// Check if the device name indicates a built-in audio output.
-fn is_builtin_device(name: &str) -> bool {
-    let lower = name.to_lowercase();
-    lower.contains("built-in")
-        || lower.contains("macbook")
-        || lower.contains("imac")
-        || lower.contains("mac mini")
-        || lower.contains("mac pro speakers")
-        || lower.contains("mac studio")
-        || lower.contains("internal")
-        || lower.contains("headphone")
 }

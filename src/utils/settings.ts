@@ -106,7 +106,6 @@ export const SETTINGS = {
   showLyricsPanel: bool("crate-show-lyrics-panel", false),
   showArtworkCarousel: bool("crate-show-artwork-carousel", false),
   lyricsOverlay: bool("crate-lyrics-overlay", false),
-  showFullscreenVisualizer: bool("crate-show-fullscreen-visualizer", false),
 
   // Library sorting/filtering
   sortBy: str("crate-sort-by", "artist"),

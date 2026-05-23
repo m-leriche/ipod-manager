@@ -291,18 +291,7 @@ Any app that speaks the Subsonic API works. Tested with:
 - [ ] **Folder structure normalization** — Flag/fix naming inconsistencies, preview renames as a diff.
 - [ ] **Format conversion during sync** — Batch transcode (FLAC to MP3/AAC) to fit more on the iPod.
 
-### Visualizer
-Real-time music visualizations that react to audio playback. Spectrum data is computed via FFT in the Rust audio engine and emitted to the frontend at ~20Hz. All visualizations share the same `audio:spectrum` event pipeline.
-
-- [x] **Radial spectrum around album art** — Circular frequency visualizer radiating outward from album art. 32 logarithmic frequency bands rendered as bars/arcs around a center circle. Smooth decay animation, glow effects, and theme-aware colors. Displayed in the NowPlayingBar.
-- [ ] **Vinyl record** — Spinning vinyl with grooves that pulse with amplitude. Rotation speed matches playback speed control. Label shows album art. Groove ridges shimmer with per-band frequency data. On-brand for "Crate."
-- [ ] **Reactive album art** — Album cover breathes with subtle scale pulses on bass hits. Glow/bloom shifts color with dominant frequency. Edge particles drift and scatter. Calm enough to leave on permanently.
-- [ ] **Audio terrain** — 3D scrolling landscape with peaks generated from the frequency spectrum in real-time. Camera moves forward through the terrain as the track progresses. WebGL or CSS 3D transforms.
-- [ ] **Particle constellation** — Particles orbit and cluster based on frequency bands. Bass pulls inward, treble scatters outward. Connected by faint lines when close (constellation effect). Calm tracks produce gentle drift, heavy tracks create chaos.
-
 ### Audio Analysis
-- [ ] Real-time frequency spectrum, oscilloscope, stereo vectorscope
-- [ ] Peak/RMS level meters, spectral waterfall
 - [ ] Clipping detection, dynamic range scoring, loudness metering (LUFS)
 - [ ] ReplayGain scanning
 - [ ] Audio fingerprinting (AcoustID)

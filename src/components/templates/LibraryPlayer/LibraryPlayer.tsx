@@ -44,8 +44,6 @@ export const LibraryPlayer = ({
   onToggleTrackList,
   onToggleLyricsPanel,
   onToggleLyricsOverlay,
-  showFullscreenVisualizer = false,
-  onToggleFullscreenVisualizer,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
@@ -67,8 +65,6 @@ export const LibraryPlayer = ({
   onToggleTrackList?: () => void;
   onToggleLyricsPanel?: () => void;
   onToggleLyricsOverlay?: () => void;
-  showFullscreenVisualizer?: boolean;
-  onToggleFullscreenVisualizer?: () => void;
 }) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
@@ -236,8 +232,6 @@ export const LibraryPlayer = ({
           onToggleTrackList={onToggleTrackList}
           onToggleLyricsPanel={onToggleLyricsPanel}
           onToggleLyricsOverlay={onToggleLyricsOverlay}
-          showFullscreenVisualizer={showFullscreenVisualizer}
-          onToggleFullscreenVisualizer={onToggleFullscreenVisualizer}
         />
 
         {/* Column browser / album grid / carousel (hidden in playlist view) */}

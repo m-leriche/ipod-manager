@@ -5,14 +5,13 @@ use super::types::PlayState;
 
 /// Shared state between the engine thread, cpal callback, and Tauri commands.
 pub struct SharedState {
-    pub position: Arc<AtomicU64>,          // f64 bits: seconds
-    pub duration: Arc<AtomicU64>,          // f64 bits: seconds
-    pub state: Arc<AtomicU8>,              // PlayState as u8
-    pub volume: Arc<AtomicU64>,            // f32 bits stored as u64 for atomic access
-    pub out_samples: Arc<AtomicU64>,       // samples actually played by cpal callback
-    pub out_channels: Arc<AtomicU64>,      // output channel count (for position calc)
-    pub out_rate: Arc<AtomicU64>,          // output sample rate (for position calc)
-    pub output_latency_us: Arc<AtomicU64>, // hardware output latency in microseconds
+    pub position: Arc<AtomicU64>,     // f64 bits: seconds
+    pub duration: Arc<AtomicU64>,     // f64 bits: seconds
+    pub state: Arc<AtomicU8>,         // PlayState as u8
+    pub volume: Arc<AtomicU64>,       // f32 bits stored as u64 for atomic access
+    pub out_samples: Arc<AtomicU64>,  // samples actually played by cpal callback
+    pub out_channels: Arc<AtomicU64>, // output channel count (for position calc)
+    pub out_rate: Arc<AtomicU64>,     // output sample rate (for position calc)
 }
 
 impl SharedState {
@@ -25,7 +24,6 @@ impl SharedState {
             out_samples: Arc::new(AtomicU64::new(0)),
             out_channels: Arc::new(AtomicU64::new(2)),
             out_rate: Arc::new(AtomicU64::new(44100)),
-            output_latency_us: Arc::new(AtomicU64::new(0)),
         }
     }
 

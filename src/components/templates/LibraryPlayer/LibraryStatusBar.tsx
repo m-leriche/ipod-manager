@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import { useEqualizer } from "../../../contexts/EqualizerContext";
-import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
-import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { EqualizerPanel } from "../../organisms/EqualizerPanel/EqualizerPanel";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -33,8 +31,6 @@ const formatDuration = (totalSecs: number): string => {
 
 export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: LibraryStatusBarProps) => {
   const { isOpen: eqOpen, setIsOpen: setEqOpen, state: eqState } = useEqualizer();
-  const { state: artRepair, cancel: cancelRepair } = useBackgroundArtRepair();
-  const { state: lyricsFetch, cancel: cancelLyricsFetch } = useBackgroundLyrics();
 
   const stats = useMemo(() => {
     const count = selectedTracks.length;
@@ -47,19 +43,14 @@ export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: Library
     };
   }, [selectedTracks]);
 
-  const artProgressPct = artRepair.total > 0 ? (artRepair.completed / artRepair.total) * 100 : 0;
-  const lyricsProgressPct = lyricsFetch.total > 0 ? (lyricsFetch.completed / lyricsFetch.total) * 100 : 0;
-  const bgActive = artRepair.active || lyricsFetch.active;
-
-  // In CoverFlow/Album Art mode, hide entirely unless a background process is running
-  if (hideSelectionStats && !bgActive) {
+  if (hideSelectionStats) {
     return <EqualizerPanel />;
   }
 
   return (
     <>
       <EqualizerPanel />
-      <div className="h-[26px] border-t border-border bg-bg-secondary px-3 flex items-center gap-3 shrink-0 text-[10px] text-text-tertiary relative">
+      <div className="h-[26px] border-t border-border bg-bg-secondary px-3 flex items-center gap-3 shrink-0 text-[10px] text-text-tertiary">
         {/* EQ button */}
         <button
           data-eq-toggle
@@ -80,62 +71,14 @@ export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: Library
           </svg>
         </button>
 
-        {bgActive ? (
-          <>
-            {/* Background progress bar (behind text) */}
-            <div className="absolute left-0 bottom-0 h-[2px] bg-accent/20 w-full">
-              <div
-                className="h-full bg-accent transition-all duration-300"
-                style={{ width: `${artRepair.active ? artProgressPct : lyricsProgressPct}%` }}
-              />
-            </div>
-            {/* Progress text */}
-            <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                className="w-3 h-3 shrink-0 text-accent animate-spin"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"
-                />
-              </svg>
-              {artRepair.active ? (
-                <span className="text-text-secondary truncate">
-                  Repairing art: {artRepair.completed}/{artRepair.total}
-                  {artRepair.currentItem && ` \u2014 ${artRepair.currentItem}`}
-                </span>
-              ) : (
-                <span className="text-text-secondary truncate">
-                  Fetching lyrics: {lyricsFetch.completed}/{lyricsFetch.total}
-                  {lyricsFetch.currentItem && ` \u2014 ${lyricsFetch.currentItem}`}
-                </span>
-              )}
-              <button
-                onClick={artRepair.active ? cancelRepair : cancelLyricsFetch}
-                className="shrink-0 text-text-tertiary hover:text-text-secondary transition-colors"
-                title={artRepair.active ? "Cancel repair" : "Cancel lyrics fetch"}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 text-center tabular-nums">
-            {stats.label}
-            {selectedTracks.length > 0 && (
-              <>
-                , {stats.size}, {stats.duration}
-              </>
-            )}
-          </div>
-        )}
+        <div className="flex-1 text-center tabular-nums">
+          {stats.label}
+          {selectedTracks.length > 0 && (
+            <>
+              , {stats.size}, {stats.duration}
+            </>
+          )}
+        </div>
       </div>
     </>
   );

@@ -519,6 +519,7 @@ export const MetadataEditor = ({
                 onToggleFix={repair.toggleFix}
                 onAcceptAll={() => repair.acceptAllForAlbum(repair.selectedAlbumData!)}
                 onClearAll={() => repair.clearAllForAlbum(repair.selectedAlbumData!)}
+                onToggleField={(field) => repair.toggleFieldForAlbum(repair.selectedAlbumData!, field)}
                 onSwitchRelease={repair.handleSwitchRelease}
                 switching={repair.switching}
               />

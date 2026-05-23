@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ErrorBoundary } from "../../atoms/ErrorBoundary/ErrorBoundary";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
@@ -21,12 +21,14 @@ import { useLibraryImport } from "./useLibraryImport";
 import { useLibraryData } from "./useLibraryData";
 import { useLibraryActions } from "./useLibraryActions";
 import type { LibraryTrack, SmartPlaylist } from "../../../types/library";
+import type { LibrarySummary } from "../../molecules/StatusBar/types";
 import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
 
 export const LibraryPlayer = ({
   onRefreshRef,
   isActive = true,
   onRepairMetadata,
+  onLibrarySummaryChange,
   showColumnBrowser,
   showInfoPanel,
   showStatsPanel,
@@ -48,6 +50,7 @@ export const LibraryPlayer = ({
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
+  onLibrarySummaryChange?: (summary: LibrarySummary | null) => void;
   showColumnBrowser: boolean;
   showInfoPanel: boolean;
   showStatsPanel: boolean;
@@ -101,6 +104,27 @@ export const LibraryPlayer = ({
   // ── Data management ───────────────────────────────────────────
 
   const data = useLibraryData(onRefreshRef);
+
+  // ── Push library summary to parent ────────────────────────────
+
+  useEffect(() => {
+    if (data.hasLibrary && data.dataLoaded) {
+      onLibrarySummaryChange?.({
+        trackCount: data.totalTrackCount,
+        artistCount: data.artistList.length,
+        albumCount: data.albumList.length,
+      });
+    } else {
+      onLibrarySummaryChange?.(null);
+    }
+  }, [
+    data.hasLibrary,
+    data.dataLoaded,
+    data.totalTrackCount,
+    data.artistList.length,
+    data.albumList.length,
+    onLibrarySummaryChange,
+  ]);
 
   // ── Action handlers ───────────────────────────────────────────
 

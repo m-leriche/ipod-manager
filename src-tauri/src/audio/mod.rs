@@ -5,7 +5,6 @@ pub mod equalizer;
 mod output;
 pub mod resampler;
 pub mod shared_state;
-pub mod spectrum;
 pub mod time_stretch;
 pub mod types;
 

@@ -66,12 +66,6 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
-const FullscreenVisualizer = lazy(() =>
-  import("./components/templates/FullscreenVisualizer/FullscreenVisualizer").then((m) => ({
-    default: m.FullscreenVisualizer,
-  })),
-);
-
 type TopTab = "library" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
 
@@ -122,7 +116,6 @@ const AppContent = () => {
     showLyricsPanel,
     showArtworkCarousel,
     lyricsOverlay,
-    showFullscreenVisualizer,
     toggleColumnBrowser,
     toggleInfoPanel,
     toggleStatsPanel,
@@ -133,7 +126,6 @@ const AppContent = () => {
     toggleLyricsPanel,
     toggleLyricsOverlay,
     dismissLyricsOverlay,
-    toggleFullscreenVisualizer,
   } = usePanelVisibility();
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
@@ -240,8 +232,6 @@ const AppContent = () => {
                 onToggleTrackList={toggleTrackList}
                 onToggleLyricsPanel={toggleLyricsPanel}
                 onToggleLyricsOverlay={toggleLyricsOverlay}
-                showFullscreenVisualizer={showFullscreenVisualizer}
-                onToggleFullscreenVisualizer={toggleFullscreenVisualizer}
               />
             </ErrorBoundary>
           </div>
@@ -381,13 +371,6 @@ const AppContent = () => {
         <Suspense fallback={null}>
           <ErrorBoundary name="Keyboard Shortcuts">
             <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
-          </ErrorBoundary>
-        </Suspense>
-      )}
-      {showFullscreenVisualizer && (
-        <Suspense fallback={null}>
-          <ErrorBoundary name="Visualizer">
-            <FullscreenVisualizer onClose={toggleFullscreenVisualizer} />
           </ErrorBoundary>
         </Suspense>
       )}

@@ -22,7 +22,6 @@ describe("usePanelVisibility", () => {
     expect(result.current.showLyricsPanel).toBe(false);
     expect(result.current.showArtworkCarousel).toBe(false);
     expect(result.current.lyricsOverlay).toBe(false);
-    expect(result.current.showFullscreenVisualizer).toBe(false);
   });
 
   it("restores state from localStorage", () => {
@@ -147,15 +146,5 @@ describe("usePanelVisibility", () => {
 
     expect(result.current.showInfoPanel).toBe(false);
     expect(localStorage.getItem("crate-show-info-panel")).toBe("false");
-  });
-
-  it("toggleFullscreenVisualizer persists to localStorage", () => {
-    const { result } = renderHook(() => usePanelVisibility());
-    expect(result.current.showFullscreenVisualizer).toBe(false);
-
-    act(() => result.current.toggleFullscreenVisualizer());
-
-    expect(result.current.showFullscreenVisualizer).toBe(true);
-    expect(localStorage.getItem("crate-show-fullscreen-visualizer")).toBe("true");
   });
 });

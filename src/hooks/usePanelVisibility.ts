@@ -11,9 +11,6 @@ export const usePanelVisibility = () => {
   const [showLyricsPanel, setShowLyricsPanel] = useState(() => getSetting("showLyricsPanel"));
   const [showArtworkCarousel, setShowArtworkCarousel] = useState(() => getSetting("showArtworkCarousel"));
   const [lyricsOverlay, setLyricsOverlay] = useState(() => getSetting("lyricsOverlay"));
-  const [showFullscreenVisualizer, setShowFullscreenVisualizer] = useState(() =>
-    getSetting("showFullscreenVisualizer"),
-  );
 
   const toggleColumnBrowser = useCallback(() => {
     // If another browser mode is active, switch to column browser
@@ -115,13 +112,6 @@ export const usePanelVisibility = () => {
     setSetting("showLyricsPanel", false);
   }, []);
 
-  const toggleFullscreenVisualizer = useCallback(() => {
-    setShowFullscreenVisualizer((prev) => {
-      setSetting("showFullscreenVisualizer", !prev);
-      return !prev;
-    });
-  }, []);
-
   return {
     showColumnBrowser,
     showInfoPanel,
@@ -132,7 +122,6 @@ export const usePanelVisibility = () => {
     showLyricsPanel,
     showArtworkCarousel,
     lyricsOverlay,
-    showFullscreenVisualizer,
     toggleColumnBrowser,
     toggleInfoPanel,
     toggleStatsPanel,
@@ -143,6 +132,5 @@ export const usePanelVisibility = () => {
     toggleLyricsPanel,
     toggleLyricsOverlay,
     dismissLyricsOverlay,
-    toggleFullscreenVisualizer,
   };
 };

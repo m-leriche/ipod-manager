@@ -22,8 +22,6 @@ interface LibraryToolbarProps {
   onToggleTrackList?: () => void;
   onToggleLyricsPanel?: () => void;
   onToggleLyricsOverlay?: () => void;
-  showFullscreenVisualizer?: boolean;
-  onToggleFullscreenVisualizer?: () => void;
 }
 
 export const LibraryToolbar = ({
@@ -50,8 +48,6 @@ export const LibraryToolbar = ({
   onToggleTrackList,
   onToggleLyricsPanel,
   onToggleLyricsOverlay,
-  showFullscreenVisualizer,
-  onToggleFullscreenVisualizer,
 }: LibraryToolbarProps) => (
   <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
     <input
@@ -132,19 +128,6 @@ export const LibraryToolbar = ({
           onToggleLyricsPanel={onToggleLyricsPanel}
           onToggleLyricsOverlay={onToggleLyricsOverlay}
         />
-      )}
-      {onToggleFullscreenVisualizer && (
-        <ViewToggle
-          active={showFullscreenVisualizer}
-          onClick={onToggleFullscreenVisualizer}
-          title="Fullscreen visualizer"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <path
-            strokeLinecap="round"
-            d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"
-          />
-        </ViewToggle>
       )}
     </div>
   </div>

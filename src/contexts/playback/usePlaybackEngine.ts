@@ -50,6 +50,13 @@ const initialState: PlaybackState = {
 /** Convert a ReplayGain dB value to a linear amplitude multiplier. */
 const dbToLinear = (db: number): number => Math.pow(10, db / 20);
 
+/** Compute the linear gain for a track based on current ReplayGain settings. */
+const computeReplayGain = (track: LibraryTrack | null, enabled: boolean, mode: ReplayGainMode): number => {
+  if (!enabled || !track) return 1.0;
+  const db = mode === "album" ? (track.replay_gain_album_db ?? track.replay_gain_track_db) : track.replay_gain_track_db;
+  return db != null ? dbToLinear(db) : 1.0;
+};
+
 const initialTime: PlaybackTimeState = {
   currentTime: 0,
   duration: 0,
@@ -350,15 +357,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   const sendReplayGain = useCallback((track: LibraryTrack | null) => {
     const s = stateRef.current;
-    if (!s.replayGainEnabled || !track) {
-      invoke("audio_set_replay_gain", { gain: 1.0 }).catch(() => {});
-      return;
-    }
-    const gainDb =
-      s.replayGainMode === "album"
-        ? (track.replay_gain_album_db ?? track.replay_gain_track_db)
-        : track.replay_gain_track_db;
-    const gain = gainDb != null ? dbToLinear(gainDb) : 1.0;
+    const gain = computeReplayGain(track, s.replayGainEnabled, s.replayGainMode);
     invoke("audio_set_replay_gain", { gain }).catch(() => {});
   }, []);
 
@@ -390,10 +389,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       trackStartedAtRef.current = Math.floor(Date.now() / 1000);
       window.dispatchEvent(new CustomEvent("track-started", { detail: track }));
 
+      sendReplayGain(track);
       invoke("audio_play", { path: track.file_path, seekSecs: null }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
-      sendReplayGain(track);
     },
     [sendReplayGain],
   );
@@ -443,10 +442,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       lastPositionRef.current = 0;
       lastPositionTimeRef.current = performance.now();
       setTime({ currentTime: 0, duration: nextTrack.duration_secs });
+      sendReplayGain(nextTrack);
       invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
-      sendReplayGain(nextTrack);
       return;
     }
 
@@ -466,10 +465,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     trackStartedAtRef.current = Math.floor(Date.now() / 1000);
     window.dispatchEvent(new CustomEvent("track-started", { detail: nextTrack }));
 
+    sendReplayGain(nextTrack);
     invoke("audio_play", { path: nextTrack.file_path, seekSecs: null }).catch((e) =>
       console.warn("audio_play failed:", e),
     );
-    sendReplayGain(nextTrack);
   }, [getNextIndex, recordPlay, advanceShuffle, sendReplayGain]);
 
   // ── Gapless transition handler (engine already playing next track) ──
@@ -639,10 +638,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
       lastPositionRef.current = seekPos ?? 0;
       lastPositionTimeRef.current = performance.now();
+      sendReplayGain(s.currentTrack);
       invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
-      sendReplayGain(s.currentTrack);
       restoredPositionRef.current = 0;
       return;
     }
@@ -860,16 +859,8 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     saveReplayGainEnabled(enabled);
     saveReplayGainMode(newMode);
     setState((prev) => ({ ...prev, replayGainEnabled: enabled, replayGainMode: newMode }));
-    // Re-send gain for the current track with new settings
-    const track = stateRef.current.currentTrack;
-    if (!enabled || !track) {
-      invoke("audio_set_replay_gain", { gain: 1.0 }).catch(() => {});
-    } else {
-      const gainDb =
-        newMode === "album" ? (track.replay_gain_album_db ?? track.replay_gain_track_db) : track.replay_gain_track_db;
-      const gain = gainDb != null ? dbToLinear(gainDb) : 1.0;
-      invoke("audio_set_replay_gain", { gain }).catch(() => {});
-    }
+    const gain = computeReplayGain(stateRef.current.currentTrack, enabled, newMode);
+    invoke("audio_set_replay_gain", { gain }).catch(() => {});
   }, []);
 
   const clearPlaybackError = useCallback(() => {

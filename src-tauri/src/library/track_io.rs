@@ -189,11 +189,52 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
 /// Parse a ReplayGain tag value like "-3.2 dB" or "+1.5 dB" into an f32.
 fn parse_replay_gain(s: &str) -> Option<f32> {
     let s = s.trim();
+    // Strip common "dB" suffix variants (case-insensitive)
     let s = s
         .strip_suffix("dB")
         .or_else(|| s.strip_suffix("db"))
+        .or_else(|| s.strip_suffix("DB"))
+        .or_else(|| s.strip_suffix("Db"))
         .unwrap_or(s);
     s.trim().parse::<f32>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_replay_gain;
+
+    #[test]
+    fn standard_db_suffix() {
+        assert_eq!(parse_replay_gain("-3.2 dB"), Some(-3.2));
+        assert_eq!(parse_replay_gain("+1.5 dB"), Some(1.5));
+        assert_eq!(parse_replay_gain("0.00 dB"), Some(0.0));
+    }
+
+    #[test]
+    fn bare_number_without_suffix() {
+        assert_eq!(parse_replay_gain("-3.2"), Some(-3.2));
+        assert_eq!(parse_replay_gain("5"), Some(5.0));
+    }
+
+    #[test]
+    fn whitespace_handling() {
+        assert_eq!(parse_replay_gain("  -3.2 dB  "), Some(-3.2));
+        assert_eq!(parse_replay_gain("\t+1.0 dB\n"), Some(1.0));
+    }
+
+    #[test]
+    fn case_insensitive_suffix() {
+        assert_eq!(parse_replay_gain("-3.2 db"), Some(-3.2));
+        assert_eq!(parse_replay_gain("-3.2 DB"), Some(-3.2));
+        assert_eq!(parse_replay_gain("-3.2 Db"), Some(-3.2));
+    }
+
+    #[test]
+    fn invalid_values() {
+        assert_eq!(parse_replay_gain("dB"), None);
+        assert_eq!(parse_replay_gain(""), None);
+        assert_eq!(parse_replay_gain("not a number"), None);
+    }
 }
 
 pub(crate) fn upsert_track(

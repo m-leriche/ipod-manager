@@ -59,7 +59,10 @@ impl SharedState {
     }
 
     pub fn set_replay_gain(&self, gain: f32) {
+        // Clamp to [0, 4] (~+12 dB max) to prevent dangerously loud output
+        // from corrupted or unusual ReplayGain tags.
+        let clamped = gain.clamp(0.0, 4.0);
         self.replay_gain
-            .store(f32::to_bits(gain) as u64, Ordering::Relaxed);
+            .store(f32::to_bits(clamped) as u64, Ordering::Relaxed);
     }
 }

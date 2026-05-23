@@ -144,7 +144,7 @@ export const RepairDetailPanel = ({
         )}
 
         {/* Per-field toggle chips */}
-        {fieldStats.length > 1 && (
+        {fieldStats.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {fieldStats.map((fs) => {
               const allAccepted = fs.accepted === fs.total;

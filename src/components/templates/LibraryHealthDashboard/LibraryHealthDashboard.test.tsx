@@ -9,6 +9,8 @@ import {
   extractTitleFromFileName,
   extractTrackInfoFromFileName,
   extractYearFromAlbumTitle,
+  getTrackLetter,
+  buildTrackLetterMap,
 } from "./helpers";
 import type { HealthReport, HealthIssue } from "./types";
 import type { LibraryTrack } from "../../../types/library";
@@ -911,6 +913,48 @@ describe("helpers", () => {
     it("returns null for year outside reasonable range", () => {
       expect(extractYearFromAlbumTitle("1899-01-01")).toBeNull();
       expect(extractYearFromAlbumTitle("2100-01-01")).toBeNull();
+    });
+  });
+
+  describe("getTrackLetter", () => {
+    it("returns first letter of artist name", () => {
+      expect(getTrackLetter(makeMockTrack(1, "a.flac", "Feist"), "artist")).toBe("F");
+    });
+
+    it("strips 'The' prefix", () => {
+      expect(getTrackLetter(makeMockTrack(1, "a.flac", "The Beatles"), "artist")).toBe("B");
+    });
+
+    it("returns '#' for empty value", () => {
+      expect(getTrackLetter(makeMockTrack(1, "a.flac", ""), "artist")).toBe("#");
+    });
+
+    it("returns '#' for numeric-prefixed value", () => {
+      expect(getTrackLetter(makeMockTrack(1, "a.flac", "50 Cent"), "artist")).toBe("#");
+    });
+
+    it("works with album field", () => {
+      const track = { ...makeMockTrack(1, "a.flac", "Artist"), album: "Let It Die" };
+      expect(getTrackLetter(track, "album")).toBe("L");
+    });
+  });
+
+  describe("buildTrackLetterMap", () => {
+    it("maps first occurrence of each letter", () => {
+      const tracks = [
+        makeMockTrack(1, "a.flac", "Alice"),
+        makeMockTrack(2, "b.flac", "Alice"),
+        makeMockTrack(3, "c.flac", "Bob"),
+      ];
+      const map = buildTrackLetterMap(tracks, "artist");
+      expect(map.get("A")).toBe(0);
+      expect(map.get("B")).toBe(2);
+      expect(map.has("C")).toBe(false);
+    });
+
+    it("returns empty map for empty list", () => {
+      const map = buildTrackLetterMap([], "artist");
+      expect(map.size).toBe(0);
     });
   });
 });

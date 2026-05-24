@@ -257,7 +257,8 @@ const NOISE_PREFIXES: &[&str] = &[
     "deluxe",
     "remaster",
     "special edition",
-    "expanded edition",
+    "expanded",
+    "super expanded",
     "limited edition",
     "bonus track",
     "bonus disc",
@@ -394,6 +395,26 @@ mod tests {
         assert_eq!(
             normalize_for_search("Let It Be (Super Deluxe Edition)"),
             "Let It Be"
+        );
+    }
+
+    #[test]
+    fn normalize_strips_expanded_variants() {
+        assert_eq!(
+            normalize_for_search("Freedom Of Choice (Expanded)"),
+            "Freedom Of Choice"
+        );
+        assert_eq!(
+            normalize_for_search("Freedom Of Choice (Expanded Edition)"),
+            "Freedom Of Choice"
+        );
+        assert_eq!(
+            normalize_for_search("Freedom Of Choice (Super Expanded)"),
+            "Freedom Of Choice"
+        );
+        assert_eq!(
+            normalize_for_search("Freedom Of Choice (Expanded) [Disc 1]"),
+            "Freedom Of Choice"
         );
     }
 

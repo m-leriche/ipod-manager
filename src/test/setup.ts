@@ -162,10 +162,15 @@ vi.mock("../contexts/LastfmContext", () => ({
 // Mock ThemeContext — provides a no-op implementation for all components
 vi.mock("../contexts/ThemeContext", () => ({
   useTheme: () => ({
-    theme: "dark" as const,
+    theme: "dark",
     setTheme: vi.fn(),
+    customThemes: [],
+    saveCustomTheme: vi.fn(() => "test-id"),
+    deleteCustomTheme: vi.fn(),
   }),
   ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
+  BUILTIN_THEMES: ["dark", "light", "win95", "classic", "winamp", "aqua", "spotify"],
+  isBuiltinTheme: (t: string) => ["dark", "light", "win95", "classic", "winamp", "aqua", "spotify"].includes(t),
 }));
 
 // Mock @tauri-apps/api/core

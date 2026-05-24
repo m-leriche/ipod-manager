@@ -6,16 +6,19 @@ import { usePlayback } from "../../../contexts/PlaybackContext";
 import { cancelSync } from "../../../utils/cancelSync";
 import { pickFolder } from "../../../utils/pickPath";
 import { useTheme } from "../../../contexts/ThemeContext";
-import type { ThemeName } from "../../../contexts/ThemeContext";
+import type { BuiltinThemeName } from "../../../contexts/ThemeContext";
 import type { ReplayGainMode } from "../../../contexts/playback/types";
+import type { CustomTheme } from "../../../types/customTheme";
 import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
 import { LastfmSettings } from "./LastfmSettings";
 import { StreamingSettings } from "./StreamingSettings";
+import { CustomThemeEditor } from "./CustomThemeEditor";
 import type { SettingsModalProps } from "./types";
 
-const THEMES: { id: ThemeName; label: string; description: string; preview: [string, string, string] }[] = [
+const THEMES: { id: BuiltinThemeName; label: string; description: string; preview: [string, string, string] }[] = [
   { id: "dark", label: "Dark", description: "Minimal dark theme", preview: ["#000000", "#111111", "#0066FF"] },
+  { id: "light", label: "Light", description: "Clean light theme", preview: ["#F4F4F6", "#EDEDEF", "#0066FF"] },
   {
     id: "win95",
     label: "Windows 95",
@@ -32,8 +35,10 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   const [libraryLocation, setLibraryLocation] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, customThemes, deleteCustomTheme } = useTheme();
   const { state: playbackState, setCrossfade, setReplayGain } = usePlayback();
+  const [editorState, setEditorState] = useState<CustomTheme | "new" | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<string | null>("get_library_location")
@@ -144,29 +149,112 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
             </span>
             <p className="text-[10px] text-text-tertiary mb-3">Choose how Crate looks.</p>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex flex-col border border-border rounded-xl overflow-hidden divide-y divide-border">
               {THEMES.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
-                  className={`flex flex-col items-center gap-1.5 px-3 py-2.5 border rounded-xl transition-all ${
-                    theme === t.id ? "border-accent bg-bg-hover" : "border-border hover:border-border-active"
+                  className={`flex items-center gap-3 px-4 py-2.5 transition-all text-left ${
+                    theme === t.id ? "bg-bg-hover" : "hover:bg-bg-hover/50"
                   }`}
                 >
-                  <div className="flex gap-1">
+                  {theme === t.id && <div className="w-0.5 h-4 bg-accent rounded-full shrink-0" />}
+                  <span
+                    className={`text-[11px] font-medium shrink-0 w-20 ${theme === t.id ? "text-accent" : "text-text-primary"}`}
+                  >
+                    {t.label}
+                  </span>
+                  <span className="text-[10px] text-text-tertiary flex-1 min-w-0 truncate">{t.description}</span>
+                  <div className="flex gap-1 shrink-0">
                     {t.preview.map((color, i) => (
                       <div
                         key={i}
-                        className="w-4 h-4 rounded-sm border border-black/10"
+                        className="w-3.5 h-3.5 rounded-full border border-black/10"
                         style={{ background: color }}
                       />
                     ))}
                   </div>
-                  <span className="text-[11px] font-medium text-text-primary">{t.label}</span>
-                  <span className="text-[9px] text-text-tertiary">{t.description}</span>
                 </button>
               ))}
             </div>
+
+            {/* Custom themes */}
+            {customThemes.length > 0 && (
+              <div className="mt-3 flex flex-col border border-border rounded-xl overflow-hidden divide-y divide-border">
+                {customThemes.map((t) => {
+                  const isActive = theme === `custom:${t.id}`;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition-all ${isActive ? "bg-bg-hover" : ""}`}
+                    >
+                      {isActive && <div className="w-0.5 h-4 bg-accent rounded-full shrink-0" />}
+                      <button onClick={() => setTheme(`custom:${t.id}`)} className="flex-1 text-left min-w-0">
+                        <span className={`text-[11px] font-medium ${isActive ? "text-accent" : "text-text-primary"}`}>
+                          {t.name}
+                        </span>
+                      </button>
+                      <div className="flex gap-1 shrink-0">
+                        {[t.background, t.accent, t.text].map((color, i) => (
+                          <div
+                            key={i}
+                            className="w-3.5 h-3.5 rounded-full border border-black/10"
+                            style={{ background: color }}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setEditorState(t)}
+                        className="text-[10px] text-text-tertiary hover:text-text-primary transition-colors"
+                        data-testid={`edit-theme-${t.id}`}
+                      >
+                        Edit
+                      </button>
+                      {confirmDeleteId === t.id ? (
+                        <button
+                          onClick={() => {
+                            deleteCustomTheme(t.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          onBlur={() => setConfirmDeleteId(null)}
+                          className="text-[10px] text-danger font-medium transition-colors"
+                          data-testid={`confirm-delete-theme-${t.id}`}
+                        >
+                          Confirm?
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(t.id)}
+                          className="text-[10px] text-text-tertiary hover:text-danger transition-colors"
+                          data-testid={`delete-theme-${t.id}`}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {editorState !== null ? (
+              <CustomThemeEditor
+                initial={editorState === "new" ? undefined : editorState}
+                existingNames={customThemes
+                  .filter((t) => (editorState !== "new" ? t.id !== editorState.id : true))
+                  .map((t) => t.name)}
+                onSave={() => setEditorState(null)}
+                onCancel={() => setEditorState(null)}
+              />
+            ) : (
+              <button
+                onClick={() => setEditorState("new")}
+                className="mt-3 text-[11px] text-accent hover:text-accent-hover transition-colors"
+                data-testid="create-theme-btn"
+              >
+                + Create Theme
+              </button>
+            )}
           </div>
 
           {/* Crossfade */}

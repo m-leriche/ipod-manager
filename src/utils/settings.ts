@@ -6,6 +6,8 @@
  * instead of touching localStorage directly.
  */
 
+import type { CustomTheme } from "../types/customTheme";
+
 // ── Schema ──────────────────────────────────────────────────────
 
 interface SettingDef<T> {
@@ -77,9 +79,21 @@ const validateNumberArray = (parsed: unknown): number[] | undefined => {
   return parsed as number[];
 };
 
+const isCustomTheme = (t: unknown): t is CustomTheme =>
+  typeof t === "object" &&
+  t !== null &&
+  typeof (t as CustomTheme).id === "string" &&
+  typeof (t as CustomTheme).name === "string" &&
+  typeof (t as CustomTheme).background === "string" &&
+  typeof (t as CustomTheme).accent === "string" &&
+  typeof (t as CustomTheme).text === "string";
+
 export const SETTINGS = {
   // Theme
   theme: str("crate-theme", "dark"),
+  customThemes: json<CustomTheme[]>("crate-custom-themes", [], (parsed) =>
+    Array.isArray(parsed) ? parsed.filter(isCustomTheme) : undefined,
+  ),
 
   // Playback
   volume: num("crate-playback-volume", 0.8, 0, 1),

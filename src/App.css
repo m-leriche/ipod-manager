@@ -119,6 +119,37 @@
 }
 
 /* ══════════════════════════════════════════════════════
+   LIGHT THEME — Clean, minimal light counterpart to Dark
+   White backgrounds, dark text, same blue accent
+   ══════════════════════════════════════════════════════ */
+
+/* ─── Color variables (Light) ─── */
+html[data-theme="light"] {
+  --color-bg-primary: #f4f4f6;
+  --color-bg-secondary: #ededef;
+  --color-bg-card: #e5e5e8;
+  --color-bg-elevated: #dfdfe2;
+  --color-bg-hover: #d8d8db;
+
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-text-tertiary: #aeaeb2;
+
+  --color-accent: #0066ff;
+  --color-accent-hover: #0055dd;
+  --color-success: #00a63e;
+  --color-success-dim: #00a63e1a;
+  --color-warning: #e68a00;
+  --color-danger: #e6332a;
+
+  --color-border: #0000000d;
+  --color-border-subtle: #00000008;
+  --color-border-active: #0000001a;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ══════════════════════════════════════════════════════
    WINDOWS 95 THEME — Authentic Win95 desktop aesthetic
    Silver gray chrome, navy title bars, 3D beveled controls
    ══════════════════════════════════════════════════════ */

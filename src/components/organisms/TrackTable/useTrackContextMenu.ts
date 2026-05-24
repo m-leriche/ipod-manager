@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { getAlbumTracks, getContextIds } from "./helpers";
@@ -141,63 +142,88 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
-      ...(onRepairAlbumArt
+      ...(onRepairAlbumArt || onRepairAllAlbumArt
         ? [
             {
-              label: (() => {
-                const folderCount = new Set(tracks.filter((t) => ids.includes(t.id)).map((t) => t.folder_path)).size;
-                return folderCount > 1 ? `Find & Repair Album Art (${folderCount} albums)` : "Find & Repair Album Art";
-              })(),
-              onClick: () => {
-                onRepairAlbumArt(tracks.filter((t) => ids.includes(t.id)));
-                onClose();
-              },
+              type: "submenu" as const,
+              label: "Album Art",
+              children: [
+                ...(onRepairAlbumArt
+                  ? [
+                      {
+                        label: (() => {
+                          const folderCount = new Set(
+                            tracks.filter((t) => ids.includes(t.id)).map((t) => t.folder_path),
+                          ).size;
+                          return folderCount > 1
+                            ? `Find & Repair Selected (${folderCount} albums)`
+                            : "Find & Repair Selected";
+                        })(),
+                        onClick: () => {
+                          onRepairAlbumArt(tracks.filter((t) => ids.includes(t.id)));
+                          onClose();
+                        },
+                      },
+                    ]
+                  : []),
+                ...(onRepairAllAlbumArt
+                  ? [
+                      {
+                        label: "Find & Repair Entire Library",
+                        onClick: () => {
+                          onRepairAllAlbumArt();
+                          onClose();
+                        },
+                        disabled: isRepairingAllArt,
+                      },
+                    ]
+                  : []),
+              ],
             },
           ]
         : []),
-      ...(onRepairAllAlbumArt
+      ...(onFetchLyrics || onRemoveLyrics || onFetchAllLyrics
         ? [
             {
-              label: "Find & Repair Art for Entire Library",
-              onClick: () => {
-                onRepairAllAlbumArt();
-                onClose();
-              },
-              disabled: isRepairingAllArt,
-            },
-          ]
-        : []),
-      ...(onFetchLyrics
-        ? [
-            {
-              label: isMulti ? `Fetch Lyrics for ${ids.length} Tracks` : "Fetch Lyrics",
-              onClick: () => {
-                onFetchLyrics(tracks.filter((t) => ids.includes(t.id)));
-                onClose();
-              },
-            },
-          ]
-        : []),
-      ...(onRemoveLyrics
-        ? [
-            {
-              label: isMulti ? `Remove Lyrics from ${ids.length} Tracks` : "Remove Lyrics",
-              onClick: () => {
-                onRemoveLyrics(tracks.filter((t) => ids.includes(t.id)));
-                onClose();
-              },
-            },
-          ]
-        : []),
-      ...(onFetchAllLyrics
-        ? [
-            {
-              label: "Fetch Lyrics for Entire Library",
-              onClick: () => {
-                onFetchAllLyrics();
-                onClose();
-              },
-              disabled: isFetchingAllLyrics,
+              type: "submenu" as const,
+              label: "Lyrics",
+              children: [
+                ...(onFetchLyrics
+                  ? [
+                      {
+                        label: isMulti ? `Fetch for ${ids.length} Tracks` : "Fetch Lyrics",
+                        onClick: () => {
+                          onFetchLyrics(tracks.filter((t) => ids.includes(t.id)));
+                          onClose();
+                        },
+                      },
+                    ]
+                  : []),
+                ...(onRemoveLyrics
+                  ? [
+                      {
+                        label: isMulti ? `Remove from ${ids.length} Tracks` : "Remove Lyrics",
+                        onClick: () => {
+                          onRemoveLyrics(tracks.filter((t) => ids.includes(t.id)));
+                          onClose();
+                        },
+                      },
+                    ]
+                  : []),
+                ...(onFetchAllLyrics
+                  ? [
+                      { type: "separator" as const },
+                      {
+                        label: "Fetch for Entire Library",
+                        onClick: () => {
+                          onFetchAllLyrics();
+                          onClose();
+                        },
+                        disabled: isFetchingAllLyrics,
+                      },
+                    ]
+                  : []),
+              ],
             },
           ]
         : []),
@@ -212,7 +238,25 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
-      { type: "separator" as const },
+      ...(onRepairAlbumArt ||
+      onRepairAllAlbumArt ||
+      onFetchLyrics ||
+      onRemoveLyrics ||
+      onFetchAllLyrics ||
+      onRepairMetadata
+        ? [{ type: "separator" as const }]
+        : []),
+      ...(!isMulti
+        ? [
+            {
+              label: "Show in Finder",
+              onClick: () => {
+                invoke("show_in_finder", { path: contextMenu.track.file_path }).catch(console.error);
+                onClose();
+              },
+            },
+          ]
+        : []),
       {
         label: isMulti ? `Delete ${ids.length} Tracks from Library` : "Delete from Library",
         onClick: () => {

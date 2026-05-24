@@ -336,14 +336,14 @@ export const TrackTable = memo(function TrackTable({
         dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
       }}
     >
-      <table className="table-fixed border-collapse" style={{ width: totalWidth }}>
+      <table className="table-fixed border-separate" style={{ width: totalWidth, borderSpacing: 0 }}>
         <colgroup>
           {orderedColumns.map((col, i) => (
             <col key={col.key} style={{ width: widths[i] }} />
           ))}
         </colgroup>
-        <thead className="sticky top-0 z-10 bg-bg-primary">
-          <tr className="border-b border-border">
+        <thead className="sticky top-0 z-10 bg-bg-primary" style={{ boxShadow: "0 1px 0 0 var(--color-border)" }}>
+          <tr>
             {orderedColumns.map((col, i) => {
               const isActive = col.sortKey === sortBy;
               const isDragging = dragIndex === i;
@@ -354,7 +354,7 @@ export const TrackTable = memo(function TrackTable({
                   ref={(el) => setHeaderRef(i, el)}
                   onMouseDown={(e) => onReorderStart(i, e)}
                   onClick={() => onSort(col.sortKey)}
-                  className={`relative px-3 py-2 text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-text-primary ${
+                  className={`relative px-3 py-2 text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-text-primary bg-bg-primary ${
                     isActive ? "text-text-primary" : "text-text-tertiary"
                   } ${col.align === "right" ? "text-right" : "text-left"} ${
                     isDragging ? "opacity-40" : ""

@@ -357,6 +357,7 @@ fn lookup_year(
         let year = rg
             .first_release_date
             .as_ref()
+            .filter(|d| !d.is_empty())
             .and_then(|d| d.split('-').next())
             .and_then(|y| y.parse::<u32>().ok())?;
         Some(AlbumYearResult {

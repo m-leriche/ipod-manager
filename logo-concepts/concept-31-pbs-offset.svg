@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg31" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e0e14"/>
+      <stop offset="100%" stop-color="#06060a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg31)"/>
+
+  <!-- Three offset discs, each bigger, PBS 70s colors: blue, orange, green -->
+  <!-- Back disc — smallest — PBS blue -->
+  <circle cx="190" cy="178" r="120" fill="#5b9bd5"/>
+  <circle cx="190" cy="178" r="12" fill="url(#bg31)"/>
+
+  <!-- Middle disc — medium — PBS orange -->
+  <circle cx="244" cy="252" r="148" fill="#e8943a"/>
+  <circle cx="244" cy="252" r="14" fill="url(#bg31)"/>
+
+  <!-- Front disc — largest — PBS green -->
+  <circle cx="298" cy="326" r="176" fill="#6db56d"/>
+  <circle cx="298" cy="326" r="16" fill="url(#bg31)"/>
+</svg>

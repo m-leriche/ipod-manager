@@ -238,13 +238,20 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
-      { type: "separator" as const },
+      ...(onRepairAlbumArt ||
+      onRepairAllAlbumArt ||
+      onFetchLyrics ||
+      onRemoveLyrics ||
+      onFetchAllLyrics ||
+      onRepairMetadata
+        ? [{ type: "separator" as const }]
+        : []),
       ...(!isMulti
         ? [
             {
               label: "Show in Finder",
               onClick: () => {
-                invoke("show_in_finder", { path: contextMenu.track.file_path });
+                invoke("show_in_finder", { path: contextMenu.track.file_path }).catch(console.error);
                 onClose();
               },
             },

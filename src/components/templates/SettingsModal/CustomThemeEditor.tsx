@@ -5,6 +5,7 @@ import type { CustomTheme } from "../../../types/customTheme";
 
 interface CustomThemeEditorProps {
   initial?: CustomTheme;
+  existingNames?: string[];
   onSave: () => void;
   onCancel: () => void;
 }
@@ -58,7 +59,7 @@ const ColorPicker = ({
   );
 };
 
-export const CustomThemeEditor = ({ initial, onSave, onCancel }: CustomThemeEditorProps) => {
+export const CustomThemeEditor = ({ initial, existingNames = [], onSave, onCancel }: CustomThemeEditorProps) => {
   const { theme: currentTheme, setTheme, saveCustomTheme } = useTheme();
   const previousTheme = useRef(currentTheme);
 
@@ -67,13 +68,19 @@ export const CustomThemeEditor = ({ initial, onSave, onCancel }: CustomThemeEdit
   const [accent, setAccent] = useState(initial?.accent ?? "#0066ff");
   const [text, setText] = useState(initial?.text ?? "#ffffff");
 
+  const trimmedName = name.trim();
+  const isDuplicateName = trimmedName !== "" && existingNames.includes(trimmedName);
+  const canSave = trimmedName !== "" && !isDuplicateName;
+
   // Live preview: apply colors as user picks them
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "custom");
     previewTheme(background, accent, text);
   }, [background, accent, text]);
 
-  // Cleanup: clear inline vars on unmount so the next theme can apply cleanly
+  // Cleanup: clear inline vars on unmount so the next theme can apply cleanly.
+  // React runs cleanup effects before new effects, so ThemeContext's effect
+  // (which re-applies the correct theme) will fire after this clears the preview.
   useEffect(() => {
     return () => clearCustomThemeVars();
   }, []);
@@ -110,7 +117,12 @@ export const CustomThemeEditor = ({ initial, onSave, onCancel }: CustomThemeEdit
         <ColorPicker label="Text" value={text} onChange={setText} testId="theme-text-picker" />
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex items-center justify-end gap-2 pt-1">
+        {isDuplicateName && (
+          <span className="text-[10px] text-warning mr-auto" data-testid="theme-duplicate-hint">
+            Name already exists
+          </span>
+        )}
         <button
           onClick={handleCancel}
           className="text-[11px] text-text-secondary hover:text-text-primary transition-colors px-2 py-1"
@@ -120,7 +132,7 @@ export const CustomThemeEditor = ({ initial, onSave, onCancel }: CustomThemeEdit
         </button>
         <button
           onClick={handleSave}
-          disabled={!name.trim()}
+          disabled={!canSave}
           className="text-[11px] text-accent hover:text-accent-hover transition-colors px-2 py-1 disabled:opacity-40"
           data-testid="theme-save-btn"
         >

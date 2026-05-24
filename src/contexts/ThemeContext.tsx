@@ -4,10 +4,11 @@ import { applyCustomThemeVars, clearCustomThemeVars } from "../utils/themeColors
 import type { CustomTheme } from "../types/customTheme";
 
 export type BuiltinThemeName = "dark" | "light" | "win95" | "classic" | "winamp" | "aqua" | "spotify";
+export type ThemeId = BuiltinThemeName | `custom:${string}`;
 
 interface ThemeContextValue {
-  theme: string;
-  setTheme: (theme: string) => void;
+  theme: ThemeId;
+  setTheme: (theme: ThemeId) => void;
   customThemes: CustomTheme[];
   saveCustomTheme: (input: Omit<CustomTheme, "id"> & { id?: string }) => string;
   deleteCustomTheme: (id: string) => void;
@@ -21,12 +22,12 @@ export const isBuiltinTheme = (t: string): t is BuiltinThemeName => BUILTIN_THEM
 
 const loadCustomThemes = (): CustomTheme[] => getSetting("customThemes");
 
-const getStoredTheme = (): string => {
+const getStoredTheme = (): ThemeId => {
   const stored = getSetting("theme");
   if (isBuiltinTheme(stored)) return stored;
   if (stored.startsWith("custom:")) {
     const id = stored.slice(7);
-    if (loadCustomThemes().some((t) => t.id === id)) return stored;
+    if (loadCustomThemes().some((t) => t.id === id)) return stored as ThemeId;
   }
   return "dark";
 };
@@ -34,7 +35,7 @@ const getStoredTheme = (): string => {
 const generateId = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setThemeState] = useState<string>(getStoredTheme);
+  const [theme, setThemeState] = useState<ThemeId>(getStoredTheme);
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(loadCustomThemes);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     setSetting("theme", theme);
   }, [theme, customThemes]);
 
-  const setTheme = useCallback((t: string) => setThemeState(t), []);
+  const setTheme = useCallback((t: ThemeId) => setThemeState(t), []);
 
   const saveCustomTheme = useCallback((input: Omit<CustomTheme, "id"> & { id?: string }): string => {
     const id = input.id ?? generateId();

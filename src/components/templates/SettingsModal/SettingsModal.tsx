@@ -37,7 +37,8 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { theme, setTheme, customThemes, deleteCustomTheme } = useTheme();
   const { state: playbackState, setCrossfade, setReplayGain } = usePlayback();
-  const [editorState, setEditorState] = useState<{ editing?: CustomTheme } | null>(null);
+  const [editorState, setEditorState] = useState<CustomTheme | "new" | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<string | null>("get_library_location")
@@ -203,34 +204,51 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
                         ))}
                       </div>
                       <button
-                        onClick={() => setEditorState({ editing: t })}
+                        onClick={() => setEditorState(t)}
                         className="text-[10px] text-text-tertiary hover:text-text-primary transition-colors"
                         data-testid={`edit-theme-${t.id}`}
                       >
                         Edit
                       </button>
-                      <button
-                        onClick={() => deleteCustomTheme(t.id)}
-                        className="text-[10px] text-text-tertiary hover:text-danger transition-colors"
-                        data-testid={`delete-theme-${t.id}`}
-                      >
-                        Delete
-                      </button>
+                      {confirmDeleteId === t.id ? (
+                        <button
+                          onClick={() => {
+                            deleteCustomTheme(t.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          onBlur={() => setConfirmDeleteId(null)}
+                          className="text-[10px] text-danger font-medium transition-colors"
+                          data-testid={`confirm-delete-theme-${t.id}`}
+                        >
+                          Confirm?
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(t.id)}
+                          className="text-[10px] text-text-tertiary hover:text-danger transition-colors"
+                          data-testid={`delete-theme-${t.id}`}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {editorState ? (
+            {editorState !== null ? (
               <CustomThemeEditor
-                initial={editorState.editing}
+                initial={editorState === "new" ? undefined : editorState}
+                existingNames={customThemes
+                  .filter((t) => (editorState !== "new" ? t.id !== editorState.id : true))
+                  .map((t) => t.name)}
                 onSave={() => setEditorState(null)}
                 onCancel={() => setEditorState(null)}
               />
             ) : (
               <button
-                onClick={() => setEditorState({})}
+                onClick={() => setEditorState("new")}
                 className="mt-3 text-[11px] text-accent hover:text-accent-hover transition-colors"
                 data-testid="create-theme-btn"
               >

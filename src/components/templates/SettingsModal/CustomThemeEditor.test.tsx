@@ -123,4 +123,18 @@ describe("CustomThemeEditor", () => {
     fireEvent.blur(hexInput);
     expect(hexInput.value).toBe("#0066ff");
   });
+
+  it("disables save when name matches an existing theme", () => {
+    render(<CustomThemeEditor existingNames={["Night", "Ocean"]} onSave={onSave} onCancel={onCancel} />);
+    fireEvent.change(screen.getByTestId("theme-name-input"), { target: { value: "Night" } });
+    expect(screen.getByTestId("theme-save-btn")).toBeDisabled();
+    expect(screen.getByTestId("theme-duplicate-hint")).toBeInTheDocument();
+  });
+
+  it("allows save when name does not collide", () => {
+    render(<CustomThemeEditor existingNames={["Night"]} onSave={onSave} onCancel={onCancel} />);
+    fireEvent.change(screen.getByTestId("theme-name-input"), { target: { value: "Sunset" } });
+    expect(screen.getByTestId("theme-save-btn")).not.toBeDisabled();
+    expect(screen.queryByTestId("theme-duplicate-hint")).not.toBeInTheDocument();
+  });
 });

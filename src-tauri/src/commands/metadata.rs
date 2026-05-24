@@ -367,27 +367,33 @@ fn lookup_year(
         })
     };
 
-    // Try release-group search (best for year lookups)
+    // Try release-group search (best for year lookups).
+    // Iterate all results — the top-scored hit sometimes lacks a date
+    // (e.g. bootleg compilations), so skip those and take the first with a year.
     if let Ok(groups) = musicbrainz::search_release_groups(artist_norm, album_norm) {
-        if let Some(result) = groups.first().and_then(make_result) {
-            return result;
+        for rg in &groups {
+            if let Some(result) = make_result(rg) {
+                return result;
+            }
         }
     }
 
-    // Fallback: release search (sometimes has results release-group misses)
+    // Fallback: release search (sometimes has results release-group misses).
+    // Same iteration — first result with a parseable date wins.
     if let Ok(releases) = musicbrainz::search_releases(artist_norm, album_norm) {
-        if let Some(best) = releases.first() {
-            let year = best
+        for release in &releases {
+            let year = release
                 .date
                 .as_ref()
+                .filter(|d| !d.is_empty())
                 .and_then(|d| d.split('-').next())
                 .and_then(|y| y.parse::<u32>().ok());
-            if year.is_some() {
+            if let Some(y) = year {
                 return AlbumYearResult {
                     artist: orig_artist.to_string(),
                     album: orig_album.to_string(),
-                    suggested_year: year,
-                    release_title: Some(best.title.clone()),
+                    suggested_year: Some(y),
+                    release_title: Some(release.title.clone()),
                 };
             }
         }

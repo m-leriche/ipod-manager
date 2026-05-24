@@ -95,4 +95,32 @@ describe("CustomThemeEditor", () => {
 
     expect(mockSaveCustomTheme).toHaveBeenCalledWith(expect.objectContaining({ name: "Neon" }));
   });
+
+  it("renders hex text inputs for each color picker", () => {
+    render(<CustomThemeEditor onSave={onSave} onCancel={onCancel} />);
+    expect(screen.getByTestId("theme-bg-picker-hex")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-accent-picker-hex")).toBeInTheDocument();
+    expect(screen.getByTestId("theme-text-picker-hex")).toBeInTheDocument();
+  });
+
+  it("updates color when valid hex is typed", () => {
+    render(<CustomThemeEditor onSave={onSave} onCancel={onCancel} />);
+    fireEvent.change(screen.getByTestId("theme-accent-picker-hex"), { target: { value: "#1db954" } });
+    expect((screen.getByTestId("theme-accent-picker") as HTMLInputElement).value).toBe("#1db954");
+  });
+
+  it("does not update color for partial hex input", () => {
+    render(<CustomThemeEditor onSave={onSave} onCancel={onCancel} />);
+    fireEvent.change(screen.getByTestId("theme-accent-picker-hex"), { target: { value: "#1db" } });
+    // Original value unchanged
+    expect((screen.getByTestId("theme-accent-picker") as HTMLInputElement).value).toBe("#0066ff");
+  });
+
+  it("reverts hex text to current value on blur", () => {
+    render(<CustomThemeEditor onSave={onSave} onCancel={onCancel} />);
+    const hexInput = screen.getByTestId("theme-accent-picker-hex") as HTMLInputElement;
+    fireEvent.change(hexInput, { target: { value: "#bad" } });
+    fireEvent.blur(hexInput);
+    expect(hexInput.value).toBe("#0066ff");
+  });
 });

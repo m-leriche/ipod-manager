@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const USER_AGENT: &str = "iPodManager/1.0 (ipod-manager-app)";
-const RATE_LIMIT: Duration = Duration::from_millis(1100);
+const RATE_LIMIT: Duration = Duration::from_millis(1000);
 const BASE_URL: &str = "https://musicbrainz.org/ws/2";
 
 static LAST_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
@@ -245,6 +245,176 @@ pub fn fetch_cover_art(mbid: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Read failed: {}", e))?;
 
     Ok(bytes)
+}
+
+// ── Artist search ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MbArtistSearchResult {
+    pub id: String,
+    pub name: String,
+    pub disambiguation: Option<String>,
+    pub score: u32,
+}
+
+/// Search MusicBrainz for an artist by name.
+/// Returns up to 5 candidates sorted by relevance score.
+pub fn search_artists(name: &str) -> Result<Vec<MbArtistSearchResult>, String> {
+    rate_limit();
+
+    let query = format!("artist:\"{}\"", name.replace('"', "\\\""));
+
+    let resp = ureq::get(&format!("{}/artist/", BASE_URL))
+        .query("query", &query)
+        .query("fmt", "json")
+        .query("limit", "5")
+        .set("User-Agent", USER_AGENT)
+        .call()
+        .map_err(|e| format!("Artist search failed: {}", e))?;
+
+    let body: serde_json::Value = {
+        let text = resp
+            .into_string()
+            .map_err(|e| format!("Read failed: {}", e))?;
+        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
+    };
+
+    let artists = body["artists"]
+        .as_array()
+        .ok_or_else(|| "No artist results from MusicBrainz".to_string())?;
+
+    let mut results = Vec::new();
+    for artist in artists {
+        let Some(id) = artist["id"].as_str() else {
+            continue;
+        };
+        results.push(MbArtistSearchResult {
+            id: id.to_string(),
+            name: artist["name"].as_str().unwrap_or("").to_string(),
+            disambiguation: artist["disambiguation"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string()),
+            score: artist["score"].as_u64().unwrap_or(0) as u32,
+        });
+    }
+
+    Ok(results)
+}
+
+// ── Release-group browse ───────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MbArtistReleaseGroup {
+    pub id: String,
+    pub title: String,
+    pub primary_type: Option<String>,
+    pub secondary_types: Vec<String>,
+    pub first_release_date: Option<String>,
+}
+
+/// Fetch release-groups (albums/EPs) for an artist MBID.
+/// Excludes singles and compilations. Returns all official release-groups
+/// sorted by first-release-date descending.
+/// If `date_cutoff` is provided, stops pagination early once all results in a
+/// page are older than the cutoff (results are sorted newest-first by MB).
+pub fn fetch_artist_release_groups(
+    artist_mbid: &str,
+    date_cutoff: Option<&str>,
+) -> Result<Vec<MbArtistReleaseGroup>, String> {
+    let mut all = Vec::new();
+    let mut offset: usize = 0;
+    let limit: usize = 100;
+
+    loop {
+        rate_limit();
+
+        let resp = ureq::get(&format!("{}/release-group", BASE_URL))
+            .query("artist", artist_mbid)
+            .query("type", "album|ep")
+            .query("fmt", "json")
+            .query("limit", &limit.to_string())
+            .query("offset", &offset.to_string())
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|e| format!("Release-group fetch failed: {}", e))?;
+
+        let body: serde_json::Value = {
+            let text = resp
+                .into_string()
+                .map_err(|e| format!("Read failed: {}", e))?;
+            serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
+        };
+
+        let groups = match body["release-groups"].as_array() {
+            Some(g) => g,
+            None => break,
+        };
+
+        if groups.is_empty() {
+            break;
+        }
+
+        let mut all_old = true;
+        for rg in groups {
+            let Some(id) = rg["id"].as_str() else {
+                continue;
+            };
+
+            // Parse secondary types and skip anything that isn't a
+            // straightforward studio album/EP (live, remix, compilation, etc.)
+            let secondary: Vec<String> = rg["secondary-types"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if !secondary.is_empty() {
+                continue;
+            }
+
+            let date = rg["first-release-date"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+
+            // Track if any result in this page is recent enough
+            if let (Some(d), Some(cutoff)) = (&date, date_cutoff) {
+                if d.as_str() >= cutoff {
+                    all_old = false;
+                }
+            } else {
+                all_old = false;
+            }
+
+            all.push(MbArtistReleaseGroup {
+                id: id.to_string(),
+                title: rg["title"].as_str().unwrap_or("").to_string(),
+                primary_type: rg["primary-type"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string()),
+                secondary_types: secondary,
+                first_release_date: date,
+            });
+        }
+
+        let total = body["release-group-count"].as_u64().unwrap_or(0) as usize;
+        offset += limit;
+
+        // Stop fetching if all results in this page are older than the cutoff
+        if (date_cutoff.is_some() && all_old) || offset >= total {
+            break;
+        }
+    }
+
+    // Sort by date descending (newest first), None dates last
+    all.sort_by(|a, b| b.first_release_date.cmp(&a.first_release_date));
+
+    Ok(all)
 }
 
 // ── Name normalization ──────────────────────────────────────────

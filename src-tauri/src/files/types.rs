@@ -89,7 +89,28 @@ impl ArtRepairCancel {
 /// Independent cancel flag for background lyrics fetching.
 pub struct LyricsCancel(Mutex<Arc<AtomicBool>>);
 
+/// Independent cancel flag for new releases checking.
+pub struct NewReleasesCancel(Mutex<Arc<AtomicBool>>);
+
 impl LyricsCancel {
+    pub fn new() -> Self {
+        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
+    }
+    pub fn cancel(&self) {
+        if let Ok(guard) = self.0.lock() {
+            guard.store(true, Ordering::SeqCst);
+        }
+    }
+    pub fn new_flag(&self) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = flag.clone();
+        }
+        flag
+    }
+}
+
+impl NewReleasesCancel {
     pub fn new() -> Self {
         Self(Mutex::new(Arc::new(AtomicBool::new(false))))
     }

@@ -1,7 +1,9 @@
 use tauri::{AppHandle, State};
 
 use crate::artist_releases::db;
-use crate::artist_releases::types::{DiscoveredRelease, NewReleasesCheckResult, WatchedArtist};
+use crate::artist_releases::types::{
+    DiscoveredRelease, MatchStatus, NewReleasesCheckResult, WatchedArtist,
+};
 use crate::files::NewReleasesCancel;
 use crate::library::LibraryDb;
 use crate::musicbrainz::MbArtistSearchResult;
@@ -84,7 +86,7 @@ pub async fn set_watched_artist_mbid(
     db: State<'_, LibraryDb>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| format!("DB lock: {}", e))?;
-    db::set_artist_mbid(&conn, id, &mbid, &mb_name, "manual")
+    db::set_artist_mbid(&conn, id, &mbid, &mb_name, MatchStatus::Manual)
 }
 
 #[tauri::command]

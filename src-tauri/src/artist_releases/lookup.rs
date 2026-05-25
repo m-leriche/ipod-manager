@@ -2,7 +2,7 @@ use rusqlite::Connection;
 use strsim::jaro_winkler;
 
 use super::db;
-use super::types::WatchedArtist;
+use super::types::{MatchStatus, WatchedArtist};
 use crate::musicbrainz::{self, MbArtistSearchResult};
 
 const AUTO_MATCH_MB_SCORE: u32 = 95;
@@ -14,7 +14,7 @@ pub fn resolve_artist_mbid(
     conn: &Connection,
     artist: &WatchedArtist,
 ) -> Result<WatchedArtist, String> {
-    if artist.match_status != "pending" {
+    if artist.match_status != MatchStatus::Pending {
         return Ok(artist.clone());
     }
 
@@ -29,19 +29,25 @@ pub fn resolve_artist_mbid(
     let similarity = jaro_winkler(&artist.name.to_lowercase(), &best.name.to_lowercase());
 
     if best.score >= AUTO_MATCH_MB_SCORE && similarity >= AUTO_MATCH_SIMILARITY {
-        db::set_artist_mbid(conn, artist.id, &best.id, &best.name, "matched")?;
+        db::set_artist_mbid(conn, artist.id, &best.id, &best.name, MatchStatus::Matched)?;
         Ok(WatchedArtist {
             mb_artist_id: Some(best.id.clone()),
             mb_artist_name: Some(best.name.clone()),
-            match_status: "matched".to_string(),
+            match_status: MatchStatus::Matched,
             ..artist.clone()
         })
     } else {
-        db::set_artist_mbid(conn, artist.id, &best.id, &best.name, "ambiguous")?;
+        db::set_artist_mbid(
+            conn,
+            artist.id,
+            &best.id,
+            &best.name,
+            MatchStatus::Ambiguous,
+        )?;
         Ok(WatchedArtist {
             mb_artist_id: Some(best.id.clone()),
             mb_artist_name: Some(best.name.clone()),
-            match_status: "ambiguous".to_string(),
+            match_status: MatchStatus::Ambiguous,
             ..artist.clone()
         })
     }

@@ -44,86 +44,43 @@ pub struct SyncProgress {
     pub phase: String,
 }
 
-pub struct SyncCancel(Mutex<Arc<AtomicBool>>);
+/// Macro for cancel flag types — each operation gets its own Tauri-managed type
+/// with identical cancel/new_flag logic.
+macro_rules! cancel_flag {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        pub struct $name(Mutex<Arc<AtomicBool>>);
 
-impl SyncCancel {
-    pub fn new() -> Self {
-        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
-    }
-    pub fn cancel(&self) {
-        if let Ok(guard) = self.0.lock() {
-            guard.store(true, Ordering::SeqCst);
+        impl $name {
+            pub fn new() -> Self {
+                Self(Mutex::new(Arc::new(AtomicBool::new(false))))
+            }
+            pub fn cancel(&self) {
+                if let Ok(guard) = self.0.lock() {
+                    guard.store(true, Ordering::SeqCst);
+                }
+            }
+            pub fn new_flag(&self) -> Arc<AtomicBool> {
+                let flag = Arc::new(AtomicBool::new(false));
+                if let Ok(mut guard) = self.0.lock() {
+                    *guard = flag.clone();
+                }
+                flag
+            }
         }
-    }
-    pub fn new_flag(&self) -> Arc<AtomicBool> {
-        let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut guard) = self.0.lock() {
-            *guard = flag.clone();
-        }
-        flag
-    }
+    };
 }
 
-/// Independent cancel flag for background album art repair.
-/// Separate from `SyncCancel` so the two operations don't interfere.
-pub struct ArtRepairCancel(Mutex<Arc<AtomicBool>>);
-
-impl ArtRepairCancel {
-    pub fn new() -> Self {
-        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
-    }
-    pub fn cancel(&self) {
-        if let Ok(guard) = self.0.lock() {
-            guard.store(true, Ordering::SeqCst);
-        }
-    }
-    pub fn new_flag(&self) -> Arc<AtomicBool> {
-        let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut guard) = self.0.lock() {
-            *guard = flag.clone();
-        }
-        flag
-    }
-}
-
-/// Independent cancel flag for background lyrics fetching.
-pub struct LyricsCancel(Mutex<Arc<AtomicBool>>);
-
-/// Independent cancel flag for new releases checking.
-pub struct NewReleasesCancel(Mutex<Arc<AtomicBool>>);
-
-impl LyricsCancel {
-    pub fn new() -> Self {
-        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
-    }
-    pub fn cancel(&self) {
-        if let Ok(guard) = self.0.lock() {
-            guard.store(true, Ordering::SeqCst);
-        }
-    }
-    pub fn new_flag(&self) -> Arc<AtomicBool> {
-        let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut guard) = self.0.lock() {
-            *guard = flag.clone();
-        }
-        flag
-    }
-}
-
-impl NewReleasesCancel {
-    pub fn new() -> Self {
-        Self(Mutex::new(Arc::new(AtomicBool::new(false))))
-    }
-    pub fn cancel(&self) {
-        if let Ok(guard) = self.0.lock() {
-            guard.store(true, Ordering::SeqCst);
-        }
-    }
-    pub fn new_flag(&self) -> Arc<AtomicBool> {
-        let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut guard) = self.0.lock() {
-            *guard = flag.clone();
-        }
-        flag
-    }
-}
+cancel_flag!(SyncCancel);
+cancel_flag!(
+    /// Independent cancel flag for background album art repair.
+    ArtRepairCancel
+);
+cancel_flag!(
+    /// Independent cancel flag for background lyrics fetching.
+    LyricsCancel
+);
+cancel_flag!(
+    /// Independent cancel flag for new releases checking.
+    NewReleasesCancel
+);

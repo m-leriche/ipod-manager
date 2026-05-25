@@ -68,8 +68,8 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
     try {
       const names = await invoke<string[]>("get_artists_with_new_releases");
       setArtistsWithNewReleases(new Set(names));
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.warn("Failed to fetch artists with new releases:", e);
     }
   }, []);
 
@@ -79,8 +79,8 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
         includeDismissed: false,
       });
       setReleases(data);
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.warn("Failed to fetch discovered releases:", e);
     }
   }, []);
 
@@ -88,8 +88,8 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
     try {
       const data = await invoke<WatchedArtist[]>("get_watched_artists");
       setWatchedArtists(data);
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.warn("Failed to fetch watched artists:", e);
     }
   }, []);
 
@@ -133,8 +133,8 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
     try {
       const result = await invoke<NewReleasesCheckResult>("check_new_releases");
       setLastResult(result);
-    } catch {
-      // silently fail
+    } catch (e) {
+      console.warn("New releases check failed:", e);
     } finally {
       activeRef.current = false;
       setCheckState(INITIAL_CHECK);

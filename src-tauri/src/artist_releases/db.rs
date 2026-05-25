@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::types::{DiscoveredRelease, WatchedArtist};
+use super::types::{DiscoveredRelease, MatchStatus, WatchedArtist};
 
 fn now_epoch() -> i64 {
     SystemTime::now()
@@ -89,7 +89,7 @@ pub fn set_artist_mbid(
     id: i64,
     mbid: &str,
     mb_name: &str,
-    status: &str,
+    status: MatchStatus,
 ) -> Result<(), String> {
     conn.execute(
         "UPDATE watched_artists SET mb_artist_id = ?1, mb_artist_name = ?2, match_status = ?3 WHERE id = ?4",

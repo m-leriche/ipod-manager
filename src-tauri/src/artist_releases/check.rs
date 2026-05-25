@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use strsim::jaro_winkler;
 use tauri::{AppHandle, Emitter};
 
-use super::types::{NewReleasesCheckProgress, NewReleasesCheckResult};
+use super::types::{MatchStatus, NewReleasesCheckProgress, NewReleasesCheckResult};
 use super::{db, lookup};
 use crate::library;
 use crate::musicbrainz;
@@ -59,7 +59,7 @@ pub fn check_new_releases(
         }
 
         // Phase 1: Resolve MBID if pending
-        let resolved = if artist.match_status == "pending" {
+        let resolved = if artist.match_status == MatchStatus::Pending {
             let _ = app.emit(
                 "new-releases-check-progress",
                 NewReleasesCheckProgress {
@@ -96,7 +96,10 @@ pub fn check_new_releases(
         };
 
         // Only fetch releases for matched or manually set artists
-        if resolved.match_status != "matched" && resolved.match_status != "manual" {
+        if !matches!(
+            resolved.match_status,
+            MatchStatus::Matched | MatchStatus::Manual
+        ) {
             checked += 1;
             continue;
         }
@@ -212,14 +215,19 @@ fn release_date_cutoff(created_at: i64, last_checked_at: i64) -> String {
 }
 
 /// Convert epoch seconds to "YYYY-MM-DD" string.
+/// Uses the Howard Hinnant civil_from_days algorithm for correct leap-year handling.
 fn epoch_to_date_string(epoch: i64) -> String {
-    let days = epoch / 86400;
-    // Approximate: good enough for a 2-year cutoff comparison
-    let year = 1970 + (days / 365) as i32;
-    let remaining = (days % 365) as u32;
-    let month = (remaining / 30).min(11) + 1;
-    let day = (remaining % 30).min(27) + 1;
-    format!("{:04}-{:02}-{:02}", year, month, day)
+    let z = epoch / 86400 + 719_468;
+    let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
+    let doe = (z - era * 146_097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}", y, m, d)
 }
 
 /// Check if a release date passes the recency filter.
@@ -235,6 +243,8 @@ fn passes_recency_filter(date: Option<&str>, cutoff: &str) -> bool {
 }
 
 /// Mark discovered releases that match local library albums as `in_library`.
+/// Note: O(n*m) where n = releases, m = local albums. Fine for typical library
+/// sizes but may need an index if either set grows into the thousands.
 fn cross_reference_library(conn: &Connection) -> Result<(), String> {
     let local_albums = db::get_local_albums(conn)?;
     let releases = db::get_discovered_releases(conn, true)?;

@@ -198,4 +198,57 @@ describe("ColumnBrowser", () => {
     const handles = container.querySelectorAll(".cursor-col-resize");
     expect(handles).toHaveLength(2);
   });
+
+  it("right-click on multi-selected artists shows batch watch label", async () => {
+    const user = userEvent.setup();
+    const onPlayAll = vi.fn();
+    render(
+      <ColumnBrowser {...defaultProps} selectedArtists={new Set(["Artist A", "Artist B"])} onPlayAll={onPlayAll} />,
+    );
+    const artistB = screen.queryByText("Artist B");
+    if (artistB) {
+      await user.pointer({ target: artistB, keys: "[MouseRight]" });
+      expect(screen.getByText("Watch 2 Artists for New Releases")).toBeInTheDocument();
+    }
+  });
+
+  it("right-click on unselected artist selects it and shows single watch label", async () => {
+    const user = userEvent.setup();
+    const onPlayAll = vi.fn();
+    render(
+      <ColumnBrowser {...defaultProps} selectedArtists={new Set(["Artist A", "Artist B"])} onPlayAll={onPlayAll} />,
+    );
+    const artistC = screen.queryByText("Artist C");
+    if (artistC) {
+      await user.pointer({ target: artistC, keys: "[MouseRight]" });
+      // Should select just Artist C and show single label
+      expect(defaultProps.onSelectArtists).toHaveBeenCalledWith(new Set(["Artist C"]));
+      expect(screen.getByText("Watch for New Releases")).toBeInTheDocument();
+    }
+  });
+
+  it("right-click on single selected artist shows single watch label", async () => {
+    const user = userEvent.setup();
+    const onPlayAll = vi.fn();
+    render(<ColumnBrowser {...defaultProps} selectedArtists={new Set(["Artist A"])} onPlayAll={onPlayAll} />);
+    const artistA = screen.queryByText("Artist A");
+    if (artistA) {
+      await user.pointer({ target: artistA, keys: "[MouseRight]" });
+      expect(screen.getByText("Watch for New Releases")).toBeInTheDocument();
+    }
+  });
+
+  it("Play All context menu action includes all selected values", async () => {
+    const user = userEvent.setup();
+    const onPlayAll = vi.fn();
+    render(
+      <ColumnBrowser {...defaultProps} selectedArtists={new Set(["Artist A", "Artist B"])} onPlayAll={onPlayAll} />,
+    );
+    const artistA = screen.queryByText("Artist A");
+    if (artistA) {
+      await user.pointer({ target: artistA, keys: "[MouseRight]" });
+      await user.click(screen.getByText("Play All"));
+      expect(onPlayAll).toHaveBeenCalledWith({ column: "artist", values: ["Artist A", "Artist B"] });
+    }
+  });
 });

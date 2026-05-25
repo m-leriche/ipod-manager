@@ -8,49 +8,62 @@ use crate::musicbrainz::{self, MbArtistSearchResult};
 const AUTO_MATCH_MB_SCORE: u32 = 95;
 const AUTO_MATCH_SIMILARITY: f64 = 0.90;
 
-/// Attempt to resolve a watched artist's MusicBrainz ID.
-/// Returns the updated artist if resolved, or the original if ambiguous/failed.
-pub fn resolve_artist_mbid(
-    conn: &Connection,
-    artist: &WatchedArtist,
-) -> Result<WatchedArtist, String> {
+/// Result of searching MusicBrainz for an artist match (no DB access).
+pub struct ArtistMatchResult {
+    pub mbid: String,
+    pub mb_name: String,
+    pub status: MatchStatus,
+}
+
+/// Search MusicBrainz for the best match for a watched artist.
+/// Pure network call — does not touch the database.
+pub fn find_best_match(artist: &WatchedArtist) -> Result<Option<ArtistMatchResult>, String> {
     if artist.match_status != MatchStatus::Pending {
-        return Ok(artist.clone());
+        return Ok(None);
     }
 
     let normalized = musicbrainz::normalize_for_search(&artist.name);
     let candidates = musicbrainz::search_artists(&normalized)?;
 
     if candidates.is_empty() {
-        return Ok(artist.clone());
+        return Ok(None);
     }
 
     let best = &candidates[0];
     let similarity = jaro_winkler(&artist.name.to_lowercase(), &best.name.to_lowercase());
 
-    if best.score >= AUTO_MATCH_MB_SCORE && similarity >= AUTO_MATCH_SIMILARITY {
-        db::set_artist_mbid(conn, artist.id, &best.id, &best.name, MatchStatus::Matched)?;
-        Ok(WatchedArtist {
-            mb_artist_id: Some(best.id.clone()),
-            mb_artist_name: Some(best.name.clone()),
-            match_status: MatchStatus::Matched,
-            ..artist.clone()
-        })
+    let status = if best.score >= AUTO_MATCH_MB_SCORE && similarity >= AUTO_MATCH_SIMILARITY {
+        MatchStatus::Matched
     } else {
-        db::set_artist_mbid(
-            conn,
-            artist.id,
-            &best.id,
-            &best.name,
-            MatchStatus::Ambiguous,
-        )?;
-        Ok(WatchedArtist {
-            mb_artist_id: Some(best.id.clone()),
-            mb_artist_name: Some(best.name.clone()),
-            match_status: MatchStatus::Ambiguous,
-            ..artist.clone()
-        })
-    }
+        MatchStatus::Ambiguous
+    };
+
+    Ok(Some(ArtistMatchResult {
+        mbid: best.id.clone(),
+        mb_name: best.name.clone(),
+        status,
+    }))
+}
+
+/// Save a MusicBrainz match result to the database and return the updated artist.
+pub fn save_artist_match(
+    conn: &Connection,
+    artist: &WatchedArtist,
+    result: &ArtistMatchResult,
+) -> Result<WatchedArtist, String> {
+    db::set_artist_mbid(
+        conn,
+        artist.id,
+        &result.mbid,
+        &result.mb_name,
+        result.status.clone(),
+    )?;
+    Ok(WatchedArtist {
+        mb_artist_id: Some(result.mbid.clone()),
+        mb_artist_name: Some(result.mb_name.clone()),
+        match_status: result.status.clone(),
+        ..artist.clone()
+    })
 }
 
 /// Search MusicBrainz for artist candidates (for manual resolution UI).

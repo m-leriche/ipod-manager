@@ -11,15 +11,16 @@ export const NewReleasesView = () => {
   const { widths, containerRef, onDragStart } = useSplitWidths();
   const [sortBy, setSortBy] = useState<ReleaseSort>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
+  const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null);
   const [artistInput, setArtistInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filter releases by selected artist
+  // Filter releases by selected artist (using watched_artist_id, not name,
+  // so MB-resolved names like "Björk" match the local watch name "Bjork")
   const filteredReleases = useMemo(() => {
-    if (!selectedArtist) return releases;
-    return releases.filter((r) => r.artist_name === selectedArtist);
-  }, [releases, selectedArtist]);
+    if (selectedArtistId === null) return releases;
+    return releases.filter((r) => r.watched_artist_id === selectedArtistId);
+  }, [releases, selectedArtistId]);
 
   const sorted = useMemo(() => sortReleases(filteredReleases, sortBy, sortDir), [filteredReleases, sortBy, sortDir]);
 
@@ -45,11 +46,12 @@ export const NewReleasesView = () => {
 
   const progressPct = checkState.totalArtists > 0 ? (checkState.completedArtists / checkState.totalArtists) * 100 : 0;
 
-  // Count releases per artist for the sidebar
+  // Count releases per watched artist for the sidebar (keyed by artist ID
+  // to avoid mismatches between local name and MB-resolved artist_name)
   const releaseCounts = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Map<number, number>();
     for (const r of releases) {
-      counts.set(r.artist_name, (counts.get(r.artist_name) ?? 0) + 1);
+      counts.set(r.watched_artist_id, (counts.get(r.watched_artist_id) ?? 0) + 1);
     }
     return counts;
   }, [releases]);
@@ -118,9 +120,9 @@ export const NewReleasesView = () => {
           <div className="flex-1 overflow-y-auto">
             {/* "All" option */}
             <button
-              onClick={() => setSelectedArtist(null)}
+              onClick={() => setSelectedArtistId(null)}
               className={`w-full text-left px-3 py-[5px] text-[11px] transition-colors ${
-                selectedArtist === null ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+                selectedArtistId === null ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
               }`}
             >
               All Artists ({watchedArtists.length})
@@ -130,24 +132,24 @@ export const NewReleasesView = () => {
               <div
                 key={artist.id}
                 className={`group flex items-center gap-1 px-3 py-[5px] text-[11px] transition-colors cursor-default ${
-                  selectedArtist === artist.name ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
+                  selectedArtistId === artist.id ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"
                 }`}
-                onClick={() => setSelectedArtist(artist.name === selectedArtist ? null : artist.name)}
+                onClick={() => setSelectedArtistId(artist.id === selectedArtistId ? null : artist.id)}
               >
                 <span className="truncate flex-1">{artist.name}</span>
-                {releaseCounts.get(artist.name) != null && (
+                {releaseCounts.get(artist.id) != null && (
                   <span
                     className={`text-[9px] shrink-0 ${
-                      selectedArtist === artist.name ? "text-white/60" : "text-text-tertiary"
+                      selectedArtistId === artist.id ? "text-white/60" : "text-text-tertiary"
                     }`}
                   >
-                    {releaseCounts.get(artist.name)}
+                    {releaseCounts.get(artist.id)}
                   </span>
                 )}
                 {artist.match_status === "ambiguous" && (
                   <span
                     className={`text-[9px] shrink-0 ${
-                      selectedArtist === artist.name ? "text-white/60" : "text-yellow-400/70"
+                      selectedArtistId === artist.id ? "text-white/60" : "text-yellow-400/70"
                     }`}
                     title="Could not auto-match"
                   >
@@ -157,11 +159,11 @@ export const NewReleasesView = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (selectedArtist === artist.name) setSelectedArtist(null);
+                    if (selectedArtistId === artist.id) setSelectedArtistId(null);
                     unwatchArtist(artist.name);
                   }}
                   className={`opacity-0 group-hover:opacity-100 transition-all shrink-0 ${
-                    selectedArtist === artist.name
+                    selectedArtistId === artist.id
                       ? "text-white/60 hover:text-white"
                       : "text-text-tertiary hover:text-text-secondary"
                   }`}
@@ -191,8 +193,8 @@ export const NewReleasesView = () => {
               <p className="text-xs text-text-tertiary">
                 {watchedArtists.length === 0
                   ? "Add artists to start watching for new releases."
-                  : selectedArtist
-                    ? `No releases for ${selectedArtist}.`
+                  : selectedArtistId !== null
+                    ? `No releases for ${watchedArtists.find((a) => a.id === selectedArtistId)?.name ?? "this artist"}.`
                     : "No new releases found. Hit Check Now to refresh."}
               </p>
             </div>

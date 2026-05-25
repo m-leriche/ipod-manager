@@ -61,6 +61,8 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
   const [artistsWithNewReleases, setArtistsWithNewReleases] = useState<Set<string>>(new Set());
   const [lastResult, setLastResult] = useState<NewReleasesCheckResult | null>(null);
   const activeRef = useRef(false);
+  const watchedArtistsRef = useRef(watchedArtists);
+  watchedArtistsRef.current = watchedArtists;
 
   // ── Data fetching ────────────────────────────────────────────
 
@@ -125,7 +127,7 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
 
   // ── Actions ──────────────────────────────────────────────────
 
-  const startCheckInternal = useCallback(async () => {
+  const startCheck = useCallback(async () => {
     if (activeRef.current) return;
     activeRef.current = true;
     setCheckState((prev) => ({ ...prev, active: true }));
@@ -144,10 +146,6 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
     }
   }, [refreshReleases, refreshWatchedArtists, refreshArtistsWithNewReleases]);
 
-  const startCheck = useCallback(async () => {
-    await startCheckInternal();
-  }, [startCheckInternal]);
-
   // ── Auto-check on startup ───────────────────────────────────
 
   useEffect(() => {
@@ -160,7 +158,7 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
       const now = Math.floor(Date.now() / 1000);
 
       if (now - lastCheckTime > TWENTY_FOUR_HOURS) {
-        startCheckInternal();
+        startCheck();
       }
     };
     autoCheck().catch(() => {});
@@ -181,14 +179,14 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
 
   const unwatchArtist = useCallback(
     async (name: string) => {
-      const artist = watchedArtists.find((a) => a.name === name);
+      const artist = watchedArtistsRef.current.find((a) => a.name === name);
       if (!artist) return;
       await invoke("unwatch_artist", { id: artist.id });
       refreshWatchedArtists();
       refreshReleases();
       refreshArtistsWithNewReleases();
     },
-    [watchedArtists, refreshWatchedArtists, refreshReleases, refreshArtistsWithNewReleases],
+    [refreshWatchedArtists, refreshReleases, refreshArtistsWithNewReleases],
   );
 
   const isWatched = useCallback((name: string) => watchedArtists.some((a) => a.name === name), [watchedArtists]);

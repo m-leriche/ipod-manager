@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use strsim::jaro_winkler;
 use tauri::{AppHandle, Emitter};
 
-use super::types::{MatchStatus, NewReleasesCheckProgress, NewReleasesCheckResult};
+use super::types::{CheckPhase, MatchStatus, NewReleasesCheckProgress, NewReleasesCheckResult};
 use super::{db, lookup};
 use crate::library;
 use crate::musicbrainz;
@@ -66,15 +66,26 @@ pub fn check_new_releases(
                     total_artists: total,
                     completed_artists: checked,
                     current_artist: artist.name.clone(),
-                    phase: "resolving_mbid".to_string(),
+                    phase: CheckPhase::ResolvingMbid,
                 },
             );
 
-            let conn = conn_arc
-                .lock()
-                .map_err(|e| format!("DB lock failed: {}", e))?;
-            match lookup::resolve_artist_mbid(&conn, artist) {
-                Ok(a) => a,
+            // Network call without holding the DB lock
+            match lookup::find_best_match(artist) {
+                Ok(Some(result)) => {
+                    let conn = conn_arc
+                        .lock()
+                        .map_err(|e| format!("DB lock failed: {}", e))?;
+                    match lookup::save_artist_match(&conn, artist, &result) {
+                        Ok(a) => a,
+                        Err(_) => {
+                            failed += 1;
+                            checked += 1;
+                            continue;
+                        }
+                    }
+                }
+                Ok(None) => artist.clone(),
                 Err(_) => {
                     failed += 1;
                     checked += 1;
@@ -120,7 +131,7 @@ pub fn check_new_releases(
                 total_artists: total,
                 completed_artists: checked,
                 current_artist: artist.name.clone(),
-                phase: "fetching_releases".to_string(),
+                phase: CheckPhase::FetchingReleases,
             },
         );
 
@@ -190,7 +201,7 @@ pub fn check_new_releases(
             total_artists: total,
             completed_artists: total,
             current_artist: String::new(),
-            phase: "done".to_string(),
+            phase: CheckPhase::Done,
         },
     );
 
@@ -203,7 +214,7 @@ pub fn check_new_releases(
 }
 
 /// Compute a YYYY-MM-DD cutoff string for filtering releases.
-/// - First check (last_checked_at == 0): go back 2 years from watch date.
+/// - First check (last_checked_at == 0): go back 30 days from watch date.
 /// - Subsequent checks: go back 30 days from last check as a buffer.
 fn release_date_cutoff(created_at: i64, last_checked_at: i64) -> String {
     let cutoff_epoch = if last_checked_at == 0 {
@@ -233,13 +244,18 @@ fn epoch_to_date_string(epoch: i64) -> String {
 /// Check if a release date passes the recency filter.
 /// Dates are YYYY, YYYY-MM, or YYYY-MM-DD from MusicBrainz.
 /// Returns false for undated releases.
+/// For partial dates (e.g. "2026"), compares only the matching prefix of
+/// the cutoff so year-only dates aren't incorrectly filtered out.
 fn passes_recency_filter(date: Option<&str>, cutoff: &str) -> bool {
     let date = match date {
         Some(d) if !d.is_empty() => d,
         _ => return false,
     };
-    // MB dates are lexicographically comparable (YYYY >= YYYY-MM-DD works fine)
-    date >= cutoff
+    if date.len() < cutoff.len() {
+        date >= &cutoff[..date.len()]
+    } else {
+        date >= cutoff
+    }
 }
 
 /// Mark discovered releases that match local library albums as `in_library`.

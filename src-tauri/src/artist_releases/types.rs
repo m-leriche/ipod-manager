@@ -74,11 +74,19 @@ pub struct DiscoveredRelease {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckPhase {
+    ResolvingMbid,
+    FetchingReleases,
+    Done,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NewReleasesCheckProgress {
     pub total_artists: usize,
     pub completed_artists: usize,
     pub current_artist: String,
-    pub phase: String,
+    pub phase: CheckPhase,
 }
 
 #[derive(Debug, Clone, Serialize)]

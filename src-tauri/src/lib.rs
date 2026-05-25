@@ -6,6 +6,7 @@ mod audio_utils;
 mod audioquality;
 mod commands;
 mod convert;
+mod discover;
 mod disk;
 pub mod error;
 mod ffprobe_meta;
@@ -373,6 +374,15 @@ pub fn run() {
             commands::get_artists_with_new_releases,
             commands::get_last_releases_check,
             commands::clear_discovered_releases,
+            commands::get_discover_feed,
+            commands::refresh_discover_feed,
+            commands::get_discover_tag_albums,
+            commands::search_discover,
+            commands::replace_discover_section,
+            commands::replace_discover_album,
+            commands::save_discover_snapshot,
+            commands::get_discover_enabled,
+            commands::set_discover_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

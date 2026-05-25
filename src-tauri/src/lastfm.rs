@@ -66,6 +66,19 @@ fn api_signature(params: &[(&str, &str)]) -> String {
     format!("{:x}", md5::compute(input.as_bytes()))
 }
 
+/// Parse a Last.fm response body, checking for API-level errors.
+fn parse_response(text: String) -> Result<serde_json::Value, String> {
+    let json: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Last.fm JSON: {}", e))?;
+
+    if let Some(code) = json.get("error") {
+        let msg = json["message"].as_str().unwrap_or("Unknown error");
+        return Err(format!("Last.fm error {}: {}", code, msg));
+    }
+
+    Ok(json)
+}
+
 /// POST a signed request to the Last.fm API and return the parsed JSON response.
 fn api_post(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
     rate_limit();
@@ -76,25 +89,14 @@ fn api_post(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
     form.push(("api_sig", &sig));
     form.push(("format", "json"));
 
-    let resp = ureq::post(API_URL)
+    let text = ureq::post(API_URL)
         .set("User-Agent", USER_AGENT)
         .send_form(&form)
-        .map_err(|e| format!("Last.fm request failed: {}", e))?;
-
-    let text = resp
+        .map_err(|e| format!("Last.fm request failed: {}", e))?
         .into_string()
         .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
 
-    let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Last.fm JSON: {}", e))?;
-
-    // Last.fm returns errors as { "error": code, "message": "..." }
-    if let Some(code) = json.get("error") {
-        let msg = json["message"].as_str().unwrap_or("Unknown error");
-        return Err(format!("Last.fm error {}: {}", code, msg));
-    }
-
-    Ok(json)
+    parse_response(text)
 }
 
 /// GET a signed request from the Last.fm API.
@@ -107,28 +109,41 @@ fn api_get(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
     for (key, value) in params {
         req = req.query(key, value);
     }
-    req = req.query("api_sig", &sig).query("format", "json");
 
-    let resp = req
+    let text = req
+        .query("api_sig", &sig)
+        .query("format", "json")
         .call()
-        .map_err(|e| format!("Last.fm request failed: {}", e))?;
-
-    let text = resp
+        .map_err(|e| format!("Last.fm request failed: {}", e))?
         .into_string()
         .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
 
-    let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Last.fm JSON: {}", e))?;
-
-    if let Some(code) = json.get("error") {
-        let msg = json["message"].as_str().unwrap_or("Unknown error");
-        return Err(format!("Last.fm error {}: {}", code, msg));
-    }
-
-    Ok(json)
+    parse_response(text)
 }
 
-// ── Public API ──────────────────────────────────────────────────
+/// GET an unsigned request from the Last.fm API.
+/// Only requires api_key — no session or signature. Used for public
+/// read-only endpoints like artist.getSimilar, artist.getTopAlbums, etc.
+pub fn api_get_public(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    rate_limit();
+
+    let mut req = ureq::get(API_URL).set("User-Agent", USER_AGENT);
+    req = req.query("api_key", API_KEY);
+    for (key, value) in params {
+        req = req.query(key, value);
+    }
+
+    let text = req
+        .query("format", "json")
+        .call()
+        .map_err(|e| format!("Last.fm request failed: {}", e))?
+        .into_string()
+        .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
+
+    parse_response(text)
+}
+
+// ── Public API (authenticated) ──────────────────────────────────
 
 /// Request an authorization token from Last.fm.
 pub fn get_token() -> Result<String, String> {

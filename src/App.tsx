@@ -170,19 +170,32 @@ const AppContent = () => {
 
   // Poll iPod connection at the App level so the StatusBar indicator stays
   // accurate even when MountPanel (Tools tab) is not mounted.
+  // Uses exponential backoff when no device is found to reduce battery drain.
   useEffect(() => {
-    const POLL_MS = 10_000;
+    const BASE_MS = 10_000;
+    const MAX_MS = 60_000;
+    let delay = BASE_MS;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+
     const poll = async () => {
       try {
         const info = await invoke<DiskInfo | null>("detect_ipod");
+        const found = !!info;
         setIpodMounted(!!info?.mounted);
+        delay = found ? BASE_MS : Math.min(delay * 2, MAX_MS);
       } catch {
         setIpodMounted(false);
+        delay = Math.min(delay * 2, MAX_MS);
       }
+      if (!cancelled) timeoutId = setTimeout(poll, delay);
     };
+
     poll();
-    const id = setInterval(poll, POLL_MS);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   useAppEventListeners({

@@ -40,25 +40,65 @@ pub async fn unmount_ipod(mount_point: Option<String>) -> Result<(), AppError> {
         .map_err(AppError::Generic)
 }
 
-/// Ensure the mount point is under /Volumes/ to prevent sudo from
+/// Ensure the mount point is directly under /Volumes/ to prevent sudo from
 /// creating or unmounting arbitrary paths.
 fn validate_mount_point(path: &str) -> Result<(), AppError> {
-    if !path.starts_with("/Volumes/") || path.contains("..") {
-        return Err(AppError::InvalidInput(
-            "Mount point must be under /Volumes/".into(),
-        ));
+    let reject = || {
+        Err(AppError::InvalidInput(
+            "Mount point must be directly under /Volumes/".into(),
+        ))
+    };
+
+    // Reject null bytes (could bypass path checks)
+    if path.contains('\0') {
+        return reject();
     }
+
+    let name = match path.strip_prefix("/Volumes/") {
+        Some(n) => n,
+        None => return reject(),
+    };
+
+    // Must have a volume name, and it must not navigate into subdirectories
+    if name.is_empty() || name.contains('/') || name.contains("..") {
+        return reject();
+    }
+
     Ok(())
 }
 
-/// Validate that a disk identifier matches the expected `diskNsN` pattern.
+/// Validate that a disk identifier matches the macOS `diskNsN` pattern
+/// (e.g. `disk0`, `disk5s2`, `disk12s1`).
+/// Note: APFS synthesized identifiers like `disk3s1s1` will be rejected.
+/// This is fine for iPods (FAT32/HFS+) but would need adjustment if reused.
 fn validate_disk_identifier(identifier: &str) -> Result<(), AppError> {
-    if !identifier.starts_with("disk")
-        || identifier.len() <= 4
-        || !identifier[4..].chars().all(|c| c.is_ascii_alphanumeric())
-    {
-        return Err(AppError::InvalidInput("Invalid disk identifier".into()));
+    let reject = || Err(AppError::InvalidInput("Invalid disk identifier".into()));
+
+    let rest = match identifier.strip_prefix("disk") {
+        Some(r) if !r.is_empty() => r,
+        _ => return reject(),
+    };
+
+    // Expected: one or more digits, then optionally 's' followed by one or more digits
+    let parts: Vec<&str> = rest.splitn(2, 's').collect();
+    match parts.as_slice() {
+        [disk_num] => {
+            if !disk_num.chars().all(|c| c.is_ascii_digit()) {
+                return reject();
+            }
+        }
+        [disk_num, slice_num] => {
+            if disk_num.is_empty()
+                || !disk_num.chars().all(|c| c.is_ascii_digit())
+                || slice_num.is_empty()
+                || !slice_num.chars().all(|c| c.is_ascii_digit())
+            {
+                return reject();
+            }
+        }
+        _ => return reject(),
     }
+
     Ok(())
 }
 
@@ -125,10 +165,27 @@ mod tests {
     }
 
     #[test]
+    fn validate_mount_point_rejects_bare_volumes() {
+        assert!(validate_mount_point("/Volumes/").is_err());
+    }
+
+    #[test]
+    fn validate_mount_point_rejects_nested_paths() {
+        assert!(validate_mount_point("/Volumes/foo/bar").is_err());
+        assert!(validate_mount_point("/Volumes/IPOD/subdir").is_err());
+    }
+
+    #[test]
+    fn validate_mount_point_rejects_null_bytes() {
+        assert!(validate_mount_point("/Volumes/IPOD\0evil").is_err());
+    }
+
+    #[test]
     fn validate_disk_identifier_accepts_valid() {
         assert!(validate_disk_identifier("disk5s2").is_ok());
         assert!(validate_disk_identifier("disk12s1").is_ok());
         assert!(validate_disk_identifier("disk0").is_ok());
+        assert!(validate_disk_identifier("disk0s1").is_ok());
     }
 
     #[test]
@@ -138,5 +195,12 @@ mod tests {
         assert!(validate_disk_identifier("").is_err());
         assert!(validate_disk_identifier("disk/../../etc").is_err());
         assert!(validate_disk_identifier("disk;rm -rf /").is_err());
+    }
+
+    #[test]
+    fn validate_disk_identifier_rejects_non_numeric() {
+        assert!(validate_disk_identifier("diskABC").is_err());
+        assert!(validate_disk_identifier("disk5sABC").is_err());
+        assert!(validate_disk_identifier("disk5s").is_err());
     }
 }

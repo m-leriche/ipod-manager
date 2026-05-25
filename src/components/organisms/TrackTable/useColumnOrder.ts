@@ -22,7 +22,7 @@ const DRAG_THRESHOLD = 5;
 export const useColumnOrder = (columns: TrackTableColumn[]) => {
   const [order, setOrder] = useState<string[]>(() => loadOrder(columns));
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const headerEls = useRef<(HTMLTableCellElement | null)[]>([]);
+  const headerEls = useRef<(HTMLElement | null)[]>([]);
 
   useEffect(() => {
     setSetting("columnOrder", order);
@@ -33,7 +33,7 @@ export const useColumnOrder = (columns: TrackTableColumn[]) => {
     return order.map((key) => map.get(key)!).filter(Boolean);
   }, [columns, order]);
 
-  const setHeaderRef = useCallback((index: number, el: HTMLTableCellElement | null) => {
+  const setHeaderRef = useCallback((index: number, el: HTMLElement | null) => {
     headerEls.current[index] = el;
   }, []);
 

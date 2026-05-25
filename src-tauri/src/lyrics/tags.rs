@@ -34,7 +34,7 @@ fn write_lyrics_id3(path: &std::path::Path, lyrics: &str) -> Result<(), String> 
         });
     }
 
-    tag.write_to_path(path, id3::Version::Id3v24)
+    tag.write_to_path(path, id3::Version::Id3v23)
         .map_err(|e| format!("Failed to write lyrics: {}", e))?;
 
     Ok(())

@@ -81,6 +81,7 @@ export const TrackTable = memo(function TrackTable({
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
 
   // Ref for selected so handleClick doesn't depend on selected state
   const selectedRef = useRef(selected);
@@ -327,118 +328,135 @@ export const TrackTable = memo(function TrackTable({
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 min-h-0 overflow-auto outline-none view-enter bg-bg-primary"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      onDragStartCapture={() => {
-        dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
-      }}
-    >
-      <table className="table-fixed border-separate" style={{ width: totalWidth, borderSpacing: 0 }}>
-        <colgroup>
-          {orderedColumns.map((col, i) => (
-            <col key={col.key} style={{ width: widths[i] }} />
-          ))}
-        </colgroup>
-        <thead className="sticky top-0 z-10 bg-bg-primary" style={{ boxShadow: "0 1px 0 0 var(--color-border)" }}>
-          <tr>
-            {orderedColumns.map((col, i) => {
-              const isActive = col.sortKey === sortBy;
-              const isDragging = dragIndex === i;
-              const isDragOver = dragOverIndex === i && dragIndex !== i;
-              return (
-                <th
-                  key={col.key}
-                  ref={(el) => setHeaderRef(i, el)}
-                  onMouseDown={(e) => onReorderStart(i, e)}
-                  onClick={() => onSort(col.sortKey)}
-                  className={`relative px-3 py-2 text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-text-primary bg-bg-primary ${
-                    isActive ? "text-text-primary" : "text-text-tertiary"
-                  } ${col.align === "right" ? "text-right" : "text-left"} ${
-                    isDragging ? "opacity-40" : ""
-                  } ${isDragOver ? "!border-l-2 !border-l-accent" : ""}`}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {col.label}
-                    {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "\u25B2" : "\u25BC"}</span>}
-                  </span>
-                  {i < orderedColumns.length - 1 && (
-                    <div
-                      onMouseDown={(e) => onResizeStart(i, e)}
-                      className="absolute top-0 -right-[4px] w-[9px] h-full cursor-col-resize group/handle z-20"
-                    >
-                      <div className="absolute left-1 top-1 bottom-1 w-px bg-border group-hover/handle:bg-text-tertiary group-active/handle:bg-accent transition-colors" />
-                    </div>
-                  )}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {paddingTop > 0 && (
-            <tr>
-              <td style={{ height: paddingTop, padding: 0 }} colSpan={orderedColumns.length} />
-            </tr>
-          )}
-          {virtualItems.map((virtualRow) => {
-            const track = tracks[virtualRow.index];
-            if (!track) {
-              return (
-                <tr key={`skeleton-${virtualRow.index}`} data-index={virtualRow.index} style={{ height: ROW_HEIGHT }}>
-                  <td colSpan={orderedColumns.length} className="px-3">
-                    <div className="h-3 w-2/3 rounded bg-bg-card animate-pulse" />
-                  </td>
-                </tr>
-              );
-            }
+    <div className="flex-1 min-h-0 flex flex-col view-enter">
+      {/* Header — lives OUTSIDE the scroll container so body content
+           can never bleed through it regardless of compositor behavior */}
+      <div
+        ref={headerScrollRef}
+        className="shrink-0 overflow-hidden bg-bg-primary"
+        style={{ boxShadow: "0 1px 0 0 var(--color-border)" }}
+      >
+        <div className="flex" style={{ width: totalWidth }}>
+          {orderedColumns.map((col, i) => {
+            const isActive = col.sortKey === sortBy;
+            const isDragging = dragIndex === i;
+            const isDragOverCol = dragOverIndex === i && dragIndex !== i;
             return (
-              <TrackRow
-                key={track.id}
-                track={track}
-                index={virtualRow.index}
-                columns={orderedColumns}
-                isCurrentTrack={currentTrackId === track.id}
-                isPlaying={currentTrackId === track.id && isActivePlaying}
-                isSelected={selected.has(track.id)}
-                isDragOver={reorderDragOver === virtualRow.index}
-                selectedCount={selected.size}
-                onClick={handleClick}
-                onDoubleClick={handleDoubleClick}
-                onContextMenu={handleContextMenu}
-                onMouseDown={isPlaylistView ? handleReorderMouseDown : undefined}
-              />
+              <div
+                key={col.key}
+                role="columnheader"
+                ref={(el) => setHeaderRef(i, el)}
+                onMouseDown={(e) => onReorderStart(i, e)}
+                onClick={() => onSort(col.sortKey)}
+                style={{ width: widths[i] }}
+                className={`relative shrink-0 px-3 py-2 text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-text-primary ${
+                  isActive ? "text-text-primary" : "text-text-tertiary"
+                } ${col.align === "right" ? "text-right" : "text-left"} ${
+                  isDragging ? "opacity-40" : ""
+                } ${isDragOverCol ? "!border-l-2 !border-l-accent" : ""}`}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {col.label}
+                  {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "\u25B2" : "\u25BC"}</span>}
+                </span>
+                {i < orderedColumns.length - 1 && (
+                  <div
+                    onMouseDown={(e) => onResizeStart(i, e)}
+                    className="absolute top-0 -right-[4px] w-[9px] h-full cursor-col-resize group/handle z-20"
+                  >
+                    <div className="absolute left-1 top-1 bottom-1 w-px bg-border group-hover/handle:bg-text-tertiary group-active/handle:bg-accent transition-colors" />
+                  </div>
+                )}
+              </div>
             );
           })}
-          {paddingBottom > 0 && (
-            <tr>
-              <td style={{ height: paddingBottom, padding: 0 }} colSpan={orderedColumns.length} />
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      {rowCount === 0 && (
-        <div className="flex flex-col items-center justify-center h-48 gap-2">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            className="w-8 h-8 text-text-tertiary/30"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-            />
-          </svg>
-          <span className="text-text-tertiary text-xs">No tracks found</span>
-          <span className="text-text-tertiary/40 text-[10px]">Try adjusting your search or filters</span>
         </div>
-      )}
+      </div>
+
+      {/* Scrollable body */}
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-auto outline-none bg-bg-primary"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onScroll={() => {
+          if (headerScrollRef.current && scrollRef.current) {
+            headerScrollRef.current.scrollLeft = scrollRef.current.scrollLeft;
+          }
+        }}
+        onDragStartCapture={() => {
+          dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
+        }}
+      >
+        <table className="table-fixed border-separate" style={{ width: totalWidth, borderSpacing: 0 }}>
+          <colgroup>
+            {orderedColumns.map((col, i) => (
+              <col key={col.key} style={{ width: widths[i] }} />
+            ))}
+          </colgroup>
+          <tbody>
+            {paddingTop > 0 && (
+              <tr>
+                <td style={{ height: paddingTop, padding: 0 }} colSpan={orderedColumns.length} />
+              </tr>
+            )}
+            {virtualItems.map((virtualRow) => {
+              const track = tracks[virtualRow.index];
+              if (!track) {
+                return (
+                  <tr key={`skeleton-${virtualRow.index}`} data-index={virtualRow.index} style={{ height: ROW_HEIGHT }}>
+                    <td colSpan={orderedColumns.length} className="px-3">
+                      <div className="h-3 w-2/3 rounded bg-bg-card animate-pulse" />
+                    </td>
+                  </tr>
+                );
+              }
+              return (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  index={virtualRow.index}
+                  columns={orderedColumns}
+                  isCurrentTrack={currentTrackId === track.id}
+                  isPlaying={currentTrackId === track.id && isActivePlaying}
+                  isSelected={selected.has(track.id)}
+                  isDragOver={reorderDragOver === virtualRow.index}
+                  selectedCount={selected.size}
+                  onClick={handleClick}
+                  onDoubleClick={handleDoubleClick}
+                  onContextMenu={handleContextMenu}
+                  onMouseDown={isPlaylistView ? handleReorderMouseDown : undefined}
+                />
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr>
+                <td style={{ height: paddingBottom, padding: 0 }} colSpan={orderedColumns.length} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {rowCount === 0 && (
+          <div className="flex flex-col items-center justify-center h-48 gap-2">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              className="w-8 h-8 text-text-tertiary/30"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+              />
+            </svg>
+            <span className="text-text-tertiary text-xs">No tracks found</span>
+            <span className="text-text-tertiary/40 text-[10px]">Try adjusting your search or filters</span>
+          </div>
+        )}
+      </div>
 
       {contextMenu &&
         createPortal(

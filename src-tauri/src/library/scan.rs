@@ -177,7 +177,7 @@ pub fn rescan_all_folders(
             .collect();
 
         for db_path in &db_paths {
-            if !Path::new(db_path).exists() {
+            if super::is_ghost_path(db_path) {
                 conn.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
                     .ok();
             }
@@ -271,7 +271,7 @@ pub fn background_rescan_all_folders(
             .collect();
 
         for db_path in &db_paths {
-            if !Path::new(db_path).exists() {
+            if super::is_ghost_path(db_path) {
                 conn.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
                     .ok();
                 removed += 1;

@@ -1,5 +1,6 @@
 mod artist_releases;
 mod audio;
+mod discover;
 mod files;
 mod health;
 mod ipod;
@@ -15,6 +16,7 @@ mod system;
 
 pub use artist_releases::*;
 pub use audio::*;
+pub use discover::*;
 pub use files::*;
 pub use health::*;
 pub use ipod::*;

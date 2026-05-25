@@ -32,6 +32,10 @@ import type { IpodInfo } from "./types/ipod";
 import type { LibrarySummary } from "./components/molecules/StatusBar/types";
 import { NewReleasesView } from "./components/templates/NewReleasesView/NewReleasesView";
 
+const DiscoverView = lazy(() =>
+  import("./components/templates/DiscoverView/DiscoverView").then((m) => ({ default: m.DiscoverView })),
+);
+
 // Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
 const FileManager = lazy(() =>
   import("./components/templates/FileManager/FileManager").then((m) => ({ default: m.FileManager })),
@@ -69,8 +73,9 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
-type TopTab = "library" | "tools" | "releases";
+type TopTab = "library" | "discover" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
+type DiscoverTab = "discover" | "releases";
 
 const App = () => (
   <ThemeProvider>
@@ -103,6 +108,7 @@ const AppContent = () => {
   const { state: playbackState } = usePlayback();
   const [topTab, setTopTab] = useState<TopTab>("library");
   const [toolTab, setToolTab] = useState<ToolTab>("files");
+  const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("discover");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -110,6 +116,13 @@ const AppContent = () => {
   const lyricsPanelResize = useLyricsPanelWidth();
   const [ipodMounted, setIpodMounted] = useState(false);
   const { hasAnyNewReleases, checkState: releasesCheckState } = useNewReleases();
+  const [discoverEnabled, setDiscoverEnabled] = useState(true);
+
+  useEffect(() => {
+    invoke<boolean>("get_discover_enabled")
+      .then(setDiscoverEnabled)
+      .catch(() => {});
+  }, []);
 
   const {
     showColumnBrowser,
@@ -190,15 +203,17 @@ const AppContent = () => {
           <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>
             Library
           </TopTabButton>
+          {discoverEnabled && (
+            <TopTabButton
+              active={topTab === "discover"}
+              onClick={() => setTopTab("discover")}
+              indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
+            >
+              Discover
+            </TopTabButton>
+          )}
           <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
             Tools
-          </TopTabButton>
-          <TopTabButton
-            active={topTab === "releases"}
-            onClick={() => setTopTab("releases")}
-            indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
-          >
-            Releases
           </TopTabButton>
         </div>
         <div className="flex-1" />
@@ -249,6 +264,38 @@ const AppContent = () => {
               />
             </ErrorBoundary>
           </div>
+          {topTab === "discover" && (
+            <div className="h-full flex flex-col view-enter">
+              <div className="px-8 pt-5 pb-4 shrink-0 flex items-center gap-3">
+                <div className="inline-flex rounded-lg bg-bg-secondary p-0.5 border border-border">
+                  <DiscoverTabButton active={discoverTab === "discover"} onClick={() => setDiscoverTab("discover")}>
+                    Discover
+                  </DiscoverTabButton>
+                  <DiscoverTabButton
+                    active={discoverTab === "releases"}
+                    onClick={() => setDiscoverTab("releases")}
+                    indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
+                  >
+                    Releases
+                  </DiscoverTabButton>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                {discoverTab === "discover" && (
+                  <Suspense fallback={null}>
+                    <ErrorBoundary name="Discover">
+                      <DiscoverView />
+                    </ErrorBoundary>
+                  </Suspense>
+                )}
+                {discoverTab === "releases" && (
+                  <ErrorBoundary name="New Releases">
+                    <NewReleasesView />
+                  </ErrorBoundary>
+                )}
+              </div>
+            </div>
+          )}
           {topTab === "tools" && (
             <div className="flex gap-6 p-6 h-full view-enter">
               <ErrorBoundary name="Mount Panel">
@@ -336,13 +383,6 @@ const AppContent = () => {
               </div>
             </div>
           )}
-          {topTab === "releases" && (
-            <div className="h-full view-enter">
-              <ErrorBoundary name="New Releases">
-                <NewReleasesView />
-              </ErrorBoundary>
-            </div>
-          )}
         </div>
         {topTab === "library" &&
           showLyricsPanel &&
@@ -384,7 +424,12 @@ const AppContent = () => {
         <Suspense fallback={null}>
           <ErrorBoundary name="Settings">
             <SettingsModal
-              onClose={() => setSettingsOpen(false)}
+              onClose={() => {
+                setSettingsOpen(false);
+                invoke<boolean>("get_discover_enabled")
+                  .then(setDiscoverEnabled)
+                  .catch(() => {});
+              }}
               onLibraryChanged={() => libraryRefreshRef.current?.()}
             />
           </ErrorBoundary>
@@ -420,6 +465,36 @@ const TopTabButton = ({
       active
         ? "bg-bg-card text-text-primary border border-border-active"
         : "text-text-tertiary border border-transparent hover:text-text-secondary"
+    }`}
+  >
+    {children}
+    {indicator && (
+      <span
+        className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${
+          indicator === "pulse" ? "bg-accent animate-pulse" : "bg-accent"
+        }`}
+      />
+    )}
+  </button>
+);
+
+const DiscoverTabButton = ({
+  active,
+  onClick,
+  children,
+  indicator,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  indicator?: "accent" | "pulse";
+}) => (
+  <button
+    role="tab"
+    aria-selected={active}
+    onClick={onClick}
+    className={`relative px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
+      active ? "bg-bg-card text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
     }`}
   >
     {children}

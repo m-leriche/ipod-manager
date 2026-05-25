@@ -128,7 +128,41 @@ fn api_get(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
     Ok(json)
 }
 
-// ── Public API ──────────────────────────────────────────────────
+// ── Public read-only API (no session needed) ───────────────────
+
+/// GET an unsigned request from the Last.fm API.
+/// Only requires api_key — no session or signature. Used for public
+/// read-only endpoints like artist.getSimilar, artist.getTopAlbums, etc.
+pub fn api_get_public(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    rate_limit();
+
+    let mut req = ureq::get(API_URL).set("User-Agent", USER_AGENT);
+    req = req.query("api_key", API_KEY);
+    for (key, value) in params {
+        req = req.query(key, value);
+    }
+    req = req.query("format", "json");
+
+    let resp = req
+        .call()
+        .map_err(|e| format!("Last.fm request failed: {}", e))?;
+
+    let text = resp
+        .into_string()
+        .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
+
+    let json: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Last.fm JSON: {}", e))?;
+
+    if let Some(code) = json.get("error") {
+        let msg = json["message"].as_str().unwrap_or("Unknown error");
+        return Err(format!("Last.fm error {}: {}", code, msg));
+    }
+
+    Ok(json)
+}
+
+// ── Public API (authenticated) ──────────────────────────────────
 
 /// Request an authorization token from Last.fm.
 pub fn get_token() -> Result<String, String> {

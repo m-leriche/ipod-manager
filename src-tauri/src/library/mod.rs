@@ -261,6 +261,16 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| format!("Failed to create artist releases tables: {}", e))?;
 
+    // Discover recommendation cache
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS discover_cache (
+            cache_key TEXT PRIMARY KEY,
+            data_json TEXT NOT NULL,
+            cached_at INTEGER NOT NULL DEFAULT 0
+        );",
+    )
+    .map_err(|e| format!("Failed to create discover_cache table: {}", e))?;
+
     // Playback queue persistence table
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS playback_queue (

@@ -16,6 +16,60 @@ import { StreamingSettings } from "./StreamingSettings";
 import { CustomThemeEditor } from "./CustomThemeEditor";
 import type { SettingsModalProps } from "./types";
 
+interface DiscoverSettingsProps {
+  onChanged: () => void;
+}
+
+const DiscoverSettings = ({ onChanged }: DiscoverSettingsProps) => {
+  const [enabled, setEnabled] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    invoke<boolean>("get_discover_enabled")
+      .then((v) => {
+        setEnabled(v);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const toggle = useCallback(
+    async (value: boolean) => {
+      setEnabled(value);
+      try {
+        await invoke("set_discover_enabled", { enabled: value });
+        onChanged();
+      } catch {
+        setEnabled(!value);
+      }
+    },
+    [onChanged],
+  );
+
+  if (!loaded) return null;
+
+  return (
+    <div className="mt-6">
+      <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-1">Discover</span>
+      <p className="text-[10px] text-text-tertiary mb-3">
+        Get artist and album recommendations from Last.fm based on your library.
+      </p>
+      <div className="flex items-center gap-3 px-4 py-3 border border-border rounded-xl">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => toggle(e.target.checked)}
+            className="accent-accent w-3.5 h-3.5"
+            data-testid="discover-toggle"
+          />
+          <span className="text-[11px] text-text-primary">Enable Discover tab</span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
 const THEMES: { id: BuiltinThemeName; label: string; description: string; preview: [string, string, string] }[] = [
   { id: "dark", label: "Dark", description: "Minimal dark theme", preview: ["#000000", "#111111", "#0066FF"] },
   { id: "light", label: "Light", description: "Clean light theme", preview: ["#F4F4F6", "#EDEDEF", "#0066FF"] },
@@ -334,6 +388,9 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
 
           {/* Streaming */}
           <StreamingSettings />
+
+          {/* Discover */}
+          <DiscoverSettings onChanged={() => {}} />
 
           {/* Last.fm */}
           <LastfmSettings />

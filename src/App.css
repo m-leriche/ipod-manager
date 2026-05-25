@@ -1937,3 +1937,12 @@ html[data-theme="custom"] ::-webkit-scrollbar-thumb {
 html[data-theme="custom"] ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-tertiary);
 }
+
+/* ─── Utility: hide scrollbar but keep scroll behavior ─── */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

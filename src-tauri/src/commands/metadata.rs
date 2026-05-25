@@ -166,7 +166,7 @@ pub async fn save_metadata(
 
                 let mut cleaned = 0usize;
                 for path_str in &all_paths {
-                    if !Path::new(path_str).exists()
+                    if library::is_ghost_path(path_str)
                         && conn
                             .execute(
                                 "DELETE FROM tracks WHERE file_path = ?1",

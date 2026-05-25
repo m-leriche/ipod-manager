@@ -342,6 +342,22 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 
 // ── Helpers ────────────────────────────────────────────────────
 
+/// Returns true if the DB path is a ghost: either the file doesn't exist,
+/// or it exists only because the filesystem is case-insensitive (macOS APFS)
+/// and the real on-disk casing differs from what the DB recorded.
+pub(crate) fn is_ghost_path(db_path: &str) -> bool {
+    let p = Path::new(db_path);
+    if !p.exists() {
+        return true;
+    }
+    // On case-insensitive filesystems, "/dd_mm_yyyy/file" resolves to the
+    // real file at "/Dd_Mm_Yyyy/file". Compare canonical path to detect this.
+    p.canonicalize()
+        .ok()
+        .map(|canon| canon.to_string_lossy() != db_path)
+        .unwrap_or(false)
+}
+
 fn now_epoch() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

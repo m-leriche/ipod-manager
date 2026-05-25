@@ -1088,6 +1088,7 @@ html[data-theme="winamp"] .border-t.border-border button.border:hover {
 /* ─── Scrollbar: Winamp style thin dark ─── */
 html[data-theme="winamp"] ::-webkit-scrollbar {
   width: 10px;
+  height: 10px;
 }
 html[data-theme="winamp"] ::-webkit-scrollbar-track {
   background: #111315;
@@ -1451,6 +1452,7 @@ html[data-theme="aqua"] .bg-bg-secondary.border.rounded-2xl {
 /* ─── Scrollbar: Aqua capsule ─── */
 html[data-theme="aqua"] ::-webkit-scrollbar {
   width: 11px;
+  height: 11px;
 }
 html[data-theme="aqua"] ::-webkit-scrollbar-track {
   background: #f0f0f0;
@@ -1846,6 +1848,7 @@ html[data-theme="spotify"] .tabular-nums.text-text-tertiary {
 /* ─── Scrollbar: Spotify-style thin and subtle ─── */
 html[data-theme="spotify"] ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 html[data-theme="spotify"] ::-webkit-scrollbar-track {
   background: transparent;
@@ -1861,6 +1864,7 @@ html[data-theme="spotify"] ::-webkit-scrollbar-thumb:hover {
 /* ─── Scrollbar: classic theme ─── */
 html[data-theme="classic"] ::-webkit-scrollbar {
   width: 12px;
+  height: 12px;
 }
 html[data-theme="classic"] ::-webkit-scrollbar-track {
   background: #d9d7d4;
@@ -1884,6 +1888,7 @@ html[data-theme="classic"] ::-webkit-scrollbar-button {
 html[data-theme="dark"] ::-webkit-scrollbar,
 html:not([data-theme]) ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 html[data-theme="dark"] ::-webkit-scrollbar-track,
 html:not([data-theme]) ::-webkit-scrollbar-track {
@@ -1902,6 +1907,7 @@ html:not([data-theme]) ::-webkit-scrollbar-thumb:hover {
 /* ─── Scrollbar: Win95 theme ─── */
 html[data-theme="win95"] ::-webkit-scrollbar {
   width: 16px;
+  height: 16px;
 }
 html[data-theme="win95"] ::-webkit-scrollbar-track {
   background: #c0c0c0;
@@ -1926,6 +1932,7 @@ html[data-theme="win95"] ::-webkit-scrollbar-button {
 /* ─── Scrollbar: custom themes ─── */
 html[data-theme="custom"] ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 html[data-theme="custom"] ::-webkit-scrollbar-track {
   background: transparent;

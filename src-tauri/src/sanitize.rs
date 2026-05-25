@@ -410,7 +410,7 @@ fn sanitize_id3(
     }
 
     new_tag
-        .write_to_path(path, id3::Version::Id3v24)
+        .write_to_path(path, id3::Version::Id3v23)
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())

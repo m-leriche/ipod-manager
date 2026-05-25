@@ -338,7 +338,11 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
         }
     }
 
-    tag.write_to_path(path, id3::Version::Id3v24)
+    // Write as v2.3 to preserve "/" as literal characters in text frames.
+    // The id3 crate converts "/" → "\0" when writing v2.4 (since "\0" is the
+    // v2.4 multi-value separator), which corrupts artist names like "dd/mm/yyyy"
+    // into three separate values where only the first ("dd") is returned.
+    tag.write_to_path(path, id3::Version::Id3v23)
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())

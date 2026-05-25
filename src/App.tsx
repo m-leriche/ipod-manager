@@ -168,6 +168,23 @@ const AppContent = () => {
     prevMountedRef.current = ipodMounted;
   }, [ipodMounted]);
 
+  // Poll iPod connection at the App level so the StatusBar indicator stays
+  // accurate even when MountPanel (Tools tab) is not mounted.
+  useEffect(() => {
+    const POLL_MS = 10_000;
+    const poll = async () => {
+      try {
+        const info = await invoke<DiskInfo | null>("detect_ipod");
+        setIpodMounted(!!info?.mounted);
+      } catch {
+        setIpodMounted(false);
+      }
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => clearInterval(id);
+  }, []);
+
   useAppEventListeners({
     onOpenSettings: () => setSettingsOpen(true),
     onLibraryChanged: () => libraryRefreshRef.current?.(),

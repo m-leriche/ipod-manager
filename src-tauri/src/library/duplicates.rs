@@ -280,50 +280,14 @@ fn build_group(group_id: usize, fingerprint: String, tracks: Vec<LibraryTrack>) 
 }
 
 fn load_all_tracks(conn: &Connection) -> Result<Vec<LibraryTrack>, String> {
-    let sql = "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
-                sort_artist, sort_album_artist, track_number, track_total, disc_number,
-                disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-                file_size, created_at, play_count, last_played, flagged, rating,
-                replay_gain_track_db, replay_gain_album_db
-         FROM tracks";
+    let sql = format!("SELECT {} FROM tracks", super::SELECT_COLUMNS);
 
     let mut stmt = conn
-        .prepare(sql)
+        .prepare(&sql)
         .map_err(|e| format!("Query failed: {}", e))?;
 
     let rows = stmt
-        .query_map([], |row| {
-            Ok(LibraryTrack {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                file_name: row.get(2)?,
-                folder_path: row.get(3)?,
-                title: row.get(4)?,
-                artist: row.get(5)?,
-                album: row.get(6)?,
-                album_artist: row.get(7)?,
-                sort_artist: row.get(8)?,
-                sort_album_artist: row.get(9)?,
-                track_number: row.get(10)?,
-                track_total: row.get(11)?,
-                disc_number: row.get(12)?,
-                disc_total: row.get(13)?,
-                year: row.get(14)?,
-                genre: row.get(15)?,
-                duration_secs: row.get(16)?,
-                sample_rate: row.get(17)?,
-                bitrate_kbps: row.get(18)?,
-                format: row.get(19)?,
-                file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
-                created_at: row.get(21)?,
-                play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-                last_played: row.get(23)?,
-                flagged: row.get(24)?,
-                rating: row.get::<_, i64>(25).map(|v| v as u8)?,
-                replay_gain_track_db: row.get(26)?,
-                replay_gain_album_db: row.get(27)?,
-            })
-        })
+        .query_map([], super::row_to_track)
         .map_err(|e| format!("Query failed: {}", e))?;
 
     rows.collect::<Result<Vec<_>, _>>()

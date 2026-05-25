@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use unicode_normalization::UnicodeNormalization;
 
 pub const AUDIO_EXT: &[&str] = &[
     "mp3", "flac", "m4a", "ogg", "opus", "wav", "aiff", "wma", "aac",
@@ -12,6 +13,15 @@ pub fn is_audio(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Normalize a path string to Unicode NFC form.
+/// macOS can produce NFD (decomposed) paths where e.g. "á" is stored as
+/// two codepoints (U+0061 + U+0301). This causes duplicate DB entries when
+/// the same file is referenced via NFC and NFD paths. Normalizing to NFC
+/// ensures a single canonical representation.
+pub fn normalize_path(path: &Path) -> PathBuf {
+    PathBuf::from(path.to_string_lossy().nfc().collect::<String>())
+}
+
 pub fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -20,7 +30,7 @@ pub fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) {
     let mut dirs = Vec::new();
 
     for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
+        let path = normalize_path(&entry.path());
         if path
             .file_name()
             .and_then(|n| n.to_str())

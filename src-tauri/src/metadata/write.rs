@@ -122,6 +122,9 @@ fn build_undo_operation(update: &MetadataUpdate, snapshot: &TrackMetadata) -> Me
             .genre
             .as_ref()
             .map(|_| snapshot.genre.clone().unwrap_or_default()),
+        compilation: update
+            .compilation
+            .map(|_| snapshot.compilation.unwrap_or(false)),
     }
 }
 
@@ -221,6 +224,20 @@ fn apply_update_ffmpeg(path: &Path, update: &MetadataUpdate) -> Result<(), Strin
         ("track", track_str),
         ("disc", disc_str),
         ("date", year_val),
+        (
+            "compilation",
+            {
+                let comp = update
+                    .compilation
+                    .unwrap_or_else(|| ex.as_ref().map(|m| m.compilation).unwrap_or(false));
+                if comp {
+                    "1"
+                } else {
+                    "0"
+                }
+            }
+            .to_string(),
+        ),
     ];
 
     let tag_refs: Vec<(&str, &str)> = tags.iter().map(|(k, v)| (*k, v.as_str())).collect();
@@ -310,6 +327,13 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
             tag.add_frame(id3::frame::Frame::text("TSO2", v.as_str()));
         }
     }
+    if let Some(v) = update.compilation {
+        if v {
+            tag.add_frame(id3::frame::Frame::text("TCMP", "1"));
+        } else {
+            tag.remove("TCMP");
+        }
+    }
 
     tag.write_to_path(path, id3::Version::Id3v24)
         .map_err(|e| format!("Save failed: {}", e))?;
@@ -396,6 +420,13 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
             tag.insert_text(ItemKey::AlbumArtistSortOrder, v.to_string());
         }
     }
+    if let Some(v) = update.compilation {
+        if v {
+            tag.insert_text(ItemKey::FlagCompilation, "1".to_string());
+        } else {
+            tag.remove_key(&ItemKey::FlagCompilation);
+        }
+    }
 
     tag.save_to_path(path, WriteOptions::default())
         .map_err(|e| format!("Save failed: {}", e))?;
@@ -423,6 +454,7 @@ mod tests {
             disc_total: Some(2),
             year: Some(1999),
             genre: Some("Rock".to_string()),
+            compilation: Some(false),
         }
     }
 
@@ -442,6 +474,7 @@ mod tests {
             disc_total: None,
             year: Some(2024),
             genre: None,
+            compilation: None,
         };
         let snapshot = make_snapshot();
         let undo = build_undo_operation(&update, &snapshot);
@@ -470,6 +503,7 @@ mod tests {
             disc_total: None,
             year: None,
             genre: None,
+            compilation: None,
         };
         let snapshot = make_snapshot();
         let undo = build_undo_operation(&update, &snapshot);
@@ -494,6 +528,7 @@ mod tests {
             disc_total: None,
             year: None,
             genre: None,
+            compilation: None,
         };
         let snapshot = make_snapshot();
         let undo = build_undo_operation(&update, &snapshot);
@@ -517,6 +552,7 @@ mod tests {
             disc_total: Some(3),
             year: Some(2024),
             genre: Some("Pop".to_string()),
+            compilation: Some(true),
         };
         let snapshot = make_snapshot();
         let undo = build_undo_operation(&update, &snapshot);

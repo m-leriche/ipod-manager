@@ -129,7 +129,7 @@ pub(super) fn build_order_by(filter: &LibraryFilter) -> String {
     };
 
     let sk_title = "sort_key(COALESCE(title, file_name))";
-    let sk_artist = "sort_key(COALESCE(sort_artist, artist, ''))";
+    let sk_artist = "sort_key(COALESCE(NULLIF(sort_album_artist,''), NULLIF(album_artist,''), NULLIF(sort_artist,''), NULLIF(artist,''), ''))";
     let sk_album = "sort_key(COALESCE(album, ''))";
     let sk_genre = "sort_key(COALESCE(genre, ''))";
     let disc_track = "COALESCE(disc_number, 0), COALESCE(track_number, 0)";
@@ -163,7 +163,7 @@ pub(crate) const SELECT_COLUMNS: &str =
      sort_artist, sort_album_artist, track_number, track_total, disc_number,
      disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
      file_size, created_at, play_count, last_played, flagged, rating,
-     replay_gain_track_db, replay_gain_album_db";
+     compilation, replay_gain_track_db, replay_gain_album_db";
 
 pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
     Ok(LibraryTrack {
@@ -193,7 +193,8 @@ pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack
         last_played: row.get(23)?,
         flagged: row.get(24)?,
         rating: row.get::<_, i64>(25).map(|v| v as u8)?,
-        replay_gain_track_db: row.get(26)?,
-        replay_gain_album_db: row.get(27)?,
+        compilation: row.get(26)?,
+        replay_gain_track_db: row.get(27)?,
+        replay_gain_album_db: row.get(28)?,
     })
 }

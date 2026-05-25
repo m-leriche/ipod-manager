@@ -29,6 +29,7 @@ export interface MetadataUpdate {
   disc_total?: number;
   year?: number;
   genre?: string;
+  compilation?: boolean;
 }
 
 export interface MetadataScanProgress {

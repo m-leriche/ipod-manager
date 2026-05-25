@@ -72,50 +72,15 @@ pub fn get_health_issue_tracks(
 ) -> Result<Vec<LibraryTrack>, String> {
     let where_clause = issue_where_clause(issue_id)?;
     let sql = format!(
-        "SELECT id, file_path, file_name, folder_path, title, artist, album, album_artist,
-                sort_artist, sort_album_artist, track_number, track_total, disc_number, disc_total,
-                year, genre, duration_secs, sample_rate, bitrate_kbps, format, file_size,
-                created_at, play_count, last_played, flagged, rating,
-                replay_gain_track_db, replay_gain_album_db
-         FROM tracks WHERE {} ORDER BY file_path",
+        "SELECT {} FROM tracks WHERE {} ORDER BY file_path",
+        super::SELECT_COLUMNS,
         where_clause
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| format!("DB error: {}", e))?;
 
     let rows = stmt
-        .query_map([], |r| {
-            Ok(LibraryTrack {
-                id: r.get(0)?,
-                file_path: r.get(1)?,
-                file_name: r.get(2)?,
-                folder_path: r.get(3)?,
-                title: r.get(4)?,
-                artist: r.get(5)?,
-                album: r.get(6)?,
-                album_artist: r.get(7)?,
-                sort_artist: r.get(8)?,
-                sort_album_artist: r.get(9)?,
-                track_number: r.get(10)?,
-                track_total: r.get(11)?,
-                disc_number: r.get(12)?,
-                disc_total: r.get(13)?,
-                year: r.get(14)?,
-                genre: r.get(15)?,
-                duration_secs: r.get(16)?,
-                sample_rate: r.get(17)?,
-                bitrate_kbps: r.get(18)?,
-                format: r.get(19)?,
-                file_size: r.get::<_, i64>(20).map(|v| v as u64)?,
-                created_at: r.get(21)?,
-                play_count: r.get::<_, i64>(22).map(|v| v as u32)?,
-                last_played: r.get(23)?,
-                flagged: r.get(24)?,
-                rating: r.get::<_, i64>(25).map(|v| v as u8)?,
-                replay_gain_track_db: r.get(26)?,
-                replay_gain_album_db: r.get(27)?,
-            })
-        })
+        .query_map([], super::row_to_track)
         .map_err(|e| format!("DB error: {}", e))?;
 
     rows.collect::<Result<Vec<_>, _>>()
@@ -208,6 +173,7 @@ mod tests {
                 last_played INTEGER,
                 flagged INTEGER NOT NULL DEFAULT 0,
                 rating INTEGER NOT NULL DEFAULT 0,
+                compilation INTEGER NOT NULL DEFAULT 0,
                 replay_gain_track_db REAL,
                 replay_gain_album_db REAL
             );",

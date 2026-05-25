@@ -129,6 +129,7 @@ mod tests {
                 last_played: None,
                 flagged: false,
                 rating: 0,
+                compilation: false,
                 replay_gain_track_db: None,
                 replay_gain_album_db: None,
             },

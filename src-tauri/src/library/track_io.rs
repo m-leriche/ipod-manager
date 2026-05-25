@@ -1,3 +1,4 @@
+use crate::audio_utils::normalize_path;
 use crate::ffprobe_meta;
 use lofty::prelude::{Accessor, AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
@@ -9,12 +10,13 @@ use std::path::Path;
 use super::types::TrackData;
 
 pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
-    let file_path = path.to_string_lossy().to_string();
-    let file_name = path
+    let normalized = normalize_path(path);
+    let file_path = normalized.to_string_lossy().to_string();
+    let file_name = normalized
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let folder_path = path
+    let folder_path = normalized
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
@@ -68,6 +70,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
                 format,
                 file_size,
                 play_count: None,
+                compilation: meta.compilation,
                 lyrics: None,
                 replay_gain_track_db: None,
                 replay_gain_album_db: None,
@@ -98,6 +101,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
         year,
         genre,
         play_count,
+        compilation,
         lyrics,
         replay_gain_track_db,
         replay_gain_album_db,
@@ -131,6 +135,11 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
             }
         });
 
+        let is_compilation = tag
+            .get_string(&ItemKey::FlagCompilation)
+            .map(|s| s.trim() == "1" || s.trim().eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         (
             tag.title().and_then(|s| trim_tag(&s)),
             tag.artist().and_then(|s| trim_tag(&s)),
@@ -147,14 +156,15 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
             tag.year(),
             tag.genre().and_then(|s| trim_tag(&s)),
             pc,
+            is_compilation,
             embedded_lyrics,
             rg_track,
             rg_album,
         )
     } else {
         (
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, false,
+            None, None, None,
         )
     };
 
@@ -180,6 +190,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
         format,
         file_size,
         play_count,
+        compilation,
         lyrics,
         replay_gain_track_db,
         replay_gain_album_db,
@@ -249,11 +260,11 @@ pub(crate) fn upsert_track(
             file_path, file_name, folder_path, title, artist, album, album_artist,
             sort_artist, sort_album_artist, track_number, track_total, disc_number,
             disc_total, year, genre, duration_secs, sample_rate, bitrate_kbps, format,
-            file_size, modified_at, scanned_at, created_at, play_count, lyrics,
-            replay_gain_track_db, replay_gain_album_db
+            file_size, modified_at, scanned_at, created_at, play_count, compilation,
+            lyrics, replay_gain_track_db, replay_gain_album_db
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+            ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28
         )
         ON CONFLICT(file_path) DO UPDATE SET
             file_name=excluded.file_name, folder_path=excluded.folder_path,
@@ -267,6 +278,7 @@ pub(crate) fn upsert_track(
             file_size=excluded.file_size, modified_at=excluded.modified_at,
             scanned_at=excluded.scanned_at,
             play_count=MAX(play_count, excluded.play_count),
+            compilation=excluded.compilation,
             lyrics=COALESCE(excluded.lyrics, lyrics),
             replay_gain_track_db=excluded.replay_gain_track_db,
             replay_gain_album_db=excluded.replay_gain_album_db",
@@ -295,6 +307,7 @@ pub(crate) fn upsert_track(
             now,
             now,
             tag_play_count,
+            t.compilation,
             t.lyrics,
             t.replay_gain_track_db,
             t.replay_gain_album_db,

@@ -28,6 +28,7 @@ pub struct LibraryTrack {
     pub last_played: Option<i64>,
     pub flagged: bool,
     pub rating: u8,
+    pub compilation: bool,
     pub replay_gain_track_db: Option<f32>,
     pub replay_gain_album_db: Option<f32>,
 }
@@ -171,6 +172,7 @@ pub(crate) struct TrackData {
     pub format: String,
     pub file_size: u64,
     pub play_count: Option<u32>,
+    pub compilation: bool,
     pub lyrics: Option<String>,
     pub replay_gain_track_db: Option<f32>,
     pub replay_gain_album_db: Option<f32>,

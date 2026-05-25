@@ -32,8 +32,9 @@ fn map_track(row: &rusqlite::Row, offset: usize) -> rusqlite::Result<LibraryTrac
         last_played: row.get(offset + 23)?,
         flagged: row.get(offset + 24)?,
         rating: row.get::<_, i64>(offset + 25).map(|v| v as u8)?,
-        replay_gain_track_db: row.get(offset + 26)?,
-        replay_gain_album_db: row.get(offset + 27)?,
+        compilation: row.get(offset + 26)?,
+        replay_gain_track_db: row.get(offset + 27)?,
+        replay_gain_album_db: row.get(offset + 28)?,
     })
 }
 
@@ -126,7 +127,7 @@ pub fn get_playlist_tracks(
                       t.track_number, t.track_total, t.disc_number, t.disc_total, t.year,
                       t.genre, t.duration_secs, t.sample_rate, t.bitrate_kbps, t.format,
                       t.file_size, t.created_at, t.play_count, t.last_played, t.flagged, t.rating,
-                      t.replay_gain_track_db, t.replay_gain_album_db
+                      t.compilation, t.replay_gain_track_db, t.replay_gain_album_db
                FROM playlist_tracks pt
                JOIN tracks t ON t.id = pt.track_id
                WHERE pt.playlist_id = ?1

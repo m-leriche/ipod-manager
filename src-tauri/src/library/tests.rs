@@ -1070,8 +1070,24 @@ fn remove_non_nfc_duplicates_keeps_nfd_when_no_nfc_counterpart() {
 fn remove_non_nfc_duplicates_ignores_already_nfc_paths() {
     let conn = test_db();
 
-    insert_test_track(&conn, "/music/normal/song.mp3", "Song", "Artist", "Album", "Rock", 2020);
-    insert_test_track(&conn, "/music/other/song.mp3", "Other", "Artist", "Album", "Rock", 2020);
+    insert_test_track(
+        &conn,
+        "/music/normal/song.mp3",
+        "Song",
+        "Artist",
+        "Album",
+        "Rock",
+        2020,
+    );
+    insert_test_track(
+        &conn,
+        "/music/other/song.mp3",
+        "Other",
+        "Artist",
+        "Album",
+        "Rock",
+        2020,
+    );
 
     let removed = remove_non_nfc_duplicates(&conn).unwrap();
     assert_eq!(removed, 0);

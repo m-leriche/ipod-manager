@@ -26,6 +26,7 @@ fn make_track(
         disc_total: None,
         year: Some(1969),
         genre: Some("Rock".to_string()),
+        compilation: None,
     }
 }
 

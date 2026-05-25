@@ -41,6 +41,7 @@ const stubTrack: LibraryTrack = {
   flagged: false,
   rating: 0,
   replay_gain_track_db: null,
+  compilation: false,
   replay_gain_album_db: null,
 };
 

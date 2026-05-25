@@ -19,6 +19,7 @@ pub struct TrackMetadata {
     pub disc_total: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
+    pub compilation: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +37,7 @@ pub struct MetadataUpdate {
     pub disc_total: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
+    pub compilation: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

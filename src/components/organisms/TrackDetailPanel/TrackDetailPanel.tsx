@@ -240,6 +240,12 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
           onChange={(v) => handleFieldChange("album_artist", v)}
         />
         <EditableField
+          label="Sort Artist"
+          value={editedFields.sort_artist}
+          mixed={mixed.sort_artist}
+          onChange={(v) => handleFieldChange("sort_artist", v)}
+        />
+        <EditableField
           label="Genre"
           value={editedFields.genre}
           mixed={mixed.genre}
@@ -294,6 +300,28 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
             compact
           />
         </div>
+
+        {/* Compilation checkbox */}
+        <div className="flex items-center gap-2 pt-1">
+          <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-widest shrink-0">
+            Compilation
+          </label>
+          {mixed.compilation && editedFields.compilation === "" ? (
+            <span
+              onClick={() => handleFieldChange("compilation", "0")}
+              className="text-[10px] text-text-tertiary/60 italic cursor-pointer hover:text-text-secondary"
+            >
+              (mixed)
+            </span>
+          ) : (
+            <input
+              type="checkbox"
+              checked={editedFields.compilation === "1"}
+              onChange={(e) => handleFieldChange("compilation", e.target.checked ? "1" : "0")}
+              className="w-3 h-3 rounded accent-accent cursor-pointer"
+            />
+          )}
+        </div>
       </div>
 
       {/* Rating */}
@@ -324,6 +352,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
           {track.sample_rate && (
             <DetailRow label="Sample Rate" value={`${(track.sample_rate / 1000).toFixed(1)} kHz`} />
           )}
+          <DetailRow label="Path" value={track.file_path} />
         </div>
       )}
 
@@ -352,7 +381,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
 
 // ── Empty state ───────────────────────────────────────────────
 
-const EMPTY_FIELDS = ["Title", "Artist", "Album", "Album Artist", "Genre", "Year"];
+const EMPTY_FIELDS = ["Title", "Artist", "Album", "Album Artist", "Sort Artist", "Genre", "Year"];
 
 const EMPTY_PAIRED = [
   ["Track No.", "Total Tracks"],

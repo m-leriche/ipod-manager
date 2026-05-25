@@ -196,6 +196,8 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
     let _ = conn
         .execute_batch("ALTER TABLE tracks ADD COLUMN lyrics_not_found INTEGER NOT NULL DEFAULT 0");
+    let _ =
+        conn.execute_batch("ALTER TABLE tracks ADD COLUMN compilation INTEGER NOT NULL DEFAULT 0");
 
     // Smart playlists table
     conn.execute_batch(

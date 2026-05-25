@@ -38,6 +38,7 @@ fn setup_db() -> Connection {
             lyrics TEXT,
             synced_lyrics TEXT,
             lyrics_not_found INTEGER NOT NULL DEFAULT 0,
+            compilation INTEGER NOT NULL DEFAULT 0,
             replay_gain_track_db REAL,
             replay_gain_album_db REAL
         );

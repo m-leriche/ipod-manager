@@ -21,6 +21,7 @@ pub struct FfprobeMetadata {
     pub bitrate_kbps: Option<u32>,
     pub sort_artist: Option<String>,
     pub sort_album_artist: Option<String>,
+    pub compilation: bool,
 }
 
 fn trim_tag(s: &str) -> Option<String> {
@@ -85,6 +86,9 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
     let genre = get_tag(&["genre"]);
     let sort_artist = get_tag(&["sort_artist"]);
     let sort_album_artist = get_tag(&["sort_album_artist"]);
+    let compilation = get_tag(&["compilation"])
+        .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
     let (track, track_total) = tags["track"]
         .as_str()
@@ -140,6 +144,7 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
         bitrate_kbps,
         sort_artist,
         sort_album_artist,
+        compilation,
     })
 }
 

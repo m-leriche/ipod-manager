@@ -20,12 +20,14 @@ export const trackToEditable = (track: LibraryTrack): EditableTrackFields => ({
   artist: track.artist ?? "",
   album: track.album ?? "",
   album_artist: track.album_artist ?? "",
+  sort_artist: track.sort_artist ?? "",
   genre: track.genre ?? "",
   year: track.year?.toString() ?? "",
   track_number: track.track_number?.toString() ?? "",
   track_total: track.track_total?.toString() ?? "",
   disc_number: track.disc_number?.toString() ?? "",
   disc_total: track.disc_total?.toString() ?? "",
+  compilation: track.compilation ? "1" : "0",
 });
 
 export const computeBatchFields = (
@@ -37,12 +39,14 @@ export const computeBatchFields = (
       artist: "",
       album: "",
       album_artist: "",
+      sort_artist: "",
       genre: "",
       year: "",
       track_number: "",
       track_total: "",
       disc_number: "",
       disc_total: "",
+      compilation: "0",
     };
     const mixed = Object.fromEntries(Object.keys(empty).map((k) => [k, false])) as Record<EditableFieldKey, boolean>;
     return { fields: empty, mixed };
@@ -110,6 +114,9 @@ export const buildMetadataUpdates = (
         case "album_artist":
           update.album_artist = editedFields.album_artist;
           break;
+        case "sort_artist":
+          update.sort_artist = editedFields.sort_artist;
+          break;
         case "genre":
           update.genre = editedFields.genre;
           break;
@@ -127,6 +134,9 @@ export const buildMetadataUpdates = (
           break;
         case "disc_total":
           update.disc_total = parseOptionalNumber(editedFields.disc_total);
+          break;
+        case "compilation":
+          update.compilation = editedFields.compilation === "1";
           break;
       }
     }

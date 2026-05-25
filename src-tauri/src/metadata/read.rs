@@ -37,6 +37,7 @@ pub fn read_track(path: &Path) -> TrackMetadata {
                 disc_total: meta.disc_total,
                 year: meta.year,
                 genre: meta.genre,
+                compilation: Some(meta.compilation),
             };
         }
         return empty_track(file_path, file_name);
@@ -44,6 +45,11 @@ pub fn read_track(path: &Path) -> TrackMetadata {
     let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
         return empty_track(file_path, file_name);
     };
+
+    let is_compilation = tag
+        .get_string(&ItemKey::FlagCompilation)
+        .map(|s| s.trim() == "1" || s.trim().eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
     TrackMetadata {
         file_path,
@@ -64,6 +70,7 @@ pub fn read_track(path: &Path) -> TrackMetadata {
         disc_total: tag.disk_total(),
         year: tag.year(),
         genre: tag.genre().map(|s| s.to_string()),
+        compilation: Some(is_compilation),
     }
 }
 
@@ -83,6 +90,7 @@ pub(super) fn empty_track(file_path: String, file_name: String) -> TrackMetadata
         disc_total: None,
         year: None,
         genre: None,
+        compilation: None,
     }
 }
 

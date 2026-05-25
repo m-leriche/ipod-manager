@@ -203,6 +203,9 @@ const AppContent = () => {
           <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>
             Library
           </TopTabButton>
+          <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
+            Tools
+          </TopTabButton>
           {discoverEnabled && (
             <TopTabButton
               active={topTab === "discover"}
@@ -212,9 +215,6 @@ const AppContent = () => {
               Discover
             </TopTabButton>
           )}
-          <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
-            Tools
-          </TopTabButton>
         </div>
         <div className="flex-1" />
         <button

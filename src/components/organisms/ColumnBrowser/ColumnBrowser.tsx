@@ -185,7 +185,12 @@ const BrowserColumn = memo(function BrowserColumn({
   const savedScrollRef = useRef(0);
   const prevSelectedSizeRef = useRef(selected.size);
   const lastClickedIndexRef = useRef<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; value: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    value: string;
+    targetValues: string[];
+  } | null>(null);
 
   // Save scroll position when making a selection, restore when clearing it
   useEffect(() => {
@@ -316,10 +321,22 @@ const BrowserColumn = memo(function BrowserColumn({
     [items, selected, onSelect, focusedIndexRef],
   );
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, value: string) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, value });
-  }, []);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, value: string, index: number) => {
+      e.preventDefault();
+      let targetValues: string[];
+      if (selected.has(value)) {
+        targetValues = Array.from(selected);
+      } else {
+        onSelect(new Set([value]));
+        lastClickedIndexRef.current = index;
+        focusedIndexRef.current = index;
+        targetValues = [value];
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY, value, targetValues });
+    },
+    [selected, onSelect, focusedIndexRef],
+  );
 
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) return [];
@@ -363,19 +380,33 @@ const BrowserColumn = memo(function BrowserColumn({
           ]
         : []),
       ...(onWatchArtist && onUnwatchArtist && isItemWatched
-        ? [
-            {
-              label: isItemWatched(contextMenu.value) ? "Stop Watching Releases" : "Watch for New Releases",
-              onClick: () => {
-                if (isItemWatched(contextMenu.value)) {
-                  onUnwatchArtist(contextMenu.value);
-                } else {
-                  onWatchArtist(contextMenu.value);
-                }
-                setContextMenu(null);
+        ? (() => {
+            const values = contextMenu.targetValues;
+            const allWatched = values.every((v) => isItemWatched(v));
+            const label =
+              values.length > 1
+                ? allWatched
+                  ? `Stop Watching ${values.length} Artists`
+                  : `Watch ${values.length} Artists for New Releases`
+                : allWatched
+                  ? "Stop Watching Releases"
+                  : "Watch for New Releases";
+            return [
+              {
+                label,
+                onClick: () => {
+                  values.forEach((v) => {
+                    if (allWatched) {
+                      onUnwatchArtist(v);
+                    } else if (!isItemWatched(v)) {
+                      onWatchArtist(v);
+                    }
+                  });
+                  setContextMenu(null);
+                },
               },
-            },
-          ]
+            ];
+          })()
         : []),
     ];
   }, [
@@ -432,7 +463,7 @@ const BrowserColumn = memo(function BrowserColumn({
                 }}
                 onClick={(e) => handleItemClick(virtualItem.index, e)}
                 onDoubleClick={onPlay}
-                onContextMenu={(e) => handleContextMenu(e, item.label)}
+                onContextMenu={(e) => handleContextMenu(e, item.label, virtualItem.index)}
                 className={`text-left px-3 text-[11px] truncate transition-colors flex items-center gap-2 ${
                   showArt ? "py-[3px]" : "py-[5px]"
                 } ${isSelected ? "bg-accent text-white" : "text-text-primary hover:bg-bg-hover/50"}`}

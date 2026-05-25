@@ -1,3 +1,4 @@
+mod artist_releases;
 mod audio;
 mod files;
 mod health;
@@ -12,6 +13,7 @@ mod queue;
 mod subsonic;
 mod system;
 
+pub use artist_releases::*;
 pub use audio::*;
 pub use files::*;
 pub use health::*;

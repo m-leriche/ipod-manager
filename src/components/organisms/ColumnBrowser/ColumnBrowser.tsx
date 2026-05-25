@@ -6,6 +6,7 @@ import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnBrowserWidths } from "./useColumnBrowserWidths";
+import { useNewReleases } from "../../../contexts/NewReleasesContext";
 import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/library";
 
 export interface ColumnContextMenuAction {
@@ -54,6 +55,7 @@ export const ColumnBrowser = memo(function ColumnBrowser({
   playlists,
 }: ColumnBrowserProps) {
   const { widths, containerRef, onDragStart } = useColumnBrowserWidths();
+  const { watchArtist, unwatchArtist, isWatched, hasNewReleases } = useNewReleases();
 
   const genreItems = useMemo<BrowserItem[]>(
     () => genres.map((g) => ({ label: g.name, count: g.track_count })),
@@ -105,6 +107,10 @@ export const ColumnBrowser = memo(function ColumnBrowser({
         playlists={playlists}
         widthPercent={`${widths[1] * 100}%`}
         onResizeStart={(e) => onDragStart(1, e)}
+        onWatchArtist={watchArtist}
+        onUnwatchArtist={unwatchArtist}
+        isItemWatched={isWatched}
+        hasItemNewReleases={hasNewReleases}
       />
       <BrowserColumn
         title="Albums"
@@ -142,6 +148,10 @@ interface BrowserColumnProps {
   onResizeStart?: (e: React.MouseEvent) => void;
   isLast?: boolean;
   showArt?: boolean;
+  onWatchArtist?: (name: string) => void;
+  onUnwatchArtist?: (name: string) => void;
+  isItemWatched?: (name: string) => boolean;
+  hasItemNewReleases?: (name: string) => boolean;
 }
 
 const ITEM_HEIGHT = 27;
@@ -165,6 +175,10 @@ const BrowserColumn = memo(function BrowserColumn({
   onResizeStart,
   isLast,
   showArt,
+  onWatchArtist,
+  onUnwatchArtist,
+  isItemWatched,
+  hasItemNewReleases,
 }: BrowserColumnProps) {
   const itemHeight = showArt ? ART_ITEM_HEIGHT : ITEM_HEIGHT;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -348,8 +362,33 @@ const BrowserColumn = memo(function BrowserColumn({
             },
           ]
         : []),
+      ...(onWatchArtist && onUnwatchArtist && isItemWatched
+        ? [
+            {
+              label: isItemWatched(contextMenu.value) ? "Stop Watching Releases" : "Watch for New Releases",
+              onClick: () => {
+                if (isItemWatched(contextMenu.value)) {
+                  onUnwatchArtist(contextMenu.value);
+                } else {
+                  onWatchArtist(contextMenu.value);
+                }
+                setContextMenu(null);
+              },
+            },
+          ]
+        : []),
     ];
-  }, [contextMenu, columnType, onPlayAll, onAddAllToQueue, onAddAllToPlaylist, playlists]);
+  }, [
+    contextMenu,
+    columnType,
+    onPlayAll,
+    onAddAllToQueue,
+    onAddAllToPlaylist,
+    playlists,
+    onWatchArtist,
+    onUnwatchArtist,
+    isItemWatched,
+  ]);
 
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -402,6 +441,13 @@ const BrowserColumn = memo(function BrowserColumn({
                   <AlbumArtwork folderPath={item.folderPath} size="sm" className="!w-6 !h-6 !rounded" />
                 )}
                 <span className="truncate">{item.label}</span>
+                {isItemWatched?.(item.label) && (
+                  <span
+                    className={`w-1 h-1 rounded-full shrink-0 ${
+                      hasItemNewReleases?.(item.label) ? "bg-accent" : "bg-text-tertiary/30"
+                    }`}
+                  />
+                )}
               </button>
             );
           })}

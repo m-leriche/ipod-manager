@@ -15,6 +15,7 @@ import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
 import { BackgroundLyricsProvider } from "./contexts/BackgroundLyricsContext";
+import { NewReleasesProvider, useNewReleases } from "./contexts/NewReleasesContext";
 import { ErrorBoundary } from "./components/atoms/ErrorBoundary/ErrorBoundary";
 import { RetroWindowDots } from "./components/atoms/RetroWindowDots/RetroWindowDots";
 import { ToastContainer } from "./components/atoms/Toast/Toast";
@@ -29,6 +30,7 @@ import type { LibraryScanProgress, LibraryTrack } from "./types/library";
 import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 import type { LibrarySummary } from "./components/molecules/StatusBar/types";
+import { NewReleasesView } from "./components/templates/NewReleasesView/NewReleasesView";
 
 // Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
 const FileManager = lazy(() =>
@@ -67,7 +69,7 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
-type TopTab = "library" | "tools";
+type TopTab = "library" | "tools" | "releases";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
 
 const App = () => (
@@ -81,8 +83,10 @@ const App = () => (
                 <EqualizerProvider>
                   <PlaybackProvider>
                     <PlaylistProvider>
-                      <AppContent />
-                      <ToastContainer />
+                      <NewReleasesProvider>
+                        <AppContent />
+                        <ToastContainer />
+                      </NewReleasesProvider>
                     </PlaylistProvider>
                   </PlaybackProvider>
                 </EqualizerProvider>
@@ -105,6 +109,7 @@ const AppContent = () => {
   const { miniPlayer, toggleMiniPlayer } = useMiniPlayer();
   const lyricsPanelResize = useLyricsPanelWidth();
   const [ipodMounted, setIpodMounted] = useState(false);
+  const { hasAnyNewReleases, checkState: releasesCheckState } = useNewReleases();
 
   const {
     showColumnBrowser,
@@ -187,6 +192,13 @@ const AppContent = () => {
           </TopTabButton>
           <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
             Tools
+          </TopTabButton>
+          <TopTabButton
+            active={topTab === "releases"}
+            onClick={() => setTopTab("releases")}
+            indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
+          >
+            Releases
           </TopTabButton>
         </div>
         <div className="flex-1" />
@@ -324,6 +336,13 @@ const AppContent = () => {
               </div>
             </div>
           )}
+          {topTab === "releases" && (
+            <div className="h-full view-enter">
+              <ErrorBoundary name="New Releases">
+                <NewReleasesView />
+              </ErrorBoundary>
+            </div>
+          )}
         </div>
         {topTab === "library" &&
           showLyricsPanel &&
@@ -386,22 +405,31 @@ const TopTabButton = ({
   active,
   onClick,
   children,
+  indicator,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  indicator?: "accent" | "pulse";
 }) => (
   <button
     role="tab"
     aria-selected={active}
     onClick={onClick}
-    className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+    className={`relative px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
       active
         ? "bg-bg-card text-text-primary border border-border-active"
         : "text-text-tertiary border border-transparent hover:text-text-secondary"
     }`}
   >
     {children}
+    {indicator && (
+      <span
+        className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${
+          indicator === "pulse" ? "bg-accent animate-pulse" : "bg-accent"
+        }`}
+      />
+    )}
   </button>
 );
 

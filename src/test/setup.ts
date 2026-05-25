@@ -173,6 +173,29 @@ vi.mock("../contexts/ThemeContext", () => ({
   isBuiltinTheme: (t: string) => ["dark", "light", "win95", "classic", "winamp", "aqua", "spotify"].includes(t),
 }));
 
+// Mock NewReleasesContext
+vi.mock("../contexts/NewReleasesContext", () => ({
+  useNewReleases: () => ({
+    checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" as const },
+    releases: [],
+    watchedArtists: [],
+    artistsWithNewReleases: new Set(),
+    hasAnyNewReleases: false,
+    lastResult: null,
+    startCheck: vi.fn(),
+    cancelCheck: vi.fn(),
+    watchArtist: vi.fn(),
+    unwatchArtist: vi.fn(),
+    isWatched: () => false,
+    hasNewReleases: () => false,
+    dismissRelease: vi.fn(),
+    refreshReleases: vi.fn(),
+    refreshWatchedArtists: vi.fn(),
+    clearResult: vi.fn(),
+  }),
+  NewReleasesProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),

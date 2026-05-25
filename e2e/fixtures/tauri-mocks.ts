@@ -141,6 +141,21 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   // Subsonic
   get_subsonic_status: { enabled: false, port: 4533, username: "", urls: [] },
 
+  // New Releases
+  get_watched_artists: [],
+  get_discovered_releases: [],
+  get_artists_with_new_releases: [],
+  get_last_releases_check: null,
+  check_new_releases: { artists_checked: 0, new_releases_found: 0, failed_lookups: 0, cancelled: false },
+  cancel_new_releases_check: null,
+  watch_artist: { id: 0, name: "", mb_artist_id: null, mb_artist_name: null, match_status: "pending", created_at: 0, last_checked_at: 0 },
+  unwatch_artist: null,
+  dismiss_release: null,
+  is_artist_watched: false,
+  search_artist_mbid: [],
+  set_watched_artist_mbid: null,
+  clear_discovered_releases: null,
+
   // Last.fm
   lastfm_get_token: { token: "mock-token", auth_url: "https://www.last.fm/api/auth/" },
   lastfm_get_session: "mock-user",

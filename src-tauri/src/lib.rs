@@ -1,5 +1,6 @@
 mod acoustid;
 mod albumart;
+mod artist_releases;
 mod audio;
 mod audio_utils;
 mod audioquality;
@@ -33,7 +34,7 @@ mod volume_monitor;
 mod watcher;
 mod youtube;
 
-use files::{ArtRepairCancel, LyricsCancel, SyncCancel};
+use files::{ArtRepairCancel, LyricsCancel, NewReleasesCancel, SyncCancel};
 use library::LibraryDb;
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -67,6 +68,7 @@ pub fn run() {
         .manage(SyncCancel::new())
         .manage(ArtRepairCancel::new())
         .manage(LyricsCancel::new())
+        .manage(NewReleasesCancel::new())
         .setup(|app| {
             // Initialize library database
             let db_path = app
@@ -358,6 +360,19 @@ pub fn run() {
             commands::save_playback_queue,
             commands::load_playback_queue,
             commands::clear_playback_queue,
+            commands::get_watched_artists,
+            commands::watch_artist,
+            commands::unwatch_artist,
+            commands::is_artist_watched,
+            commands::check_new_releases,
+            commands::cancel_new_releases_check,
+            commands::get_discovered_releases,
+            commands::dismiss_release,
+            commands::search_artist_mbid,
+            commands::set_watched_artist_mbid,
+            commands::get_artists_with_new_releases,
+            commands::get_last_releases_check,
+            commands::clear_discovered_releases,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

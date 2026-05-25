@@ -2,65 +2,12 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { LibraryTrack } from "../../types/library";
-import type { PlaybackState, PlaybackTimeState, PlaybackContextValue, RepeatMode, ReplayGainMode } from "./types";
-import {
-  loadVolume,
-  saveVolume,
-  loadCrossfade,
-  saveCrossfade,
-  loadSpeed,
-  saveSpeed,
-  savePlaybackState,
-  loadPlaybackState,
-  loadReplayGainEnabled,
-  saveReplayGainEnabled,
-  loadReplayGainMode,
-  saveReplayGainMode,
-} from "./persistence";
-
-// ── Shuffle helpers ─────────────────────────────────────────────
-
-const shuffleIndices = (length: number, currentIndex: number): number[] => {
-  const indices = Array.from({ length }, (_, i) => i).filter((i) => i !== currentIndex);
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  return [currentIndex, ...indices];
-};
-
-// ── Initial state ───────────────────────────────────────────────
-
-const initialState: PlaybackState = {
-  currentTrack: null,
-  isPlaying: false,
-  volume: loadVolume(),
-  speed: loadSpeed(),
-  crossfade: loadCrossfade(),
-  replayGainEnabled: loadReplayGainEnabled(),
-  replayGainMode: loadReplayGainMode() as ReplayGainMode,
-  queue: [],
-  queueIndex: -1,
-  shuffle: false,
-  repeat: "off",
-  libraryAvailable: true,
-  playbackError: null,
-};
-
-/** Convert a ReplayGain dB value to a linear amplitude multiplier. */
-const dbToLinear = (db: number): number => Math.pow(10, db / 20);
-
-/** Compute the linear gain for a track based on current ReplayGain settings. */
-const computeReplayGain = (track: LibraryTrack | null, enabled: boolean, mode: ReplayGainMode): number => {
-  if (!enabled || !track) return 1.0;
-  const db = mode === "album" ? (track.replay_gain_album_db ?? track.replay_gain_track_db) : track.replay_gain_track_db;
-  return db != null ? dbToLinear(db) : 1.0;
-};
-
-const initialTime: PlaybackTimeState = {
-  currentTime: 0,
-  duration: 0,
-};
+import type { PlaybackState, PlaybackTimeState, PlaybackContextValue } from "./types";
+import { savePlaybackState, loadPlaybackState } from "./persistence";
+import { shuffleIndices, initialState, initialTime, computeReplayGain } from "./helpers";
+import { useQueueOperations } from "./useQueueOperations";
+import { usePlaybackSettings } from "./usePlaybackSettings";
+import { useEngineEvents } from "./useEngineEvents";
 
 // ── Hook ────────────────────────────────────────────────────────
 
@@ -188,116 +135,29 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     };
   }, [checkLibraryAvailable]);
 
+  // Tracks the queue index for which a time-based preload was issued.
+  const timePreloadedForRef = useRef(-1);
+
   // ── Listen for Rust audio engine events ──────────────────────
-
-  useEffect(() => {
-    let active = true;
-    const unlisteners: Array<() => void> = [];
-
-    const register = (promise: Promise<() => void>) => {
-      promise.then((unlisten) => {
-        if (active) unlisteners.push(unlisten);
-        else unlisten();
-      });
-    };
-
-    register(
-      listen<{ position: number; duration: number }>("audio:position", (event) => {
-        if (!active) return;
-        const { position, duration } = event.payload;
-        lastPositionRef.current = position;
-        lastPositionTimeRef.current = performance.now();
-        setTime((prev) => {
-          const newDur = duration > 0 ? duration : prev.duration;
-          return { currentTime: position, duration: newDur };
-        });
-
-        // Time-based preload: check if we're close enough to EOF to need
-        // the next track ready. Runs at engine event rate (~20Hz) instead
-        // of on every interpolated time tick.
-        if (duration > 0) {
-          const s = stateRef.current;
-          if (s.isPlaying && s.repeat !== "one" && timePreloadedForRef.current !== s.queueIndex) {
-            const threshold = Math.max(s.crossfade + 5, 10);
-            const remaining = duration - position;
-            if (remaining <= threshold && remaining > 0) {
-              timePreloadedForRef.current = s.queueIndex;
-              const nextIdx = getNextIndexRef.current();
-              if (nextIdx !== null && s.queue[nextIdx]) {
-                invoke("audio_preload_next", { path: s.queue[nextIdx].file_path }).catch(() => {});
-              }
-            }
-          }
-        }
-      }),
-    );
-
-    register(
-      listen<number>("audio:duration-ready", (event) => {
-        if (!active) return;
-        const dur = event.payload;
-        if (dur > 0) {
-          setTime((prev) => ({ ...prev, duration: dur }));
-        }
-      }),
-    );
-
-    register(
-      listen("audio:track-ended", () => {
-        if (active) onTrackEndedRef.current();
-      }),
-    );
-
-    register(
-      listen("audio:gapless-transition", () => {
-        if (active) onGaplessTransitionRef.current();
-      }),
-    );
-
-    register(
-      listen<string>("audio:error", (event) => {
-        if (!active) return;
-        console.warn("Audio error:", event.payload);
-        const msg = event.payload.includes("Failed to open")
-          ? "File not available \u2014 drive may be disconnected"
-          : "Playback error";
-        setState((prev) => ({ ...prev, isPlaying: false, playbackError: msg }));
-      }),
-    );
-
-    // ── System media key events (play/pause button, etc.) ──────
-    register(
-      listen("mediakey:toggle", () => {
-        if (active) onMediaToggleRef.current();
-      }),
-    );
-    register(
-      listen("mediakey:play", () => {
-        if (active) onMediaPlayRef.current();
-      }),
-    );
-    register(
-      listen("mediakey:pause", () => {
-        if (active) onMediaPauseRef.current();
-      }),
-    );
-    register(
-      listen("mediakey:next", () => {
-        if (active) onMediaNextRef.current();
-      }),
-    );
-    register(
-      listen("mediakey:previous", () => {
-        if (active) onMediaPreviousRef.current();
-      }),
-    );
-
-    return () => {
-      active = false;
-      unlisteners.forEach((fn) => fn());
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
+  useEngineEvents(
+    {
+      lastPositionRef,
+      lastPositionTimeRef,
+      stateRef,
+      timePreloadedForRef,
+      getNextIndexRef,
+      onTrackEndedRef,
+      onGaplessTransitionRef,
+      onMediaToggleRef,
+      onMediaPlayRef,
+      onMediaPauseRef,
+      onMediaNextRef,
+      onMediaPreviousRef,
+      rafRef,
+    },
+    setTime,
+    setState,
+  );
 
   // ── rAF loop for smooth position interpolation ───────────────
 
@@ -551,10 +411,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   // ── Preload next track for gapless playback ──────────────────
 
-  // Tracks the queue index for which a time-based preload was issued.
-  // When queue index changes, the preload is implicitly stale.
-  const timePreloadedForRef = useRef(-1);
-
   // Immediate preload: fire whenever queue position or settings change
   useEffect(() => {
     if (!state.isPlaying || state.queue.length === 0) return;
@@ -760,112 +616,15 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     invoke("audio_seek", { positionSecs: t }).catch((e) => console.warn("audio_seek failed:", e));
   }, []);
 
-  const setVolume = useCallback((volume: number) => {
-    const clamped = Math.max(0, Math.min(1, volume));
-    invoke("audio_set_volume", { volume: clamped }).catch((e) => console.warn("audio_set_volume failed:", e));
-    saveVolume(clamped);
-    setState((prev) => ({ ...prev, volume: clamped }));
-  }, []);
+  // ── Extracted hooks ───────────────────────────────────────────
 
-  const addToQueue = useCallback((tracks: LibraryTrack[]) => {
-    setState((prev) => ({
-      ...prev,
-      queue: [...prev.queue, ...tracks],
-    }));
-  }, []);
+  const { addToQueue, playNext, removeFromQueue, reorderQueue, clearQueue, toggleShuffle, cycleRepeat } =
+    useQueueOperations(setState, shuffleOrderRef, shufflePositionRef);
 
-  const playNext = useCallback((tracks: LibraryTrack[]) => {
-    setState((prev) => {
-      const insertAt = prev.queueIndex + 1;
-      const newQueue = [...prev.queue];
-      newQueue.splice(insertAt, 0, ...tracks);
-      return { ...prev, queue: newQueue };
-    });
-  }, []);
-
-  const removeFromQueue = useCallback((index: number) => {
-    setState((prev) => {
-      const newQueue = prev.queue.filter((_, i) => i !== index);
-      let newIndex = prev.queueIndex;
-      if (index < prev.queueIndex) newIndex -= 1;
-      else if (index === prev.queueIndex) newIndex = -1;
-      return { ...prev, queue: newQueue, queueIndex: newIndex };
-    });
-  }, []);
-
-  const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
-    setState((prev) => {
-      const newQueue = [...prev.queue];
-      const [moved] = newQueue.splice(fromIndex, 1);
-      newQueue.splice(toIndex, 0, moved);
-
-      let newIndex = prev.queueIndex;
-      if (fromIndex === prev.queueIndex) {
-        newIndex = toIndex;
-      } else {
-        if (fromIndex < prev.queueIndex && toIndex >= prev.queueIndex) newIndex -= 1;
-        if (fromIndex > prev.queueIndex && toIndex <= prev.queueIndex) newIndex += 1;
-      }
-
-      return { ...prev, queue: newQueue, queueIndex: newIndex };
-    });
-  }, []);
-
-  const clearQueue = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      queue: prev.currentTrack ? [prev.currentTrack] : [],
-      queueIndex: prev.currentTrack ? 0 : -1,
-    }));
-  }, []);
-
-  const toggleShuffle = useCallback(() => {
-    setState((prev) => {
-      const newShuffle = !prev.shuffle;
-      if (newShuffle && prev.queue.length > 0) {
-        shuffleOrderRef.current = shuffleIndices(prev.queue.length, prev.queueIndex);
-        shufflePositionRef.current = 0;
-      }
-      return { ...prev, shuffle: newShuffle };
-    });
-  }, []);
-
-  const cycleRepeat = useCallback(() => {
-    setState((prev) => {
-      const modes: RepeatMode[] = ["off", "all", "one"];
-      const nextIdx = (modes.indexOf(prev.repeat) + 1) % modes.length;
-      return { ...prev, repeat: modes[nextIdx] };
-    });
-  }, []);
-
-  const setSpeed = useCallback((speed: number) => {
-    const clamped = Math.max(0.25, Math.min(4, speed));
-    invoke("audio_set_speed", { speed: clamped }).catch((e) => console.warn("audio_set_speed failed:", e));
-    saveSpeed(clamped);
-    setState((prev) => ({ ...prev, speed: clamped }));
-  }, []);
-
-  const setCrossfade = useCallback((seconds: number) => {
-    const clamped = Math.max(0, Math.min(12, seconds));
-    invoke("audio_set_crossfade", { durationSecs: clamped }).catch((e) =>
-      console.warn("audio_set_crossfade failed:", e),
-    );
-    saveCrossfade(clamped);
-    setState((prev) => ({ ...prev, crossfade: clamped }));
-  }, []);
-
-  const setReplayGain = useCallback((enabled: boolean, mode?: ReplayGainMode) => {
-    const newMode = mode ?? stateRef.current.replayGainMode;
-    saveReplayGainEnabled(enabled);
-    saveReplayGainMode(newMode);
-    setState((prev) => ({ ...prev, replayGainEnabled: enabled, replayGainMode: newMode }));
-    const gain = computeReplayGain(stateRef.current.currentTrack, enabled, newMode);
-    invoke("audio_set_replay_gain", { gain }).catch(() => {});
-  }, []);
-
-  const clearPlaybackError = useCallback(() => {
-    setState((prev) => (prev.playbackError ? { ...prev, playbackError: null } : prev));
-  }, []);
+  const { setVolume, setSpeed, setCrossfade, setReplayGain, clearPlaybackError } = usePlaybackSettings(
+    setState,
+    stateRef,
+  );
 
   // Memoize the main context value so time-only updates don't re-render consumers
   const value = useMemo<PlaybackContextValue>(

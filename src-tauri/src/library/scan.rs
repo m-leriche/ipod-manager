@@ -251,38 +251,7 @@ pub fn background_rescan_all_folders(
         changed += 1;
     }
 
-    // Remove non-NFC duplicate entries left over from before path normalization.
-    // If both NFC and NFD versions of a path exist, delete the non-NFC one.
-    let mut removed = 0;
-    {
-        let mut stmt = conn
-            .prepare("SELECT id, file_path FROM tracks")
-            .map_err(|e| format!("Query failed: {}", e))?;
-        let all_entries: Vec<(i64, String)> = stmt
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(|e| format!("Query failed: {}", e))?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        for (id, path) in &all_entries {
-            let nfc: String = path.nfc().collect();
-            if *path != nfc {
-                // This entry has a non-NFC path — check if the NFC version exists
-                let nfc_exists: bool = conn
-                    .query_row(
-                        "SELECT 1 FROM tracks WHERE file_path = ?1",
-                        params![nfc],
-                        |_| Ok(true),
-                    )
-                    .unwrap_or(false);
-                if nfc_exists {
-                    conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])
-                        .ok();
-                    removed += 1;
-                }
-            }
-        }
-    }
+    let mut removed = remove_non_nfc_duplicates(conn)?;
 
     // Remove orphaned tracks (files deleted from disk)
     for folder in &folders {
@@ -318,4 +287,39 @@ pub fn background_rescan_all_folders(
         removed,
         total_scanned: total,
     })
+}
+
+/// Remove non-NFC duplicate entries left over from before path normalization.
+/// If both NFC and NFD versions of a path exist, delete the non-NFC one.
+/// Returns the number of entries removed.
+pub(super) fn remove_non_nfc_duplicates(conn: &Connection) -> Result<usize, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, file_path FROM tracks")
+        .map_err(|e| format!("Query failed: {}", e))?;
+    let all_entries: Vec<(i64, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(|e| format!("Query failed: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut removed = 0;
+    for (id, path) in &all_entries {
+        let nfc: String = path.nfc().collect();
+        if *path != nfc {
+            // This entry has a non-NFC path — check if the NFC version exists
+            let nfc_exists: bool = conn
+                .query_row(
+                    "SELECT 1 FROM tracks WHERE file_path = ?1",
+                    params![nfc],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false);
+            if nfc_exists {
+                conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])
+                    .ok();
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
 }

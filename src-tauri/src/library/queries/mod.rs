@@ -166,35 +166,45 @@ pub(crate) const SELECT_COLUMNS: &str =
      compilation, replay_gain_track_db, replay_gain_album_db";
 
 pub(crate) fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<LibraryTrack> {
+    row_to_track_at(row, 0)
+}
+
+/// Map a row to a `LibraryTrack` starting at the given column offset.
+/// Use offset > 0 when preceding columns (e.g. playlist position) are
+/// selected before the standard track columns.
+pub(crate) fn row_to_track_at(
+    row: &rusqlite::Row,
+    offset: usize,
+) -> rusqlite::Result<LibraryTrack> {
     Ok(LibraryTrack {
-        id: row.get(0)?,
-        file_path: row.get(1)?,
-        file_name: row.get(2)?,
-        folder_path: row.get(3)?,
-        title: row.get(4)?,
-        artist: row.get(5)?,
-        album: row.get(6)?,
-        album_artist: row.get(7)?,
-        sort_artist: row.get(8)?,
-        sort_album_artist: row.get(9)?,
-        track_number: row.get(10)?,
-        track_total: row.get(11)?,
-        disc_number: row.get(12)?,
-        disc_total: row.get(13)?,
-        year: row.get(14)?,
-        genre: row.get(15)?,
-        duration_secs: row.get(16)?,
-        sample_rate: row.get(17)?,
-        bitrate_kbps: row.get(18)?,
-        format: row.get(19)?,
-        file_size: row.get::<_, i64>(20).map(|v| v as u64)?,
-        created_at: row.get(21)?,
-        play_count: row.get::<_, i64>(22).map(|v| v as u32)?,
-        last_played: row.get(23)?,
-        flagged: row.get(24)?,
-        rating: row.get::<_, i64>(25).map(|v| v as u8)?,
-        compilation: row.get(26)?,
-        replay_gain_track_db: row.get(27)?,
-        replay_gain_album_db: row.get(28)?,
+        id: row.get(offset)?,
+        file_path: row.get(offset + 1)?,
+        file_name: row.get(offset + 2)?,
+        folder_path: row.get(offset + 3)?,
+        title: row.get(offset + 4)?,
+        artist: row.get(offset + 5)?,
+        album: row.get(offset + 6)?,
+        album_artist: row.get(offset + 7)?,
+        sort_artist: row.get(offset + 8)?,
+        sort_album_artist: row.get(offset + 9)?,
+        track_number: row.get(offset + 10)?,
+        track_total: row.get(offset + 11)?,
+        disc_number: row.get(offset + 12)?,
+        disc_total: row.get(offset + 13)?,
+        year: row.get(offset + 14)?,
+        genre: row.get(offset + 15)?,
+        duration_secs: row.get(offset + 16)?,
+        sample_rate: row.get(offset + 17)?,
+        bitrate_kbps: row.get(offset + 18)?,
+        format: row.get(offset + 19)?,
+        file_size: row.get::<_, i64>(offset + 20).map(|v| v as u64)?,
+        created_at: row.get(offset + 21)?,
+        play_count: row.get::<_, i64>(offset + 22).map(|v| v as u32)?,
+        last_played: row.get(offset + 23)?,
+        flagged: row.get(offset + 24)?,
+        rating: row.get::<_, i64>(offset + 25).map(|v| v as u8)?,
+        compilation: row.get(offset + 26)?,
+        replay_gain_track_db: row.get(offset + 27)?,
+        replay_gain_album_db: row.get(offset + 28)?,
     })
 }

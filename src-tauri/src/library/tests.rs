@@ -1,6 +1,7 @@
 use crate::library::*;
 use crate::library::{
-    delete::delete_tracks, import::compute_library_dest, track_io::upsert_track, types::TrackData,
+    delete::delete_tracks, import::compute_library_dest, scan::remove_non_nfc_duplicates,
+    track_io::upsert_track, types::TrackData,
 };
 use rusqlite::Connection;
 use std::path::Path;
@@ -1002,4 +1003,81 @@ fn large_batch_insert_and_query() {
     )
     .unwrap();
     assert_eq!(flagged.len(), 500);
+}
+
+// ── Unicode NFC duplicate cleanup ───────────────────────────────
+
+#[test]
+fn remove_non_nfc_duplicates_deletes_nfd_when_nfc_exists() {
+    let conn = test_db();
+
+    // "é" in NFC (U+00E9) vs NFD (U+0065 U+0301)
+    let nfc_path = "/music/Caf\u{00e9}/song.mp3";
+    let nfd_path = "/music/Cafe\u{0301}/song.mp3";
+    assert_ne!(nfc_path, nfd_path);
+
+    // Insert both variants directly via SQL to simulate pre-normalization state
+    conn.execute(
+        "INSERT INTO tracks (file_path, file_name, folder_path, format) VALUES (?1, 'song.mp3', '/music/nfc', 'MP3')",
+        rusqlite::params![nfc_path],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO tracks (file_path, file_name, folder_path, format) VALUES (?1, 'song.mp3', '/music/nfd', 'MP3')",
+        rusqlite::params![nfd_path],
+    ).unwrap();
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 2);
+
+    let removed = remove_non_nfc_duplicates(&conn).unwrap();
+    assert_eq!(removed, 1);
+
+    // Only the NFC entry should remain
+    let remaining: Vec<String> = conn
+        .prepare("SELECT file_path FROM tracks")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0], nfc_path);
+}
+
+#[test]
+fn remove_non_nfc_duplicates_keeps_nfd_when_no_nfc_counterpart() {
+    let conn = test_db();
+
+    // Only the NFD version exists — should not be removed
+    let nfd_path = "/music/Cafe\u{0301}/song.mp3";
+    conn.execute(
+        "INSERT INTO tracks (file_path, file_name, folder_path, format) VALUES (?1, 'song.mp3', '/music/nfd', 'MP3')",
+        rusqlite::params![nfd_path],
+    ).unwrap();
+
+    let removed = remove_non_nfc_duplicates(&conn).unwrap();
+    assert_eq!(removed, 0);
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn remove_non_nfc_duplicates_ignores_already_nfc_paths() {
+    let conn = test_db();
+
+    insert_test_track(&conn, "/music/normal/song.mp3", "Song", "Artist", "Album", "Rock", 2020);
+    insert_test_track(&conn, "/music/other/song.mp3", "Other", "Artist", "Album", "Rock", 2020);
+
+    let removed = remove_non_nfc_duplicates(&conn).unwrap();
+    assert_eq!(removed, 0);
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 2);
 }

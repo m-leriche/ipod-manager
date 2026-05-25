@@ -224,6 +224,9 @@ fn apply_update_ffmpeg(path: &Path, update: &MetadataUpdate) -> Result<(), Strin
         ("track", track_str),
         ("disc", disc_str),
         ("date", year_val),
+        // compilation is bool, not Option<String>, so it can't use resolve().
+        // write_metadata strips all existing metadata (-map_metadata -1) and
+        // rewrites from scratch, so every field must be written unconditionally.
         (
             "compilation",
             {

@@ -187,15 +187,16 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   // ── Column browser context menu handlers ──────────────────────
 
   const getTracksForColumnAction = useCallback(
-    (action: { column: string; value: string }) => {
+    (action: { column: string; values: string[] }) => {
+      const valSet = new Set(action.values);
       return tracks.filter((t) => {
         switch (action.column) {
           case "genre":
-            return t.genre === action.value;
+            return t.genre != null && valSet.has(t.genre);
           case "artist":
-            return t.artist === action.value;
+            return t.artist != null && valSet.has(t.artist);
           case "album":
-            return t.album === action.value;
+            return t.album != null && valSet.has(t.album);
           default:
             return false;
         }
@@ -205,7 +206,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   );
 
   const handleColumnPlayAll = useCallback(
-    async (action: { column: string; value: string }) => {
+    async (action: { column: string; values: string[] }) => {
       const matched = getTracksForColumnAction(action);
       if (matched.length > 0) {
         playTrack(matched[0], matched);
@@ -215,9 +216,9 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
         const filter: LibraryFilter = {
           sort_by: "track_number",
           sort_direction: "asc",
-          ...(action.column === "genre" ? { genre: [action.value] } : {}),
-          ...(action.column === "artist" ? { artist: [action.value] } : {}),
-          ...(action.column === "album" ? { album: [action.value] } : {}),
+          ...(action.column === "genre" ? { genre: action.values } : {}),
+          ...(action.column === "artist" ? { artist: action.values } : {}),
+          ...(action.column === "album" ? { album: action.values } : {}),
         };
         const fetched = await invoke<LibraryTrack[]>("get_library_tracks", { filter });
         if (fetched.length > 0) playTrack(fetched[0], fetched);
@@ -229,7 +230,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   );
 
   const handleColumnAddToQueue = useCallback(
-    (action: { column: string; value: string }) => {
+    (action: { column: string; values: string[] }) => {
       const matched = getTracksForColumnAction(action);
       if (matched.length > 0) addToQueue(matched);
     },
@@ -237,7 +238,7 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   );
 
   const handleColumnAddToPlaylist = useCallback(
-    (action: { column: string; value: string }, playlistId: number) => {
+    (action: { column: string; values: string[] }, playlistId: number) => {
       const matched = getTracksForColumnAction(action);
       if (matched.length > 0)
         addToPlaylistCtx(

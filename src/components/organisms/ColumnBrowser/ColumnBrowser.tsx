@@ -11,7 +11,7 @@ import type { GenreSummary, ArtistSummary, AlbumSummary } from "../../../types/l
 
 export interface ColumnContextMenuAction {
   column: "genre" | "artist" | "album";
-  value: string;
+  values: string[];
 }
 
 interface ColumnBrowserProps {
@@ -340,7 +340,18 @@ const BrowserColumn = memo(function BrowserColumn({
 
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) return [];
-    const action: ColumnContextMenuAction = { column: columnType, value: contextMenu.value };
+    const action: ColumnContextMenuAction = { column: columnType, values: contextMenu.targetValues };
+
+    const allWatched = onWatchArtist && isItemWatched ? contextMenu.targetValues.every((v) => isItemWatched(v)) : false;
+    const watchLabel =
+      contextMenu.targetValues.length > 1
+        ? allWatched
+          ? `Stop Watching ${contextMenu.targetValues.length} Artists`
+          : `Watch ${contextMenu.targetValues.length} Artists for New Releases`
+        : allWatched
+          ? "Stop Watching Releases"
+          : "Watch for New Releases";
+
     return [
       ...(onPlayAll
         ? [
@@ -380,33 +391,21 @@ const BrowserColumn = memo(function BrowserColumn({
           ]
         : []),
       ...(onWatchArtist && onUnwatchArtist && isItemWatched
-        ? (() => {
-            const values = contextMenu.targetValues;
-            const allWatched = values.every((v) => isItemWatched(v));
-            const label =
-              values.length > 1
-                ? allWatched
-                  ? `Stop Watching ${values.length} Artists`
-                  : `Watch ${values.length} Artists for New Releases`
-                : allWatched
-                  ? "Stop Watching Releases"
-                  : "Watch for New Releases";
-            return [
-              {
-                label,
-                onClick: () => {
-                  values.forEach((v) => {
-                    if (allWatched) {
-                      onUnwatchArtist(v);
-                    } else if (!isItemWatched(v)) {
-                      onWatchArtist(v);
-                    }
-                  });
-                  setContextMenu(null);
-                },
+        ? [
+            {
+              label: watchLabel,
+              onClick: () => {
+                contextMenu.targetValues.forEach((v) => {
+                  if (allWatched) {
+                    onUnwatchArtist(v);
+                  } else if (!isItemWatched(v)) {
+                    onWatchArtist(v);
+                  }
+                });
+                setContextMenu(null);
               },
-            ];
-          })()
+            },
+          ]
         : []),
     ];
   }, [

@@ -273,7 +273,7 @@ export const LibraryPlayer = ({
                       albums={data.albumList}
                       selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
                       onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
-                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", values: [name] })}
                       sortMode={data.albumSortMode}
                       onSortModeChange={data.handleAlbumSortModeChange}
                       artists={data.artistList}
@@ -298,7 +298,7 @@ export const LibraryPlayer = ({
                       albums={data.albumList}
                       selectedAlbum={data.selectedAlbums.size === 1 ? [...data.selectedAlbums][0] : null}
                       onSelectAlbum={(name) => data.handleSelectAlbum(name ? new Set([name]) : new Set())}
-                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", value: name })}
+                      onPlayAlbum={(name) => actions.handleColumnPlayAll({ column: "album", values: [name] })}
                       onFixAlbumArt={actions.handleFixAlbumArtForAlbum}
                       onUploadAlbumArt={actions.handleUploadAlbumArt}
                       onFixAllAlbumArt={startArtRepair}

@@ -176,7 +176,7 @@ vi.mock("../contexts/ThemeContext", () => ({
 // Mock NewReleasesContext
 vi.mock("../contexts/NewReleasesContext", () => ({
   useNewReleases: () => ({
-    checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" },
+    checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" as const },
     releases: [],
     watchedArtists: [],
     artistsWithNewReleases: new Set(),

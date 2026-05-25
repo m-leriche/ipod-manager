@@ -8,12 +8,14 @@ import type {
   NewReleasesCheckResult,
 } from "../types/releases";
 
+type CheckPhase = "resolving_mbid" | "fetching_releases" | "done" | "";
+
 interface CheckState {
   active: boolean;
   totalArtists: number;
   completedArtists: number;
   currentArtist: string;
-  phase: string;
+  phase: CheckPhase;
 }
 
 interface NewReleasesContextValue {

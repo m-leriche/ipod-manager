@@ -8,7 +8,7 @@ vi.mock("../../../contexts/NewReleasesContext");
 const mockUseNewReleases = vi.mocked(useNewReleases);
 
 const baseContext = {
-  checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" },
+  checkState: { active: false, totalArtists: 0, completedArtists: 0, currentArtist: "", phase: "" as const },
   releases: [],
   watchedArtists: [],
   artistsWithNewReleases: new Set<string>(),

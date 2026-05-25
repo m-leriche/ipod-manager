@@ -25,7 +25,7 @@ export interface NewReleasesCheckProgress {
   total_artists: number;
   completed_artists: number;
   current_artist: string;
-  phase: string;
+  phase: "resolving_mbid" | "fetching_releases" | "done";
 }
 
 export interface NewReleasesCheckResult {

@@ -50,9 +50,11 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
           setStatus("not_found");
           delay = Math.min(delay * 2, MAX_MS);
         }
-      } catch {
+      } catch (err) {
         setDiskInfo(null);
         setStatus("not_found");
+        // Show the first poll error without spamming on repeated failures
+        setMessage((prev) => prev ?? { text: `Detection failed: ${err}`, type: "error" });
         delay = Math.min(delay * 2, MAX_MS);
       }
       if (!cancelled) timeoutId = setTimeout(schedulePoll, delay);

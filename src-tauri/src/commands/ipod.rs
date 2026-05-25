@@ -69,6 +69,8 @@ fn validate_mount_point(path: &str) -> Result<(), AppError> {
 
 /// Validate that a disk identifier matches the macOS `diskNsN` pattern
 /// (e.g. `disk0`, `disk5s2`, `disk12s1`).
+/// Note: APFS synthesized identifiers like `disk3s1s1` will be rejected.
+/// This is fine for iPods (FAT32/HFS+) but would need adjustment if reused.
 fn validate_disk_identifier(identifier: &str) -> Result<(), AppError> {
     let reject = || Err(AppError::InvalidInput("Invalid disk identifier".into()));
 

@@ -12,23 +12,6 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
   const [message, setMessage] = useState<Message | null>(null);
   const [password, setPassword] = useState("");
 
-  const pollIPod = useCallback(async () => {
-    try {
-      const info = await invoke<DiskInfo | null>("detect_ipod");
-      if (info) {
-        setDiskInfo(info);
-        setStatus(info.mounted ? "mounted" : "found");
-      } else {
-        setDiskInfo(null);
-        setStatus("not_found");
-      }
-    } catch (err) {
-      setDiskInfo(null);
-      setStatus("not_found");
-      setMessage((prev) => prev ?? { text: `Detection failed: ${err}`, type: "error" });
-    }
-  }, []);
-
   const detectIPod = useCallback(async () => {
     setStatus("detecting");
     setMessage(null);
@@ -49,11 +32,41 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
   }, []);
 
   useEffect(() => {
-    detectIPod();
-    const POLL_INTERVAL_MS = 10_000;
-    const interval = setInterval(pollIPod, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [detectIPod, pollIPod]);
+    const BASE_MS = 10_000;
+    const MAX_MS = 60_000;
+    let delay = BASE_MS;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+
+    const schedulePoll = async () => {
+      try {
+        const info = await invoke<DiskInfo | null>("detect_ipod");
+        if (info) {
+          setDiskInfo(info);
+          setStatus(info.mounted ? "mounted" : "found");
+          delay = BASE_MS;
+        } else {
+          setDiskInfo(null);
+          setStatus("not_found");
+          delay = Math.min(delay * 2, MAX_MS);
+        }
+      } catch {
+        setDiskInfo(null);
+        setStatus("not_found");
+        delay = Math.min(delay * 2, MAX_MS);
+      }
+      if (!cancelled) timeoutId = setTimeout(schedulePoll, delay);
+    };
+
+    detectIPod().then(() => {
+      if (!cancelled) timeoutId = setTimeout(schedulePoll, BASE_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [detectIPod]);
 
   useEffect(() => {
     onMountChange?.(status === "mounted");

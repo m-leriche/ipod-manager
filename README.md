@@ -19,6 +19,7 @@ Full music library browser with three browsing modes: column browser (Genre/Arti
 - **Filesystem watcher** — Auto-refreshes the library when files change on disk.
 - **Media keys** — System media key integration (play/pause/next/previous).
 - **Keyboard shortcuts** — Comprehensive shortcuts with Cmd+/ reference dialog.
+- **Custom themes** — 7 built-in themes (dark, light, win95, classic, winamp, aqua, spotify) plus a custom theme editor for creating your own color schemes.
 
 ### Tools
 
@@ -27,8 +28,15 @@ Full music library browser with three browsing modes: column browser (Genre/Arti
 - **Metadata Editor** — Scan a folder and view/edit ID3 tags grouped by Artist/Album/Track. Batch edit across selections with dirty tracking. MusicBrainz repair: compares local metadata track-by-track, detects title mismatches, wrong track numbers, missing tags, year discrepancies, and incomplete albums. Side-by-side comparison with per-fix accept/reject.
 - **Audio Extractor** — YouTube audio downloading (via yt-dlp) and local video audio extraction (via ffmpeg). Pick format (FLAC or MP3 320kbps), auto-detect chapters, and split into individual tracks.
 - **Duplicates** — Find duplicate tracks across directories by filename, metadata match, or file hash. Side-by-side comparison.
-- **Converter** — Batch audio format conversion.
+- **Converter** — Batch audio format conversion between MP3 and FLAC with quality presets (128/320 kbps for MP3, multiple sample rate/bit depth options for FLAC). Shows codec info and warns when converting lossy sources to lossless.
+- **Health Dashboard** — Analyzes your library for metadata issues (missing tags, artwork, lyrics) and displays them in a categorized dashboard with severity levels. Click through to view affected tracks and repair directly.
+- **Export / Import** — Export your library's metadata (tracks, playlists, smart playlists, ratings, play counts) to a JSON backup. Restore from backup when rebuilding your library to preserve organization.
 - **Streaming Server** — Built-in Subsonic-compatible server for streaming your library to any Subsonic client (Amperfy, Symfonium, DSub, etc.) over WiFi or Tailscale. See [Streaming Server](#streaming-server-wifi-sync) for setup.
+
+### Discover
+
+- **Recommendations** — Personalized album recommendations seeded by your listening habits (most played, recently played, recently added, or random). Genre-based exploration, artist/album search, and dismiss-to-refresh. Powered by Last.fm.
+- **New Releases** — Watch specific artists and get notified when they release new albums, EPs, or singles. Shows which releases are already in your library and which are new.
 
 ## Prerequisites
 
@@ -124,6 +132,11 @@ src/
         ├── DuplicateDetector/           # Duplicate track finder
         ├── IpodSummary/                 # iPod info, storage, play data
         ├── MountPanel/                  # Compact iPod mount/unmount sidebar
+        ├── LibraryHealthDashboard/      # Library metadata health analysis
+        ├── LibraryExport/               # Library metadata export/import
+        ├── DiscoverView/                # Album recommendations via Last.fm
+        ├── NewReleasesView/             # New release tracking for watched artists
+        ├── QualityAnalyzer/             # Audio quality analysis + spectrograms
         └── SettingsModal/               # App settings dialog
 
 src-tauri/src/

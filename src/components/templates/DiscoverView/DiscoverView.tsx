@@ -172,6 +172,39 @@ export const DiscoverView = () => {
     [saveSnapshot],
   );
 
+  // ── Replace an entire section with a new random seed ──────────
+
+  const handleReplaceSection = useCallback(
+    async (sectionIdx: number) => {
+      const excludeSeeds = sectionsRef.current.map((s) => s.seed_artist);
+
+      try {
+        const replacement = await invoke<DiscoverSection | null>("replace_discover_section", {
+          excludeSeeds,
+        });
+
+        setSections((prev) => {
+          const next = [...prev];
+          if (replacement) {
+            next[sectionIdx] = replacement;
+          } else {
+            next.splice(sectionIdx, 1);
+          }
+          saveSnapshot(next);
+          return next;
+        });
+      } catch {
+        // If replacement fails, just remove the section
+        setSections((prev) => {
+          const next = prev.filter((_, i) => i !== sectionIdx);
+          saveSnapshot(next);
+          return next;
+        });
+      }
+    },
+    [saveSnapshot],
+  );
+
   // ── Tags ─────────────────────────────────────────────────────
 
   const handleTagClick = useCallback(
@@ -339,6 +372,7 @@ export const DiscoverView = () => {
             section={section}
             onWatchArtist={handleWatchArtist}
             onDismissAlbum={(albumIdx) => handleDismissAlbum(si, albumIdx, "feed")}
+            onDismissSection={() => handleReplaceSection(si)}
           />
         ))}
 

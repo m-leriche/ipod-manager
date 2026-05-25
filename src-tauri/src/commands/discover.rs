@@ -103,6 +103,20 @@ pub async fn search_discover(
 }
 
 #[tauri::command]
+pub async fn replace_discover_section(
+    exclude_seeds: Vec<String>,
+    albums_per_seed: Option<usize>,
+    db: State<'_, LibraryDb>,
+) -> Result<Option<DiscoverSection>, String> {
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        discover::replace_section(&conn_arc, &exclude_seeds, albums_per_seed.unwrap_or(6))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
 pub async fn replace_discover_album(
     seed_artist: String,
     exclude_artists: Vec<String>,

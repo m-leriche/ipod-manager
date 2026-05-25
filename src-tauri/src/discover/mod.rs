@@ -187,6 +187,32 @@ pub fn get_tag_albums(
     Ok(albums)
 }
 
+/// Pick a new random seed artist (excluding `exclude_seeds`) and build a section for it.
+pub fn replace_section(
+    conn_arc: &Arc<Mutex<Connection>>,
+    exclude_seeds: &[String],
+    albums_per_seed: usize,
+) -> Result<Option<DiscoverSection>, String> {
+    let exclude_set: HashSet<String> = exclude_seeds.iter().map(|s| s.to_lowercase()).collect();
+
+    // Pick random candidates and find the first one not in the exclude list
+    let seed = {
+        let conn = conn_arc.lock().map_err(|e| format!("DB lock: {}", e))?;
+        let candidates = get_seed_artists(&conn, 20, &SeedStrategy::Random)?;
+        candidates
+            .into_iter()
+            .find(|a| !exclude_set.contains(&a.to_lowercase()))
+    };
+
+    let seed = match seed {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+
+    let sections = build_discover_feed(conn_arc, &[seed], albums_per_seed)?;
+    Ok(sections.into_iter().next())
+}
+
 /// Fetch a single replacement album for a dismissed card.
 /// Finds the next similar artist (to `seed_artist`) whose name isn't in
 /// `exclude_artists`, and returns their top album.

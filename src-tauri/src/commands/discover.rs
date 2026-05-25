@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::discover::{self, DiscoverAlbum, DiscoverSection, SeedStrategy};
+use crate::error::AppError;
 use crate::library::LibraryDb;
 
 #[tauri::command]
@@ -119,26 +120,34 @@ pub async fn replace_discover_album(
 pub async fn save_discover_snapshot(
     sections: Vec<DiscoverSection>,
     db: State<'_, LibraryDb>,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| format!("DB lock: {}", e))?;
-    discover::save_feed_snapshot(&conn, &sections);
-    Ok(())
+) -> Result<(), AppError> {
+    db.with_db(move |conn| {
+        discover::save_feed_snapshot(conn, &sections);
+        Ok::<_, String>(())
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn get_discover_enabled(db: State<'_, LibraryDb>) -> Result<bool, String> {
-    let conn = db.conn.lock().map_err(|e| format!("DB lock: {}", e))?;
-    Ok(crate::library::get_setting(&conn, "discover_enabled")
-        .map(|v| v != "false")
-        .unwrap_or(true))
+pub async fn get_discover_enabled(db: State<'_, LibraryDb>) -> Result<bool, AppError> {
+    db.with_db(|conn| {
+        Ok::<_, String>(
+            crate::library::get_setting(conn, "discover_enabled")
+                .map(|v| v != "false")
+                .unwrap_or(true),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn set_discover_enabled(enabled: bool, db: State<'_, LibraryDb>) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| format!("DB lock: {}", e))?;
-    crate::library::set_setting(
-        &conn,
-        "discover_enabled",
-        if enabled { "true" } else { "false" },
-    )
+pub async fn set_discover_enabled(enabled: bool, db: State<'_, LibraryDb>) -> Result<(), AppError> {
+    db.with_db(move |conn| {
+        crate::library::set_setting(
+            conn,
+            "discover_enabled",
+            if enabled { "true" } else { "false" },
+        )
+    })
+    .await
 }

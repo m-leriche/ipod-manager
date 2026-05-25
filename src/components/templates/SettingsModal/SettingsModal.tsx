@@ -16,11 +16,7 @@ import { StreamingSettings } from "./StreamingSettings";
 import { CustomThemeEditor } from "./CustomThemeEditor";
 import type { SettingsModalProps } from "./types";
 
-interface DiscoverSettingsProps {
-  onChanged: () => void;
-}
-
-const DiscoverSettings = ({ onChanged }: DiscoverSettingsProps) => {
+const DiscoverSettings = () => {
   const [enabled, setEnabled] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
@@ -33,18 +29,14 @@ const DiscoverSettings = ({ onChanged }: DiscoverSettingsProps) => {
       .catch(() => setLoaded(true));
   }, []);
 
-  const toggle = useCallback(
-    async (value: boolean) => {
-      setEnabled(value);
-      try {
-        await invoke("set_discover_enabled", { enabled: value });
-        onChanged();
-      } catch {
-        setEnabled(!value);
-      }
-    },
-    [onChanged],
-  );
+  const toggle = useCallback(async (value: boolean) => {
+    setEnabled(value);
+    try {
+      await invoke("set_discover_enabled", { enabled: value });
+    } catch {
+      setEnabled(!value);
+    }
+  }, []);
 
   if (!loaded) return null;
 
@@ -390,7 +382,7 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
           <StreamingSettings />
 
           {/* Discover */}
-          <DiscoverSettings onChanged={() => {}} />
+          <DiscoverSettings />
 
           {/* Last.fm */}
           <LastfmSettings />

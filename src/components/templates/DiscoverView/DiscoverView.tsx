@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNewReleases } from "../../../contexts/NewReleasesContext";
+import { useToast } from "../../../contexts/ToastContext";
 import { DiscoverCard } from "./DiscoverCard";
 import type { DiscoverSection, DiscoverAlbum, SeedStrategy } from "./types";
 
@@ -22,12 +23,19 @@ export const DiscoverView = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Refs for dismiss handler to avoid stale closures on rapid clicks
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const searchResultsRef = useRef(searchResults);
+  searchResultsRef.current = searchResults;
+
   const [genres, setGenres] = useState<string[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [tagAlbums, setTagAlbums] = useState<DiscoverAlbum[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
 
   const { watchArtist } = useNewReleases();
+  const toast = useToast();
 
   // ── Snapshot persistence helper ──────────────────────────────
 
@@ -79,30 +87,33 @@ export const DiscoverView = () => {
 
   // ── Search ───────────────────────────────────────────────────
 
-  const handleSearch = useCallback(async (query: string) => {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    setSearchLoading(true);
-    try {
-      const section = await invoke<DiscoverSection>("search_discover", { query: trimmed });
-      if (section.albums.length > 0) {
-        setSearchResults((prev) => {
-          const existing = prev.findIndex((s) => s.seed_artist.toLowerCase() === section.seed_artist.toLowerCase());
-          if (existing >= 0) {
-            const next = [...prev];
-            next[existing] = section;
-            return next;
-          }
-          return [section, ...prev];
-        });
+  const handleSearch = useCallback(
+    async (query: string) => {
+      const trimmed = query.trim();
+      if (!trimmed) return;
+      setSearchLoading(true);
+      try {
+        const section = await invoke<DiscoverSection>("search_discover", { query: trimmed });
+        if (section.albums.length > 0) {
+          setSearchResults((prev) => {
+            const existing = prev.findIndex((s) => s.seed_artist.toLowerCase() === section.seed_artist.toLowerCase());
+            if (existing >= 0) {
+              const next = [...prev];
+              next[existing] = section;
+              return next;
+            }
+            return [section, ...prev];
+          });
+        }
+      } catch {
+        toast.error(`No recommendations found for "${trimmed}"`);
+      } finally {
+        setSearchLoading(false);
+        setSearchQuery("");
       }
-    } catch {
-      // Search can fail for obscure queries — don't show an error
-    } finally {
-      setSearchLoading(false);
-      setSearchQuery("");
-    }
-  }, []);
+    },
+    [toast],
+  );
 
   const handleSearchSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -120,24 +131,16 @@ export const DiscoverView = () => {
 
   const handleDismissAlbum = useCallback(
     async (sectionIdx: number, albumIdx: number, source: "feed" | "search") => {
-      const list = source === "feed" ? sections : searchResults;
+      // Read from refs to avoid stale closures on rapid dismissals
+      const list = source === "feed" ? sectionsRef.current : searchResultsRef.current;
       const section = list[sectionIdx];
-      if (!section) return;
+      if (!section || !section.albums[albumIdx]) return;
 
-      const dismissed = section.albums[albumIdx];
-      if (!dismissed) return;
-
-      // Collect all artist names currently in this section (for exclusion)
+      const seedArtist = section.seed_artist;
       const excludeArtists = section.albums.map((a) => a.artist_name);
 
-      // Fetch replacement
-      try {
-        const replacement = await invoke<DiscoverAlbum | null>("replace_discover_album", {
-          seedArtist: section.seed_artist,
-          excludeArtists,
-        });
-
-        const updater = (prev: DiscoverSection[]) => {
+      const applyUpdate = (setter: typeof setSections, replacement: DiscoverAlbum | null, persist: boolean) => {
+        setter((prev) => {
           const next = prev.map((s, si) => {
             if (si !== sectionIdx) return s;
             const albums = [...s.albums];
@@ -148,38 +151,25 @@ export const DiscoverView = () => {
             }
             return { ...s, albums };
           });
+          if (persist) saveSnapshot(next);
           return next;
-        };
+        });
+      };
 
-        if (source === "feed") {
-          setSections((prev) => {
-            const next = updater(prev);
-            saveSnapshot(next);
-            return next;
-          });
-        } else {
-          setSearchResults(updater);
-        }
+      const setter = source === "feed" ? setSections : setSearchResults;
+      const persist = source === "feed";
+
+      try {
+        const replacement = await invoke<DiscoverAlbum | null>("replace_discover_album", {
+          seedArtist,
+          excludeArtists,
+        });
+        applyUpdate(setter, replacement, persist);
       } catch {
-        // If replacement fails, just remove the card
-        const remover = (prev: DiscoverSection[]) =>
-          prev.map((s, si) => {
-            if (si !== sectionIdx) return s;
-            return { ...s, albums: s.albums.filter((_, ai) => ai !== albumIdx) };
-          });
-
-        if (source === "feed") {
-          setSections((prev) => {
-            const next = remover(prev);
-            saveSnapshot(next);
-            return next;
-          });
-        } else {
-          setSearchResults(remover);
-        }
+        applyUpdate(setter, null, persist);
       }
     },
-    [sections, searchResults, saveSnapshot],
+    [saveSnapshot],
   );
 
   // ── Tags ─────────────────────────────────────────────────────

@@ -345,27 +345,35 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 
 /// Returns true if the DB path is a ghost: either the file doesn't exist,
 /// or it exists only because the filesystem is case-insensitive (macOS APFS)
-/// and the real on-disk casing differs from what the DB recorded.
+/// and the real on-disk casing differs from what the DB recorded AND a
+/// replacement record already exists at the canonical path.
 ///
-/// NFC-normalizes both sides of the canonical-vs-DB comparison so that HFS+
-/// (which stores filenames in NFD) doesn't falsely flag records whose paths
-/// contain non-ASCII characters (e.g. "André").
-pub(crate) fn is_ghost_path(db_path: &str) -> bool {
+/// The "replacement must exist" guard prevents deleting the only record for a
+/// file when the canonical path differs due to Unicode normalization (NFC vs
+/// NFD on HFS+), symlink resolution, or other path transformations.
+pub(crate) fn is_ghost_path(db_path: &str, conn: &Connection) -> bool {
     let p = Path::new(db_path);
     if !p.exists() {
         return true;
     }
-    // On case-insensitive filesystems, "/dd_mm_yyyy/file" resolves to the
-    // real file at "/Dd_Mm_Yyyy/file". Compare canonical path to detect this.
-    // NFC-normalize both sides so NFD from HFS+ doesn't mismatch our NFC DB paths.
-    p.canonicalize()
-        .ok()
-        .map(|canon| {
-            let canon_nfc: String = canon.to_string_lossy().nfc().collect();
-            let db_nfc: String = db_path.nfc().collect();
-            canon_nfc != db_nfc
-        })
-        .unwrap_or(false)
+    let canon = match p.canonicalize() {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let canon_nfc: String = canon.to_string_lossy().nfc().collect();
+    let db_nfc: String = db_path.nfc().collect();
+    if canon_nfc == db_nfc {
+        return false;
+    }
+    // The canonical path differs (e.g. case change, NFD/NFC, symlink).
+    // Only flag as ghost if a record already exists at the canonical path —
+    // otherwise we'd delete the only record for this file and lose created_at.
+    conn.query_row(
+        "SELECT 1 FROM tracks WHERE file_path = ?1",
+        rusqlite::params![canon_nfc],
+        |_| Ok(true),
+    )
+    .unwrap_or(false)
 }
 
 fn now_epoch() -> i64 {

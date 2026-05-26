@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { pickFolder } from "../../../utils/pickPath";
-import type { TrackMetadata, MetadataSaveResult } from "../../../types/metadata";
+import type { TrackMetadata, MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 import type { Phase, View, EditableFields } from "./types";
 
 interface UseMetadataScanParams {
@@ -12,7 +12,7 @@ interface UseMetadataScanParams {
   setError: (e: string | null) => void;
   setSaveResult: (r: MetadataSaveResult | null) => void;
   setView: (v: View) => void;
-  setUndoOperations: (ops: import("../../../types/metadata").MetadataUpdate[] | null) => void;
+  setUndoOperations: (ops: MetadataUpdate[] | null) => void;
   onBeforeScan: () => void;
   startProgress: (msg: string, cancel: () => void) => void;
   finishProgress: (msg: string) => void;

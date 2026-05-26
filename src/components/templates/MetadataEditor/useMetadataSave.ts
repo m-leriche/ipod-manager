@@ -2,7 +2,13 @@ import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { buildUpdate } from "./helpers";
-import type { TrackMetadata, MetadataUpdate, MetadataSaveResult, SanitizeResult } from "../../../types/metadata";
+import type {
+  TrackMetadata,
+  MetadataUpdate,
+  MetadataSaveProgress,
+  MetadataSaveResult,
+  SanitizeResult,
+} from "../../../types/metadata";
 import type { Phase, EditableFields, SanitizeModalOptions } from "./types";
 
 interface UseMetadataSaveParams {
@@ -15,7 +21,7 @@ interface UseMetadataSaveParams {
   setEditedTracks: React.Dispatch<React.SetStateAction<Record<string, EditableFields>>>;
   setTracks: React.Dispatch<React.SetStateAction<TrackMetadata[]>>;
   setSaveResult: (r: MetadataSaveResult | null) => void;
-  setSaveProgress: (p: import("../../../types/metadata").MetadataSaveProgress | null) => void;
+  setSaveProgress: (p: MetadataSaveProgress | null) => void;
   setUndoOperations: (ops: MetadataUpdate[] | null) => void;
   setError: (e: string | null) => void;
   setRepairingArt: (v: boolean) => void;

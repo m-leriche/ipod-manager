@@ -50,6 +50,9 @@ export const useEngineEvents = (
           return { currentTime: position, duration: newDur };
         });
 
+        // Time-based preload: check if we're close enough to EOF to need
+        // the next track ready. Runs at engine event rate (~20Hz) instead
+        // of on every interpolated time tick.
         if (duration > 0) {
           const s = refs.stateRef.current;
           if (s.isPlaying && s.repeat !== "one" && refs.timePreloadedForRef.current !== s.queueIndex) {

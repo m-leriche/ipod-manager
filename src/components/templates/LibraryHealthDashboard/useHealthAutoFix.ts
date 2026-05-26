@@ -123,17 +123,18 @@ export const useHealthAutoFix = (params: {
     setAutoFixStatus(null);
     setLookupProgress({ completed: 0, total: needsLookup.length, current: "" });
 
+    let unlisten: (() => void) | undefined;
     try {
-      const unlisten = await listen<YearLookupProgress>("year-lookup-progress", (e) => {
+      unlisten = await listen<YearLookupProgress>("year-lookup-progress", (e) => {
         setLookupProgress(e.payload);
       });
       const apiResults = await invoke<AlbumYearResult[]>("lookup_album_years", { albums: needsLookup });
-      unlisten();
       setYearLookupResults([...extracted, ...apiResults]);
       setAutoFixStatus(null);
     } catch (e) {
       setAutoFixStatus(`Error: ${e}`);
     } finally {
+      unlisten?.();
       setLookupProgress(null);
       setSaving(false);
     }

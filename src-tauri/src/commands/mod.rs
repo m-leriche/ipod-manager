@@ -13,6 +13,7 @@ mod playlists;
 mod queue;
 mod subsonic;
 mod system;
+mod year_lookup;
 
 pub use artist_releases::*;
 pub use audio::*;
@@ -29,3 +30,4 @@ pub use playlists::*;
 pub use queue::*;
 pub use subsonic::*;
 pub use system::*;
+pub use year_lookup::*;

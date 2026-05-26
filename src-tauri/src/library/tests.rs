@@ -1090,17 +1090,16 @@ fn ghost_path_nfc_vs_nfd_is_not_ghost() {
 }
 
 #[test]
-fn ghost_path_only_deletes_when_replacement_exists() {
+fn ghost_path_not_ghost_when_no_replacement_exists() {
     let conn = test_db();
-    let (_dir, canon) = canonical_tempdir();
 
     // Create a file at a path that differs from its canonical form.
     // On macOS, /tmp → /private/tmp, so a file created via the temp dir
     // will have a canonical path that differs from its /tmp-based path.
     let dir_raw = tempfile::tempdir().unwrap();
-    let file_via_symlink = dir_raw.path().join("track.mp3");
-    std::fs::write(&file_via_symlink, b"data").unwrap();
-    let symlink_path = file_via_symlink.to_str().unwrap();
+    let file = dir_raw.path().join("track.mp3");
+    std::fs::write(&file, b"data").unwrap();
+    let symlink_path = file.to_str().unwrap();
 
     // File exists but canonical path differs (symlink) — without a
     // replacement record in the DB, this should NOT be a ghost.
@@ -1108,6 +1107,30 @@ fn ghost_path_only_deletes_when_replacement_exists() {
         !super::is_ghost_path(symlink_path, &conn),
         "should not be ghost when no replacement record exists"
     );
+}
+
+#[test]
+fn ghost_path_is_ghost_when_replacement_exists() {
+    let conn = test_db();
+    let dir_raw = tempfile::tempdir().unwrap();
+    let file = dir_raw.path().join("track.mp3");
+    std::fs::write(&file, b"data").unwrap();
+    let symlink_path = file.to_str().unwrap();
+    let canon_path: String = file.canonicalize().unwrap().to_string_lossy().into_owned();
+
+    // Only matters when paths actually differ (e.g. /tmp → /private/tmp)
+    if symlink_path != canon_path {
+        // Insert a replacement record at the canonical path
+        conn.execute(
+            "INSERT INTO tracks (file_path, file_name, folder_path, format) VALUES (?1, 'track.mp3', '/music', 'MP3')",
+            rusqlite::params![&canon_path],
+        )
+        .unwrap();
+        assert!(
+            super::is_ghost_path(symlink_path, &conn),
+            "should be ghost when replacement record exists at canonical path"
+        );
+    }
 }
 
 // ── Unicode NFC duplicate cleanup ───────────────────────────────

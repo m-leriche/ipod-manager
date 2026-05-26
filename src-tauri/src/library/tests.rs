@@ -1049,19 +1049,22 @@ fn canonical_tempdir() -> (tempfile::TempDir, std::path::PathBuf) {
 
 #[test]
 fn ghost_path_returns_true_for_nonexistent_file() {
-    assert!(super::is_ghost_path("/no/such/file.mp3"));
+    let conn = test_db();
+    assert!(super::is_ghost_path("/no/such/file.mp3", &conn));
 }
 
 #[test]
 fn ghost_path_returns_false_for_existing_file() {
+    let conn = test_db();
     let (_dir, canon) = canonical_tempdir();
     let file = canon.join("song.mp3");
     std::fs::write(&file, b"data").unwrap();
-    assert!(!super::is_ghost_path(file.to_str().unwrap()));
+    assert!(!super::is_ghost_path(file.to_str().unwrap(), &conn));
 }
 
 #[test]
 fn ghost_path_nfc_vs_nfd_is_not_ghost() {
+    let conn = test_db();
     // Simulate the scenario where the DB stores an NFC path but canonicalize()
     // returns NFD (as happens on HFS+ volumes). Both forms should be treated
     // as equivalent — the file is NOT a ghost.
@@ -1080,10 +1083,31 @@ fn ghost_path_nfc_vs_nfd_is_not_ghost() {
     // NFD path might not exist, so skip the assertion in that case.
     if nfd_path.exists() {
         assert!(
-            !super::is_ghost_path(nfd_path.to_str().unwrap()),
+            !super::is_ghost_path(nfd_path.to_str().unwrap(), &conn),
             "NFC/NFD equivalent path should not be a ghost"
         );
     }
+}
+
+#[test]
+fn ghost_path_only_deletes_when_replacement_exists() {
+    let conn = test_db();
+    let (_dir, canon) = canonical_tempdir();
+
+    // Create a file at a path that differs from its canonical form.
+    // On macOS, /tmp → /private/tmp, so a file created via the temp dir
+    // will have a canonical path that differs from its /tmp-based path.
+    let dir_raw = tempfile::tempdir().unwrap();
+    let file_via_symlink = dir_raw.path().join("track.mp3");
+    std::fs::write(&file_via_symlink, b"data").unwrap();
+    let symlink_path = file_via_symlink.to_str().unwrap();
+
+    // File exists but canonical path differs (symlink) — without a
+    // replacement record in the DB, this should NOT be a ghost.
+    assert!(
+        !super::is_ghost_path(symlink_path, &conn),
+        "should not be ghost when no replacement record exists"
+    );
 }
 
 // ── Unicode NFC duplicate cleanup ───────────────────────────────

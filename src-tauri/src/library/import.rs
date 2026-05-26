@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
+use unicode_normalization::UnicodeNormalization;
 
 use super::folders::add_folder;
 use super::scan::scan_folder;
@@ -13,7 +14,7 @@ use super::types::{ImportProgress, ImportResult, TrackData};
 
 pub fn sanitize_path_component(name: &str) -> String {
     let sanitized: String = name
-        .chars()
+        .nfc()
         .map(|c| match c {
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
             _ => c,

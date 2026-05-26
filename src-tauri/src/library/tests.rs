@@ -158,6 +158,38 @@ fn folder_crud() {
 }
 
 #[test]
+fn upsert_preserves_created_at_on_conflict() {
+    let conn = test_db();
+
+    let t = make_track_data(TrackDataOverrides {
+        file_path: Some("/m/song.mp3".to_string()),
+        ..Default::default()
+    });
+
+    // First insert: created_at = 1000
+    upsert_track(&conn, &t, 100, 1000).unwrap();
+    let created: i64 = conn
+        .query_row(
+            "SELECT created_at FROM tracks WHERE file_path = ?1",
+            rusqlite::params!["/m/song.mp3"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(created, 1000);
+
+    // Second upsert (same file_path): now = 9999, but created_at should stay 1000
+    upsert_track(&conn, &t, 200, 9999).unwrap();
+    let created: i64 = conn
+        .query_row(
+            "SELECT created_at FROM tracks WHERE file_path = ?1",
+            rusqlite::params!["/m/song.mp3"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(created, 1000, "created_at must be preserved on upsert");
+}
+
+#[test]
 fn track_upsert_and_query() {
     let conn = test_db();
     insert_test_track(
@@ -1003,6 +1035,55 @@ fn large_batch_insert_and_query() {
     )
     .unwrap();
     assert_eq!(flagged.len(), 500);
+}
+
+// ── is_ghost_path ───────────────────────────────────────────────
+
+/// Resolve symlinks in the temp dir path so that /tmp → /private/tmp
+/// doesn't cause false positives in is_ghost_path tests.
+fn canonical_tempdir() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let canon = dir.path().canonicalize().unwrap();
+    (dir, canon)
+}
+
+#[test]
+fn ghost_path_returns_true_for_nonexistent_file() {
+    assert!(super::is_ghost_path("/no/such/file.mp3"));
+}
+
+#[test]
+fn ghost_path_returns_false_for_existing_file() {
+    let (_dir, canon) = canonical_tempdir();
+    let file = canon.join("song.mp3");
+    std::fs::write(&file, b"data").unwrap();
+    assert!(!super::is_ghost_path(file.to_str().unwrap()));
+}
+
+#[test]
+fn ghost_path_nfc_vs_nfd_is_not_ghost() {
+    // Simulate the scenario where the DB stores an NFC path but canonicalize()
+    // returns NFD (as happens on HFS+ volumes). Both forms should be treated
+    // as equivalent — the file is NOT a ghost.
+    let (_dir, canon) = canonical_tempdir();
+    // Create file with NFC name: "André.mp3" using precomposed é (U+00E9)
+    let nfc_name = "Andr\u{00e9}.mp3";
+    let file = canon.join(nfc_name);
+    std::fs::write(&file, b"data").unwrap();
+
+    // Construct the NFD variant: "André.mp3" using e + combining acute (U+0065 U+0301)
+    let nfd_name = "Andre\u{0301}.mp3";
+    let nfd_path = canon.join(nfd_name);
+
+    // On macOS APFS (normalization-insensitive), both paths resolve to the
+    // same file. On case-sensitive/normalization-sensitive filesystems the
+    // NFD path might not exist, so skip the assertion in that case.
+    if nfd_path.exists() {
+        assert!(
+            !super::is_ghost_path(nfd_path.to_str().unwrap()),
+            "NFC/NFD equivalent path should not be a ghost"
+        );
+    }
 }
 
 // ── Unicode NFC duplicate cleanup ───────────────────────────────

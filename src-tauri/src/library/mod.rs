@@ -21,6 +21,7 @@ use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use unicode_normalization::UnicodeNormalization;
 
 // ── Re-exports (preserve public API) ───────────────────────────
 
@@ -345,6 +346,10 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 /// Returns true if the DB path is a ghost: either the file doesn't exist,
 /// or it exists only because the filesystem is case-insensitive (macOS APFS)
 /// and the real on-disk casing differs from what the DB recorded.
+///
+/// NFC-normalizes both sides of the canonical-vs-DB comparison so that HFS+
+/// (which stores filenames in NFD) doesn't falsely flag records whose paths
+/// contain non-ASCII characters (e.g. "André").
 pub(crate) fn is_ghost_path(db_path: &str) -> bool {
     let p = Path::new(db_path);
     if !p.exists() {
@@ -352,9 +357,14 @@ pub(crate) fn is_ghost_path(db_path: &str) -> bool {
     }
     // On case-insensitive filesystems, "/dd_mm_yyyy/file" resolves to the
     // real file at "/Dd_Mm_Yyyy/file". Compare canonical path to detect this.
+    // NFC-normalize both sides so NFD from HFS+ doesn't mismatch our NFC DB paths.
     p.canonicalize()
         .ok()
-        .map(|canon| canon.to_string_lossy() != db_path)
+        .map(|canon| {
+            let canon_nfc: String = canon.to_string_lossy().nfc().collect();
+            let db_nfc: String = db_path.nfc().collect();
+            canon_nfc != db_nfc
+        })
         .unwrap_or(false)
 }
 

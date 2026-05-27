@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useUpdateChecker } from "../../../hooks/useUpdateChecker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { getVersion } from "@tauri-apps/api/app";
@@ -11,6 +11,7 @@ interface UpdateSectionProps {
 export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
   const { state, checkForUpdate, downloadAndInstall } = useUpdateChecker();
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const didAutoCheck = useRef(false);
 
   useEffect(() => {
     getVersion()
@@ -19,7 +20,10 @@ export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
   }, []);
 
   useEffect(() => {
-    if (autoCheck) checkForUpdate();
+    if (autoCheck && !didAutoCheck.current) {
+      didAutoCheck.current = true;
+      checkForUpdate();
+    }
   }, [autoCheck, checkForUpdate]);
 
   return (

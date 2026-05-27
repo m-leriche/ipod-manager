@@ -4,9 +4,17 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+use crate::process;
 use crate::youtube::{Chapter, DownloadProgress, DownloadResult};
+
+/// Timeout for single-file audio extraction (30 minutes).
+const EXTRACT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// Timeout for individual chapter split operations (5 minutes per chapter).
+const CHAPTER_SPLIT_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VideoProbe {
@@ -107,6 +115,12 @@ pub fn extract_audio(
         };
     }
 
+    log::info!(
+        "Starting audio extraction: path={}, format={}",
+        path,
+        format
+    );
+
     let src = Path::new(path);
     let title = src
         .file_stem()
@@ -178,6 +192,7 @@ fn extract_single(
     {
         Ok(c) => c,
         Err(e) => {
+            log::error!("Failed to start ffmpeg: {}", e);
             return DownloadResult {
                 success: false,
                 cancelled: false,
@@ -196,21 +211,14 @@ fn extract_single(
         };
     };
 
-    // Drain stderr in background to prevent pipe deadlock
-    let stderr_handle = child.stderr.take().map(|mut stderr| {
-        std::thread::spawn(move || {
-            let mut buf = String::new();
-            std::io::Read::read_to_string(&mut stderr, &mut buf).unwrap_or_default();
-            buf
-        })
-    });
+    let stderr_handle = process::drain_stderr(&mut child);
 
     let reader = std::io::BufReader::new(stdout);
 
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
-            let _ = child.kill();
-            let _ = child.wait();
+            log::info!("Audio extraction cancelled by user");
+            process::kill_and_wait(&mut child);
             let _ = std::fs::remove_file(&output_path);
             return DownloadResult {
                 success: false,
@@ -243,9 +251,16 @@ fn extract_single(
         }
     }
 
-    let status = match child.wait() {
+    let status = match process::wait_with_timeout(&mut child, EXTRACT_TIMEOUT) {
         Ok(s) => s,
         Err(e) => {
+            let stderr = process::collect_stderr(stderr_handle);
+            log::error!(
+                "ffmpeg process error during extraction: {} (stderr: {})",
+                e,
+                stderr.trim()
+            );
+            let _ = std::fs::remove_file(&output_path);
             return DownloadResult {
                 success: false,
                 cancelled: false,
@@ -256,9 +271,8 @@ fn extract_single(
     };
 
     if !status.success() {
-        let stderr = stderr_handle
-            .and_then(|h| h.join().ok())
-            .unwrap_or_default();
+        let stderr = process::collect_stderr(stderr_handle);
+        log::error!("ffmpeg extraction failed: {}", stderr.trim());
         let _ = std::fs::remove_file(&output_path);
         return DownloadResult {
             success: false,
@@ -270,6 +284,8 @@ fn extract_single(
             )),
         };
     }
+
+    log::info!("Audio extraction complete: {}", output_path);
 
     DownloadResult {
         success: true,
@@ -298,15 +314,28 @@ fn extract_chapters(
         };
     }
 
+    log::info!(
+        "Extracting {} chapters from {} to {}",
+        chapters.len(),
+        path,
+        chapter_dir
+    );
+
     let total = chapters.len();
     let mut file_paths: Vec<String> = Vec::new();
 
     for (i, chapter) in chapters.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
+            log::info!(
+                "Chapter extraction cancelled, cleaning up {} files",
+                file_paths.len()
+            );
+            process::cleanup_files(&file_paths);
+            process::cleanup_dir(&chapter_dir);
             return DownloadResult {
                 success: false,
                 cancelled: true,
-                file_paths,
+                file_paths: vec![],
                 error: None,
             };
         }
@@ -349,33 +378,66 @@ fn extract_chapters(
             output_path.clone(),
         ]);
 
-        let output = match Command::new("ffmpeg").args(&args).output() {
-            Ok(o) => o,
+        let mut child = match Command::new("ffmpeg")
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
             Err(e) => {
+                log::error!("Failed to start ffmpeg for chapter {}: {}", i + 1, e);
+                process::cleanup_files(&file_paths);
+                process::cleanup_dir(&chapter_dir);
                 return DownloadResult {
                     success: false,
                     cancelled: false,
-                    file_paths,
+                    file_paths: vec![],
                     error: Some(format!("Failed to run ffmpeg: {}", e)),
                 };
             }
         };
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return DownloadResult {
-                success: false,
-                cancelled: false,
-                file_paths,
-                error: Some(format!(
-                    "ffmpeg failed on chapter {}: {}",
-                    i + 1,
-                    stderr.lines().last().unwrap_or("unknown error").trim()
-                )),
-            };
-        }
+        let stderr_handle = process::drain_stderr(&mut child);
 
-        file_paths.push(output_path);
+        match process::wait_with_timeout(&mut child, CHAPTER_SPLIT_TIMEOUT) {
+            Ok(status) if status.success() => {
+                file_paths.push(output_path);
+            }
+            Ok(_status) => {
+                let stderr = process::collect_stderr(stderr_handle);
+                log::error!("ffmpeg failed on chapter {}: {}", i + 1, stderr.trim());
+                process::cleanup_files(&file_paths);
+                process::cleanup_dir(&chapter_dir);
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: vec![],
+                    error: Some(format!(
+                        "ffmpeg failed on chapter {}: {}",
+                        i + 1,
+                        stderr.lines().last().unwrap_or("unknown error").trim()
+                    )),
+                };
+            }
+            Err(e) => {
+                let stderr = process::collect_stderr(stderr_handle);
+                log::error!(
+                    "ffmpeg timed out on chapter {}: {} (stderr: {})",
+                    i + 1,
+                    e,
+                    stderr.trim()
+                );
+                process::cleanup_files(&file_paths);
+                process::cleanup_dir(&chapter_dir);
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: vec![],
+                    error: Some(format!("ffmpeg timed out on chapter {}: {}", i + 1, e)),
+                };
+            }
+        }
     }
 
     let _ = app.emit(
@@ -388,6 +450,8 @@ fn extract_chapters(
             title: None,
         },
     );
+
+    log::info!("Chapter extraction complete, {} files", file_paths.len());
 
     DownloadResult {
         success: true,

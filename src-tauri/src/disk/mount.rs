@@ -7,6 +7,11 @@ pub const DEFAULT_MOUNT_POINT: &str = "/Volumes/IPOD";
 /// `mount_point` controls where the volume appears (e.g. `/Volumes/IPOD`).
 /// Password is piped to sudo via stdin.
 pub fn mount_ipod_disk(identifier: &str, password: &str, mount_point: &str) -> Result<(), String> {
+    log::info!(
+        "Mounting iPod: identifier={}, mount_point={}",
+        identifier,
+        mount_point
+    );
     fn sudo_run(password: &str, args: &[&str]) -> Result<String, String> {
         use std::io::Write;
         use std::process::Stdio;
@@ -22,7 +27,8 @@ pub fn mount_ipod_disk(identifier: &str, password: &str, mount_point: &str) -> R
             .map_err(|e| format!("Failed to spawn sudo: {e}"))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            let _ = writeln!(stdin, "{}", password);
+            writeln!(stdin, "{}", password)
+                .map_err(|e| format!("Failed to write password to sudo stdin: {e}"))?;
         }
 
         let output = child
@@ -42,16 +48,19 @@ pub fn mount_ipod_disk(identifier: &str, password: &str, mount_point: &str) -> R
     }
 
     // Step 1: Unmount from any existing mount point (best-effort)
+    log::info!("Step 1: unmounting existing mount (best-effort)");
     let _ = sudo_run(
         password,
         &["diskutil", "unmount", &format!("/dev/{}", identifier)],
     );
 
     // Step 2: Create mount point
+    log::info!("Step 2: creating mount point {}", mount_point);
     sudo_run(password, &["mkdir", "-p", mount_point])
         .map_err(|e| format!("Failed to create mount point: {e}"))?;
 
     // Step 3: Mount as FAT32
+    log::info!("Step 3: mounting /dev/{} as FAT32", identifier);
     sudo_run(
         password,
         &[
@@ -64,11 +73,13 @@ pub fn mount_ipod_disk(identifier: &str, password: &str, mount_point: &str) -> R
     )
     .map_err(|e| format!("Mount failed: {e}"))?;
 
+    log::info!("iPod mounted successfully at {}", mount_point);
     Ok(())
 }
 
 /// Unmount the iPod at the given mount point.
 pub fn unmount_ipod_disk(mount_point: &str) -> Result<(), String> {
+    log::info!("Unmounting iPod at {}", mount_point);
     let output = Command::new("diskutil")
         .args(["unmount", mount_point])
         .output()

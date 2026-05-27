@@ -28,9 +28,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: v__VERSION__
           releaseName: "Crate v__VERSION__"
           releaseBody: "See the assets below to download and install."
           releaseDraft: true
+          includeUpdaterJson: true

@@ -254,7 +254,12 @@ fn extract_single(
     let status = match process::wait_with_timeout(&mut child, EXTRACT_TIMEOUT) {
         Ok(s) => s,
         Err(e) => {
-            log::error!("ffmpeg process error during extraction: {}", e);
+            let stderr = process::collect_stderr(stderr_handle);
+            log::error!(
+                "ffmpeg process error during extraction: {} (stderr: {})",
+                e,
+                stderr.trim()
+            );
             let _ = std::fs::remove_file(&output_path);
             return DownloadResult {
                 success: false,
@@ -416,7 +421,13 @@ fn extract_chapters(
                 };
             }
             Err(e) => {
-                log::error!("ffmpeg timed out on chapter {}: {}", i + 1, e);
+                let stderr = process::collect_stderr(stderr_handle);
+                log::error!(
+                    "ffmpeg timed out on chapter {}: {} (stderr: {})",
+                    i + 1,
+                    e,
+                    stderr.trim()
+                );
                 process::cleanup_files(&file_paths);
                 process::cleanup_dir(&chapter_dir);
                 return DownloadResult {

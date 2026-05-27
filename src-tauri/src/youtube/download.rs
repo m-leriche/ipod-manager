@@ -159,7 +159,8 @@ pub fn download_audio(
     let status = match process::wait_with_timeout(&mut child, DOWNLOAD_TIMEOUT) {
         Ok(s) => s,
         Err(e) => {
-            log::error!("yt-dlp process error: {}", e);
+            let stderr = process::collect_stderr(stderr_handle);
+            log::error!("yt-dlp process error: {} (stderr: {})", e, stderr.trim());
             process::cleanup_files(&file_paths);
             return DownloadResult {
                 success: false,
@@ -320,6 +321,8 @@ fn split_chapters(
                 log::error!("Failed to start ffmpeg for chapter {}: {}", i + 1, e);
                 process::cleanup_files(&chapter_paths);
                 process::cleanup_dir(&chapter_dir);
+                // Intentionally keep full_file: the download succeeded, only splitting
+                // failed — the user retains the working full-length file.
                 return DownloadResult {
                     success: false,
                     cancelled: false,
@@ -340,6 +343,8 @@ fn split_chapters(
                 log::error!("ffmpeg failed on chapter {}: {}", i + 1, stderr.trim());
                 process::cleanup_files(&chapter_paths);
                 process::cleanup_dir(&chapter_dir);
+                // Intentionally keep full_file: the download succeeded, only splitting
+                // failed — the user retains the working full-length file.
                 return DownloadResult {
                     success: false,
                     cancelled: false,
@@ -352,9 +357,17 @@ fn split_chapters(
                 };
             }
             Err(e) => {
-                log::error!("ffmpeg timed out on chapter {}: {}", i + 1, e);
+                let stderr = process::collect_stderr(stderr_handle);
+                log::error!(
+                    "ffmpeg timed out on chapter {}: {} (stderr: {})",
+                    i + 1,
+                    e,
+                    stderr.trim()
+                );
                 process::cleanup_files(&chapter_paths);
                 process::cleanup_dir(&chapter_dir);
+                // Intentionally keep full_file: the download succeeded, only splitting
+                // failed — the user retains the working full-length file.
                 return DownloadResult {
                     success: false,
                     cancelled: false,

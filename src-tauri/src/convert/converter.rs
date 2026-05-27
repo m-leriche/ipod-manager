@@ -179,6 +179,12 @@ fn convert_single(
     let status = match process::wait_with_timeout(&mut child, CONVERT_TIMEOUT) {
         Ok(s) => s,
         Err(e) => {
+            let stderr = process::collect_stderr(stderr_handle);
+            log::error!(
+                "ffmpeg conversion timed out: {} (stderr: {})",
+                e,
+                stderr.trim()
+            );
             let _ = std::fs::remove_file(&output_path);
             return Err(format!("Process error: {}", e));
         }

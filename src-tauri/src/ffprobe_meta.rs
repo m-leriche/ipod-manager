@@ -185,7 +185,11 @@ pub fn write_metadata(path: &Path, updates: &[(&str, &str)]) -> Result<(), Strin
     }
 
     // Replace original with temp file
-    std::fs::rename(&tmp_path, path).map_err(|e| format!("Failed to replace file: {}", e))?;
+    std::fs::rename(&tmp_path, path).map_err(|e| {
+        // Clean up temp file if rename fails
+        let _ = std::fs::remove_file(&tmp_path);
+        format!("Failed to replace file: {}", e)
+    })?;
 
     Ok(())
 }

@@ -24,6 +24,7 @@ mod metarepair;
 mod musicbrainz;
 mod network;
 mod playlist_export;
+mod process;
 mod profiles;
 mod rockbox;
 mod sanitize;

@@ -2,11 +2,19 @@ use std::io::BufRead;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 use super::progress::parse_progress_line;
 use super::{validate_url, Chapter, DownloadProgress, DownloadResult};
 use crate::localvideo;
+use crate::process;
+
+/// Timeout for the main yt-dlp download process (30 minutes).
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// Timeout for individual chapter split operations (5 minutes per chapter).
+const CHAPTER_SPLIT_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 pub fn download_audio(
     url: &str,
@@ -32,6 +40,8 @@ pub fn download_audio(
             error: Some(format!("Invalid format: {}", format)),
         };
     }
+
+    log::info!("Starting YouTube download: url={}, format={}", url, format);
 
     let output_template = format!("{}/%(title)s.%(ext)s", output_dir);
 
@@ -65,6 +75,7 @@ pub fn download_audio(
     {
         Ok(c) => c,
         Err(e) => {
+            log::error!("Failed to start yt-dlp: {}", e);
             return DownloadResult {
                 success: false,
                 cancelled: false,
@@ -83,14 +94,7 @@ pub fn download_audio(
         };
     };
 
-    // Drain stderr in a background thread to prevent pipe buffer deadlock
-    let stderr_handle = child.stderr.take().map(|mut stderr| {
-        std::thread::spawn(move || {
-            let mut buf = String::new();
-            std::io::Read::read_to_string(&mut stderr, &mut buf).unwrap_or_default();
-            buf
-        })
-    });
+    let stderr_handle = process::drain_stderr(&mut child);
 
     let reader = std::io::BufReader::new(stdout);
     let mut file_paths: Vec<String> = Vec::new();
@@ -98,8 +102,8 @@ pub fn download_audio(
 
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
-            let _ = child.kill();
-            let _ = child.wait();
+            log::info!("YouTube download cancelled by user");
+            process::kill_and_wait(&mut child);
             return DownloadResult {
                 success: false,
                 cancelled: true,
@@ -152,9 +156,11 @@ pub fn download_audio(
         }
     }
 
-    let status = match child.wait() {
+    let status = match process::wait_with_timeout(&mut child, DOWNLOAD_TIMEOUT) {
         Ok(s) => s,
         Err(e) => {
+            log::error!("yt-dlp process error: {}", e);
+            process::cleanup_files(&file_paths);
             return DownloadResult {
                 success: false,
                 cancelled: false,
@@ -165,10 +171,9 @@ pub fn download_audio(
     };
 
     if !status.success() {
-        let stderr = stderr_handle
-            .and_then(|h| h.join().ok())
-            .unwrap_or_default();
-
+        let stderr = process::collect_stderr(stderr_handle);
+        log::error!("yt-dlp exited with error: {}", stderr.trim());
+        process::cleanup_files(&file_paths);
         return DownloadResult {
             success: false,
             cancelled: false,
@@ -177,110 +182,168 @@ pub fn download_audio(
         };
     }
 
+    log::info!("YouTube download complete, {} files", file_paths.len());
+
     // Split into chapters using ffmpeg if chapters were provided
     if !chapters.is_empty() {
-        let full_file = match file_paths.first() {
-            Some(p) => p.clone(),
-            None => {
-                return DownloadResult {
-                    success: false,
-                    cancelled: false,
-                    file_paths: vec![],
-                    error: Some("Could not determine downloaded file path".to_string()),
-                };
-            }
-        };
+        return split_chapters(
+            &file_paths,
+            output_dir,
+            format,
+            &chapters,
+            &app,
+            &cancel_flag,
+        );
+    }
 
-        let title = std::path::Path::new(&full_file)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("audio")
-            .to_string();
+    DownloadResult {
+        success: true,
+        cancelled: false,
+        file_paths,
+        error: None,
+    }
+}
 
-        let chapter_dir = format!("{}/{}", output_dir, localvideo::sanitize_filename(&title));
-        if let Err(e) = std::fs::create_dir_all(&chapter_dir) {
+fn split_chapters(
+    file_paths: &[String],
+    output_dir: &str,
+    format: &str,
+    chapters: &[Chapter],
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+) -> DownloadResult {
+    let full_file = match file_paths.first() {
+        Some(p) => p.clone(),
+        None => {
             return DownloadResult {
                 success: false,
                 cancelled: false,
                 file_paths: vec![],
-                error: Some(format!("Failed to create chapter directory: {}", e)),
+                error: Some("Could not determine downloaded file path".to_string()),
+            };
+        }
+    };
+
+    let title = std::path::Path::new(&full_file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("audio")
+        .to_string();
+
+    let chapter_dir = format!("{}/{}", output_dir, localvideo::sanitize_filename(&title));
+    if let Err(e) = std::fs::create_dir_all(&chapter_dir) {
+        return DownloadResult {
+            success: false,
+            cancelled: false,
+            file_paths: vec![],
+            error: Some(format!("Failed to create chapter directory: {}", e)),
+        };
+    }
+
+    log::info!(
+        "Splitting into {} chapters in {}",
+        chapters.len(),
+        chapter_dir
+    );
+
+    let total = chapters.len();
+    let mut chapter_paths: Vec<String> = Vec::new();
+
+    for (i, chapter) in chapters.iter().enumerate() {
+        if cancel_flag.load(Ordering::SeqCst) {
+            log::info!(
+                "Chapter splitting cancelled, cleaning up {} files",
+                chapter_paths.len()
+            );
+            process::cleanup_files(&chapter_paths);
+            process::cleanup_dir(&chapter_dir);
+            let _ = std::fs::remove_file(&full_file);
+            return DownloadResult {
+                success: false,
+                cancelled: true,
+                file_paths: vec![],
+                error: None,
             };
         }
 
-        let total = chapters.len();
-        let mut chapter_paths: Vec<String> = Vec::new();
+        let _ = app.emit(
+            "youtube-progress",
+            DownloadProgress {
+                phase: "splitting".to_string(),
+                percent: (i as f64 / total as f64 * 100.0).min(100.0),
+                speed: None,
+                eta: None,
+                title: Some(chapter.title.clone()),
+            },
+        );
 
-        for (i, chapter) in chapters.iter().enumerate() {
-            if cancel_flag.load(Ordering::SeqCst) {
-                return DownloadResult {
-                    success: false,
-                    cancelled: true,
-                    file_paths: chapter_paths,
-                    error: None,
-                };
-            }
+        let output_path = format!(
+            "{}/{:02}. {}.{}",
+            chapter_dir,
+            i + 1,
+            localvideo::sanitize_filename(&chapter.title),
+            format
+        );
 
-            let _ = app.emit(
-                "youtube-progress",
-                DownloadProgress {
-                    phase: "splitting".to_string(),
-                    percent: (i as f64 / total as f64 * 100.0).min(100.0),
-                    speed: None,
-                    eta: None,
-                    title: Some(chapter.title.clone()),
-                },
-            );
-
-            let output_path = format!(
-                "{}/{:02}. {}.{}",
-                chapter_dir,
+        let mut ffmpeg_args = vec![
+            "-i".to_string(),
+            full_file.clone(),
+            "-vn".to_string(),
+            "-ss".to_string(),
+            format!("{}", chapter.start_time),
+            "-to".to_string(),
+            format!("{}", chapter.end_time),
+        ];
+        ffmpeg_args.extend(localvideo::build_codec_args(format));
+        ffmpeg_args.extend([
+            "-metadata".to_string(),
+            format!(
+                "{}={}/{}",
+                localvideo::track_number_key(format),
                 i + 1,
-                localvideo::sanitize_filename(&chapter.title),
-                format
-            );
+                total
+            ),
+            "-metadata".to_string(),
+            format!("title={}", chapter.title),
+            "-y".to_string(),
+            output_path.clone(),
+        ]);
 
-            let mut ffmpeg_args = vec![
-                "-i".to_string(),
-                full_file.clone(),
-                "-vn".to_string(),
-                "-ss".to_string(),
-                format!("{}", chapter.start_time),
-                "-to".to_string(),
-                format!("{}", chapter.end_time),
-            ];
-            ffmpeg_args.extend(localvideo::build_codec_args(format));
-            ffmpeg_args.extend([
-                "-metadata".to_string(),
-                format!(
-                    "{}={}/{}",
-                    localvideo::track_number_key(format),
-                    i + 1,
-                    total
-                ),
-                "-metadata".to_string(),
-                format!("title={}", chapter.title),
-                "-y".to_string(),
-                output_path.clone(),
-            ]);
-
-            let output = match Command::new("ffmpeg").args(&ffmpeg_args).output() {
-                Ok(o) => o,
-                Err(e) => {
-                    return DownloadResult {
-                        success: false,
-                        cancelled: false,
-                        file_paths: chapter_paths,
-                        error: Some(format!("Failed to run ffmpeg: {}", e)),
-                    };
-                }
-            };
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut child = match Command::new("ffmpeg")
+            .args(&ffmpeg_args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("Failed to start ffmpeg for chapter {}: {}", i + 1, e);
+                process::cleanup_files(&chapter_paths);
+                process::cleanup_dir(&chapter_dir);
                 return DownloadResult {
                     success: false,
                     cancelled: false,
-                    file_paths: chapter_paths,
+                    file_paths: vec![],
+                    error: Some(format!("Failed to run ffmpeg: {}", e)),
+                };
+            }
+        };
+
+        let stderr_handle = process::drain_stderr(&mut child);
+
+        match process::wait_with_timeout(&mut child, CHAPTER_SPLIT_TIMEOUT) {
+            Ok(status) if status.success() => {
+                chapter_paths.push(output_path);
+            }
+            Ok(_status) => {
+                let stderr = process::collect_stderr(stderr_handle);
+                log::error!("ffmpeg failed on chapter {}: {}", i + 1, stderr.trim());
+                process::cleanup_files(&chapter_paths);
+                process::cleanup_dir(&chapter_dir);
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: vec![],
                     error: Some(format!(
                         "ffmpeg failed on chapter {}: {}",
                         i + 1,
@@ -288,35 +351,40 @@ pub fn download_audio(
                     )),
                 };
             }
-
-            chapter_paths.push(output_path);
+            Err(e) => {
+                log::error!("ffmpeg timed out on chapter {}: {}", i + 1, e);
+                process::cleanup_files(&chapter_paths);
+                process::cleanup_dir(&chapter_dir);
+                return DownloadResult {
+                    success: false,
+                    cancelled: false,
+                    file_paths: vec![],
+                    error: Some(format!("ffmpeg timed out on chapter {}: {}", i + 1, e)),
+                };
+            }
         }
-
-        let _ = app.emit(
-            "youtube-progress",
-            DownloadProgress {
-                phase: "splitting".to_string(),
-                percent: 100.0,
-                speed: None,
-                eta: None,
-                title: None,
-            },
-        );
-
-        let _ = std::fs::remove_file(&full_file);
-
-        return DownloadResult {
-            success: true,
-            cancelled: false,
-            file_paths: chapter_paths,
-            error: None,
-        };
     }
+
+    let _ = app.emit(
+        "youtube-progress",
+        DownloadProgress {
+            phase: "splitting".to_string(),
+            percent: 100.0,
+            speed: None,
+            eta: None,
+            title: None,
+        },
+    );
+
+    // Remove the original full file now that chapters are split
+    let _ = std::fs::remove_file(&full_file);
+
+    log::info!("Chapter splitting complete, {} files", chapter_paths.len());
 
     DownloadResult {
         success: true,
         cancelled: false,
-        file_paths,
+        file_paths: chapter_paths,
         error: None,
     }
 }

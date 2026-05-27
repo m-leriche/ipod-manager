@@ -3,11 +3,16 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 use super::helpers::{build_codec_args, build_output_path, parse_ffmpeg_time};
 use super::probe::probe_audio;
 use super::{ConvertProgress, ConvertRequest, ConvertResult};
+use crate::process;
+
+/// Timeout for a single file conversion (30 minutes).
+const CONVERT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 pub fn convert_batch(
     requests: Vec<ConvertRequest>,
@@ -21,8 +26,11 @@ pub fn convert_batch(
     let mut output_paths = Vec::new();
     let mut warnings = Vec::new();
 
+    log::info!("Starting batch conversion of {} files", total);
+
     for (i, req) in requests.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
+            log::info!("Batch conversion cancelled after {}/{} files", i, total);
             return ConvertResult {
                 success: converted > 0,
                 cancelled: true,
@@ -56,11 +64,18 @@ pub fn convert_batch(
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("?");
+                log::warn!("Conversion failed for {}: {}", file_name, e);
                 errors.push(format!("{}: {}", file_name, e));
                 failed += 1;
             }
         }
     }
+
+    log::info!(
+        "Batch conversion complete: {} converted, {} failed",
+        converted,
+        failed
+    );
 
     ConvertResult {
         success: failed == 0 && !errors.is_empty() || converted > 0,
@@ -128,20 +143,12 @@ fn convert_single(
         return Err("Failed to capture ffmpeg stdout".to_string());
     };
 
-    // Drain stderr in background
-    let stderr_handle = child.stderr.take().map(|mut stderr| {
-        std::thread::spawn(move || {
-            let mut buf = String::new();
-            std::io::Read::read_to_string(&mut stderr, &mut buf).unwrap_or_default();
-            buf
-        })
-    });
+    let stderr_handle = process::drain_stderr(&mut child);
 
     let reader = std::io::BufReader::new(stdout);
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
-            let _ = child.kill();
-            let _ = child.wait();
+            process::kill_and_wait(&mut child);
             let _ = std::fs::remove_file(&output_path);
             return Err("Cancelled".to_string());
         }
@@ -169,12 +176,16 @@ fn convert_single(
         }
     }
 
-    let status = child.wait().map_err(|e| format!("Process error: {}", e))?;
+    let status = match process::wait_with_timeout(&mut child, CONVERT_TIMEOUT) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = std::fs::remove_file(&output_path);
+            return Err(format!("Process error: {}", e));
+        }
+    };
 
     if !status.success() {
-        let stderr = stderr_handle
-            .and_then(|h| h.join().ok())
-            .unwrap_or_default();
+        let stderr = process::collect_stderr(stderr_handle);
         let _ = std::fs::remove_file(&output_path);
         return Err(format!(
             "ffmpeg error: {}",

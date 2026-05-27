@@ -1,14 +1,18 @@
 use crate::error::AppError;
 use crate::library::{self, LibraryDb};
 use crate::subsonic::SubsonicCacheHandle;
-use tauri::State;
+use tauri::{AppHandle, State};
+
+use super::scanning::auto_backup;
 
 #[tauri::command]
 pub async fn delete_library_tracks(
     track_ids: Vec<i64>,
+    app: AppHandle,
     db: State<'_, LibraryDb>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<usize, AppError> {
+    auto_backup(&app, &db).await;
     let result = db
         .with_db(move |conn| {
             let library_root = library::get_library_location(conn)

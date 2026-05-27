@@ -10,6 +10,7 @@ describe("useAppEventListeners", () => {
     onOpenSettings: vi.fn(),
     onLibraryChanged: vi.fn(),
     onToggleShortcuts: vi.fn(),
+    onCheckForUpdates: vi.fn(),
   };
 
   beforeEach(() => {

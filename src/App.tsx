@@ -31,6 +31,7 @@ import type { DiskInfo } from "./components/templates/MountPanel/types";
 import type { IpodInfo } from "./types/ipod";
 import type { LibrarySummary } from "./components/molecules/StatusBar/types";
 import { NewReleasesView } from "./components/templates/NewReleasesView/NewReleasesView";
+import { WelcomeScreen } from "./components/templates/WelcomeScreen/WelcomeScreen";
 
 const DiscoverView = lazy(() =>
   import("./components/templates/DiscoverView/DiscoverView").then((m) => ({ default: m.DiscoverView })),
@@ -117,6 +118,11 @@ const AppContent = () => {
   const [ipodMounted, setIpodMounted] = useState(false);
   const { hasAnyNewReleases, checkState: releasesCheckState } = useNewReleases();
   const [discoverEnabled, setDiscoverEnabled] = useState(true);
+  const [libraryReady, setLibraryReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    invoke<string | null>("get_library_location").then((loc) => setLibraryReady(!!loc));
+  }, []);
 
   useEffect(() => {
     invoke<boolean>("get_discover_enabled")
@@ -202,6 +208,7 @@ const AppContent = () => {
     onOpenSettings: () => setSettingsOpen(true),
     onLibraryChanged: () => libraryRefreshRef.current?.(),
     onToggleShortcuts: () => setShortcutsOpen((prev) => !prev),
+    onCheckForUpdates: () => setSettingsOpen(true),
   });
 
   const handleRescan = useCallback(async () => {
@@ -221,6 +228,19 @@ const AppContent = () => {
       unlisten();
     }
   }, [startProgress, updateProgress, finishProgress, failProgress]);
+
+  // Show welcome screen on first run (no library configured yet)
+  if (libraryReady === null) return null; // Still loading
+  if (!libraryReady) {
+    return (
+      <WelcomeScreen
+        onComplete={() => {
+          setLibraryReady(true);
+          libraryRefreshRef.current?.();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg-primary text-text-primary font-sans antialiased">

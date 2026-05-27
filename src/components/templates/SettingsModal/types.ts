@@ -13,4 +13,5 @@ export interface SubsonicStatus {
   port: number;
   username: string;
   urls: ServerUrl[];
+  localhost_only: boolean;
 }

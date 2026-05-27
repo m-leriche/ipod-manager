@@ -3,9 +3,41 @@ use serde::Serialize;
 use std::fs;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 /// Maximum number of automatic backups to keep before pruning old ones.
 const MAX_BACKUPS: usize = 10;
+
+/// Minimum interval between automatic backups (5 minutes).
+/// Prevents backup spam when the user performs many small destructive
+/// operations in a row (e.g. deleting tracks one-by-one).
+const AUTO_BACKUP_INTERVAL: Duration = Duration::from_secs(300);
+
+static LAST_AUTO_BACKUP: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Create a backup if enough time has passed since the last automatic one.
+/// Failures are logged but never propagated — auto-backups must not block
+/// the operation the user actually requested.
+pub fn auto_backup_if_due(conn: &Connection, db_path: &Path) {
+    {
+        let guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(last) = *guard {
+            if last.elapsed() < AUTO_BACKUP_INTERVAL {
+                return;
+            }
+        }
+    }
+
+    match create_backup(conn, db_path) {
+        Ok(info) => {
+            log::info!("Auto-backup created: {}", info.path);
+            let mut guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+            *guard = Some(Instant::now());
+        }
+        Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BackupInfo {

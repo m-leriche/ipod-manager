@@ -11,6 +11,8 @@ pub struct SubsonicStatus {
     pub port: u16,
     pub username: String,
     pub urls: Vec<ServerUrl>,
+    /// True when default credentials are in use and remote access is blocked.
+    pub localhost_only: bool,
 }
 
 /// Returns the current Subsonic server status including reachable URLs.
@@ -23,13 +25,16 @@ pub async fn get_subsonic_status(
     db: State<'_, LibraryDb>,
     server: State<'_, SubsonicServer>,
 ) -> Result<SubsonicStatus, AppError> {
-    let (username, port) = {
+    let (username, password, port) = {
         let conn = db.lock_conn()?;
         let username = crate::library::get_setting(&conn, "subsonic_username")
             .unwrap_or_else(|| "admin".to_string());
-        (username, server.port)
+        let password = crate::library::get_setting(&conn, "subsonic_password")
+            .unwrap_or_else(|| "admin".to_string());
+        (username, password, server.port)
     };
 
+    let localhost_only = username == "admin" && password == "admin";
     let urls = crate::network::detect_server_urls(port).await;
 
     Ok(SubsonicStatus {
@@ -37,6 +42,7 @@ pub async fn get_subsonic_status(
         port,
         username,
         urls,
+        localhost_only,
     })
 }
 

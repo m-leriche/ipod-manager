@@ -21,3 +21,6 @@ src-tauri/target/
 # Playwright
 playwright-report/
 test-results/
+
+# Tauri update signing keys (private key must never be committed)
+src-tauri/keys/update.key

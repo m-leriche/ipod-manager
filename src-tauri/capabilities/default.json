@@ -14,6 +14,9 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-inner-size",
     "dialog:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "updater:default",
+    "process:allow-restart",
+    "core:app:allow-version"
   ]
 }

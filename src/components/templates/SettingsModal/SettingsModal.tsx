@@ -13,6 +13,7 @@ import { RetroWindowDots } from "../../atoms/RetroWindowDots/RetroWindowDots";
 import type { LibraryScanProgress } from "../../../types/library";
 import { LastfmSettings } from "./LastfmSettings";
 import { StreamingSettings } from "./StreamingSettings";
+import { UpdateSection } from "./UpdateSection";
 import { CustomThemeEditor } from "./CustomThemeEditor";
 import type { SettingsModalProps } from "./types";
 
@@ -150,6 +151,8 @@ export const SettingsModal = ({ onClose, onLibraryChanged }: SettingsModalProps)
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5">
+          <UpdateSection />
+
           <div>
             <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest block mb-1">
               Library Location

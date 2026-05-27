@@ -25,7 +25,13 @@ test.describe("Settings Modal", () => {
     await expect(page.getByRole("button", { name: "Change", exact: true })).toBeVisible();
   });
 
-  test("shows 'Not configured' when no library set", async ({ page }) => {
+  test("shows 'Not configured' when no library set", async ({ page, tauriMocks }) => {
+    // Override library location to null and reload so the settings modal
+    // can open (the welcome screen doesn't have settings access).
+    // We still need a library location for the app to boot past the
+    // welcome screen, so we set it, open settings, then clear it at runtime.
+    await tauriMocks.setResponses({ get_library_location: null });
+
     await page.evaluate(() => {
       (window as any).__TAURI_MOCK_EMIT__("open-settings", null);
     });

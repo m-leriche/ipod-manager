@@ -15,7 +15,7 @@ test.describe("Navigation", () => {
   });
 
   test("defaults to Library tab", async ({ page }) => {
-    await expect(page.getByText("Add your music library")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Library", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
   test("switches to Tools tab and shows sub-tabs", async ({ page }) => {
@@ -51,7 +51,7 @@ test.describe("Navigation", () => {
     await expect(page.getByRole("tab", { name: "File Manager" })).toBeVisible();
 
     await page.getByRole("tab", { name: "Library", exact: true }).click();
-    await expect(page.getByText("Add your music library")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Library", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
   test("keyboard shortcut opens shortcuts dialog", async ({ page }) => {

@@ -109,6 +109,38 @@ Output:
 - `src-tauri/target/release/bundle/macos/Crate.app`
 - `src-tauri/target/release/bundle/dmg/Crate_<version>_aarch64.dmg`
 
+## Releasing
+
+Releases are automated via GitHub Actions. To publish a new version:
+
+1. **Bump the version** in all three files:
+   - `package.json`
+   - `src-tauri/Cargo.toml`
+   - `src-tauri/tauri.conf.json`
+
+2. **Commit, tag, and push:**
+   ```bash
+   git add -A && git commit -m "Bump version to X.Y.Z"
+   git tag vX.Y.Z
+   git push && git push origin vX.Y.Z
+   ```
+
+3. **Wait for the build** (~5-10 min) at [Actions](https://github.com/m-leriche/ipod-manager/actions)
+
+4. **Publish the release** — go to [Releases](https://github.com/m-leriche/ipod-manager/releases), open the draft, edit notes if needed, and click **Publish release**
+
+The app checks for updates via Settings or the **Crate > Check for Updates** menu item. Users running a previous version will see the update and can install it in-place.
+
+### Release signing
+
+Update bundles are signed with a Tauri signing key (separate from macOS code signing). The public key is at `src-tauri/keys/update.key.pub` and configured in `src-tauri/tauri.conf.json`. The private key is stored as a GitHub Actions secret (`TAURI_SIGNING_PRIVATE_KEY`).
+
+To regenerate keys (breaks updates for users on older versions):
+```bash
+npx tauri signer generate -w src-tauri/keys/update.key
+```
+Then update the `pubkey` in `tauri.conf.json` under `plugins.updater` and replace the `TAURI_SIGNING_PRIVATE_KEY` secret in GitHub.
+
 ## Project Structure
 
 ```
@@ -204,7 +236,7 @@ Each component has its own folder with co-located test, types, and helper files.
 | Testing    | Vitest, React Testing Library, Playwright (e2e), cargo test |
 | Linting    | ESLint, Clippy                    |
 | Formatting | Prettier, rustfmt                 |
-| CI         | GitHub Actions (4 parallel jobs: Prettier, Tests, E2E, Rust) |
+| CI         | GitHub Actions (6 parallel jobs: Prettier, ESLint, Tests, Build, E2E, Rust) |
 | Audio      | symphonia (decoding), cpal (playback), lofty (metadata), souvlaki (media keys) |
 | Database   | SQLite via rusqlite                |
 | External   | yt-dlp + ffmpeg (YouTube/video), ffprobe (quality analysis) |
@@ -231,16 +263,16 @@ Crate runs a built-in [Subsonic](http://www.subsonic.org/pages/api.jsp)-compatib
 
 1. **Open Settings** (gear icon) and scroll to **Streaming Server**
 2. The server starts automatically when the app launches — you'll see a green dot and `Running on port 4533`
-3. **Copy the Server URL** shown under "Local WiFi" (e.g. `http://192.168.1.42:4533`)
-4. **Open your Subsonic client** (Amperfy, play:Sub, Symfonium, DSub, etc.) and add a new server:
-   - **Server URL:** paste the URL from step 3
-   - **Username:** `admin` (default)
-   - **Password:** `admin` (default)
-5. Your full library appears in the client — browse, search, and stream
+3. **Set credentials** — the server ships with default `admin`/`admin` credentials. **Remote access is blocked until you change them.** Click "Change credentials" to set a real username and password (requires app restart).
+4. **Copy the Server URL** shown under "Local WiFi" (e.g. `http://192.168.1.42:4533`)
+5. **Open your Subsonic client** (Amperfy, play:Sub, Symfonium, DSub, etc.) and add a new server:
+   - **Server URL:** paste the URL from step 4
+   - **Username/Password:** the credentials you set in step 3
+6. Your full library appears in the client — browse, search, and stream
 
-### Changing Credentials
+### Security
 
-Click **Change credentials** in Settings to set a custom username and password. Changes take effect on the next app restart.
+With default credentials (`admin`/`admin`), the server binds to **localhost only** (`127.0.0.1`) — it's only accessible from your own machine. Once you set custom credentials, the server binds to all interfaces (`0.0.0.0`) and is accessible from other devices on your network. Settings shows a yellow warning banner when remote access is blocked.
 
 ### Network & Remote Access
 

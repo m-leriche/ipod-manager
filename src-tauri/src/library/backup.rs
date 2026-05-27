@@ -19,20 +19,20 @@ static LAST_AUTO_BACKUP: Mutex<Option<Instant>> = Mutex::new(None);
 /// Create a backup if enough time has passed since the last automatic one.
 /// Failures are logged but never propagated — auto-backups must not block
 /// the operation the user actually requested.
+///
+/// Holds the rate-limit lock across the entire operation to prevent two
+/// concurrent callers from both passing the check and creating two backups.
 pub fn auto_backup_if_due(conn: &Connection, db_path: &Path) {
-    {
-        let guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(last) = *guard {
-            if last.elapsed() < AUTO_BACKUP_INTERVAL {
-                return;
-            }
+    let mut guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(last) = *guard {
+        if last.elapsed() < AUTO_BACKUP_INTERVAL {
+            return;
         }
     }
 
     match create_backup(conn, db_path) {
         Ok(info) => {
             log::info!("Auto-backup created: {}", info.path);
-            let mut guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
             *guard = Some(Instant::now());
         }
         Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),

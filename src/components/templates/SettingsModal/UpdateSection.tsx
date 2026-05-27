@@ -4,7 +4,11 @@ import { Spinner } from "../../atoms/Spinner/Spinner";
 import { getVersion } from "@tauri-apps/api/app";
 import { useState } from "react";
 
-export const UpdateSection = () => {
+interface UpdateSectionProps {
+  autoCheck?: boolean;
+}
+
+export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
   const { state, checkForUpdate, downloadAndInstall } = useUpdateChecker();
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
@@ -13,6 +17,10 @@ export const UpdateSection = () => {
       .then(setAppVersion)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (autoCheck) checkForUpdate();
+  }, [autoCheck, checkForUpdate]);
 
   return (
     <div className="mb-6">

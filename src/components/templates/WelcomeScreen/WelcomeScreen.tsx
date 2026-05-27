@@ -30,8 +30,15 @@ export const WelcomeScreen = ({ onComplete }: WelcomeScreenProps) => {
       await invoke("set_library_location", { path: selected });
       onComplete();
     } catch (e) {
-      setError(`Scan failed: ${e}`);
-      setScanning(false);
+      const msg = String(e);
+      // Cancellation is not an error — just reset to the folder picker
+      if (msg.includes("Cancelled")) {
+        setScanning(false);
+        setProgress(null);
+      } else {
+        setError(`Scan failed: ${msg}`);
+        setScanning(false);
+      }
     } finally {
       unlisten();
     }

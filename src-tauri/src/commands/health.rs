@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::library::{self, LibraryDb};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_library_health(
@@ -33,17 +33,7 @@ pub async fn import_library(
     app: AppHandle,
     db: State<'_, LibraryDb>,
 ) -> Result<library::export::ImportResult, AppError> {
-    // Auto-backup before importing (can overwrite library data)
-    if let Ok(data_dir) = app.path().app_data_dir() {
-        let db_path = data_dir.join("library.db");
-        let conn_arc = db.conn_arc();
-        let _ = tauri::async_runtime::spawn_blocking(move || {
-            if let Ok(conn) = conn_arc.lock() {
-                library::backup::auto_backup_if_due(&conn, &db_path);
-            }
-        })
-        .await;
-    }
+    super::auto_backup(&app, &db).await;
     db.with_db(move |conn| library::export::import_library(conn, &input_path))
         .await
 }

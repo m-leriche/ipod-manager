@@ -111,6 +111,7 @@ const AppContent = () => {
   const [toolTab, setToolTab] = useState<ToolTab>("files");
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("discover");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autoCheckUpdate, setAutoCheckUpdate] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const { miniPlayer, toggleMiniPlayer } = useMiniPlayer();
@@ -208,7 +209,10 @@ const AppContent = () => {
     onOpenSettings: () => setSettingsOpen(true),
     onLibraryChanged: () => libraryRefreshRef.current?.(),
     onToggleShortcuts: () => setShortcutsOpen((prev) => !prev),
-    onCheckForUpdates: () => setSettingsOpen(true),
+    onCheckForUpdates: () => {
+      setAutoCheckUpdate(true);
+      setSettingsOpen(true);
+    },
   });
 
   const handleRescan = useCallback(async () => {
@@ -476,11 +480,13 @@ const AppContent = () => {
             <SettingsModal
               onClose={() => {
                 setSettingsOpen(false);
+                setAutoCheckUpdate(false);
                 invoke<boolean>("get_discover_enabled")
                   .then(setDiscoverEnabled)
                   .catch(() => {});
               }}
               onLibraryChanged={() => libraryRefreshRef.current?.()}
+              autoCheckUpdate={autoCheckUpdate}
             />
           </ErrorBoundary>
         </Suspense>

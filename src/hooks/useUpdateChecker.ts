@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { check } from "@tauri-apps/plugin-updater";
+import { useState, useCallback, useRef } from "react";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
 export interface UpdateState {
@@ -18,27 +18,27 @@ export const useUpdateChecker = () => {
     downloading: false,
     error: null,
   });
+  const updateRef = useRef<Update | null>(null);
 
   const checkForUpdate = useCallback(async () => {
     setState((s) => ({ ...s, checking: true, error: null }));
     try {
       const update = await check();
+      updateRef.current = update;
       if (update) {
         setState((s) => ({ ...s, checking: false, available: true, version: update.version }));
-        return update;
+      } else {
+        setState((s) => ({ ...s, checking: false, available: false }));
       }
-      setState((s) => ({ ...s, checking: false, available: false }));
-      return null;
     } catch (e) {
       setState((s) => ({ ...s, checking: false, error: String(e) }));
-      return null;
     }
   }, []);
 
   const downloadAndInstall = useCallback(async () => {
     setState((s) => ({ ...s, downloading: true, error: null }));
     try {
-      const update = await check();
+      const update = updateRef.current ?? (await check());
       if (!update) return;
       await update.downloadAndInstall();
       await relaunch();

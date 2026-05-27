@@ -64,6 +64,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .register_uri_scheme_protocol("stream", |ctx, request| {
             streaming::handle_request(ctx, request)
         })
@@ -171,12 +173,18 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+,")
                 .build(app)?;
 
+            let check_updates_item = MenuItemBuilder::new("Check for Updates...")
+                .id("check-updates")
+                .build(app)?;
+
             let app_submenu = Submenu::with_items(
                 app,
                 "Crate",
                 true,
                 &[
                     &PredefinedMenuItem::about(app, Some("About Crate"), None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &check_updates_item,
                     &PredefinedMenuItem::separator(app)?,
                     &settings_item,
                     &PredefinedMenuItem::separator(app)?,
@@ -224,6 +232,8 @@ pub fn run() {
             app.on_menu_event(move |app_handle, event| {
                 if event.id().as_ref() == "settings" {
                     let _ = app_handle.emit("open-settings", ());
+                } else if event.id().as_ref() == "check-updates" {
+                    let _ = app_handle.emit("check-for-updates", ());
                 }
             });
 

@@ -1,6 +1,7 @@
 export interface SettingsModalProps {
   onClose: () => void;
   onLibraryChanged: () => void;
+  autoCheckUpdate?: boolean;
 }
 
 export interface ServerUrl {
@@ -13,4 +14,5 @@ export interface SubsonicStatus {
   port: number;
   username: string;
   urls: ServerUrl[];
+  localhost_only: boolean;
 }

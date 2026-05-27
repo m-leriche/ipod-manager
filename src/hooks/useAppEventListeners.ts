@@ -5,10 +5,12 @@ export const useAppEventListeners = ({
   onOpenSettings,
   onLibraryChanged,
   onToggleShortcuts,
+  onCheckForUpdates,
 }: {
   onOpenSettings: () => void;
   onLibraryChanged: () => void;
   onToggleShortcuts: () => void;
+  onCheckForUpdates: () => void;
 }) => {
   const onOpenSettingsRef = useRef(onOpenSettings);
   onOpenSettingsRef.current = onOpenSettings;
@@ -16,6 +18,8 @@ export const useAppEventListeners = ({
   onLibraryChangedRef.current = onLibraryChanged;
   const onToggleShortcutsRef = useRef(onToggleShortcuts);
   onToggleShortcutsRef.current = onToggleShortcuts;
+  const onCheckForUpdatesRef = useRef(onCheckForUpdates);
+  onCheckForUpdatesRef.current = onCheckForUpdates;
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -29,6 +33,15 @@ export const useAppEventListeners = ({
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("library-changed", () => onLibraryChangedRef.current()).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
+
+  // "Check for Updates" menu item
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("check-for-updates", () => onCheckForUpdatesRef.current()).then((fn) => {
       unlisten = fn;
     });
     return () => unlisten?.();

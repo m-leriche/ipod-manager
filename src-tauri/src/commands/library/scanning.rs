@@ -39,6 +39,8 @@ pub async fn set_library_location(
     cancel: State<'_, SyncCancel>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<(), AppError> {
+    // Back up before clearing all tracks for the new location
+    auto_backup(&app, &db).await;
     let conn_arc = db.conn_arc();
     let flag = cancel.new_flag();
 
@@ -202,7 +204,7 @@ pub async fn get_library_folders(
 /// Best-effort automatic backup before destructive operations.
 /// Runs on a blocking thread to avoid stalling the Tokio runtime.
 /// Failures are logged but never block the caller.
-async fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
+pub(crate) async fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
     let db_path = match app.path().app_data_dir() {
         Ok(dir) => dir.join("library.db"),
         Err(_) => return,
@@ -213,10 +215,7 @@ async fn auto_backup(app: &AppHandle, db: &State<'_, LibraryDb>) {
             Ok(c) => c,
             Err(_) => return,
         };
-        match library::backup::create_backup(&conn, &db_path) {
-            Ok(info) => log::info!("Auto-backup created: {}", info.path),
-            Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
-        }
+        library::backup::auto_backup_if_due(&conn, &db_path);
     })
     .await;
 }

@@ -14,7 +14,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   read_rockbox_playdata: null,
 
   // Library
-  get_library_location: null,
+  get_library_location: "/Users/test/Music",
   check_library_available: true,
   set_library_location: null,
   refresh_library: null,
@@ -139,7 +139,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   get_library_stats: null,
 
   // Subsonic
-  get_subsonic_status: { enabled: false, port: 4533, username: "", urls: [] },
+  get_subsonic_status: { enabled: false, port: 4533, username: "", urls: [], localhost_only: false },
 
   // New Releases
   get_watched_artists: [],
@@ -166,6 +166,12 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   lastfm_set_scrobble_enabled: null,
   lastfm_flush_queue: null,
   lastfm_open_auth_url: null,
+
+  // Discover
+  get_discover_enabled: true,
+
+  // Tauri plugins (internal commands)
+  "plugin:app|version": "1.0.0",
 };
 
 type CommandOverrides = Record<string, unknown>;

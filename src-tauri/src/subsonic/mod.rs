@@ -137,10 +137,12 @@ pub fn start_server(
     username: String,
     password: String,
 ) -> (SubsonicServer, SubsonicCacheHandle) {
-    if username == "admin" && password == "admin" {
+    let using_defaults = username == "admin" && password == "admin";
+    if using_defaults {
         log::warn!(
             "Subsonic server using default credentials (admin/admin). \
-             Change them in Settings to secure your server."
+             Binding to localhost only — remote access is blocked until \
+             credentials are changed in Settings."
         );
     }
 
@@ -202,7 +204,15 @@ pub fn start_server(
         .fallback(fallback)
         .layer(middleware::from_fn(log_request));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    // Bind to localhost only when using default credentials to prevent
+    // unauthenticated remote access. Once the user sets real credentials,
+    // the server binds to all interfaces for LAN/VPN streaming.
+    let bind_addr: [u8; 4] = if using_defaults {
+        [127, 0, 0, 1]
+    } else {
+        [0, 0, 0, 0]
+    };
+    let addr = SocketAddr::from((bind_addr, port));
 
     tauri::async_runtime::spawn(async move {
         match tokio::net::TcpListener::bind(addr).await {

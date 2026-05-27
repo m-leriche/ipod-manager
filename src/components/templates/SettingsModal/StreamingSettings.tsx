@@ -84,8 +84,22 @@ export const StreamingSettings = () => {
         {status && <span className="text-[10px] text-text-tertiary">{status.username}</span>}
       </div>
 
+      {/* Default credentials warning */}
+      {status?.localhost_only && (
+        <div className="mt-3 flex items-start gap-2.5 px-4 py-3 border border-yellow-500/30 bg-yellow-500/5 rounded-xl">
+          <span className="text-yellow-500 shrink-0 text-sm leading-none mt-0.5">&#9888;</span>
+          <div>
+            <p className="text-[11px] text-yellow-500 font-medium">Remote access blocked</p>
+            <p className="text-[10px] text-text-tertiary mt-0.5">
+              Default credentials (admin/admin) are in use. The server is only accessible from this machine. Change
+              credentials below to enable LAN and VPN streaming.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Connection URLs */}
-      {status && status.urls.length > 0 && (
+      {status && status.urls.length > 0 && !status.localhost_only && (
         <div className="mt-3 flex flex-col gap-2">
           <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest">
             Server URL{status.urls.length > 1 ? "s" : ""}
@@ -106,7 +120,7 @@ export const StreamingSettings = () => {
         </div>
       )}
 
-      {status && status.urls.length === 0 && (
+      {status && status.urls.length === 0 && !status.localhost_only && (
         <p className="mt-2 text-[10px] text-text-tertiary px-1">
           No network interfaces detected. Check your WiFi connection.
         </p>

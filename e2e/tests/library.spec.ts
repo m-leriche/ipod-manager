@@ -1,11 +1,12 @@
 import { test, expect } from "../fixtures/tauri-mocks";
 import { MOCK_BROWSER_DATA, MOCK_PAGINATED_BROWSER_DATA, MOCK_TRACKS } from "../fixtures/mock-data";
 
-test.describe("Library — empty state", () => {
-  test("shows empty state when no library is set", async ({ page }) => {
+test.describe("Library — first run", () => {
+  test("shows welcome screen when no library is set", async ({ page, tauriMocks }) => {
+    await tauriMocks.override({ get_library_location: null });
     await page.goto("/");
-    await expect(page.getByText("Add your music library")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Choose Folder" })).toBeVisible();
+    await expect(page.getByText("Welcome to Crate")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose Music Folder" })).toBeVisible();
   });
 });
 

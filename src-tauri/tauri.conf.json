@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Crate",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "com.crateapp.app",
   "build": {
     "frontendDist": "../dist",
@@ -26,6 +26,14 @@
         "enable": true,
         "scope": ["**"]
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVFRkY5RDAzRkM4Q0Y3NTcKUldSWDk0ejhBNTMvN2xpMXVHQ2FZME92UzZ5bWJyL2I3bm95Nk1vYzRRVUlWYjZDZDY2cUdkMHMK",
+      "endpoints": [
+        "https://github.com/m-leriche/ipod-manager/releases/latest/download/latest.json"
+      ]
     }
   },
   "bundle": {

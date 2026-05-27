@@ -14,7 +14,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   read_rockbox_playdata: null,
 
   // Library
-  get_library_location: null,
+  get_library_location: "/Users/test/Music",
   check_library_available: true,
   set_library_location: null,
   refresh_library: null,

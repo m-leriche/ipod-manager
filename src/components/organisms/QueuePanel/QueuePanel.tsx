@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 
 interface QueuePanelProps {
@@ -18,6 +18,17 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragStartYRef = useRef(0);
   const dragActiveRef = useRef(false);
+  const listenersRef = useRef<{ move: (ev: MouseEvent) => void; up: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (listenersRef.current) {
+        window.removeEventListener("mousemove", listenersRef.current.move);
+        window.removeEventListener("mouseup", listenersRef.current.up);
+        listenersRef.current = null;
+      }
+    };
+  }, []);
 
   const handleDragMouseDown = useCallback(
     (e: React.MouseEvent, index: number) => {
@@ -42,6 +53,7 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
       const handleMouseUp = () => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        listenersRef.current = null;
 
         if (dragActiveRef.current) {
           setDragOverIndex((overIdx) => {
@@ -62,6 +74,7 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
 
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      listenersRef.current = { move: handleMouseMove, up: handleMouseUp };
     },
     [reorderQueue],
   );

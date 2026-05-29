@@ -60,9 +60,11 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
       if (!cancelled) timeoutId = setTimeout(schedulePoll, delay);
     };
 
-    detectIPod().then(() => {
-      if (!cancelled) timeoutId = setTimeout(schedulePoll, BASE_MS);
-    });
+    detectIPod()
+      .catch(() => {})
+      .then(() => {
+        if (!cancelled) timeoutId = setTimeout(schedulePoll, BASE_MS);
+      });
 
     return () => {
       cancelled = true;

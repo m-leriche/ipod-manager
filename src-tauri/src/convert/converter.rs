@@ -78,7 +78,7 @@ pub fn convert_batch(
     );
 
     ConvertResult {
-        success: failed == 0 && !errors.is_empty() || converted > 0,
+        success: failed == 0 && converted > 0,
         cancelled: false,
         converted,
         failed,

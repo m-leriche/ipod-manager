@@ -99,4 +99,39 @@ describe("SeekBar", () => {
     fireEvent(window, new MouseEvent("mouseup", { clientX: 200 }));
     expect(onChange).toHaveBeenCalledWith(1);
   });
+
+  it("supports keyboard arrow keys", () => {
+    const onChange = vi.fn();
+    const { container } = render(<SeekBar value={0.5} onChange={onChange} />);
+    const bar = container.firstElementChild!;
+
+    fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenCalledWith(0.55);
+
+    onChange.mockClear();
+    fireEvent.keyDown(bar, { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenCalledWith(0.45);
+  });
+
+  it("supports Home and End keys", () => {
+    const onChange = vi.fn();
+    const { container } = render(<SeekBar value={0.5} onChange={onChange} />);
+    const bar = container.firstElementChild!;
+
+    fireEvent.keyDown(bar, { key: "Home" });
+    expect(onChange).toHaveBeenCalledWith(0);
+
+    onChange.mockClear();
+    fireEvent.keyDown(bar, { key: "End" });
+    expect(onChange).toHaveBeenCalledWith(1);
+  });
+
+  it("clamps keyboard values to 0-1", () => {
+    const onChange = vi.fn();
+    const { container } = render(<SeekBar value={0.02} onChange={onChange} />);
+    const bar = container.firstElementChild!;
+
+    fireEvent.keyDown(bar, { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenCalledWith(0);
+  });
 });

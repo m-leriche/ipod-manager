@@ -8,6 +8,7 @@ import { TransportControls } from "../../molecules/TransportControls/TransportCo
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 import { LyricsPanel } from "../LyricsPanel/LyricsPanel";
 import { getDragPayload } from "../TrackTable/TrackTable";
+import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import type { LibraryTrack } from "../../../types/library";
 
 interface NowPlayingBarProps {
@@ -15,22 +16,10 @@ interface NowPlayingBarProps {
   queueOpen?: boolean;
   onToggleMiniPlayer?: () => void;
   miniPlayer?: boolean;
-  showInfoPanel?: boolean;
-  showStatsPanel?: boolean;
-  onToggleInfoPanel?: () => void;
-  onToggleStatsPanel?: () => void;
 }
 
-export const NowPlayingBar = ({
-  onToggleQueue,
-  queueOpen,
-  onToggleMiniPlayer,
-  miniPlayer,
-  showInfoPanel,
-  showStatsPanel,
-  onToggleInfoPanel,
-  onToggleStatsPanel,
-}: NowPlayingBarProps) => {
+export const NowPlayingBar = ({ onToggleQueue, queueOpen, onToggleMiniPlayer, miniPlayer }: NowPlayingBarProps) => {
+  const { showInfoPanel, showStatsPanel, toggleInfoPanel, toggleStatsPanel } = useViewLayout();
   const {
     state,
     pause,
@@ -182,14 +171,14 @@ export const NowPlayingBar = ({
 
       {/* Right — Panel toggles + Volume + Queue toggle */}
       <div className="shrink-0 flex items-center justify-end gap-1">
-        {!miniPlayer && onToggleInfoPanel && (
-          <PanelToggle active={showInfoPanel} onClick={onToggleInfoPanel} title="Info panel">
+        {!miniPlayer && (
+          <PanelToggle active={showInfoPanel} onClick={toggleInfoPanel} title="Info panel">
             <circle cx="12" cy="12" r="9" />
             <path strokeLinecap="round" d="M12 11v5M12 8h.01" />
           </PanelToggle>
         )}
-        {!miniPlayer && onToggleStatsPanel && (
-          <PanelToggle active={showStatsPanel} onClick={onToggleStatsPanel} title="Library stats">
+        {!miniPlayer && (
+          <PanelToggle active={showStatsPanel} onClick={toggleStatsPanel} title="Library stats">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-6 4 3 5-7" />
           </PanelToggle>

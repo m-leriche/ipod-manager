@@ -1,3 +1,5 @@
+import { useViewLayout } from "../../../contexts/ViewLayoutContext";
+
 interface LibraryToolbarProps {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   search: string;
@@ -8,20 +10,6 @@ interface LibraryToolbarProps {
   trackCount: number;
   displayedTrackCount: number;
   isPlaylistView: boolean;
-  showPlaylistSidebar: boolean;
-  showColumnBrowser: boolean;
-  showAlbumGrid: boolean;
-  showArtworkCarousel: boolean;
-  showTrackList: boolean;
-  showLyricsPanel: boolean;
-  lyricsOverlay: boolean;
-  onTogglePlaylistSidebar?: () => void;
-  onToggleColumnBrowser?: () => void;
-  onToggleAlbumGrid?: () => void;
-  onToggleArtworkCarousel?: () => void;
-  onToggleTrackList?: () => void;
-  onToggleLyricsPanel?: () => void;
-  onToggleLyricsOverlay?: () => void;
 }
 
 export const LibraryToolbar = ({
@@ -34,104 +22,99 @@ export const LibraryToolbar = ({
   trackCount,
   displayedTrackCount,
   isPlaylistView,
-  showPlaylistSidebar,
-  showColumnBrowser,
-  showAlbumGrid,
-  showArtworkCarousel,
-  showTrackList,
-  showLyricsPanel,
-  lyricsOverlay,
-  onTogglePlaylistSidebar,
-  onToggleColumnBrowser,
-  onToggleAlbumGrid,
-  onToggleArtworkCarousel,
-  onToggleTrackList,
-  onToggleLyricsPanel,
-  onToggleLyricsOverlay,
-}: LibraryToolbarProps) => (
-  <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
-    <input
-      ref={searchInputRef}
-      type="text"
-      value={search}
-      onChange={(e) => onSearchChange(e.target.value)}
-      placeholder="Search... (⌘F)"
-      aria-label="Search library"
-      className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
-    />
-    <button
-      onClick={onToggleFlaggedOnly}
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-        flaggedOnly ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
-      }`}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill={flaggedOnly ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth={2}
-        className="w-3 h-3"
+}: LibraryToolbarProps) => {
+  const {
+    showPlaylistSidebar,
+    showColumnBrowser,
+    showAlbumGrid,
+    showArtworkCarousel,
+    showTrackList,
+    showLyricsPanel,
+    lyricsOverlay,
+    togglePlaylistSidebar,
+    toggleColumnBrowser,
+    toggleAlbumGrid,
+    toggleArtworkCarousel,
+    toggleTrackList,
+    toggleLyricsPanel,
+    toggleLyricsOverlay,
+  } = useViewLayout();
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
+      <input
+        ref={searchInputRef}
+        type="text"
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder="Search... (⌘F)"
+        aria-label="Search library"
+        className="w-48 px-3 py-1 bg-bg-card border border-border rounded-md text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-active"
+      />
+      <button
+        onClick={onToggleFlaggedOnly}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+          flaggedOnly ? "text-accent bg-accent/10" : "text-text-tertiary hover:text-text-secondary"
+        }`}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V3h16l-6 9 6 9H4" />
-      </svg>
-      To Sync
-    </button>
-    <div className="flex-1" />
-    {isBackgroundScanning && (
-      <span className="text-[10px] text-text-tertiary flex items-center gap-1.5 animate-pulse">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-        Updating…
+        <svg
+          viewBox="0 0 24 24"
+          fill={flaggedOnly ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth={2}
+          className="w-3 h-3"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V3h16l-6 9 6 9H4" />
+        </svg>
+        To Sync
+      </button>
+      <div className="flex-1" />
+      {isBackgroundScanning && (
+        <span className="text-[10px] text-text-tertiary flex items-center gap-1.5 animate-pulse">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+          Updating…
+        </span>
+      )}
+      <span className="text-[10px] text-text-tertiary tabular-nums">
+        {isPlaylistView ? displayedTrackCount : trackCount} tracks
       </span>
-    )}
-    <span className="text-[10px] text-text-tertiary tabular-nums">
-      {isPlaylistView ? displayedTrackCount : trackCount} tracks
-    </span>
-    <div className="w-px h-4 bg-border" />
-    <div className="flex items-center gap-0.5">
-      {onTogglePlaylistSidebar && (
-        <ViewToggle active={showPlaylistSidebar} onClick={onTogglePlaylistSidebar} title="Playlists">
+      <div className="w-px h-4 bg-border" />
+      <div className="flex items-center gap-0.5">
+        <ViewToggle active={showPlaylistSidebar} onClick={togglePlaylistSidebar} title="Playlists">
           <path strokeLinecap="round" d="M4 6h16M4 10h12M4 14h14M4 18h10" />
         </ViewToggle>
-      )}
-      {onToggleColumnBrowser && (
-        <ViewToggle active={showColumnBrowser && !showAlbumGrid} onClick={onToggleColumnBrowser} title="Column browser">
+        <ViewToggle active={showColumnBrowser && !showAlbumGrid} onClick={toggleColumnBrowser} title="Column browser">
           <rect x="3" y="3" width="5" height="18" rx="1" />
           <rect x="10" y="3" width="5" height="18" rx="1" />
           <rect x="17" y="3" width="5" height="18" rx="1" />
         </ViewToggle>
-      )}
-      {onToggleAlbumGrid && (
-        <ViewToggle active={showAlbumGrid} onClick={onToggleAlbumGrid} title="Album grid">
+        <ViewToggle active={showAlbumGrid} onClick={toggleAlbumGrid} title="Album grid">
           <rect x="3" y="3" width="8" height="8" rx="1" />
           <rect x="13" y="3" width="8" height="8" rx="1" />
           <rect x="3" y="13" width="8" height="8" rx="1" />
           <rect x="13" y="13" width="8" height="8" rx="1" />
         </ViewToggle>
-      )}
-      {onToggleArtworkCarousel && (
-        <ViewToggle active={showArtworkCarousel} onClick={onToggleArtworkCarousel} title="Cover flow">
+        <ViewToggle active={showArtworkCarousel} onClick={toggleArtworkCarousel} title="Cover flow">
           <path d="M2 8l4-1v10l-4-1V8z" />
           <rect x="8" y="4" width="8" height="16" rx="1" />
           <path d="M22 8l-4-1v10l4-1V8z" />
         </ViewToggle>
-      )}
-      {(showAlbumGrid || showArtworkCarousel) && onToggleTrackList && (
-        <ViewToggle active={showTrackList} onClick={onToggleTrackList} title="Track list">
-          <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-        </ViewToggle>
-      )}
-      {onToggleLyricsPanel && (
+        {(showAlbumGrid || showArtworkCarousel) && (
+          <ViewToggle active={showTrackList} onClick={toggleTrackList} title="Track list">
+            <path strokeLinecap="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </ViewToggle>
+        )}
         <LyricsToggle
           showLyricsPanel={showLyricsPanel}
           lyricsOverlay={lyricsOverlay}
           showArtworkCarousel={showArtworkCarousel}
-          onToggleLyricsPanel={onToggleLyricsPanel}
-          onToggleLyricsOverlay={onToggleLyricsOverlay}
+          onToggleLyricsPanel={toggleLyricsPanel}
+          onToggleLyricsOverlay={toggleLyricsOverlay}
         />
-      )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── View Toggle Button ──────────────────────────────────────────
 

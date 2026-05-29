@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { cancelSync } from "./utils/cancelSync";
 import { usePanelVisibility } from "./hooks/usePanelVisibility";
+import { ViewLayoutProvider } from "./contexts/ViewLayoutContext";
 import { useMiniPlayer } from "./hooks/useMiniPlayer";
 import { useAppEventListeners } from "./hooks/useAppEventListeners";
 import { ProgressProvider, useProgress } from "./contexts/ProgressContext";
@@ -10,7 +11,7 @@ import { PlaybackProvider, usePlayback } from "./contexts/PlaybackContext";
 import { EqualizerProvider } from "./contexts/EqualizerContext";
 import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { ToastProvider } from "./contexts/ToastContext";
+import { ToastProvider, useToast } from "./contexts/ToastContext";
 import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
@@ -131,27 +132,26 @@ const AppContent = () => {
       .catch(() => {});
   }, []);
 
-  const {
-    showColumnBrowser,
-    showInfoPanel,
-    showStatsPanel,
-    showPlaylistSidebar,
-    showAlbumGrid,
-    showTrackList,
-    showLyricsPanel,
-    showArtworkCarousel,
-    lyricsOverlay,
-    toggleColumnBrowser,
-    toggleInfoPanel,
-    toggleStatsPanel,
-    togglePlaylistSidebar,
-    toggleAlbumGrid,
-    toggleTrackList,
-    toggleArtworkCarousel,
-    toggleLyricsPanel,
-    toggleLyricsOverlay,
-    dismissLyricsOverlay,
-  } = usePanelVisibility();
+  const viewLayout = usePanelVisibility();
+  const { showLyricsPanel, showArtworkCarousel, lyricsOverlay } = viewLayout;
+  const toast = useToast();
+
+  // Check for missing external tools at startup
+  useEffect(() => {
+    const missing: string[] = [];
+    Promise.allSettled([
+      invoke("check_ffmpeg").catch(() => {
+        missing.push("ffmpeg");
+      }),
+      invoke("check_yt_dependencies").catch(() => {
+        missing.push("yt-dlp");
+      }),
+    ]).then(() => {
+      if (missing.length > 0) {
+        toast.warning(`Missing tools: ${missing.join(", ")}. Install with: brew install ${missing.join(" ")}`);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);
@@ -247,258 +247,239 @@ const AppContent = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary text-text-primary font-sans antialiased">
-      <header
-        className={`px-8 py-4 border-b border-border flex items-center gap-6 shrink-0 ${miniPlayer ? "hidden" : ""}`}
-      >
-        <RetroWindowDots />
-        <h1 className="text-sm font-medium tracking-tight text-text-secondary">Crate</h1>
-        <div className="flex gap-1" role="tablist" aria-label="Main navigation">
-          <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>
-            Library
-          </TopTabButton>
-          <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
-            Tools
-          </TopTabButton>
-          {discoverEnabled && (
-            <TopTabButton
-              active={topTab === "discover"}
-              onClick={() => setTopTab("discover")}
-              indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
-            >
-              Discover
-            </TopTabButton>
-          )}
-        </div>
-        <div className="flex-1" />
-        <button
-          onClick={handleRescan}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+    <ViewLayoutProvider value={viewLayout}>
+      <div className="flex flex-col h-screen overflow-hidden bg-bg-primary text-text-primary font-sans antialiased">
+        <header
+          className={`px-8 py-4 border-b border-border flex items-center gap-6 shrink-0 ${miniPlayer ? "hidden" : ""}`}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"
-            />
-          </svg>
-          Rescan Library
-        </button>
-      </header>
-
-      <main className={`flex-1 min-h-0 relative flex ${miniPlayer ? "hidden" : ""}`}>
-        <div className="flex-1 min-w-0 min-h-0 relative">
-          {/* Library stays mounted always — hidden via CSS to preserve state */}
-          <div
-            className={`h-full transition-opacity duration-150 ${topTab === "library" ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0"}`}
+          <RetroWindowDots />
+          <h1 className="text-sm font-medium tracking-tight text-text-secondary">Crate</h1>
+          <div className="flex gap-1" role="tablist" aria-label="Main navigation">
+            <TopTabButton active={topTab === "library"} onClick={() => setTopTab("library")}>
+              Library
+            </TopTabButton>
+            <TopTabButton active={topTab === "tools"} onClick={() => setTopTab("tools")}>
+              Tools
+            </TopTabButton>
+            {discoverEnabled && (
+              <TopTabButton
+                active={topTab === "discover"}
+                onClick={() => setTopTab("discover")}
+                indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
+              >
+                Discover
+              </TopTabButton>
+            )}
+          </div>
+          <div className="flex-1" />
+          <button
+            onClick={handleRescan}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
           >
-            <ErrorBoundary name="Library">
-              <LibraryPlayer
-                onRefreshRef={libraryRefreshRef}
-                isActive={topTab === "library"}
-                onRepairMetadata={handleRepairMetadata}
-                onLibrarySummaryChange={setLibrarySummary}
-                showColumnBrowser={showColumnBrowser}
-                showInfoPanel={showInfoPanel}
-                showStatsPanel={showStatsPanel}
-                showPlaylistSidebar={showPlaylistSidebar}
-                showAlbumGrid={showAlbumGrid}
-                showTrackList={showTrackList}
-                showArtworkCarousel={showArtworkCarousel}
-                showLyricsPanel={showLyricsPanel}
-                lyricsOverlay={lyricsOverlay && showLyricsPanel}
-                onLyricsOverlayDismiss={dismissLyricsOverlay}
-                onToggleColumnBrowser={toggleColumnBrowser}
-                onTogglePlaylistSidebar={togglePlaylistSidebar}
-                onToggleAlbumGrid={toggleAlbumGrid}
-                onToggleArtworkCarousel={toggleArtworkCarousel}
-                onToggleTrackList={toggleTrackList}
-                onToggleLyricsPanel={toggleLyricsPanel}
-                onToggleLyricsOverlay={toggleLyricsOverlay}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"
+              />
+            </svg>
+            Rescan Library
+          </button>
+        </header>
+
+        <main className={`flex-1 min-h-0 relative flex ${miniPlayer ? "hidden" : ""}`}>
+          <div className="flex-1 min-w-0 min-h-0 relative">
+            {/* Library stays mounted always — hidden via CSS to preserve state */}
+            <div
+              className={`h-full transition-opacity duration-150 ${topTab === "library" ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0"}`}
+            >
+              <ErrorBoundary name="Library">
+                <LibraryPlayer
+                  onRefreshRef={libraryRefreshRef}
+                  isActive={topTab === "library"}
+                  onRepairMetadata={handleRepairMetadata}
+                  onLibrarySummaryChange={setLibrarySummary}
+                />
+              </ErrorBoundary>
+            </div>
+            {topTab === "discover" && (
+              <div className="h-full flex flex-col view-enter">
+                <div className="px-8 pt-5 pb-4 shrink-0 flex items-center gap-3">
+                  <div className="inline-flex rounded-lg bg-bg-secondary p-0.5 border border-border">
+                    <DiscoverTabButton active={discoverTab === "discover"} onClick={() => setDiscoverTab("discover")}>
+                      Discover
+                    </DiscoverTabButton>
+                    <DiscoverTabButton
+                      active={discoverTab === "releases"}
+                      onClick={() => setDiscoverTab("releases")}
+                      indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
+                    >
+                      Releases
+                    </DiscoverTabButton>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0">
+                  {discoverTab === "discover" && (
+                    <Suspense fallback={null}>
+                      <ErrorBoundary name="Discover">
+                        <DiscoverView />
+                      </ErrorBoundary>
+                    </Suspense>
+                  )}
+                  {discoverTab === "releases" && (
+                    <ErrorBoundary name="New Releases">
+                      <NewReleasesView />
+                    </ErrorBoundary>
+                  )}
+                </div>
+              </div>
+            )}
+            {topTab === "tools" && (
+              <div className="flex gap-6 p-6 h-full view-enter">
+                <ErrorBoundary name="Mount Panel">
+                  <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
+                </ErrorBoundary>
+                <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+                  <div className="flex gap-1.5 shrink-0" role="tablist" aria-label="Tool tabs">
+                    <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
+                      iPod
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "files"} onClick={() => setToolTab("files")}>
+                      File Manager
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
+                      Metadata
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "audio"} onClick={() => setToolTab("audio")}>
+                      Audio Extractor
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "duplicates"} onClick={() => setToolTab("duplicates")}>
+                      Duplicates
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
+                      Converter
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "health"} onClick={() => setToolTab("health")}>
+                      Health
+                    </ToolTabButton>
+                    <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
+                      Export / Import
+                    </ToolTabButton>
+                  </div>
+                  <Suspense fallback={null}>
+                    <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
+                      {toolTab === "ipod" && (
+                        <ErrorBoundary name="iPod Summary">
+                          <IpodSummary
+                            diskInfo={diskInfo}
+                            isMounted={ipodMounted}
+                            cachedInfo={ipodInfo}
+                            onInfoLoaded={setIpodInfo}
+                          />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "files" && (
+                        <ErrorBoundary name="File Manager">
+                          <FileManager />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "metadata" && (
+                        <ErrorBoundary name="Metadata Editor">
+                          <MetadataEditor
+                            initialPaths={metadataRepairPaths}
+                            onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                          />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "audio" && (
+                        <ErrorBoundary name="Audio Extractor">
+                          <AudioExtractor />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "duplicates" && (
+                        <ErrorBoundary name="Duplicate Detector">
+                          <DuplicateDetector />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "convert" && (
+                        <ErrorBoundary name="Audio Converter">
+                          <AudioConverter />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "health" && (
+                        <ErrorBoundary name="Library Health">
+                          <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "export" && (
+                        <ErrorBoundary name="Library Export">
+                          <LibraryExport />
+                        </ErrorBoundary>
+                      )}
+                    </div>
+                  </Suspense>
+                </div>
+              </div>
+            )}
+          </div>
+          {topTab === "library" &&
+            showLyricsPanel &&
+            !(lyricsOverlay && showArtworkCarousel) &&
+            playbackState.currentTrack && (
+              <div style={{ width: lyricsPanelResize.width }} className="relative shrink-0 border-l border-border">
+                <div
+                  onMouseDown={lyricsPanelResize.onDragStart}
+                  className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors z-10"
+                />
+                <ErrorBoundary name="Lyrics" compact>
+                  <LyricsPanel track={playbackState.currentTrack} />
+                </ErrorBoundary>
+              </div>
+            )}
+          {queueOpen && (
+            <ErrorBoundary name="Queue">
+              <QueuePanel onClose={() => setQueueOpen(false)} />
+            </ErrorBoundary>
+          )}
+        </main>
+
+        {!miniPlayer && <StatusBar librarySummary={librarySummary} ipodConnected={ipodMounted} />}
+
+        <ErrorBoundary name="Now Playing" compact>
+          <NowPlayingBar
+            onToggleQueue={() => setQueueOpen((prev) => !prev)}
+            queueOpen={queueOpen}
+            onToggleMiniPlayer={toggleMiniPlayer}
+            miniPlayer={miniPlayer}
+          />
+        </ErrorBoundary>
+
+        {settingsOpen && (
+          <Suspense fallback={null}>
+            <ErrorBoundary name="Settings">
+              <SettingsModal
+                onClose={() => {
+                  setSettingsOpen(false);
+                  setAutoCheckUpdate(false);
+                  invoke<boolean>("get_discover_enabled")
+                    .then(setDiscoverEnabled)
+                    .catch(() => {});
+                }}
+                onLibraryChanged={() => libraryRefreshRef.current?.()}
+                autoCheckUpdate={autoCheckUpdate}
               />
             </ErrorBoundary>
-          </div>
-          {topTab === "discover" && (
-            <div className="h-full flex flex-col view-enter">
-              <div className="px-8 pt-5 pb-4 shrink-0 flex items-center gap-3">
-                <div className="inline-flex rounded-lg bg-bg-secondary p-0.5 border border-border">
-                  <DiscoverTabButton active={discoverTab === "discover"} onClick={() => setDiscoverTab("discover")}>
-                    Discover
-                  </DiscoverTabButton>
-                  <DiscoverTabButton
-                    active={discoverTab === "releases"}
-                    onClick={() => setDiscoverTab("releases")}
-                    indicator={hasAnyNewReleases ? "accent" : releasesCheckState.active ? "pulse" : undefined}
-                  >
-                    Releases
-                  </DiscoverTabButton>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                {discoverTab === "discover" && (
-                  <Suspense fallback={null}>
-                    <ErrorBoundary name="Discover">
-                      <DiscoverView />
-                    </ErrorBoundary>
-                  </Suspense>
-                )}
-                {discoverTab === "releases" && (
-                  <ErrorBoundary name="New Releases">
-                    <NewReleasesView />
-                  </ErrorBoundary>
-                )}
-              </div>
-            </div>
-          )}
-          {topTab === "tools" && (
-            <div className="flex gap-6 p-6 h-full view-enter">
-              <ErrorBoundary name="Mount Panel">
-                <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
-              </ErrorBoundary>
-              <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-                <div className="flex gap-1.5 shrink-0" role="tablist" aria-label="Tool tabs">
-                  <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
-                    iPod
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "files"} onClick={() => setToolTab("files")}>
-                    File Manager
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
-                    Metadata
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "audio"} onClick={() => setToolTab("audio")}>
-                    Audio Extractor
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "duplicates"} onClick={() => setToolTab("duplicates")}>
-                    Duplicates
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
-                    Converter
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "health"} onClick={() => setToolTab("health")}>
-                    Health
-                  </ToolTabButton>
-                  <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
-                    Export / Import
-                  </ToolTabButton>
-                </div>
-                <Suspense fallback={null}>
-                  <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
-                    {toolTab === "ipod" && (
-                      <ErrorBoundary name="iPod Summary">
-                        <IpodSummary
-                          diskInfo={diskInfo}
-                          isMounted={ipodMounted}
-                          cachedInfo={ipodInfo}
-                          onInfoLoaded={setIpodInfo}
-                        />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "files" && (
-                      <ErrorBoundary name="File Manager">
-                        <FileManager />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "metadata" && (
-                      <ErrorBoundary name="Metadata Editor">
-                        <MetadataEditor
-                          initialPaths={metadataRepairPaths}
-                          onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
-                        />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "audio" && (
-                      <ErrorBoundary name="Audio Extractor">
-                        <AudioExtractor />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "duplicates" && (
-                      <ErrorBoundary name="Duplicate Detector">
-                        <DuplicateDetector />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "convert" && (
-                      <ErrorBoundary name="Audio Converter">
-                        <AudioConverter />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "health" && (
-                      <ErrorBoundary name="Library Health">
-                        <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
-                      </ErrorBoundary>
-                    )}
-                    {toolTab === "export" && (
-                      <ErrorBoundary name="Library Export">
-                        <LibraryExport />
-                      </ErrorBoundary>
-                    )}
-                  </div>
-                </Suspense>
-              </div>
-            </div>
-          )}
-        </div>
-        {topTab === "library" &&
-          showLyricsPanel &&
-          !(lyricsOverlay && showArtworkCarousel) &&
-          playbackState.currentTrack && (
-            <div style={{ width: lyricsPanelResize.width }} className="relative shrink-0 border-l border-border">
-              <div
-                onMouseDown={lyricsPanelResize.onDragStart}
-                className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors z-10"
-              />
-              <ErrorBoundary name="Lyrics" compact>
-                <LyricsPanel track={playbackState.currentTrack} />
-              </ErrorBoundary>
-            </div>
-          )}
-        {queueOpen && (
-          <ErrorBoundary name="Queue">
-            <QueuePanel onClose={() => setQueueOpen(false)} />
-          </ErrorBoundary>
+          </Suspense>
         )}
-      </main>
-
-      {!miniPlayer && <StatusBar librarySummary={librarySummary} ipodConnected={ipodMounted} />}
-
-      <ErrorBoundary name="Now Playing" compact>
-        <NowPlayingBar
-          onToggleQueue={() => setQueueOpen((prev) => !prev)}
-          queueOpen={queueOpen}
-          onToggleMiniPlayer={toggleMiniPlayer}
-          miniPlayer={miniPlayer}
-          showInfoPanel={showInfoPanel}
-          showStatsPanel={showStatsPanel}
-          onToggleInfoPanel={toggleInfoPanel}
-          onToggleStatsPanel={toggleStatsPanel}
-        />
-      </ErrorBoundary>
-
-      {settingsOpen && (
-        <Suspense fallback={null}>
-          <ErrorBoundary name="Settings">
-            <SettingsModal
-              onClose={() => {
-                setSettingsOpen(false);
-                setAutoCheckUpdate(false);
-                invoke<boolean>("get_discover_enabled")
-                  .then(setDiscoverEnabled)
-                  .catch(() => {});
-              }}
-              onLibraryChanged={() => libraryRefreshRef.current?.()}
-              autoCheckUpdate={autoCheckUpdate}
-            />
-          </ErrorBoundary>
-        </Suspense>
-      )}
-      {shortcutsOpen && (
-        <Suspense fallback={null}>
-          <ErrorBoundary name="Keyboard Shortcuts">
-            <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
-          </ErrorBoundary>
-        </Suspense>
-      )}
-    </div>
+        {shortcutsOpen && (
+          <Suspense fallback={null}>
+            <ErrorBoundary name="Keyboard Shortcuts">
+              <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+            </ErrorBoundary>
+          </Suspense>
+        )}
+      </div>
+    </ViewLayoutProvider>
   );
 };
 

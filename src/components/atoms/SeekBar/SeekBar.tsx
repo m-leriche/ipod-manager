@@ -49,6 +49,22 @@ export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarPro
     [onChange, onScrub, calcFraction],
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const step = e.shiftKey ? 0.1 : 0.05;
+      let next: number | null = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(1, value + step);
+      else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, value - step);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = 1;
+      if (next !== null) {
+        e.preventDefault();
+        onChange(next);
+      }
+    },
+    [value, onChange],
+  );
+
   const displayFraction = dragFraction ?? value;
   const pct = `${(displayFraction * 100).toFixed(1)}%`;
 
@@ -56,6 +72,13 @@ export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarPro
     <div
       ref={barRef}
       onMouseDown={handleMouseDown}
+      onKeyDown={handleKeyDown}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(displayFraction * 100)}
+      tabIndex={0}
       className={`group relative h-3 flex items-center cursor-pointer ${className}`}
     >
       <div className="w-full h-[3px] group-hover:h-[5px] rounded-full bg-bg-card transition-all relative overflow-hidden">

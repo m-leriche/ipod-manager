@@ -17,6 +17,7 @@ import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairCon
 import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useToast } from "../../../contexts/ToastContext";
+import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import { useLibraryImport } from "./useLibraryImport";
 import { useLibraryData } from "./useLibraryData";
 import { useLibraryActions } from "./useLibraryActions";
@@ -29,46 +30,23 @@ export const LibraryPlayer = ({
   isActive = true,
   onRepairMetadata,
   onLibrarySummaryChange,
-  showColumnBrowser,
-  showInfoPanel,
-  showStatsPanel,
-  showPlaylistSidebar,
-  showAlbumGrid = false,
-  showTrackList = true,
-  showArtworkCarousel = false,
-  showLyricsPanel = false,
-  lyricsOverlay = false,
-  onLyricsOverlayDismiss,
-  onToggleColumnBrowser,
-  onTogglePlaylistSidebar,
-  onToggleAlbumGrid,
-  onToggleArtworkCarousel,
-  onToggleTrackList,
-  onToggleLyricsPanel,
-  onToggleLyricsOverlay,
 }: {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
   isActive?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   onLibrarySummaryChange?: (summary: LibrarySummary | null) => void;
-  showColumnBrowser: boolean;
-  showInfoPanel: boolean;
-  showStatsPanel: boolean;
-  showPlaylistSidebar: boolean;
-  showAlbumGrid?: boolean;
-  showTrackList?: boolean;
-  showArtworkCarousel?: boolean;
-  showLyricsPanel?: boolean;
-  lyricsOverlay?: boolean;
-  onLyricsOverlayDismiss?: () => void;
-  onToggleColumnBrowser?: () => void;
-  onTogglePlaylistSidebar?: () => void;
-  onToggleAlbumGrid?: () => void;
-  onToggleArtworkCarousel?: () => void;
-  onToggleTrackList?: () => void;
-  onToggleLyricsPanel?: () => void;
-  onToggleLyricsOverlay?: () => void;
 }) => {
+  const {
+    showColumnBrowser,
+    showInfoPanel,
+    showStatsPanel,
+    showPlaylistSidebar,
+    showAlbumGrid,
+    showTrackList,
+    showArtworkCarousel,
+    lyricsOverlay,
+    dismissLyricsOverlay,
+  } = useViewLayout();
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const toast = useToast();
   const { state: artRepairState, start: startArtRepair } = useBackgroundArtRepair();
@@ -242,20 +220,6 @@ export const LibraryPlayer = ({
           trackCount={data.totalTrackCount}
           displayedTrackCount={data.displayedTracks.length}
           isPlaylistView={isPlaylistView}
-          showPlaylistSidebar={showPlaylistSidebar}
-          showColumnBrowser={showColumnBrowser}
-          showAlbumGrid={showAlbumGrid}
-          showArtworkCarousel={showArtworkCarousel}
-          showTrackList={showTrackList}
-          showLyricsPanel={showLyricsPanel}
-          lyricsOverlay={lyricsOverlay}
-          onTogglePlaylistSidebar={onTogglePlaylistSidebar}
-          onToggleColumnBrowser={onToggleColumnBrowser}
-          onToggleAlbumGrid={onToggleAlbumGrid}
-          onToggleArtworkCarousel={onToggleArtworkCarousel}
-          onToggleTrackList={onToggleTrackList}
-          onToggleLyricsPanel={onToggleLyricsPanel}
-          onToggleLyricsOverlay={onToggleLyricsOverlay}
         />
 
         {/* Column browser / album grid / carousel (hidden in playlist view) */}
@@ -280,7 +244,7 @@ export const LibraryPlayer = ({
                       selectedArtist={data.selectedArtists.size === 1 ? [...data.selectedArtists][0] : null}
                       onSelectArtist={(name) => data.handleSelectArtist(name ? new Set([name]) : new Set())}
                       lyricsOverlay={lyricsOverlay}
-                      onLyricsOverlayDismiss={onLyricsOverlayDismiss}
+                      onLyricsOverlayDismiss={dismissLyricsOverlay}
                     />
                   </ErrorBoundary>
                 </div>

@@ -1,6 +1,9 @@
+use crate::files::compare_dirs;
 use crate::files::copy::{fmt_bytes, is_no_space};
 use crate::files::{create_folder, list_dir, rename_entry};
 use std::io;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 // ── Existing unit tests ──────────────────────────────────────────
 
@@ -166,6 +169,205 @@ fn create_folder_succeeds() {
     let result = create_folder(new_dir.to_str().unwrap());
     assert!(result.is_ok());
     assert!(new_dir.is_dir());
+}
+
+// ── compare_dirs ────────────────────────────────────────────────
+
+fn no_cancel() -> Arc<AtomicBool> {
+    Arc::new(AtomicBool::new(false))
+}
+
+#[test]
+fn compare_dirs_identical_directories() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join("song.mp3"), "audio data").unwrap();
+    std::fs::write(tgt.path().join("song.mp3"), "audio data").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "same");
+    assert_eq!(results[0].relative_path, "song.mp3");
+}
+
+#[test]
+fn compare_dirs_source_only_file() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join("new.flac"), "data").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "source_only");
+}
+
+#[test]
+fn compare_dirs_target_only_file() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(tgt.path().join("extra.mp3"), "data").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "target_only");
+}
+
+#[test]
+fn compare_dirs_modified_file() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join("track.mp3"), "short").unwrap();
+    std::fs::write(tgt.path().join("track.mp3"), "longer content").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "modified");
+    assert_ne!(results[0].source_size, results[0].target_size);
+}
+
+#[test]
+fn compare_dirs_mixed_statuses_sorted_correctly() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    // source_only
+    std::fs::write(src.path().join("new.flac"), "new").unwrap();
+    // same
+    std::fs::write(src.path().join("shared.mp3"), "same").unwrap();
+    std::fs::write(tgt.path().join("shared.mp3"), "same").unwrap();
+    // modified
+    std::fs::write(src.path().join("changed.mp3"), "v1").unwrap();
+    std::fs::write(tgt.path().join("changed.mp3"), "version2").unwrap();
+    // target_only
+    std::fs::write(tgt.path().join("orphan.mp3"), "old").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 4);
+    // Sort order: source_only, modified, target_only, same
+    assert_eq!(results[0].status, "source_only");
+    assert_eq!(results[1].status, "modified");
+    assert_eq!(results[2].status, "target_only");
+    assert_eq!(results[3].status, "same");
+}
+
+#[test]
+fn compare_dirs_recursive_subdirectories() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::create_dir_all(src.path().join("Artist/Album")).unwrap();
+    std::fs::create_dir_all(tgt.path().join("Artist/Album")).unwrap();
+    std::fs::write(src.path().join("Artist/Album/01.mp3"), "data").unwrap();
+    std::fs::write(tgt.path().join("Artist/Album/01.mp3"), "data").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].relative_path, "Artist/Album/01.mp3");
+    assert_eq!(results[0].status, "same");
+}
+
+#[test]
+fn compare_dirs_skips_dotfiles() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join(".DS_Store"), "junk").unwrap();
+    std::fs::write(src.path().join("track.mp3"), "audio").unwrap();
+    std::fs::write(tgt.path().join("track.mp3"), "audio").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].relative_path, "track.mp3");
+}
+
+#[test]
+fn compare_dirs_empty_directories() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert!(results.is_empty());
+}
+
+#[test]
+fn compare_dirs_cancellation() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join("file.mp3"), "data").unwrap();
+
+    let cancel = Arc::new(AtomicBool::new(true));
+    let result = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        cancel,
+    );
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Cancelled"));
+}
+
+#[test]
+fn compare_dirs_rejects_nonexistent_source() {
+    let tgt = tempfile::tempdir().unwrap();
+    let result = compare_dirs(
+        "/tmp/nonexistent_dir_xyz_12345",
+        tgt.path().to_str().unwrap(),
+        no_cancel(),
+    );
+    assert!(result.is_err());
 }
 
 // ── Security: symlink handling ───────────────────────────────────

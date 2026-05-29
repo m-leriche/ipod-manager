@@ -59,6 +59,32 @@ vi.mock("../../../contexts/BackgroundLyricsContext", () => ({
   }),
 }));
 
+const mockViewLayout = {
+  showColumnBrowser: false,
+  showInfoPanel: false,
+  showStatsPanel: false,
+  showPlaylistSidebar: false,
+  showAlbumGrid: false,
+  showTrackList: true,
+  showLyricsPanel: false,
+  showArtworkCarousel: false,
+  lyricsOverlay: false,
+  toggleColumnBrowser: vi.fn(),
+  toggleInfoPanel: vi.fn(),
+  toggleStatsPanel: vi.fn(),
+  togglePlaylistSidebar: vi.fn(),
+  toggleAlbumGrid: vi.fn(),
+  toggleTrackList: vi.fn(),
+  toggleArtworkCarousel: vi.fn(),
+  toggleLyricsPanel: vi.fn(),
+  toggleLyricsOverlay: vi.fn(),
+  dismissLyricsOverlay: vi.fn(),
+};
+
+vi.mock("../../../contexts/ViewLayoutContext", () => ({
+  useViewLayout: () => mockViewLayout,
+}));
+
 // Mock the data/actions hooks
 const mockLibraryData = {
   hasLibrary: true,
@@ -121,72 +147,83 @@ vi.mock("./useLibraryImport", () => ({
   }),
 }));
 
-const defaultProps = {
-  showColumnBrowser: false,
-  showInfoPanel: false,
-  showStatsPanel: false,
-  showPlaylistSidebar: false,
-};
-
 describe("LibraryPlayer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLibraryData.hasLibrary = true;
     mockLibraryData.dataLoaded = true;
+    // Reset view layout to defaults
+    Object.assign(mockViewLayout, {
+      showColumnBrowser: false,
+      showInfoPanel: false,
+      showStatsPanel: false,
+      showPlaylistSidebar: false,
+      showAlbumGrid: false,
+      showTrackList: true,
+      showLyricsPanel: false,
+      showArtworkCarousel: false,
+      lyricsOverlay: false,
+    });
   });
 
   it("renders empty state when no library exists", () => {
     mockLibraryData.hasLibrary = false;
-    render(<LibraryPlayer {...defaultProps} />);
+    render(<LibraryPlayer />);
     expect(screen.getByText("Add your music library")).toBeInTheDocument();
     expect(screen.getByText("Choose Folder")).toBeInTheDocument();
   });
 
   it("renders loading skeleton when data is not loaded", () => {
     mockLibraryData.dataLoaded = false;
-    render(<LibraryPlayer {...defaultProps} />);
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("loading-skeleton")).toBeInTheDocument();
   });
 
   it("renders toolbar and track table when library is loaded", () => {
-    render(<LibraryPlayer {...defaultProps} />);
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("library-toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("track-table")).toBeInTheDocument();
     expect(screen.getByTestId("status-bar")).toBeInTheDocument();
   });
 
   it("shows column browser when showColumnBrowser is true", () => {
-    render(<LibraryPlayer {...defaultProps} showColumnBrowser />);
+    mockViewLayout.showColumnBrowser = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("column-browser")).toBeInTheDocument();
   });
 
   it("shows album grid when showAlbumGrid is true", () => {
-    render(<LibraryPlayer {...defaultProps} showAlbumGrid />);
+    mockViewLayout.showAlbumGrid = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("album-grid")).toBeInTheDocument();
   });
 
   it("shows artwork carousel when showArtworkCarousel is true", () => {
-    render(<LibraryPlayer {...defaultProps} showArtworkCarousel />);
+    mockViewLayout.showArtworkCarousel = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("artwork-carousel")).toBeInTheDocument();
   });
 
   it("shows playlist sidebar when showPlaylistSidebar is true", () => {
-    render(<LibraryPlayer {...defaultProps} showPlaylistSidebar />);
+    mockViewLayout.showPlaylistSidebar = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("playlist-sidebar")).toBeInTheDocument();
   });
 
   it("shows info panel when showInfoPanel is true", () => {
-    render(<LibraryPlayer {...defaultProps} showInfoPanel />);
+    mockViewLayout.showInfoPanel = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("detail-panel")).toBeInTheDocument();
   });
 
   it("shows stats panel when showStatsPanel is true", () => {
-    render(<LibraryPlayer {...defaultProps} showStatsPanel />);
+    mockViewLayout.showStatsPanel = true;
+    render(<LibraryPlayer />);
     expect(screen.getByTestId("library-stats")).toBeInTheDocument();
   });
 
   it("does not show column browser by default", () => {
-    render(<LibraryPlayer {...defaultProps} />);
+    render(<LibraryPlayer />);
     expect(screen.queryByTestId("column-browser")).not.toBeInTheDocument();
   });
 });

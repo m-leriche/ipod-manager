@@ -35,6 +35,15 @@ const track: LibraryTrack = {
   replay_gain_album_db: null,
 };
 
+vi.mock("../../../contexts/ViewLayoutContext", () => ({
+  useViewLayout: () => ({
+    showInfoPanel: false,
+    showStatsPanel: false,
+    toggleInfoPanel: vi.fn(),
+    toggleStatsPanel: vi.fn(),
+  }),
+}));
+
 // Controllable mock state
 let mockPlaybackState = {
   currentTrack: null as LibraryTrack | null,

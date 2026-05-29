@@ -9,5 +9,11 @@ export default defineConfig({
     globals: true,
     css: false,
     exclude: ["e2e/**", "node_modules/**"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/test/**", "src/**/*.test.{ts,tsx}"],
+    },
   },
 });

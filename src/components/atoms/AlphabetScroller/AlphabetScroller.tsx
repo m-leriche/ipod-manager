@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { ALPHABET } from "./helpers";
 import type { AlphabetScrollerProps } from "./types";
 
@@ -10,6 +10,17 @@ export const AlphabetScroller = ({
 }: AlphabetScrollerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+  const listenersRef = useRef<{ move: (ev: MouseEvent) => void; up: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (listenersRef.current) {
+        window.removeEventListener("mousemove", listenersRef.current.move);
+        window.removeEventListener("mouseup", listenersRef.current.up);
+        listenersRef.current = null;
+      }
+    };
+  }, []);
 
   const selectLetterAtY = useCallback(
     (clientY: number) => {
@@ -40,9 +51,11 @@ export const AlphabetScroller = ({
         isDraggingRef.current = false;
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        listenersRef.current = null;
       };
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      listenersRef.current = { move: handleMouseMove, up: handleMouseUp };
     },
     [selectLetterAtY],
   );

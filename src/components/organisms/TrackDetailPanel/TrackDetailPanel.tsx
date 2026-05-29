@@ -7,6 +7,7 @@ import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
+import { useToast } from "../../../contexts/ToastContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import { pickFile } from "../../../utils/pickPath";
@@ -32,6 +33,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   const { bumpArtCache } = useArtCache();
   const { state: artRepairState, start: startRepair } = useBackgroundArtRepair();
   const { state: lyricsState, start: startLyricsFetch } = useBackgroundLyrics();
+  const toast = useToast();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -81,11 +83,11 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       await invoke<MetadataSaveResult>("save_metadata", { updates });
       onSave?.();
     } catch (e) {
-      console.error("Failed to save metadata:", e);
+      toast.error(`Failed to save metadata: ${e}`);
     } finally {
       setSaving(false);
     }
-  }, [tracks, editedFields, originalFields, originalMixed, onSave]);
+  }, [tracks, editedFields, originalFields, originalMixed, onSave, toast]);
 
   const handleRepairArt = useCallback(async () => {
     const folders = [...new Set(tracks.map((t) => t.folder_path))];
@@ -99,12 +101,12 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       bumpArtCache();
       onSave?.();
     } catch (e) {
-      console.error("Failed to repair album art:", e);
+      toast.error(`Failed to repair album art: ${e}`);
     } finally {
       setRepairing(false);
       unlisten();
     }
-  }, [tracks, onSave, bumpArtCache]);
+  }, [tracks, onSave, bumpArtCache, toast]);
 
   const handleUploadArt = useCallback(async () => {
     const imagePath = await pickFile("Select album artwork", [
@@ -119,9 +121,9 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       bumpArtCache();
       onSave?.();
     } catch (e) {
-      console.error("Failed to upload album art:", e);
+      toast.error(`Failed to upload album art: ${e}`);
     }
-  }, [tracks, onSave, bumpArtCache]);
+  }, [tracks, onSave, bumpArtCache, toast]);
 
   if (tracks.length === 0) return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
 
@@ -336,7 +338,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
               await invoke("rate_tracks", { trackIds: ids, rating });
               onSave?.();
             } catch (e) {
-              console.error("Failed to rate tracks:", e);
+              toast.error(`Failed to rate tracks: ${e}`);
             }
           }}
         />

@@ -56,6 +56,12 @@ export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarPro
     <div
       ref={barRef}
       onMouseDown={handleMouseDown}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(displayFraction * 100)}
+      tabIndex={0}
       className={`group relative h-3 flex items-center cursor-pointer ${className}`}
     >
       <div className="w-full h-[3px] group-hover:h-[5px] rounded-full bg-bg-card transition-all relative overflow-hidden">

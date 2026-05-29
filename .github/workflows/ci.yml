@@ -42,6 +42,22 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test
 
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm audit --omit=dev --audit-level=high
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
+          ignore: RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2026-0104,RUSTSEC-2024-0413,RUSTSEC-2024-0416
+
   build:
     name: Build
     runs-on: ubuntu-latest

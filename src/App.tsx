@@ -138,20 +138,16 @@ const AppContent = () => {
 
   // Check for missing external tools at startup
   useEffect(() => {
-    const missing: string[] = [];
-    Promise.allSettled([
-      invoke("check_ffmpeg").catch(() => {
-        missing.push("ffmpeg");
-      }),
-      invoke("check_yt_dependencies").catch(() => {
-        missing.push("yt-dlp");
-      }),
-    ]).then(() => {
+    Promise.allSettled([invoke("check_ffmpeg"), invoke("check_yt_dependencies")]).then(([ffmpeg, ytdlp]) => {
+      const missing = [
+        ...(ffmpeg.status === "rejected" ? ["ffmpeg"] : []),
+        ...(ytdlp.status === "rejected" ? ["yt-dlp"] : []),
+      ];
       if (missing.length > 0) {
         toast.warning(`Missing tools: ${missing.join(", ")}. Install with: brew install ${missing.join(" ")}`);
       }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [toast]);
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [ipodInfo, setIpodInfo] = useState<IpodInfo | null>(null);

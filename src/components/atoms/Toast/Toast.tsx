@@ -40,7 +40,17 @@ const STYLES: Record<ToastType, string> = {
   info: "border-accent/30 text-accent",
 };
 
-const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: string) => void }) => {
+const ToastItem = ({
+  toast,
+  onDismiss,
+  onPause,
+  onResume,
+}: {
+  toast: ToastData;
+  onDismiss: (id: string) => void;
+  onPause: (id: string) => void;
+  onResume: (id: string) => void;
+}) => {
   const [exiting, setExiting] = useState(false);
 
   const handleDismiss = () => {
@@ -50,6 +60,8 @@ const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
 
   return (
     <div
+      onMouseEnter={toast.action ? () => onPause(toast.id) : undefined}
+      onMouseLeave={toast.action ? () => onResume(toast.id) : undefined}
       className={`flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border bg-bg-card shadow-lg backdrop-blur-sm max-w-sm transition-all duration-150 ${STYLES[toast.type]} ${
         exiting ? "opacity-0 translate-x-4" : "animate-[toast-in_200ms_ease-out]"
       }`}
@@ -85,14 +97,14 @@ const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
 
 export const ToastContainer = () => {
   const toasts = useToastState();
-  const { dismiss } = useToast();
+  const { dismiss, pauseTimer, resumeTimer } = useToast();
 
   if (toasts.length === 0) return null;
 
   return (
     <div className="fixed bottom-16 right-4 z-[100] flex flex-col gap-2 pointer-events-auto">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
+        <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} onPause={pauseTimer} onResume={resumeTimer} />
       ))}
     </div>
   );

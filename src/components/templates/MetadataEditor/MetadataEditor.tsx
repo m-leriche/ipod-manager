@@ -214,6 +214,15 @@ export const MetadataEditor = ({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey && undoAvailableRef.current) {
+        // Don't intercept native undo in text inputs
+        const el = document.activeElement;
+        if (
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          (el as HTMLElement)?.isContentEditable
+        ) {
+          return;
+        }
         e.preventDefault();
         handleUndoRef.current();
       }

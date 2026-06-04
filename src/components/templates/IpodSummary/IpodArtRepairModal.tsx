@@ -36,8 +36,10 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
   onCloseRef.current = onClose;
   // Track whether this effect invocation is still current (not stale from HMR)
   const scanIdRef = useRef(0);
+  // Bump to re-trigger the scan effect (used by retry)
+  const [scanTrigger, setScanTrigger] = useState(0);
 
-  // Scan on mount
+  // Scan on mount and on retry
   useEffect(() => {
     const id = ++scanIdRef.current;
     let unlistenScan: (() => void) | null = null;
@@ -76,7 +78,14 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
     return () => {
       unlistenScan?.();
     };
-  }, [musicPath]);
+  }, [musicPath, scanTrigger]);
+
+  const retryScan = useCallback(() => {
+    setError(null);
+    setPhase("scanning");
+    setScanProgress({ albums_found: 0, current_folder: "" });
+    setScanTrigger((n) => n + 1);
+  }, []);
 
   const missingAlbums = albums.filter((a) => !a.has_cover_file);
 
@@ -162,43 +171,7 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
               result={result}
               error={error}
               totalScanned={albums.length}
-              onRetry={
-                error
-                  ? () => {
-                      setError(null);
-                      setPhase("scanning");
-                      setScanProgress({ albums_found: 0, current_folder: "" });
-                      // Bump scanIdRef to re-trigger the scan effect
-                      scanIdRef.current++;
-                      const id = scanIdRef.current;
-                      const run = async () => {
-                        try {
-                          const results = await invoke<AlbumInfo[]>("scan_album_art", { path: musicPath });
-                          if (scanIdRef.current !== id) return;
-                          setAlbums(results);
-                          const missing = results.filter((a) => !a.has_cover_file);
-                          setSelected(new Set(missing.map((a) => a.folder_path)));
-                          setPhase(missing.length === 0 ? "done" : "summary");
-                          if (missing.length === 0) {
-                            setResult({
-                              total: 0,
-                              fixed: 0,
-                              already_ok: results.length,
-                              failed: 0,
-                              cancelled: false,
-                              errors: [],
-                            });
-                          }
-                        } catch (e) {
-                          if (scanIdRef.current !== id) return;
-                          setError(`${e}`);
-                          setPhase("done");
-                        }
-                      };
-                      run();
-                    }
-                  : undefined
-              }
+              onRetry={error ? retryScan : undefined}
             />
           )}
         </div>

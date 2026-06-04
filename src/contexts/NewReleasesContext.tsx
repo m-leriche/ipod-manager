@@ -163,7 +163,7 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
         startCheck();
       }
     };
-    autoCheck().catch(() => {});
+    autoCheck().catch((e) => console.warn("Failed to auto-check new releases:", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -129,7 +129,7 @@ const AppContent = () => {
   useEffect(() => {
     invoke<boolean>("get_discover_enabled")
       .then(setDiscoverEnabled)
-      .catch(() => {});
+      .catch((e) => console.warn("Failed to check discover status:", e));
   }, []);
 
   const viewLayout = usePanelVisibility();
@@ -459,7 +459,7 @@ const AppContent = () => {
                   setAutoCheckUpdate(false);
                   invoke<boolean>("get_discover_enabled")
                     .then(setDiscoverEnabled)
-                    .catch(() => {});
+                    .catch((e) => console.warn("Failed to check discover status:", e));
                 }}
                 onLibraryChanged={() => libraryRefreshRef.current?.()}
                 autoCheckUpdate={autoCheckUpdate}

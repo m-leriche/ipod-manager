@@ -88,6 +88,7 @@ export const StatusBar = ({ librarySummary, ipodConnected }: StatusBarProps) => 
               onClick={activeCancel}
               className="shrink-0 text-text-tertiary hover:text-text-secondary transition-colors"
               title="Cancel"
+              aria-label="Cancel"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

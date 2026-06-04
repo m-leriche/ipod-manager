@@ -37,6 +37,7 @@ export const StarRating = ({ rating, onChange, size = "md" }: StarRatingProps) =
           key={star}
           type="button"
           disabled={!interactive}
+          aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
             handleClick(star);

@@ -40,7 +40,9 @@ export const DiscoverView = () => {
   // ── Snapshot persistence helper ──────────────────────────────
 
   const saveSnapshot = useCallback((updated: DiscoverSection[]) => {
-    invoke("save_discover_snapshot", { sections: updated }).catch(() => {});
+    invoke("save_discover_snapshot", { sections: updated }).catch((e) =>
+      console.warn("Failed to save discover snapshot:", e),
+    );
   }, []);
 
   // ── Feed loading ─────────────────────────────────────────────
@@ -230,7 +232,7 @@ export const DiscoverView = () => {
 
   const handleWatchArtist = useCallback(
     (name: string) => {
-      watchArtist(name).catch(() => {});
+      watchArtist(name).catch((e) => console.warn("Failed to watch artist:", e));
     },
     [watchArtist],
   );

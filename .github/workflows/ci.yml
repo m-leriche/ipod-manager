@@ -52,6 +52,18 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm audit --omit=dev --audit-level=high
+      # Suppressed advisories — reviewed 2026-06-04:
+      #
+      # rustls-webpki (transitive dep via ureq/reqwest/tauri-plugin-updater, pinned at 0.103.11):
+      #   RUSTSEC-2026-0098: URI name constraints incorrectly accepted. Low risk — requires
+      #                      certificate misissuance and we don't assert URI names.
+      #   RUSTSEC-2026-0099: Wildcard names bypass name constraints. Same low-risk preconditions.
+      #   RUSTSEC-2026-0104: Panic parsing CRL with empty BIT STRING in onlySomeReasons. DoS only,
+      #                      and we don't use CRLs. Fix requires 0.103.13+ (waiting on upstream).
+      #
+      # atk / atk-sys (transitive dep, Linux CI only — not in macOS production builds):
+      #   RUSTSEC-2024-0413: atk crate unmaintained (INFO). GTK3 binding, no security impact.
+      #   RUSTSEC-2024-0416: atk-sys crate unmaintained (INFO). Same — migrate to gtk4-rs if needed.
       - uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

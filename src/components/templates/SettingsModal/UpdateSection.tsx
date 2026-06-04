@@ -16,7 +16,7 @@ export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
   useEffect(() => {
     getVersion()
       .then(setAppVersion)
-      .catch(() => {});
+      .catch((e) => console.warn("Failed to get app version:", e));
   }, []);
 
   useEffect(() => {

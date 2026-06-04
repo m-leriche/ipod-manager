@@ -16,6 +16,7 @@ export const VolumeControl = ({ volume, onChange }: VolumeControlProps) => {
         onClick={handleIconClick}
         className="text-text-secondary hover:text-text-primary transition-colors"
         title={volume > 0 ? "Mute" : "Unmute"}
+        aria-label={volume > 0 ? "Mute" : "Unmute"}
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
           {volume === 0 ? (

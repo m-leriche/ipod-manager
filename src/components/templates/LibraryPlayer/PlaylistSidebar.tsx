@@ -170,6 +170,7 @@ export const PlaylistSidebar = ({
               disabled={exporting}
               className="text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-30"
               title="Export all playlists to iPod"
+              aria-label="Export all playlists to iPod"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
                 <path
@@ -188,6 +189,7 @@ export const PlaylistSidebar = ({
             }}
             className="text-text-tertiary hover:text-text-secondary transition-colors"
             title="New Playlist"
+            aria-label="New Playlist"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -219,6 +221,7 @@ export const PlaylistSidebar = ({
             onClick={onSmartPlaylistCreate}
             className="text-text-tertiary hover:text-text-secondary transition-colors"
             title="New Smart Playlist"
+            aria-label="New Smart Playlist"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

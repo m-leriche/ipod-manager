@@ -133,6 +133,7 @@ export const PresetDropdown = () => {
                     onClick={() => deletePreset(p.name)}
                     className="shrink-0 p-0.5 text-text-tertiary hover:text-danger transition-colors"
                     title="Delete preset"
+                    aria-label="Delete preset"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

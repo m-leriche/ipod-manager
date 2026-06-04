@@ -110,7 +110,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       .then((available) => {
         setState((prev) => (prev.libraryAvailable === available ? prev : { ...prev, libraryAvailable: available }));
       })
-      .catch(() => {});
+      .catch((e) => console.warn("Failed to check library availability:", e));
   }, []);
 
   useEffect(() => {

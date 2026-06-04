@@ -91,7 +91,11 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
           >
             Clear
           </button>
-          <button onClick={onClose} className="text-text-tertiary hover:text-text-secondary transition-colors">
+          <button
+            onClick={onClose}
+            className="text-text-tertiary hover:text-text-secondary transition-colors"
+            aria-label="Close queue"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -164,6 +168,7 @@ export const QueuePanel = ({ onClose }: QueuePanelProps) => {
                   <button
                     onClick={() => removeFromQueue(i)}
                     className="text-text-tertiary hover:text-text-secondary transition-colors shrink-0"
+                    aria-label="Remove from queue"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

@@ -59,6 +59,7 @@ const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
       <button
         onClick={handleDismiss}
         className="shrink-0 mt-0.5 text-text-tertiary hover:text-text-secondary transition-colors"
+        aria-label="Dismiss notification"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

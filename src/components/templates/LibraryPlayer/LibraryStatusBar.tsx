@@ -63,6 +63,7 @@ export const LibraryStatusBar = ({ selectedTracks, hideSelectionStats }: Library
                 : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover"
           }`}
           title="Equalizer"
+          aria-label="Equalizer"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
             <path strokeLinecap="round" d="M4 8h4m4 0h8M4 16h8m4 0h4" />

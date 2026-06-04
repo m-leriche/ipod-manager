@@ -27,7 +27,10 @@ const DiscoverSettings = () => {
         setEnabled(v);
         setLoaded(true);
       })
-      .catch(() => setLoaded(true));
+      .catch((e) => {
+        console.warn("Failed to check Subsonic status:", e);
+        setLoaded(true);
+      });
   }, []);
 
   const toggle = useCallback(async (value: boolean) => {

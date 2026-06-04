@@ -2,17 +2,23 @@ import { createContext, useContext, useState, useCallback, useRef, useMemo } fro
 
 export type ToastType = "success" | "error" | "info" | "warning";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   id: string;
   type: ToastType;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastActions {
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info: (message: string) => void;
-  warning: (message: string) => void;
+  success: (message: string, action?: ToastAction) => void;
+  error: (message: string, action?: ToastAction) => void;
+  info: (message: string, action?: ToastAction) => void;
+  warning: (message: string, action?: ToastAction) => void;
   dismiss: (id: string) => void;
 }
 
@@ -47,9 +53,9 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const addToast = useCallback((type: ToastType, message: string) => {
+  const addToast = useCallback((type: ToastType, message: string, action?: ToastAction) => {
     const id = `toast-${++nextId}`;
-    const toast: Toast = { id, type, message };
+    const toast: Toast = { id, type, message, action };
 
     setToasts((prev) => [...prev, toast]);
 
@@ -61,10 +67,16 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     timersRef.current.set(id, timer);
   }, []);
 
-  const success = useCallback((message: string) => addToast("success", message), [addToast]);
-  const error = useCallback((message: string) => addToast("error", message), [addToast]);
-  const info = useCallback((message: string) => addToast("info", message), [addToast]);
-  const warning = useCallback((message: string) => addToast("warning", message), [addToast]);
+  const success = useCallback(
+    (message: string, action?: ToastAction) => addToast("success", message, action),
+    [addToast],
+  );
+  const error = useCallback((message: string, action?: ToastAction) => addToast("error", message, action), [addToast]);
+  const info = useCallback((message: string, action?: ToastAction) => addToast("info", message, action), [addToast]);
+  const warning = useCallback(
+    (message: string, action?: ToastAction) => addToast("warning", message, action),
+    [addToast],
+  );
 
   const actions = useMemo(() => ({ success, error, info, warning, dismiss }), [success, error, info, warning, dismiss]);
   const state = useMemo(() => ({ toasts }), [toasts]);

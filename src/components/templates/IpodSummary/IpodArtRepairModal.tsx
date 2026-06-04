@@ -157,7 +157,50 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
             <ReviewView albums={missingAlbums} selected={selected} onToggle={toggleAlbum} onToggleAll={toggleAll} />
           )}
           {phase === "fixing" && <FixingView progress={fixProgress} />}
-          {phase === "done" && <DoneView result={result} error={error} totalScanned={albums.length} />}
+          {phase === "done" && (
+            <DoneView
+              result={result}
+              error={error}
+              totalScanned={albums.length}
+              onRetry={
+                error
+                  ? () => {
+                      setError(null);
+                      setPhase("scanning");
+                      setScanProgress({ albums_found: 0, current_folder: "" });
+                      // Bump scanIdRef to re-trigger the scan effect
+                      scanIdRef.current++;
+                      const id = scanIdRef.current;
+                      const run = async () => {
+                        try {
+                          const results = await invoke<AlbumInfo[]>("scan_album_art", { path: musicPath });
+                          if (scanIdRef.current !== id) return;
+                          setAlbums(results);
+                          const missing = results.filter((a) => !a.has_cover_file);
+                          setSelected(new Set(missing.map((a) => a.folder_path)));
+                          setPhase(missing.length === 0 ? "done" : "summary");
+                          if (missing.length === 0) {
+                            setResult({
+                              total: 0,
+                              fixed: 0,
+                              already_ok: results.length,
+                              failed: 0,
+                              cancelled: false,
+                              errors: [],
+                            });
+                          }
+                        } catch (e) {
+                          if (scanIdRef.current !== id) return;
+                          setError(`${e}`);
+                          setPhase("done");
+                        }
+                      };
+                      run();
+                    }
+                  : undefined
+              }
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -312,15 +355,25 @@ const DoneView = ({
   result,
   error,
   totalScanned,
+  onRetry,
 }: {
   result: AlbumArtResult | null;
   error: string | null;
   totalScanned: number;
+  onRetry?: () => void;
 }) => {
   if (error) {
     return (
-      <div className="py-4 text-center">
+      <div className="py-4 flex flex-col items-center gap-3">
         <p className="text-xs text-danger">{error}</p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+          >
+            Try Again
+          </button>
+        )}
       </div>
     );
   }

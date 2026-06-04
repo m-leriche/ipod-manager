@@ -123,8 +123,14 @@ export const LyricsPanel = ({ track, variant = "panel" }: LyricsPanelProps) => {
     return (
       <div className={baseClass}>
         {!isOverlay && <PanelHeader />}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-4 h-4 border-2 border-text-tertiary/30 border-t-text-tertiary rounded-full animate-spin" />
+        <div className="flex-1 px-4 py-6 space-y-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="skeleton h-3 rounded"
+              style={{ width: `${50 + Math.sin(i) * 30}%`, animationDelay: `${i * 60}ms` }}
+            />
+          ))}
         </div>
       </div>
     );

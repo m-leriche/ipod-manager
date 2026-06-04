@@ -55,7 +55,21 @@ const ToastItem = ({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
       }`}
     >
       <span className="shrink-0 mt-0.5">{ICONS[toast.type]}</span>
-      <p className="flex-1 text-[11px] leading-relaxed text-text-primary break-words">{toast.message}</p>
+      <p className="flex-1 text-[11px] leading-relaxed text-text-primary break-words">
+        {toast.message}
+        {toast.action && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.action!.onClick();
+              handleDismiss();
+            }}
+            className="ml-2 font-medium underline underline-offset-2 hover:opacity-80 transition-opacity"
+          >
+            {toast.action.label}
+          </button>
+        )}
+      </p>
       <button
         onClick={handleDismiss}
         className="shrink-0 mt-0.5 text-text-tertiary hover:text-text-secondary transition-colors"

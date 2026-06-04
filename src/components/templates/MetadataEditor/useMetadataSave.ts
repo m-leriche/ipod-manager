@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { buildUpdate } from "./helpers";
@@ -10,6 +10,7 @@ import type {
   SanitizeResult,
 } from "../../../types/metadata";
 import type { Phase, EditableFields, SanitizeModalOptions } from "./types";
+import type { ToastAction } from "../../../contexts/ToastContext";
 
 interface UseMetadataSaveParams {
   tracks: TrackMetadata[];
@@ -32,6 +33,7 @@ interface UseMetadataSaveParams {
   failProgress: (msg: string) => void;
   cancel: () => void;
   refreshTracks: () => Promise<void>;
+  onSaveToast?: (message: string, action?: ToastAction) => void;
 }
 
 export const useMetadataSave = ({
@@ -55,7 +57,10 @@ export const useMetadataSave = ({
   failProgress,
   cancel,
   refreshTracks,
+  onSaveToast,
 }: UseMetadataSaveParams) => {
+  // Ref so the toast action always calls the latest handleUndo
+  const undoRef = useRef<(() => void) | null>(null);
   const handleSave = useCallback(async () => {
     const updates = [];
     for (const [filePath, edited] of Object.entries(editedTracks)) {
@@ -102,6 +107,12 @@ export const useMetadataSave = ({
       }
       setPhase("scanned");
       finishProgress(`Saved ${result.succeeded} of ${result.total} files`);
+      if (result.succeeded > 0 && onSaveToast) {
+        onSaveToast(`Saved ${result.succeeded} file${result.succeeded !== 1 ? "s" : ""}`, {
+          label: "Undo",
+          onClick: () => undoRef.current?.(),
+        });
+      }
     } catch (e) {
       setError(`${e}`);
       setPhase("scanned");
@@ -121,6 +132,7 @@ export const useMetadataSave = ({
     setError,
     finishProgress,
     failProgress,
+    onSaveToast,
   ]);
 
   const handleUndo = useCallback(async () => {
@@ -210,6 +222,8 @@ export const useMetadataSave = ({
       unlisten();
     }
   }, [selectedTracks, setRepairingArt, setArtCacheBust, bumpArtCache]);
+
+  undoRef.current = handleUndo;
 
   return { handleSave, handleUndo, handleSanitize, handleRepairArt };
 };

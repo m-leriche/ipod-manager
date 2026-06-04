@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { cancelSync } from "../../../utils/cancelSync";
-import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { useFileSelection } from "./useFileSelection";
@@ -378,11 +377,26 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
 
         {/* Content */}
         {loading && (
-          <CenterMsg>
-            <Spinner /> Loading...
+          <div className="flex-1 p-2 space-y-1">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-2 h-7" style={{ animationDelay: `${i * 40}ms` }}>
+                <div className="skeleton w-4 h-4 rounded" />
+                <div className="skeleton flex-1 h-3 rounded" style={{ maxWidth: `${40 + Math.sin(i) * 20}%` }} />
+              </div>
+            ))}
+          </div>
+        )}
+        {error && (
+          <CenterMsg className="text-danger">
+            {error}
+            <button
+              onClick={reload}
+              className="ml-2 text-[10px] font-medium text-accent hover:text-accent/80 transition-colors"
+            >
+              Retry
+            </button>
           </CenterMsg>
         )}
-        {error && <CenterMsg className="text-danger">{error}</CenterMsg>}
         {!loading && !error && filteredEntries.length === 0 && !creatingFolder && (
           <CenterMsg>{filter ? "No matches" : "Empty folder"}</CenterMsg>
         )}

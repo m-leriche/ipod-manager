@@ -25,6 +25,7 @@ import type { TrackMetadata, MetadataUpdate, MetadataSaveProgress, MetadataSaveR
 import type { Phase, View, EditableFields } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
+import { useToast } from "../../../contexts/ToastContext";
 
 export const MetadataEditor = ({
   initialPaths,
@@ -41,6 +42,7 @@ export const MetadataEditor = ({
     fail: failProgress,
   } = useProgress();
   const { bumpArtCache } = useArtCache();
+  const toast = useToast();
 
   // ── Shared state ──
   const [phase, setPhase] = useState<Phase>("idle");
@@ -200,7 +202,25 @@ export const MetadataEditor = ({
     failProgress,
     cancel,
     refreshTracks: scanHook.refreshTracks,
+    onSaveToast: toast.success,
   });
+
+  // ── Cmd+Z undo shortcut ──
+  const handleUndoRef = useRef(handleUndo);
+  handleUndoRef.current = handleUndo;
+  const undoAvailableRef = useRef(false);
+  undoAvailableRef.current = undoOperations !== null && undoOperations.length > 0;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey && undoAvailableRef.current) {
+        e.preventDefault();
+        handleUndoRef.current();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // ── Auto-scan from external navigation ──
   useEffect(() => {

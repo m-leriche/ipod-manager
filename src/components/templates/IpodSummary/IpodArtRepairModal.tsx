@@ -36,8 +36,10 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
   onCloseRef.current = onClose;
   // Track whether this effect invocation is still current (not stale from HMR)
   const scanIdRef = useRef(0);
+  // Bump to re-trigger the scan effect (used by retry)
+  const [scanTrigger, setScanTrigger] = useState(0);
 
-  // Scan on mount
+  // Scan on mount and on retry
   useEffect(() => {
     const id = ++scanIdRef.current;
     let unlistenScan: (() => void) | null = null;
@@ -76,7 +78,14 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
     return () => {
       unlistenScan?.();
     };
-  }, [musicPath]);
+  }, [musicPath, scanTrigger]);
+
+  const retryScan = useCallback(() => {
+    setError(null);
+    setPhase("scanning");
+    setScanProgress({ albums_found: 0, current_folder: "" });
+    setScanTrigger((n) => n + 1);
+  }, []);
 
   const missingAlbums = albums.filter((a) => !a.has_cover_file);
 
@@ -157,7 +166,14 @@ export const IpodArtRepairModal = ({ musicPath, onClose }: Props) => {
             <ReviewView albums={missingAlbums} selected={selected} onToggle={toggleAlbum} onToggleAll={toggleAll} />
           )}
           {phase === "fixing" && <FixingView progress={fixProgress} />}
-          {phase === "done" && <DoneView result={result} error={error} totalScanned={albums.length} />}
+          {phase === "done" && (
+            <DoneView
+              result={result}
+              error={error}
+              totalScanned={albums.length}
+              onRetry={error ? retryScan : undefined}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -312,15 +328,25 @@ const DoneView = ({
   result,
   error,
   totalScanned,
+  onRetry,
 }: {
   result: AlbumArtResult | null;
   error: string | null;
   totalScanned: number;
+  onRetry?: () => void;
 }) => {
   if (error) {
     return (
-      <div className="py-4 text-center">
+      <div className="py-4 flex flex-col items-center gap-3">
         <p className="text-xs text-danger">{error}</p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+          >
+            Try Again
+          </button>
+        )}
       </div>
     );
   }

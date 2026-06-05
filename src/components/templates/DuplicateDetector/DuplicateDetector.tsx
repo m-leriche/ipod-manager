@@ -11,6 +11,7 @@ export const DuplicateDetector = () => {
   const [result, setResult] = useState<DuplicateDetectionResult | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState<DuplicateDetectionProgress | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [selectedForDeletion, setSelectedForDeletion] = useState<Set<number>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -18,6 +19,7 @@ export const DuplicateDetector = () => {
   const handleScan = useCallback(async () => {
     setScanning(true);
     setResult(null);
+    setScanError(null);
     setSelectedForDeletion(new Set());
 
     const unlisten = await listen<DuplicateDetectionProgress>("duplicate-detection-progress", (e) => {
@@ -40,14 +42,14 @@ export const DuplicateDetector = () => {
     } catch (e) {
       const msg = `${e}`;
       if (!msg.includes("Cancelled")) {
-        toast.error(`Duplicate detection failed: ${e}`);
+        setScanError(msg);
       }
     } finally {
       unlisten();
       setScanning(false);
       setProgress(null);
     }
-  }, [toast]);
+  }, []);
 
   const toggleTrack = useCallback((trackId: number) => {
     setSelectedForDeletion((prev) => {
@@ -148,9 +150,21 @@ export const DuplicateDetector = () => {
 
       {/* Groups list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {!result && !scanning && (
+        {!result && !scanning && !scanError && (
           <div className="flex items-center justify-center h-full">
             <p className="text-[11px] text-text-tertiary">Click "Scan for Duplicates" to find duplicate tracks</p>
+          </div>
+        )}
+
+        {scanError && !scanning && (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <p className="text-[11px] text-danger">{scanError}</p>
+            <button
+              onClick={handleScan}
+              className="px-3 py-1.5 text-[11px] font-medium rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         )}
 

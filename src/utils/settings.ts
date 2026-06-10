@@ -8,6 +8,8 @@
 
 import type { CustomTheme } from "../types/customTheme";
 import type { ShortcutBinding } from "../types/shortcuts";
+import { TEMPLATE_FIELDS } from "../types/metadata";
+import type { MetadataTemplate } from "../types/metadata";
 
 // ── Schema ──────────────────────────────────────────────────────
 
@@ -98,6 +100,17 @@ const validateShortcutOverrides = (parsed: unknown): Record<string, ShortcutBind
   return obj as Record<string, ShortcutBinding>;
 };
 
+const isMetadataTemplate = (t: unknown): t is MetadataTemplate =>
+  typeof t === "object" &&
+  t !== null &&
+  typeof (t as MetadataTemplate).id === "string" &&
+  typeof (t as MetadataTemplate).name === "string" &&
+  typeof (t as MetadataTemplate).fields === "object" &&
+  (t as MetadataTemplate).fields !== null &&
+  Object.entries((t as MetadataTemplate).fields).every(
+    ([k, v]) => (TEMPLATE_FIELDS as readonly string[]).includes(k) && typeof v === "string",
+  );
+
 const isCustomTheme = (t: unknown): t is CustomTheme =>
   typeof t === "object" &&
   t !== null &&
@@ -159,6 +172,11 @@ export const SETTINGS = {
 
   // Keyboard shortcut overrides (action → binding); defaults live in utils/shortcuts.ts
   shortcutOverrides: json<Record<string, ShortcutBinding>>("crate-shortcut-overrides", {}, validateShortcutOverrides),
+
+  // Metadata templates (batch tag presets)
+  metadataTemplates: json<MetadataTemplate[]>("crate-metadata-templates", [], (parsed) =>
+    Array.isArray(parsed) ? parsed.filter(isMetadataTemplate) : undefined,
+  ),
 
   // Layout dimensions
   columnWidths: json<Record<string, number>>("crate-column-widths", {}, validateNumberRecord),

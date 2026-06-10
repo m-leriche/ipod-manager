@@ -93,6 +93,15 @@ describe("settings", () => {
     expect(getSetting("browserColumnWidths")).toEqual([]);
   });
 
+  it("filters metadata templates with non-whitelisted fields", () => {
+    const valid = { id: "a", name: "Good", fields: { genre: "Jazz" } };
+    const badField = { id: "b", name: "Bad", fields: { title: "Hijack" } };
+    const badValue = { id: "c", name: "Bad", fields: { genre: 42 } };
+    localStorage.setItem(SETTINGS.metadataTemplates.key, JSON.stringify([valid, badField, badValue]));
+
+    expect(getSetting("metadataTemplates")).toEqual([valid]);
+  });
+
   it("lyricsOverlaySize defaults to 1 (multiplier)", () => {
     expect(getSetting("lyricsOverlaySize")).toBe(1);
     setSetting("lyricsOverlaySize", 1.5);

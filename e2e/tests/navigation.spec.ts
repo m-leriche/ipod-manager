@@ -55,9 +55,10 @@ test.describe("Navigation", () => {
   });
 
   test("keyboard shortcut opens shortcuts dialog", async ({ page }) => {
-    // Dispatch a keydown event matching the app's handler (metaKey || ctrlKey) + "/"
+    // Dispatch a keydown matching the shortcut registry's default binding
+    // (mod + Slash). The registry matches on KeyboardEvent.code.
     await page.evaluate(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", ctrlKey: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", code: "Slash", ctrlKey: true, bubbles: true }));
     });
     await expect(page.getByText("Keyboard Shortcuts")).toBeVisible();
   });

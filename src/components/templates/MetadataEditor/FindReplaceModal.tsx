@@ -7,6 +7,9 @@ import { fieldLabel } from "./helpers";
 
 const PREVIEW_LIMIT = 50;
 
+/** Delay before re-running the (possibly expensive) preview while typing. */
+const PREVIEW_DEBOUNCE_MS = 150;
+
 interface FindReplaceModalProps {
   tracks: TrackMetadata[];
   editedTracks: Record<string, EditableFields>;
@@ -22,6 +25,19 @@ export const FindReplaceModal = ({ tracks, editedTracks, targetLabel, onApply, o
   const [useRegex, setUseRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
 
+  // Debounce the typed pattern so the preview (user regex × every field of
+  // every target track) doesn't run synchronously on each keystroke.
+  const [debouncedFind, setDebouncedFind] = useState("");
+  const [debouncedReplace, setDebouncedReplace] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFind(find);
+      setDebouncedReplace(replace);
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [find, replace]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -34,12 +50,12 @@ export const FindReplaceModal = ({ tracks, editedTracks, targetLabel, onApply, o
     () =>
       previewFindReplace(tracks, editedTracks, {
         fields: [...fields],
-        find,
-        replace,
+        find: debouncedFind,
+        replace: debouncedReplace,
         useRegex,
         caseSensitive,
       }),
-    [tracks, editedTracks, fields, find, replace, useRegex, caseSensitive],
+    [tracks, editedTracks, fields, debouncedFind, debouncedReplace, useRegex, caseSensitive],
   );
 
   const invalidPattern = changes === null;
@@ -162,14 +178,14 @@ export const FindReplaceModal = ({ tracks, editedTracks, targetLabel, onApply, o
               <div className="px-4 py-3 text-[11px] text-danger" role="alert">
                 Invalid regular expression
               </div>
-            ) : find === "" ? (
+            ) : debouncedFind === "" ? (
               <div className="px-4 py-3 text-[11px] text-text-tertiary">Enter text to find</div>
             ) : changes.length === 0 ? (
               <div className="px-4 py-3 text-[11px] text-text-tertiary">No matches in the selected fields</div>
             ) : (
               <div className="divide-y divide-border" data-testid="find-replace-preview">
-                {changes.slice(0, PREVIEW_LIMIT).map((c, i) => (
-                  <div key={i} className="px-4 py-2 flex items-baseline gap-2 text-[11px]">
+                {changes.slice(0, PREVIEW_LIMIT).map((c) => (
+                  <div key={`${c.filePath}-${c.field}`} className="px-4 py-2 flex items-baseline gap-2 text-[11px]">
                     <span className="text-text-tertiary shrink-0 w-24 truncate" title={c.fileName}>
                       {c.fileName}
                     </span>

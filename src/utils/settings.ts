@@ -7,6 +7,7 @@
  */
 
 import type { CustomTheme } from "../types/customTheme";
+import { TEMPLATE_FIELDS } from "../types/metadata";
 import type { MetadataTemplate } from "../types/metadata";
 
 // ── Schema ──────────────────────────────────────────────────────
@@ -87,7 +88,9 @@ const isMetadataTemplate = (t: unknown): t is MetadataTemplate =>
   typeof (t as MetadataTemplate).name === "string" &&
   typeof (t as MetadataTemplate).fields === "object" &&
   (t as MetadataTemplate).fields !== null &&
-  Object.values((t as MetadataTemplate).fields).every((v) => typeof v === "string");
+  Object.entries((t as MetadataTemplate).fields).every(
+    ([k, v]) => (TEMPLATE_FIELDS as readonly string[]).includes(k) && typeof v === "string",
+  );
 
 const isCustomTheme = (t: unknown): t is CustomTheme =>
   typeof t === "object" &&

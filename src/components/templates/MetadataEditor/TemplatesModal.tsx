@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { TEMPLATE_FIELDS } from "../../../types/metadata";
 import type { MetadataTemplate } from "../../../types/metadata";
-import { TEMPLATE_FIELDS } from "./batchOperations";
 import { fieldLabel } from "./helpers";
 import { getSetting, setSetting } from "../../../utils/settings";
 
@@ -33,7 +33,11 @@ export const TemplatesModal = ({ targetLabel, onApply, onClose }: TemplatesModal
   }, []);
 
   const handleCreate = useCallback(() => {
-    const fields = Object.fromEntries(Object.entries(draftFields).filter(([, v]) => v.trim() !== ""));
+    const fields = Object.fromEntries(
+      Object.entries(draftFields)
+        .map(([k, v]) => [k, v.trim()])
+        .filter(([, v]) => v !== ""),
+    );
     if (name.trim() === "" || Object.keys(fields).length === 0) return;
     const template: MetadataTemplate = {
       id: crypto.randomUUID(),
@@ -102,6 +106,7 @@ export const TemplatesModal = ({ targetLabel, onApply, onClose }: TemplatesModal
                     <button
                       onClick={() => handleDelete(t.id)}
                       onBlur={() => setConfirmDeleteId(null)}
+                      autoFocus
                       className="text-[10px] text-danger font-medium transition-colors shrink-0"
                       data-testid={`confirm-delete-template-${t.id}`}
                     >
@@ -154,9 +159,16 @@ export const TemplatesModal = ({ targetLabel, onApply, onClose }: TemplatesModal
                     <span className="text-[11px] text-text-secondary w-28 shrink-0">{fieldLabel(field)}</span>
                     <input
                       type="text"
+                      inputMode={field === "year" ? "numeric" : undefined}
                       value={draftFields[field] ?? ""}
-                      onChange={(e) => setDraftFields((prev) => ({ ...prev, [field]: e.target.value }))}
-                      placeholder="Leave empty to skip"
+                      onChange={(e) =>
+                        setDraftFields((prev) => ({
+                          ...prev,
+                          // year is parsed as an integer on save — only accept digits
+                          [field]: field === "year" ? e.target.value.replace(/\D/g, "") : e.target.value,
+                        }))
+                      }
+                      placeholder={field === "year" ? "e.g. 1999" : "Leave empty to skip"}
                       className="flex-1 bg-bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary focus:border-border-active outline-none"
                       data-testid={`template-field-${field}`}
                     />

@@ -184,8 +184,14 @@ describe("previewTemplate", () => {
     expect(previewTemplate([track], edited, template)).toHaveLength(0);
   });
 
-  it("ignores unknown fields in the template", () => {
-    const bogus: MetadataTemplate = { id: "t2", name: "Bogus", fields: { not_a_field: "x" } };
+  it("ignores non-whitelisted fields in the template", () => {
+    // Simulates a template that bypassed the UI (e.g. hand-edited localStorage):
+    // per-track fields like title must never be batch-overwritten.
+    const bogus = {
+      id: "t2",
+      name: "Bogus",
+      fields: { not_a_field: "x", title: "Hijacked" },
+    } as unknown as MetadataTemplate;
     expect(previewTemplate([makeTrack()], {}, bogus)).toHaveLength(0);
   });
 });

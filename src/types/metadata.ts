@@ -53,12 +53,25 @@ export interface MetadataSaveResult {
   undo_operations: MetadataUpdate[];
 }
 
+/** Fields a metadata template can set (per-track fields like title/track are excluded). */
+export const TEMPLATE_FIELDS = [
+  "artist",
+  "album",
+  "album_artist",
+  "sort_artist",
+  "sort_album_artist",
+  "genre",
+  "year",
+] as const;
+
+export type TemplateField = (typeof TEMPLATE_FIELDS)[number];
+
 /** A named set of field values that can be applied to many tracks at once. */
 export interface MetadataTemplate {
   id: string;
   name: string;
   /** Field name → value (string-encoded, matching the editor's EditableFields). */
-  fields: Record<string, string>;
+  fields: Partial<Record<TemplateField, string>>;
 }
 
 export interface SanitizeProgress {

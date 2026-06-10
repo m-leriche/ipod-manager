@@ -1,3 +1,4 @@
+import { TEMPLATE_FIELDS } from "../../../types/metadata";
 import type { TrackMetadata, MetadataTemplate } from "../../../types/metadata";
 import type { EditableFields } from "./types";
 import { trackToEditable } from "./helpers";
@@ -15,18 +16,7 @@ export const STRING_FIELDS = [
 
 export type StringField = (typeof STRING_FIELDS)[number];
 
-/** Fields a template can set (per-track fields like title/track are excluded). */
-export const TEMPLATE_FIELDS = [
-  "artist",
-  "album",
-  "album_artist",
-  "sort_artist",
-  "sort_album_artist",
-  "genre",
-  "year",
-] as const;
-
-export type TemplateField = (typeof TEMPLATE_FIELDS)[number];
+const TEMPLATE_FIELD_SET = new Set<string>(TEMPLATE_FIELDS);
 
 export interface FindReplaceOptions {
   fields: StringField[];
@@ -118,7 +108,10 @@ export const previewTemplate = (
   for (const track of tracks) {
     const fields = currentFields(track, editedTracks);
     for (const [field, value] of Object.entries(template.fields)) {
-      if (!(field in fields)) continue;
+      // Only allow whitelisted template fields — protects per-track fields
+      // (title, track) from templates that bypassed the UI (e.g. hand-edited
+      // localStorage).
+      if (value === undefined || !TEMPLATE_FIELD_SET.has(field)) continue;
       const key = field as keyof EditableFields;
       if (fields[key] !== value) {
         changes.push({

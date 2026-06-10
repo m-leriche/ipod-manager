@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { FindReplaceModal } from "./FindReplaceModal";
 import type { TrackMetadata } from "../../../types/metadata";
 
@@ -35,6 +35,9 @@ const renderModal = (onApply = vi.fn(), onClose = vi.fn()) => {
   return { onApply, onClose };
 };
 
+// The preview is debounced, so assertions about it must wait for the timer.
+const typeFind = (value: string) => fireEvent.change(screen.getByTestId("find-input"), { target: { value } });
+
 describe("FindReplaceModal", () => {
   it("renders with the target label", () => {
     renderModal();
@@ -46,41 +49,53 @@ describe("FindReplaceModal", () => {
     expect(screen.getByTestId("apply-find-replace")).toBeDisabled();
   });
 
-  it("previews matches as you type", () => {
+  it("previews matches after the debounce", async () => {
     renderModal();
-    fireEvent.change(screen.getByTestId("find-input"), { target: { value: " (Live)" } });
+    typeFind(" (Live)");
 
-    expect(screen.getByTestId("find-replace-preview")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("find-replace-preview")).toBeInTheDocument();
+    });
     expect(screen.getByText("1 change")).toBeInTheDocument();
     expect(screen.getByText("Song (Live)")).toBeInTheDocument();
   });
 
-  it("includes additional fields when toggled", () => {
+  it("includes additional fields when toggled", async () => {
     renderModal();
-    fireEvent.change(screen.getByTestId("find-input"), { target: { value: " (Live)" } });
+    typeFind(" (Live)");
     fireEvent.click(screen.getByTestId("field-toggle-album"));
 
-    expect(screen.getByText("2 changes")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("2 changes")).toBeInTheDocument();
+    });
   });
 
-  it("shows an error for an invalid regex", () => {
+  it("shows an error for an invalid regex", async () => {
     renderModal();
     fireEvent.click(screen.getByTestId("regex-toggle"));
-    fireEvent.change(screen.getByTestId("find-input"), { target: { value: "[unclosed" } });
+    typeFind("[unclosed");
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Invalid regular expression");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Invalid regular expression");
+    });
     expect(screen.getByTestId("apply-find-replace")).toBeDisabled();
   });
 
-  it("shows a no-matches message", () => {
+  it("shows a no-matches message", async () => {
     renderModal();
-    fireEvent.change(screen.getByTestId("find-input"), { target: { value: "zzz-no-match" } });
-    expect(screen.getByText("No matches in the selected fields")).toBeInTheDocument();
+    typeFind("zzz-no-match");
+    await waitFor(() => {
+      expect(screen.getByText("No matches in the selected fields")).toBeInTheDocument();
+    });
   });
 
-  it("calls onApply with the computed changes", () => {
+  it("calls onApply with the computed changes", async () => {
     const { onApply } = renderModal();
-    fireEvent.change(screen.getByTestId("find-input"), { target: { value: " (Live)" } });
+    typeFind(" (Live)");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("apply-find-replace")).toBeEnabled();
+    });
     fireEvent.click(screen.getByTestId("apply-find-replace"));
 
     expect(onApply).toHaveBeenCalledTimes(1);

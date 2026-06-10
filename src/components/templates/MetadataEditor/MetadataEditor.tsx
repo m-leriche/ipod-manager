@@ -133,9 +133,10 @@ export const MetadataEditor = ({
   // ── Editor logic ──
   const groups = useMemo(() => groupTracks(tracks, editedTracks), [tracks, editedTracks]);
   const dirtyCount = useMemo(() => {
+    const byPath = new Map(tracks.map((t) => [t.file_path, t]));
     let count = 0;
     for (const [filePath, edited] of Object.entries(editedTracks)) {
-      const original = tracks.find((t) => t.file_path === filePath);
+      const original = byPath.get(filePath);
       if (original && buildUpdate(original, edited) !== null) count++;
     }
     return count;

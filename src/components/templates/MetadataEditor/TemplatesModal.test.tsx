@@ -53,6 +53,29 @@ describe("TemplatesModal", () => {
     expect(screen.getByText("My Preset")).toBeInTheDocument();
   });
 
+  it("only accepts digits in the year field", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("create-template"));
+
+    const yearInput = screen.getByTestId("template-field-year") as HTMLInputElement;
+    fireEvent.change(yearInput, { target: { value: "ninety" } });
+    expect(yearInput.value).toBe("");
+
+    fireEvent.change(yearInput, { target: { value: "1999x" } });
+    expect(yearInput.value).toBe("1999");
+  });
+
+  it("does not save a template whose only field is a rejected year", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("create-template"));
+    fireEvent.change(screen.getByTestId("template-name-input"), { target: { value: "Year Only" } });
+    fireEvent.change(screen.getByTestId("template-field-year"), { target: { value: "ninety" } });
+
+    // Non-numeric input was stripped, so no field has a value
+    expect(screen.getByTestId("save-template")).toBeDisabled();
+    expect(getSetting("metadataTemplates")).toHaveLength(0);
+  });
+
   it("disables save until a name and at least one field are set", () => {
     renderModal();
     fireEvent.click(screen.getByTestId("create-template"));

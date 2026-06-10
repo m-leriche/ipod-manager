@@ -66,12 +66,26 @@ export const matchesShortcut = (e: KeyboardEvent, action: ShortcutAction): boole
   return e.code === b.code && (e.metaKey || e.ctrlKey) === b.mod && e.shiftKey === b.shift && e.altKey === b.alt;
 };
 
-/** Another action already bound to `candidate`, if any. */
-export const findConflict = (candidate: ShortcutBinding, exclude: ShortcutAction): ShortcutAction | null => {
+// Fixed combos handled outside the registry (in-app handlers and macOS conventions)
+// that a recorded binding must not shadow.
+const RESERVED_BINDINGS: { binding: ShortcutBinding; label: string }[] = [
+  { binding: binding("KeyZ", { mod: true }), label: "Undo" },
+  { binding: binding("Comma", { mod: true }), label: "Settings" },
+  { binding: binding("KeyA", { mod: true }), label: "Select All" },
+  { binding: binding("KeyC", { mod: true }), label: "Copy" },
+  { binding: binding("KeyX", { mod: true }), label: "Cut" },
+  { binding: binding("KeyV", { mod: true }), label: "Paste" },
+  { binding: binding("KeyQ", { mod: true }), label: "Quit" },
+  { binding: binding("KeyW", { mod: true }), label: "Close Window" },
+];
+
+/** Label of the action or fixed combo already using `candidate`, if any. */
+export const findConflict = (candidate: ShortcutBinding, exclude: ShortcutAction): string | null => {
   for (const def of SHORTCUT_DEFS) {
-    if (def.action !== exclude && bindingsEqual(getBinding(def.action), candidate)) return def.action;
+    if (def.action !== exclude && bindingsEqual(getBinding(def.action), candidate)) return def.label;
   }
-  return null;
+  const reserved = RESERVED_BINDINGS.find((r) => bindingsEqual(r.binding, candidate));
+  return reserved ? reserved.label : null;
 };
 
 const MODIFIER_CODES = new Set([

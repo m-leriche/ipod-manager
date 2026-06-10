@@ -17,7 +17,7 @@ export const ShortcutsSection = () => {
   // Bindings are read from settings; bump to re-render after changes
   const [, setVersion] = useState(0);
   const [recording, setRecording] = useState<ShortcutAction | null>(null);
-  const [conflict, setConflict] = useState<{ action: ShortcutAction; with: ShortcutAction } | null>(null);
+  const [conflict, setConflict] = useState<{ action: ShortcutAction; with: string } | null>(null);
 
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -35,9 +35,9 @@ export const ShortcutsSection = () => {
       const binding = eventToBinding(e);
       if (!binding) return; // bare modifier — keep recording
 
-      const conflictingAction = findConflict(binding, recording);
-      if (conflictingAction) {
-        setConflict({ action: recording, with: conflictingAction });
+      const conflictingLabel = findConflict(binding, recording);
+      if (conflictingLabel) {
+        setConflict({ action: recording, with: conflictingLabel });
         setRecording(null);
         return;
       }
@@ -69,8 +69,6 @@ export const ShortcutsSection = () => {
     refresh();
   }, [refresh]);
 
-  const labelFor = (action: ShortcutAction) => SHORTCUT_DEFS.find((d) => d.action === action)?.label ?? action;
-
   const categories = ["Playback", "Library", "General"] as const;
 
   return (
@@ -81,7 +79,7 @@ export const ShortcutsSection = () => {
     >
       {conflict && (
         <div className="px-3 py-2.5 mb-3 rounded-xl text-[10px] bg-warning/10 text-warning" role="alert">
-          That combination is already used by “{labelFor(conflict.with)}”. Choose a different one.
+          That combination is already used by “{conflict.with}”. Choose a different one.
         </div>
       )}
 

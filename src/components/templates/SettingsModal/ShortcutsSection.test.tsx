@@ -58,6 +58,15 @@ describe("ShortcutsSection", () => {
     expect(getBinding("nextTrack")).toEqual(DEFAULT_BINDINGS.nextTrack);
   });
 
+  it("rejects fixed combos like mod+Z (undo)", () => {
+    render(<ShortcutsSection />);
+    fireEvent.click(screen.getByTestId("shortcut-focusSearch"));
+    fireEvent.keyDown(window, { code: "KeyZ", metaKey: true });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Undo");
+    expect(getBinding("focusSearch")).toEqual(DEFAULT_BINDINGS.focusSearch);
+  });
+
   it("shows a reset button for customized shortcuts and resets on click", () => {
     render(<ShortcutsSection />);
     fireEvent.click(screen.getByTestId("shortcut-playPause"));

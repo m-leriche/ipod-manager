@@ -19,6 +19,8 @@ const SECTIONS: SettingsSectionDef[] = [
 
 export const SettingsModal = ({ onClose, onLibraryChanged, autoCheckUpdate }: SettingsModalProps) => {
   const [section, setSection] = useState<SettingsSection>("general");
+  // One-shot: sections remount on nav, so the auto-check must be consumed at modal level
+  const [autoCheckPending, setAutoCheckPending] = useState(autoCheckUpdate ?? false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -80,9 +82,13 @@ export const SettingsModal = ({ onClose, onLibraryChanged, autoCheckUpdate }: Se
             ))}
           </nav>
 
-          <div className="flex-1 min-w-0 overflow-y-auto p-5" key={section}>
+          <div className="flex-1 min-w-0 overflow-y-auto p-5">
             {section === "general" && (
-              <GeneralSection onLibraryChanged={onLibraryChanged} autoCheckUpdate={autoCheckUpdate} />
+              <GeneralSection
+                onLibraryChanged={onLibraryChanged}
+                autoCheckUpdate={autoCheckPending}
+                onAutoCheckStarted={() => setAutoCheckPending(false)}
+              />
             )}
             {section === "appearance" && <AppearanceSection />}
             {section === "playback" && <PlaybackSection />}

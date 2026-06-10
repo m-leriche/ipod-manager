@@ -12,9 +12,11 @@ import type { LibraryScanProgress } from "../../../types/library";
 export const GeneralSection = ({
   onLibraryChanged,
   autoCheckUpdate,
+  onAutoCheckStarted,
 }: {
   onLibraryChanged: () => void;
   autoCheckUpdate?: boolean;
+  onAutoCheckStarted?: () => void;
 }) => {
   const [libraryLocation, setLibraryLocation] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export const GeneralSection = ({
 
   return (
     <>
-      <UpdateSection autoCheck={autoCheckUpdate} />
+      <UpdateSection autoCheck={autoCheckUpdate} onAutoCheckStarted={onAutoCheckStarted} />
 
       <SettingGroup
         title="Library Location"

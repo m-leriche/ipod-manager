@@ -111,13 +111,15 @@ export const LibraryPlayer = ({
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 
-  // After an import finishes, kick off background fetches if enabled in Settings
+  // After an import finishes, kick off background fetches if enabled in Settings.
+  // start() no-ops while a fetch is already running, so no .active checks here —
+  // depending on .active would churn this callback and re-register the drag-drop listener.
   const { onImportComplete } = data;
   const handleImportComplete = useCallback(async () => {
     await onImportComplete();
-    if (getSetting("autoFetchAlbumArt") && !artRepairState.active) startArtRepair();
-    if (getSetting("autoFetchLyrics") && !lyricsState.active) startLyricsFetch();
-  }, [onImportComplete, artRepairState.active, startArtRepair, lyricsState.active, startLyricsFetch]);
+    if (getSetting("autoFetchAlbumArt")) startArtRepair();
+    if (getSetting("autoFetchLyrics")) startLyricsFetch();
+  }, [onImportComplete, startArtRepair, startLyricsFetch]);
 
   const { isDragOver, handleChooseLibrary } = useLibraryImport(
     isActive,

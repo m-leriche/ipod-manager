@@ -109,7 +109,7 @@ describe("shortcuts", () => {
   describe("findConflict", () => {
     it("detects a binding already used by another action", () => {
       const conflict = findConflict(DEFAULT_BINDINGS.playPause, "nextTrack");
-      expect(conflict).toBe("playPause");
+      expect(conflict).toBe("Play / Pause");
     });
 
     it("ignores the excluded action itself", () => {
@@ -118,6 +118,17 @@ describe("shortcuts", () => {
 
     it("returns null for an unused binding", () => {
       expect(findConflict({ code: "KeyQ", mod: true, shift: true, alt: false }, "playPause")).toBeNull();
+    });
+
+    it("rejects fixed combos handled outside the registry", () => {
+      expect(findConflict({ code: "KeyZ", mod: true, shift: false, alt: false }, "playPause")).toBe("Undo");
+      expect(findConflict({ code: "Comma", mod: true, shift: false, alt: false }, "playPause")).toBe("Settings");
+      expect(findConflict({ code: "KeyC", mod: true, shift: false, alt: false }, "playPause")).toBe("Copy");
+    });
+
+    it("allows combos that only share the key with a reserved combo", () => {
+      expect(findConflict({ code: "KeyZ", mod: false, shift: false, alt: false }, "playPause")).toBeNull();
+      expect(findConflict({ code: "KeyZ", mod: true, shift: true, alt: false }, "playPause")).toBeNull();
     });
   });
 
@@ -156,6 +167,12 @@ describe("shortcuts", () => {
           const b = DEFAULT_BINDINGS[SHORTCUT_DEFS[j].action];
           expect(bindingsEqual(a, b)).toBe(false);
         }
+      }
+    });
+
+    it("has no default binding that collides with a reserved combo", () => {
+      for (const def of SHORTCUT_DEFS) {
+        expect(findConflict(DEFAULT_BINDINGS[def.action], def.action)).toBeNull();
       }
     });
   });

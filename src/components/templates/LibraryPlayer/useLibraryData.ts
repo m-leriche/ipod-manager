@@ -69,6 +69,9 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't steal keystrokes from text fields (the binding may be a bare key)
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
       if (matchesShortcut(e, "focusSearch")) {
         e.preventDefault();
         searchInputRef.current?.focus();

@@ -44,17 +44,20 @@ vi.mock("../../atoms/Skeleton/Skeleton", () => ({
   LibraryLoadingSkeleton: () => <div data-testid="loading-skeleton" />,
 }));
 
+const mockStartArtRepair = vi.fn();
+const mockStartLyricsFetch = vi.fn();
+
 vi.mock("../../../contexts/BackgroundArtRepairContext", () => ({
   useBackgroundArtRepair: () => ({
     state: { active: false, total: 0, completed: 0, currentItem: "" },
-    start: vi.fn(),
+    start: mockStartArtRepair,
     cancel: vi.fn(),
   }),
 }));
 vi.mock("../../../contexts/BackgroundLyricsContext", () => ({
   useBackgroundLyrics: () => ({
     state: { active: false, total: 0, completed: 0, currentItem: "" },
-    start: vi.fn(),
+    start: mockStartLyricsFetch,
     cancel: vi.fn(),
   }),
 }));
@@ -140,16 +143,22 @@ vi.mock("./useLibraryActions", () => ({
   }),
 }));
 
+// Capture the import-complete callback LibraryPlayer hands to useLibraryImport
+let capturedImportComplete: (() => Promise<void>) | undefined;
 vi.mock("./useLibraryImport", () => ({
-  useLibraryImport: () => ({
-    isDragOver: false,
-    handleChooseLibrary: vi.fn(),
-  }),
+  useLibraryImport: (...args: unknown[]) => {
+    capturedImportComplete = args[5] as () => Promise<void>;
+    return {
+      isDragOver: false,
+      handleChooseLibrary: vi.fn(),
+    };
+  },
 }));
 
 describe("LibraryPlayer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockLibraryData.hasLibrary = true;
     mockLibraryData.dataLoaded = true;
     // Reset view layout to defaults
@@ -225,5 +234,29 @@ describe("LibraryPlayer", () => {
   it("does not show column browser by default", () => {
     render(<LibraryPlayer />);
     expect(screen.queryByTestId("column-browser")).not.toBeInTheDocument();
+  });
+
+  describe("import complete", () => {
+    it("refreshes data and starts auto-fetches enabled in settings", async () => {
+      localStorage.setItem("crate-auto-fetch-album-art", "true");
+      localStorage.setItem("crate-auto-fetch-lyrics", "true");
+      render(<LibraryPlayer />);
+
+      await capturedImportComplete!();
+
+      expect(mockLibraryData.onImportComplete).toHaveBeenCalledTimes(1);
+      expect(mockStartArtRepair).toHaveBeenCalledTimes(1);
+      expect(mockStartLyricsFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not start auto-fetches when disabled in settings", async () => {
+      render(<LibraryPlayer />);
+
+      await capturedImportComplete!();
+
+      expect(mockLibraryData.onImportComplete).toHaveBeenCalledTimes(1);
+      expect(mockStartArtRepair).not.toHaveBeenCalled();
+      expect(mockStartLyricsFetch).not.toHaveBeenCalled();
+    });
   });
 });

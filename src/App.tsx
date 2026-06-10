@@ -136,7 +136,11 @@ const AppContent = () => {
 
   useEffect(() => {
     invoke<boolean>("get_discover_enabled")
-      .then(setDiscoverEnabled)
+      .then((enabled) => {
+        setDiscoverEnabled(enabled);
+        // A remembered "discover" tab must not restore a view whose nav button is hidden
+        if (!enabled) setTopTab((tab) => (tab === "discover" ? "library" : tab));
+      })
       .catch((e) => console.warn("Failed to check discover status:", e));
   }, []);
 

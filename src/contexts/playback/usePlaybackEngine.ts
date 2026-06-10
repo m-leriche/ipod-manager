@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { LibraryTrack } from "../../types/library";
 import type { PlaybackState, PlaybackTimeState, PlaybackContextValue } from "./types";
 import { savePlaybackState, loadPlaybackState } from "./persistence";
+import { getSetting } from "../../utils/settings";
 import { shuffleIndices, initialState, initialTime, computeReplayGain } from "./helpers";
 import { useQueueOperations } from "./useQueueOperations";
 import { usePlaybackSettings } from "./usePlaybackSettings";
@@ -67,6 +68,10 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
 
   // ── Restore queue from SQLite on mount ──────────────────────
   useEffect(() => {
+    if (!getSetting("resumeQueueOnLaunch")) {
+      queueRestoredRef.current = true;
+      return;
+    }
     loadPlaybackState().then((restored) => {
       queueRestoredRef.current = true;
       if (!restored) return;

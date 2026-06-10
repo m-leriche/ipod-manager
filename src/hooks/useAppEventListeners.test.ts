@@ -57,22 +57,37 @@ describe("useAppEventListeners", () => {
   it("calls onToggleShortcuts on Cmd+/ keydown", () => {
     renderHook(() => useAppEventListeners(callbacks));
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", metaKey: true }));
     expect(callbacks.onToggleShortcuts).toHaveBeenCalledTimes(1);
   });
 
   it("calls onToggleShortcuts on Ctrl+/ keydown", () => {
     renderHook(() => useAppEventListeners(callbacks));
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", ctrlKey: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", ctrlKey: true }));
     expect(callbacks.onToggleShortcuts).toHaveBeenCalledTimes(1);
   });
 
   it("does not call onToggleShortcuts on / without modifier", () => {
     renderHook(() => useAppEventListeners(callbacks));
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "/" }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Slash" }));
     expect(callbacks.onToggleShortcuts).not.toHaveBeenCalled();
+  });
+
+  it("respects a custom shortcut override for the shortcuts dialog", () => {
+    localStorage.setItem(
+      "crate-shortcut-overrides",
+      JSON.stringify({ toggleShortcutsDialog: { code: "KeyH", mod: true, shift: false, alt: false } }),
+    );
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", metaKey: true }));
+    expect(callbacks.onToggleShortcuts).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyH", metaKey: true }));
+    expect(callbacks.onToggleShortcuts).toHaveBeenCalledTimes(1);
+    localStorage.removeItem("crate-shortcut-overrides");
   });
 
   it("cleans up event listeners on unmount", async () => {

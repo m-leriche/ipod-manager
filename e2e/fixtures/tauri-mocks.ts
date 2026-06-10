@@ -170,6 +170,10 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   // Discover
   get_discover_enabled: true,
 
+  // Metadata tag format
+  get_id3_version: "v2.3",
+  set_id3_version: null,
+
   // Tauri plugins (internal commands)
   "plugin:app|version": "1.0.0",
 };

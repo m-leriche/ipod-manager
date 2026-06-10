@@ -53,6 +53,14 @@ export interface MetadataSaveResult {
   undo_operations: MetadataUpdate[];
 }
 
+/** A named set of field values that can be applied to many tracks at once. */
+export interface MetadataTemplate {
+  id: string;
+  name: string;
+  /** Field name → value (string-encoded, matching the editor's EditableFields). */
+  fields: Record<string, string>;
+}
+
 export interface SanitizeProgress {
   total: number;
   completed: number;

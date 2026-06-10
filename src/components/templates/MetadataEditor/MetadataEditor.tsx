@@ -21,7 +21,17 @@ import { useMetadataScan } from "./useMetadataScan";
 import { useMetadataSave } from "./useMetadataSave";
 import { IdentifyPanel } from "./IdentifyPanel";
 import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
-import type { TrackMetadata, MetadataUpdate, MetadataSaveProgress, MetadataSaveResult } from "../../../types/metadata";
+import { stageChanges, previewTemplate } from "./batchOperations";
+import type { FieldChange } from "./batchOperations";
+import { FindReplaceModal } from "./FindReplaceModal";
+import { TemplatesModal } from "./TemplatesModal";
+import type {
+  TrackMetadata,
+  MetadataUpdate,
+  MetadataSaveProgress,
+  MetadataSaveResult,
+  MetadataTemplate,
+} from "../../../types/metadata";
 import type { Phase, View, EditableFields } from "./types";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
@@ -58,6 +68,8 @@ export const MetadataEditor = ({
   const [repairingArt, setRepairingArt] = useState(false);
   const [artCacheBust, setArtCacheBust] = useState(0);
   const [sanitizerOpen, setSanitizerOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [undoOperations, setUndoOperations] = useState<MetadataUpdate[] | null>(null);
 
   const cancel = cancelSync;
@@ -173,6 +185,37 @@ export const MetadataEditor = ({
       return next;
     });
   }, [selected]);
+
+  // ── Batch operations (find & replace, templates) ──
+  // Target the selection when there is one, otherwise all scanned tracks.
+  const batchTargets = selectedTracks.length > 0 ? selectedTracks : tracks;
+  const batchTargetLabel =
+    selectedTracks.length > 0
+      ? `${selectedTracks.length} selected track${selectedTracks.length === 1 ? "" : "s"}`
+      : `all ${tracks.length} track${tracks.length === 1 ? "" : "s"}`;
+
+  const handleApplyFindReplace = useCallback(
+    (changes: FieldChange[]) => {
+      setEditedTracks((prev) => stageChanges(tracks, prev, changes));
+      setFindReplaceOpen(false);
+      toast.success(`Staged ${changes.length} change${changes.length === 1 ? "" : "s"} — review and save`);
+    },
+    [tracks, toast],
+  );
+
+  const handleApplyTemplate = useCallback(
+    (template: MetadataTemplate) => {
+      const changes = previewTemplate(batchTargets, editedTracks, template);
+      setTemplatesOpen(false);
+      if (changes.length === 0) {
+        toast.info("Template matches the current values — nothing to change");
+        return;
+      }
+      setEditedTracks((prev) => stageChanges(tracks, prev, changes));
+      toast.success(`Staged ${changes.length} change${changes.length === 1 ? "" : "s"} — review and save`);
+    },
+    [batchTargets, editedTracks, tracks, toast],
+  );
 
   const selectedFolderPath = useMemo(() => {
     if (selectedTracks.length === 0) return null;
@@ -292,6 +335,8 @@ export const MetadataEditor = ({
         onBrowse={scanHook.browse}
         onRescan={() => scanHook.scan()}
         dirtyCount={dirtyCount}
+        onOpenFindReplace={() => setFindReplaceOpen(true)}
+        onOpenTemplates={() => setTemplatesOpen(true)}
         repairReport={repair.report}
         onStartRepair={repair.startRepair}
         repairTotalAccepted={repair.totalAccepted}
@@ -439,6 +484,24 @@ export const MetadataEditor = ({
         <div className="absolute inset-0 bg-accent/5 border-2 border-dashed border-accent rounded-2xl flex items-center justify-center pointer-events-none z-40">
           <span className="text-accent text-xs font-medium">Drop to rescan</span>
         </div>
+      )}
+
+      {findReplaceOpen && (
+        <FindReplaceModal
+          tracks={batchTargets}
+          editedTracks={editedTracks}
+          targetLabel={batchTargetLabel}
+          onApply={handleApplyFindReplace}
+          onClose={() => setFindReplaceOpen(false)}
+        />
+      )}
+
+      {templatesOpen && (
+        <TemplatesModal
+          targetLabel={batchTargetLabel}
+          onApply={handleApplyTemplate}
+          onClose={() => setTemplatesOpen(false)}
+        />
       )}
 
       {sanitizerOpen && (

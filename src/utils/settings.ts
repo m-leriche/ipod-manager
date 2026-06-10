@@ -7,6 +7,7 @@
  */
 
 import type { CustomTheme } from "../types/customTheme";
+import type { MetadataTemplate } from "../types/metadata";
 
 // ── Schema ──────────────────────────────────────────────────────
 
@@ -79,6 +80,15 @@ const validateNumberArray = (parsed: unknown): number[] | undefined => {
   return parsed as number[];
 };
 
+const isMetadataTemplate = (t: unknown): t is MetadataTemplate =>
+  typeof t === "object" &&
+  t !== null &&
+  typeof (t as MetadataTemplate).id === "string" &&
+  typeof (t as MetadataTemplate).name === "string" &&
+  typeof (t as MetadataTemplate).fields === "object" &&
+  (t as MetadataTemplate).fields !== null &&
+  Object.values((t as MetadataTemplate).fields).every((v) => typeof v === "string");
+
 const isCustomTheme = (t: unknown): t is CustomTheme =>
   typeof t === "object" &&
   t !== null &&
@@ -128,6 +138,11 @@ export const SETTINGS = {
   sortDirection: str("crate-sort-direction", "asc", ["asc", "desc"]),
   flaggedFilter: bool("crate-flagged-filter", false),
   albumSortMode: str("crate-album-sort-mode", "album", ["album", "artist", "year", "recent", "alpha"]),
+
+  // Metadata templates (batch tag presets)
+  metadataTemplates: json<MetadataTemplate[]>("crate-metadata-templates", [], (parsed) =>
+    Array.isArray(parsed) ? parsed.filter(isMetadataTemplate) : undefined,
+  ),
 
   // Layout dimensions
   columnWidths: json<Record<string, number>>("crate-column-widths", {}, validateNumberRecord),

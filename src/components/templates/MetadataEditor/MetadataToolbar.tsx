@@ -11,6 +11,8 @@ interface MetadataToolbarProps {
   onRescan: () => void;
   // Edit view
   dirtyCount: number;
+  onOpenFindReplace: () => void;
+  onOpenTemplates: () => void;
   // Repair
   repairReport: RepairReport | null;
   onStartRepair: () => void;
@@ -41,6 +43,8 @@ export const MetadataToolbar = ({
   onBrowse,
   onRescan,
   dirtyCount,
+  onOpenFindReplace,
+  onOpenTemplates,
   repairReport,
   onStartRepair,
   repairTotalAccepted,
@@ -98,6 +102,8 @@ export const MetadataToolbar = ({
       {/* Edit view: scan action buttons */}
       {!isSaving && view === "edit" && (
         <div className="flex gap-1.5 shrink-0">
+          <ActionButton onClick={onOpenFindReplace}>Find &amp; Replace</ActionButton>
+          <ActionButton onClick={onOpenTemplates}>Templates</ActionButton>
           {!repairReport && <ActionButton onClick={onStartRepair}>Repair with MusicBrainz</ActionButton>}
           {!hasQualityResults && <ActionButton onClick={onStartQualityScan}>Quality Scan</ActionButton>}
           {!identifyResults && (

@@ -85,13 +85,22 @@ pub async fn save_metadata(
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
+    let id3_version = {
+        let conn = conn_arc
+            .lock()
+            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
+        metadata::Id3WriteVersion::from_setting(
+            library::get_setting(&conn, metadata::Id3WriteVersion::SETTING_KEY).as_deref(),
+        )
+    };
+
     // Stop the file watcher entirely so the debouncer is dropped and all
     // queued/pending OS filesystem events are discarded.
     watcher.stop();
 
     let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
         let mut result = tauri::async_runtime::spawn_blocking(move || {
-            Ok::<_, AppError>(metadata::save_metadata(updates, app, flag))
+            Ok::<_, AppError>(metadata::save_metadata(updates, app, flag, id3_version))
         })
         .await
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
@@ -200,6 +209,33 @@ pub async fn save_metadata(
     }
 
     final_result
+}
+
+#[tauri::command]
+pub async fn get_id3_version(db: State<'_, LibraryDb>) -> Result<String, AppError> {
+    db.with_db(|conn| {
+        Ok::<_, String>(
+            metadata::Id3WriteVersion::from_setting(
+                library::get_setting(conn, metadata::Id3WriteVersion::SETTING_KEY).as_deref(),
+            )
+            .as_setting()
+            .to_string(),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn set_id3_version(version: String, db: State<'_, LibraryDb>) -> Result<(), AppError> {
+    if version != "v2.3" && version != "v2.4" {
+        return Err(AppError::InvalidInput(format!(
+            "Invalid ID3 version: {version}"
+        )));
+    }
+    db.with_db(move |conn| {
+        library::set_setting(conn, metadata::Id3WriteVersion::SETTING_KEY, &version)
+    })
+    .await
 }
 
 #[tauri::command]

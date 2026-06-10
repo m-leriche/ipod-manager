@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { SHORTCUT_DEFS, getBinding, formatBinding } from "../../../utils/shortcuts";
 
 interface KeyboardShortcutsDialogProps {
   onClose: () => void;
@@ -7,21 +8,20 @@ interface KeyboardShortcutsDialogProps {
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 const mod = isMac ? "\u2318" : "Ctrl";
 
-const sections = [
+const registryKeys = (action: (typeof SHORTCUT_DEFS)[number]["action"]) => formatBinding(getBinding(action));
+
+const buildSections = () => [
   {
     title: "Playback",
-    shortcuts: [
-      { keys: ["Space"], description: "Play / Pause" },
-      { keys: ["\u2190"], description: "Seek backward 10s" },
-      { keys: ["\u2192"], description: "Seek forward 10s" },
-      { keys: [mod, "\u2190"], description: "Previous track" },
-      { keys: [mod, "\u2192"], description: "Next track" },
-    ],
+    shortcuts: SHORTCUT_DEFS.filter((d) => d.category === "Playback").map((d) => ({
+      keys: registryKeys(d.action),
+      description: d.label,
+    })),
   },
   {
     title: "Library",
     shortcuts: [
-      { keys: [mod, "F"], description: "Search library" },
+      { keys: registryKeys("focusSearch"), description: "Search library" },
       { keys: ["\u2191 / \u2193"], description: "Navigate tracks" },
       { keys: ["Enter"], description: "Play selected track" },
       { keys: ["Escape"], description: "Clear selection" },
@@ -33,11 +33,12 @@ const sections = [
   },
   {
     title: "General",
-    shortcuts: [{ keys: [mod, "/"], description: "Show this dialog" }],
+    shortcuts: [{ keys: registryKeys("toggleShortcutsDialog"), description: "Show this dialog" }],
   },
 ];
 
 export const KeyboardShortcutsDialog = ({ onClose }: KeyboardShortcutsDialogProps) => {
+  const sections = useMemo(() => buildSections(), []);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -99,6 +100,9 @@ export const KeyboardShortcutsDialog = ({ onClose }: KeyboardShortcutsDialogProp
               </div>
             </div>
           ))}
+          <p className="text-[10px] text-text-tertiary pt-1">
+            Playback, search, and dialog shortcuts can be customized in Settings → Shortcuts.
+          </p>
         </div>
       </div>
     </div>

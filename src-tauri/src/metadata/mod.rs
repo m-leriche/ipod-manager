@@ -40,6 +40,37 @@ pub struct MetadataUpdate {
     pub compilation: Option<bool>,
 }
 
+/// ID3 tag version used when writing MP3 metadata.
+///
+/// v2.3 is the default: it has the widest player compatibility (including
+/// Rockbox and classic iPods) and avoids the id3 crate's v2.4 behavior of
+/// converting "/" to "\0" (the v2.4 multi-value separator), which corrupts
+/// names like "dd/mm/yyyy".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Id3WriteVersion {
+    #[default]
+    V23,
+    V24,
+}
+
+impl Id3WriteVersion {
+    pub const SETTING_KEY: &'static str = "id3_write_version";
+
+    pub fn from_setting(value: Option<&str>) -> Self {
+        match value {
+            Some("v2.4") => Id3WriteVersion::V24,
+            _ => Id3WriteVersion::V23,
+        }
+    }
+
+    pub fn as_setting(&self) -> &'static str {
+        match self {
+            Id3WriteVersion::V23 => "v2.3",
+            Id3WriteVersion::V24 => "v2.4",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MetadataScanProgress {
     pub total: usize,
@@ -78,5 +109,33 @@ mod tests {
         assert_eq!(t.file_path, "/a/b.mp3");
         assert!(t.title.is_none());
         assert!(t.artist.is_none());
+    }
+
+    #[test]
+    fn id3_version_defaults_to_v23() {
+        assert_eq!(Id3WriteVersion::from_setting(None), Id3WriteVersion::V23);
+        assert_eq!(
+            Id3WriteVersion::from_setting(Some("garbage")),
+            Id3WriteVersion::V23
+        );
+        assert_eq!(
+            Id3WriteVersion::from_setting(Some("v2.3")),
+            Id3WriteVersion::V23
+        );
+    }
+
+    #[test]
+    fn id3_version_parses_v24() {
+        assert_eq!(
+            Id3WriteVersion::from_setting(Some("v2.4")),
+            Id3WriteVersion::V24
+        );
+    }
+
+    #[test]
+    fn id3_version_setting_roundtrip() {
+        for v in [Id3WriteVersion::V23, Id3WriteVersion::V24] {
+            assert_eq!(Id3WriteVersion::from_setting(Some(v.as_setting())), v);
+        }
     }
 }

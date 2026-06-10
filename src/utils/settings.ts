@@ -7,6 +7,7 @@
  */
 
 import type { CustomTheme } from "../types/customTheme";
+import type { ShortcutBinding } from "../types/shortcuts";
 import { TEMPLATE_FIELDS } from "../types/metadata";
 import type { MetadataTemplate } from "../types/metadata";
 
@@ -81,6 +82,24 @@ const validateNumberArray = (parsed: unknown): number[] | undefined => {
   return parsed as number[];
 };
 
+const isShortcutBinding = (b: unknown): b is ShortcutBinding =>
+  typeof b === "object" &&
+  b !== null &&
+  typeof (b as ShortcutBinding).code === "string" &&
+  typeof (b as ShortcutBinding).mod === "boolean" &&
+  typeof (b as ShortcutBinding).shift === "boolean" &&
+  typeof (b as ShortcutBinding).alt === "boolean";
+
+/** Validate that parsed JSON is a Record<string, ShortcutBinding>. */
+const validateShortcutOverrides = (parsed: unknown): Record<string, ShortcutBinding> | undefined => {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+  const obj = parsed as Record<string, unknown>;
+  for (const v of Object.values(obj)) {
+    if (!isShortcutBinding(v)) return undefined;
+  }
+  return obj as Record<string, ShortcutBinding>;
+};
+
 const isMetadataTemplate = (t: unknown): t is MetadataTemplate =>
   typeof t === "object" &&
   t !== null &&
@@ -141,6 +160,18 @@ export const SETTINGS = {
   sortDirection: str("crate-sort-direction", "asc", ["asc", "desc"]),
   flaggedFilter: bool("crate-flagged-filter", false),
   albumSortMode: str("crate-album-sort-mode", "album", ["album", "artist", "year", "recent", "alpha"]),
+
+  // Startup behavior
+  resumeQueueOnLaunch: bool("crate-resume-queue-on-launch", true),
+  rememberLastTab: bool("crate-remember-last-tab", false),
+  lastTopTab: str("crate-last-top-tab", "library", ["library", "discover", "tools"]),
+
+  // Auto-fetch after library imports
+  autoFetchAlbumArt: bool("crate-auto-fetch-album-art", false),
+  autoFetchLyrics: bool("crate-auto-fetch-lyrics", false),
+
+  // Keyboard shortcut overrides (action → binding); defaults live in utils/shortcuts.ts
+  shortcutOverrides: json<Record<string, ShortcutBinding>>("crate-shortcut-overrides", {}, validateShortcutOverrides),
 
   // Metadata templates (batch tag presets)
   metadataTemplates: json<MetadataTemplate[]>("crate-metadata-templates", [], (parsed) =>

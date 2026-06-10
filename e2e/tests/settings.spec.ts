@@ -39,10 +39,12 @@ test.describe("Settings Modal", () => {
     await expect(page.getByText("Not configured")).toBeVisible();
   });
 
-  test("shows theme selector with theme options", async ({ page }) => {
+  test("shows theme selector with theme options in the Appearance section", async ({ page }) => {
     await page.evaluate(() => {
       (window as any).__TAURI_MOCK_EMIT__("open-settings", null);
     });
+
+    await page.getByTestId("settings-nav-appearance").click();
 
     await expect(page.getByText("Theme", { exact: true })).toBeVisible();
     // Theme buttons have format: "ThemeName Description"
@@ -50,6 +52,29 @@ test.describe("Settings Modal", () => {
     await expect(page.getByRole("button", { name: /Windows 95/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Winamp/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Spotify/ })).toBeVisible();
+  });
+
+  test("navigates between settings sections", async ({ page }) => {
+    await page.evaluate(() => {
+      (window as any).__TAURI_MOCK_EMIT__("open-settings", null);
+    });
+
+    // General is the default section
+    await expect(page.getByText("Library Location")).toBeVisible();
+    await expect(page.getByTestId("resume-queue-toggle")).toBeVisible();
+
+    await page.getByTestId("settings-nav-playback").click();
+    await expect(page.getByTestId("crossfade-slider")).toBeVisible();
+
+    await page.getByTestId("settings-nav-library").click();
+    await expect(page.getByText("Default Sort")).toBeVisible();
+    await expect(page.getByText("Tag Format")).toBeVisible();
+
+    await page.getByTestId("settings-nav-shortcuts").click();
+    await expect(page.getByTestId("shortcut-playPause")).toBeVisible();
+
+    await page.getByTestId("settings-nav-connections").click();
+    await expect(page.getByTestId("discover-toggle")).toBeVisible();
   });
 
   test("closes on Escape key", async ({ page }) => {

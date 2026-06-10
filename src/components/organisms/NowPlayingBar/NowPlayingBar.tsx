@@ -8,6 +8,7 @@ import { TransportControls } from "../../molecules/TransportControls/TransportCo
 import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 import { LyricsPanel } from "../LyricsPanel/LyricsPanel";
 import { getDragPayload } from "../TrackTable/TrackTable";
+import { matchesShortcut } from "../../../utils/shortcuts";
 import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -55,31 +56,21 @@ export const NowPlayingBar = ({ onToggleQueue, queueOpen, onToggleMiniPlayer, mi
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
       const t = timeRef.current;
-      switch (e.code) {
-        case "Space":
-          e.preventDefault();
-          handlePlayPause();
-          break;
-        case "ArrowLeft":
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            previous();
-          } else {
-            e.preventDefault();
-            const newFrac = Math.max(0, (t.currentTime - 10) / t.duration);
-            seekTo(newFrac);
-          }
-          break;
-        case "ArrowRight":
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            next();
-          } else {
-            e.preventDefault();
-            const newFrac = Math.min(1, (t.currentTime + 10) / t.duration);
-            seekTo(newFrac);
-          }
-          break;
+      if (matchesShortcut(e, "playPause")) {
+        e.preventDefault();
+        handlePlayPause();
+      } else if (matchesShortcut(e, "previousTrack")) {
+        e.preventDefault();
+        previous();
+      } else if (matchesShortcut(e, "nextTrack")) {
+        e.preventDefault();
+        next();
+      } else if (matchesShortcut(e, "seekBackward")) {
+        e.preventDefault();
+        seekTo(Math.max(0, (t.currentTime - 10) / t.duration));
+      } else if (matchesShortcut(e, "seekForward")) {
+        e.preventDefault();
+        seekTo(Math.min(1, (t.currentTime + 10) / t.duration));
       }
     };
 

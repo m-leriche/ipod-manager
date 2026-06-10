@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { matchesShortcut } from "../utils/shortcuts";
 
 export const useAppEventListeners = ({
   onOpenSettings,
@@ -47,10 +48,13 @@ export const useAppEventListeners = ({
     return () => unlisten?.();
   }, []);
 
-  // Global Cmd+/ to open keyboard shortcuts dialog
+  // Global shortcut (default Cmd+/) to open keyboard shortcuts dialog
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      // Don't steal keystrokes from text fields (the binding may be a bare key)
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (matchesShortcut(e, "toggleShortcutsDialog")) {
         e.preventDefault();
         onToggleShortcutsRef.current();
       }

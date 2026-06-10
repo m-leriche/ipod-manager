@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ErrorBoundary } from "../../atoms/ErrorBoundary/ErrorBoundary";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
@@ -24,6 +24,7 @@ import { useLibraryActions } from "./useLibraryActions";
 import type { LibraryTrack, SmartPlaylist } from "../../../types/library";
 import type { LibrarySummary } from "../../molecules/StatusBar/types";
 import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
+import { getSetting } from "../../../utils/settings";
 
 export const LibraryPlayer = ({
   onRefreshRef,
@@ -110,13 +111,23 @@ export const LibraryPlayer = ({
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 
+  // After an import finishes, kick off background fetches if enabled in Settings.
+  // start() no-ops while a fetch is already running, so no .active checks here —
+  // depending on .active would churn this callback and re-register the drag-drop listener.
+  const { onImportComplete } = data;
+  const handleImportComplete = useCallback(async () => {
+    await onImportComplete();
+    if (getSetting("autoFetchAlbumArt")) startArtRepair();
+    if (getSetting("autoFetchLyrics")) startLyricsFetch();
+  }, [onImportComplete, startArtRepair, startLyricsFetch]);
+
   const { isDragOver, handleChooseLibrary } = useLibraryImport(
     isActive,
     startProgress,
     updateProgress,
     finishProgress,
     failProgress,
-    data.onImportComplete,
+    handleImportComplete,
   );
 
   // ── Render ────────────────────────────────────────────────────

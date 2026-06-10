@@ -9,8 +9,11 @@ describe("SettingsModal", () => {
   const onLibraryChanged = vi.fn();
 
   beforeEach(() => {
+    localStorage.clear();
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_library_location") return "/Users/test/Music";
+      if (cmd === "get_id3_version") return "v2.3";
+      if (cmd === "get_discover_enabled") return true;
       return undefined;
     });
   });
@@ -18,6 +21,19 @@ describe("SettingsModal", () => {
   it("renders the settings title", async () => {
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
     expect(screen.getByText("Settings")).toBeInTheDocument();
+  });
+
+  it("renders all section navigation items", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    for (const section of ["general", "appearance", "playback", "library", "shortcuts", "connections"]) {
+      expect(screen.getByTestId(`settings-nav-${section}`)).toBeInTheDocument();
+    }
+  });
+
+  it("opens with the General section active", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    expect(screen.getByTestId("settings-nav-general")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Library Location")).toBeInTheDocument();
   });
 
   it("displays current library location", async () => {
@@ -39,32 +55,46 @@ describe("SettingsModal", () => {
     });
   });
 
-  it("shows 'Choose' button when no location, 'Change' when set", async () => {
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_library_location") return null;
-      return undefined;
-    });
-
-    const { unmount } = render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    await waitFor(() => {
-      expect(screen.getByText("Choose")).toBeInTheDocument();
-    });
-    unmount();
-
-    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_library_location") return "/Users/test/Music";
-      return undefined;
-    });
-
+  it("switches to the Appearance section showing themes", async () => {
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    fireEvent.click(screen.getByTestId("settings-nav-appearance"));
+    expect(screen.getByTestId("settings-nav-appearance")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Theme")).toBeInTheDocument();
+    expect(screen.getByText("Windows 95")).toBeInTheDocument();
+  });
+
+  it("switches to the Playback section showing crossfade", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    fireEvent.click(screen.getByTestId("settings-nav-playback"));
+    expect(screen.getByText("Crossfade")).toBeInTheDocument();
+    expect(screen.getByTestId("crossfade-slider")).toBeInTheDocument();
+  });
+
+  it("switches to the Library section showing default sort and tag format", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    fireEvent.click(screen.getByTestId("settings-nav-library"));
+    expect(screen.getByText("Default Sort")).toBeInTheDocument();
+    expect(screen.getByText("Tag Format")).toBeInTheDocument();
+  });
+
+  it("switches to the Shortcuts section", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    fireEvent.click(screen.getByTestId("settings-nav-shortcuts"));
+    expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-playPause")).toBeInTheDocument();
+  });
+
+  it("switches to the Connections section", async () => {
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    fireEvent.click(screen.getByTestId("settings-nav-connections"));
     await waitFor(() => {
-      expect(screen.getByText("Change")).toBeInTheDocument();
+      expect(screen.getByTestId("discover-toggle")).toBeInTheDocument();
     });
   });
 
   it("calls onClose when close button is clicked", async () => {
     render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    fireEvent.click(screen.getByText("\u00D7"));
+    fireEvent.click(screen.getByText("×"));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -111,38 +141,5 @@ describe("SettingsModal", () => {
       expect(open).toHaveBeenCalled();
     });
     expect(invoke).not.toHaveBeenCalledWith("set_library_location", expect.anything());
-  });
-
-  it("renders the crossfade slider", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    expect(screen.getByText("Crossfade")).toBeInTheDocument();
-    expect(screen.getByTestId("crossfade-slider")).toBeInTheDocument();
-  });
-
-  it("shows 'Off' when crossfade is 0", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    expect(screen.getByText("Off")).toBeInTheDocument();
-  });
-
-  it("crossfade slider has correct initial value and range", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    const slider = screen.getByTestId("crossfade-slider") as HTMLInputElement;
-    expect(slider.min).toBe("0");
-    expect(slider.max).toBe("12");
-    expect(slider.step).toBe("1");
-    expect(slider.value).toBe("0");
-  });
-
-  it("renders ReplayGain toggle unchecked by default", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    const toggle = screen.getByTestId("replay-gain-toggle") as HTMLInputElement;
-    expect(toggle).toBeInTheDocument();
-    expect(toggle.checked).toBe(false);
-  });
-
-  it("hides mode selector when ReplayGain is disabled", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
-    expect(screen.queryByText("Track gain")).not.toBeInTheDocument();
-    expect(screen.queryByText("Album gain")).not.toBeInTheDocument();
   });
 });

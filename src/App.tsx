@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react"
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { cancelSync } from "./utils/cancelSync";
+import { getSetting, setSetting } from "./utils/settings";
 import { usePanelVisibility } from "./hooks/usePanelVisibility";
 import { ViewLayoutProvider } from "./contexts/ViewLayoutContext";
 import { useMiniPlayer } from "./hooks/useMiniPlayer";
@@ -108,7 +109,9 @@ const App = () => (
 
 const AppContent = () => {
   const { state: playbackState } = usePlayback();
-  const [topTab, setTopTab] = useState<TopTab>("library");
+  const [topTab, setTopTab] = useState<TopTab>(() =>
+    getSetting("rememberLastTab") ? (getSetting("lastTopTab") as TopTab) : "library",
+  );
   const [toolTab, setToolTab] = useState<ToolTab>("files");
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("discover");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -126,9 +129,18 @@ const AppContent = () => {
     invoke<string | null>("get_library_location").then((loc) => setLibraryReady(!!loc));
   }, []);
 
+  // Persist the active tab so it can be restored on launch when enabled
+  useEffect(() => {
+    if (getSetting("rememberLastTab")) setSetting("lastTopTab", topTab);
+  }, [topTab]);
+
   useEffect(() => {
     invoke<boolean>("get_discover_enabled")
-      .then(setDiscoverEnabled)
+      .then((enabled) => {
+        setDiscoverEnabled(enabled);
+        // A remembered "discover" tab must not restore a view whose nav button is hidden
+        if (!enabled) setTopTab((tab) => (tab === "discover" ? "library" : tab));
+      })
       .catch((e) => console.warn("Failed to check discover status:", e));
   }, []);
 

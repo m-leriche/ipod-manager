@@ -10,12 +10,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
-use super::{MetadataSaveProgress, MetadataSaveResult, MetadataUpdate, TrackMetadata};
+use super::{
+    Id3WriteVersion, MetadataSaveProgress, MetadataSaveResult, MetadataUpdate, TrackMetadata,
+};
 
 pub fn save_metadata(
     updates: Vec<MetadataUpdate>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
+    id3_version: Id3WriteVersion,
 ) -> MetadataSaveResult {
     let total = updates.len();
     let mut succeeded = 0;
@@ -51,7 +54,7 @@ pub fn save_metadata(
         );
 
         let snapshot = super::read::read_track(Path::new(&update.file_path));
-        match apply_update(update) {
+        match apply_update(update, id3_version) {
             Ok(()) => {
                 undo_operations.push(build_undo_operation(update, &snapshot));
                 succeeded += 1;
@@ -128,7 +131,7 @@ fn build_undo_operation(update: &MetadataUpdate, snapshot: &TrackMetadata) -> Me
     }
 }
 
-fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
+fn apply_update(update: &MetadataUpdate, id3_version: Id3WriteVersion) -> Result<(), String> {
     let path = Path::new(&update.file_path);
     if !path.exists() {
         return Err("File not found".to_string());
@@ -144,7 +147,7 @@ fn apply_update(update: &MetadataUpdate) -> Result<(), String> {
         .unwrap_or(false);
 
     if is_mp3 {
-        return apply_update_id3(path, update);
+        return apply_update_id3(path, update, id3_version);
     }
 
     // Try lofty first; if it can't open the file, fall back to ffmpeg
@@ -256,7 +259,11 @@ fn format_number_pair(num: Option<u32>, total: Option<u32>) -> String {
 }
 
 /// Write MP3 tags via the id3 crate.
-fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> {
+fn apply_update_id3(
+    path: &Path,
+    update: &MetadataUpdate,
+    id3_version: Id3WriteVersion,
+) -> Result<(), String> {
     let mut tag = id3::Tag::read_from_path(path).unwrap_or_else(|_| id3::Tag::new());
 
     if let Some(ref v) = update.title {
@@ -338,11 +345,15 @@ fn apply_update_id3(path: &Path, update: &MetadataUpdate) -> Result<(), String> 
         }
     }
 
-    // Write as v2.3 to preserve "/" as literal characters in text frames.
+    // v2.3 (the default) preserves "/" as literal characters in text frames.
     // The id3 crate converts "/" → "\0" when writing v2.4 (since "\0" is the
     // v2.4 multi-value separator), which corrupts artist names like "dd/mm/yyyy"
     // into three separate values where only the first ("dd") is returned.
-    tag.write_to_path(path, id3::Version::Id3v23)
+    let version = match id3_version {
+        Id3WriteVersion::V23 => id3::Version::Id3v23,
+        Id3WriteVersion::V24 => id3::Version::Id3v24,
+    };
+    tag.write_to_path(path, version)
         .map_err(|e| format!("Save failed: {}", e))?;
 
     Ok(())

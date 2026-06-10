@@ -6,9 +6,10 @@ import { useState } from "react";
 
 interface UpdateSectionProps {
   autoCheck?: boolean;
+  onAutoCheckStarted?: () => void;
 }
 
-export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
+export const UpdateSection = ({ autoCheck, onAutoCheckStarted }: UpdateSectionProps) => {
   const { state, checkForUpdate, downloadAndInstall } = useUpdateChecker();
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const didAutoCheck = useRef(false);
@@ -22,9 +23,10 @@ export const UpdateSection = ({ autoCheck }: UpdateSectionProps) => {
   useEffect(() => {
     if (autoCheck && !didAutoCheck.current) {
       didAutoCheck.current = true;
+      onAutoCheckStarted?.();
       checkForUpdate();
     }
-  }, [autoCheck, checkForUpdate]);
+  }, [autoCheck, checkForUpdate, onAutoCheckStarted]);
 
   return (
     <div className="mb-6">

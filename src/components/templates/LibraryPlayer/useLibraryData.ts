@@ -17,8 +17,12 @@ import type {
 import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
 import { getSetting, setSetting } from "../../../utils/settings";
+import { matchesShortcut } from "../../../utils/shortcuts";
 
 const PAGE_SIZE = 500;
+
+/** Window event fired by Settings when the default sort preferences change. */
+export const SORT_SETTINGS_CHANGED_EVENT = "crate:sort-settings-changed";
 
 export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void) | null>) => {
   const { playTrack } = usePlayback();
@@ -61,11 +65,14 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const fetchIdRef = useRef(0);
   const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
 
-  // ── Global Cmd+F to focus search ─────────────────────────────
+  // ── Global shortcut (default Cmd+F) to focus search ──────────
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+      // Don't steal keystrokes from text fields (the binding may be a bare key)
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (matchesShortcut(e, "focusSearch")) {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -73,6 +80,18 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // ── Re-apply default sort when changed in Settings ────────────
+
+  useEffect(() => {
+    const handleSortSettingsChanged = () => {
+      setSortBy(getSetting("sortBy"));
+      setSortDirection(getSetting("sortDirection") as "asc" | "desc");
+      setAlbumSortMode(getSetting("albumSortMode") as AlbumSortMode);
+    };
+    window.addEventListener(SORT_SETTINGS_CHANGED_EVENT, handleSortSettingsChanged);
+    return () => window.removeEventListener(SORT_SETTINGS_CHANGED_EVENT, handleSortSettingsChanged);
   }, []);
 
   // ── Displayed tracks (library, playlist, or smart playlist) ────

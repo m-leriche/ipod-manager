@@ -267,6 +267,8 @@ pub fn run() {
             commands::scan_metadata,
             commands::sanitize_tags,
             commands::save_metadata,
+            commands::get_id3_version,
+            commands::set_id3_version,
             commands::repair_analyze,
             commands::repair_compare_release,
             commands::lookup_album_years,

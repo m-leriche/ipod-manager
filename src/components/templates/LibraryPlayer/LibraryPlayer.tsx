@@ -111,15 +111,20 @@ export const LibraryPlayer = ({
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 
-  // After an import finishes, kick off background fetches if enabled in Settings.
+  // After an import finishes, kick off background fetches if enabled in Settings,
+  // scoped to the newly imported files (no paths = initial library setup = everything).
   // start() no-ops while a fetch is already running, so no .active checks here —
   // depending on .active would churn this callback and re-register the drag-drop listener.
   const { onImportComplete } = data;
-  const handleImportComplete = useCallback(async () => {
-    await onImportComplete();
-    if (getSetting("autoFetchAlbumArt")) startArtRepair();
-    if (getSetting("autoFetchLyrics")) startLyricsFetch();
-  }, [onImportComplete, startArtRepair, startLyricsFetch]);
+  const handleImportComplete = useCallback(
+    async (importedPaths?: string[]) => {
+      await onImportComplete();
+      if (importedPaths && importedPaths.length === 0) return;
+      if (getSetting("autoFetchAlbumArt")) startArtRepair(importedPaths);
+      if (getSetting("autoFetchLyrics")) startLyricsFetch(importedPaths);
+    },
+    [onImportComplete, startArtRepair, startLyricsFetch],
+  );
 
   const { isDragOver, handleChooseLibrary } = useLibraryImport(
     isActive,

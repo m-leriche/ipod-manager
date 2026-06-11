@@ -124,6 +124,7 @@ pub struct ImportResult {
     pub copied: usize,
     pub skipped: usize,
     pub errors: Vec<String>,
+    pub imported_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

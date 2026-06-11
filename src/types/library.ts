@@ -202,6 +202,7 @@ export interface ImportResult {
   copied: number;
   skipped: number;
   errors: string[];
+  imported_paths: string[];
 }
 
 export interface PlaylistExportResult {

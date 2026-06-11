@@ -50,7 +50,7 @@ describe("BackgroundLyricsContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundLyrics();
-      return <button onClick={start}>Fetch</button>;
+      return <button onClick={() => start()}>Fetch</button>;
     };
 
     render(
@@ -64,6 +64,25 @@ describe("BackgroundLyricsContext", () => {
     await screen.findByText("Lyrics Fetch");
     expect(screen.getByText(/15 found/)).toBeInTheDocument();
     expect(screen.getByText(/2 not found/)).toBeInTheDocument();
+  });
+
+  it("scopes the command to the given paths", async () => {
+    const TestConsumer = () => {
+      const { start } = useBackgroundLyrics();
+      return <button onClick={() => start(["/music/A/B/01-01 a.flac"])}>Fetch</button>;
+    };
+
+    render(
+      <BackgroundLyricsProvider>
+        <TestConsumer />
+      </BackgroundLyricsProvider>,
+    );
+
+    await userEvent.click(screen.getByText("Fetch"));
+
+    expect(mockInvoke).toHaveBeenLastCalledWith("fetch_library_lyrics", {
+      scopePaths: ["/music/A/B/01-01 a.flac"],
+    });
   });
 
   it("shows cancelled message when cancelled", async () => {
@@ -83,7 +102,7 @@ describe("BackgroundLyricsContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundLyrics();
-      return <button onClick={start}>Fetch</button>;
+      return <button onClick={() => start()}>Fetch</button>;
     };
 
     render(
@@ -114,7 +133,7 @@ describe("BackgroundLyricsContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundLyrics();
-      return <button onClick={start}>Fetch</button>;
+      return <button onClick={() => start()}>Fetch</button>;
     };
 
     render(
@@ -145,7 +164,7 @@ describe("BackgroundLyricsContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundLyrics();
-      return <button onClick={start}>Fetch</button>;
+      return <button onClick={() => start()}>Fetch</button>;
     };
 
     render(
@@ -178,7 +197,7 @@ describe("BackgroundLyricsContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundLyrics();
-      return <button onClick={start}>Fetch</button>;
+      return <button onClick={() => start()}>Fetch</button>;
     };
 
     render(

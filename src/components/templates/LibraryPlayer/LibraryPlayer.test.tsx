@@ -144,10 +144,10 @@ vi.mock("./useLibraryActions", () => ({
 }));
 
 // Capture the import-complete callback LibraryPlayer hands to useLibraryImport
-let capturedImportComplete: (() => Promise<void>) | undefined;
+let capturedImportComplete: ((importedPaths?: string[]) => Promise<void>) | undefined;
 vi.mock("./useLibraryImport", () => ({
   useLibraryImport: (...args: unknown[]) => {
-    capturedImportComplete = args[5] as () => Promise<void>;
+    capturedImportComplete = args[5] as (importedPaths?: string[]) => Promise<void>;
     return {
       isDragOver: false,
       handleChooseLibrary: vi.fn(),
@@ -247,6 +247,30 @@ describe("LibraryPlayer", () => {
       expect(mockLibraryData.onImportComplete).toHaveBeenCalledTimes(1);
       expect(mockStartArtRepair).toHaveBeenCalledTimes(1);
       expect(mockStartLyricsFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("scopes auto-fetches to the newly imported files", async () => {
+      localStorage.setItem("crate-auto-fetch-album-art", "true");
+      localStorage.setItem("crate-auto-fetch-lyrics", "true");
+      render(<LibraryPlayer />);
+
+      const imported = ["/music/Artist/Album/01-01 Song.flac"];
+      await capturedImportComplete!(imported);
+
+      expect(mockStartArtRepair).toHaveBeenCalledWith(imported);
+      expect(mockStartLyricsFetch).toHaveBeenCalledWith(imported);
+    });
+
+    it("skips auto-fetches when nothing was imported", async () => {
+      localStorage.setItem("crate-auto-fetch-album-art", "true");
+      localStorage.setItem("crate-auto-fetch-lyrics", "true");
+      render(<LibraryPlayer />);
+
+      await capturedImportComplete!([]);
+
+      expect(mockLibraryData.onImportComplete).toHaveBeenCalledTimes(1);
+      expect(mockStartArtRepair).not.toHaveBeenCalled();
+      expect(mockStartLyricsFetch).not.toHaveBeenCalled();
     });
 
     it("does not start auto-fetches when disabled in settings", async () => {

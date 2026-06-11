@@ -88,6 +88,7 @@ pub fn import_to_library(
     let mut copied = 0;
     let mut skipped = 0;
     let mut errors = Vec::new();
+    let mut imported_paths = Vec::new();
 
     for (i, src_path) in audio_files.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
@@ -96,6 +97,7 @@ pub fn import_to_library(
                 copied,
                 skipped,
                 errors,
+                imported_paths,
             });
         }
 
@@ -130,7 +132,10 @@ pub fn import_to_library(
         }
 
         match fs::copy(src_path, &dest_path) {
-            Ok(_) => copied += 1,
+            Ok(_) => {
+                copied += 1;
+                imported_paths.push(dest_path.to_string_lossy().to_string());
+            }
             Err(e) => {
                 errors.push(format!("{}: Copy failed: {}", file_name, e));
             }
@@ -154,5 +159,6 @@ pub fn import_to_library(
         copied,
         skipped,
         errors,
+        imported_paths,
     })
 }

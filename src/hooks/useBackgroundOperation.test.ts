@@ -90,6 +90,16 @@ describe("useBackgroundOperation", () => {
     expect(result.current.result).toEqual(resultData);
   });
 
+  it("forwards start args to the command", async () => {
+    const { result } = renderHook(() => useBackgroundOperation<TestResult>(makeConfig()));
+
+    await act(async () => {
+      result.current.start({ scopePaths: ["/music/a.flac"] });
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("start_operation", { scopePaths: ["/music/a.flac"] });
+  });
+
   it("calls onError handler when command fails", async () => {
     mockInvoke.mockImplementation((cmd) => {
       if (cmd === "start_operation") return Promise.reject("Network error");

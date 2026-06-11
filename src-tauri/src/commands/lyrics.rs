@@ -93,6 +93,7 @@ pub async fn write_lyrics_to_file(file_path: String, plain_lyrics: String) -> Re
 
 #[tauri::command]
 pub async fn fetch_library_lyrics(
+    scope_paths: Option<Vec<String>>,
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, LyricsCancel>,
@@ -101,7 +102,12 @@ pub async fn fetch_library_lyrics(
     let conn_arc = db.conn_arc();
 
     tauri::async_runtime::spawn_blocking(move || -> Result<lyrics::LyricsFetchResult, AppError> {
-        Ok(lyrics::fetch_library_lyrics(&conn_arc, &app, &flag))
+        Ok(lyrics::fetch_library_lyrics(
+            &conn_arc,
+            &app,
+            &flag,
+            scope_paths,
+        ))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

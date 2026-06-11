@@ -285,6 +285,7 @@ pub async fn sanitize_tags(
 
 #[tauri::command]
 pub async fn fix_library_album_art(
+    scope_paths: Option<Vec<String>>,
     app: AppHandle,
     db: State<'_, LibraryDb>,
     cancel: State<'_, ArtRepairCancel>,
@@ -293,8 +294,22 @@ pub async fn fix_library_album_art(
     let conn_arc = db.conn_arc();
 
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<_, AppError> {
-        // Lock briefly to query folders, then release before the long-running repair
-        let folders = {
+        // Scoped run (e.g. post-import): only the folders containing the given
+        // files. Full run: every folder in the library.
+        let folders: Vec<String> = if let Some(paths) = scope_paths {
+            let mut folders: Vec<String> = paths
+                .iter()
+                .filter_map(|p| Path::new(p).parent())
+                .map(|dir| dir.to_string_lossy().to_string())
+                .collect();
+            folders.sort();
+            folders.dedup();
+            folders
+                .into_iter()
+                .filter(|path| !albumart::has_cover(Path::new(path)))
+                .collect()
+        } else {
+            // Lock briefly to query folders, then release before the long-running repair
             let conn = conn_arc
                 .lock()
                 .map_err(|e| format!("DB lock failed: {}", e))?;
@@ -309,7 +324,6 @@ pub async fn fix_library_album_art(
                 .filter_map(|r| r.ok())
                 .filter(|path: &String| !albumart::has_cover(Path::new(path)))
                 .collect();
-
             folders
         }; // lock released here
 

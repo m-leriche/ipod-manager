@@ -12,7 +12,7 @@ export const useLibraryImport = (
   updateProgress: (completed: number, total: number, currentFile: string) => void,
   finishProgress: (msg: string) => void,
   failProgress: (msg: string) => void,
-  onImportComplete: () => Promise<void>,
+  onImportComplete: (importedPaths?: string[]) => Promise<void>,
 ) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const isActiveRef = useRef(isActive);
@@ -71,7 +71,7 @@ export const useLibraryImport = (
               ? `${result.skipped} track${result.skipped !== 1 ? "s" : ""} already in library`
               : "No audio files found";
         finishProgress(msg);
-        await onImportComplete();
+        await onImportComplete(result.imported_paths);
       } catch (e) {
         failProgress(`Import failed: ${e}`);
       } finally {

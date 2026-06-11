@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useCallback } from "react";
 import { useArtCache } from "./ArtCacheContext";
 import { ConfirmDialog } from "../components/atoms/ConfirmDialog/ConfirmDialog";
 import { useBackgroundOperation } from "../hooks/useBackgroundOperation";
@@ -15,7 +15,8 @@ interface ArtRepairResult {
 
 interface BackgroundArtRepairActions {
   state: BackgroundOperationState;
-  start: () => void;
+  /** Repair album art. Pass `scopePaths` (file paths) to limit to their folders; omit for the whole library. */
+  start: (scopePaths?: string[]) => void;
   cancel: () => void;
 }
 
@@ -60,8 +61,14 @@ export const BackgroundArtRepairProvider = ({ children }: { children: React.Reac
     }),
   });
 
+  // Guard with Array.isArray so callers can pass `start` directly as an event handler
+  const startRepair = useCallback(
+    (scopePaths?: string[]) => start(Array.isArray(scopePaths) ? { scopePaths } : undefined),
+    [start],
+  );
+
   return (
-    <BackgroundArtRepairContext.Provider value={{ state, start, cancel }}>
+    <BackgroundArtRepairContext.Provider value={{ state, start: startRepair, cancel }}>
       {children}
       {result && (
         <ConfirmDialog

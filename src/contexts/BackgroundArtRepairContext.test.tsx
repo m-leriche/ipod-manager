@@ -54,7 +54,7 @@ describe("BackgroundArtRepairContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundArtRepair();
-      return <button onClick={start}>Start</button>;
+      return <button onClick={() => start()}>Start</button>;
     };
 
     render(
@@ -69,6 +69,33 @@ describe("BackgroundArtRepairContext", () => {
     await screen.findByText("Album Art Repair");
     expect(screen.getByText(/5 fixed/)).toBeInTheDocument();
     expect(screen.getByText(/2 not found/)).toBeInTheDocument();
+  });
+
+  it("scopes the command to the given paths and ignores non-array args", async () => {
+    const TestConsumer = () => {
+      const { start } = useBackgroundArtRepair();
+      return (
+        <>
+          <button onClick={() => start(["/music/A/B/01-01 a.flac"])}>Scoped</button>
+          <button onClick={start as unknown as React.MouseEventHandler<HTMLButtonElement>}>Full</button>
+        </>
+      );
+    };
+
+    render(
+      <BackgroundArtRepairProvider>
+        <TestConsumer />
+      </BackgroundArtRepairProvider>,
+    );
+
+    await userEvent.click(screen.getByText("Scoped"));
+    expect(mockInvoke).toHaveBeenLastCalledWith("fix_library_album_art", {
+      scopePaths: ["/music/A/B/01-01 a.flac"],
+    });
+
+    // Passing start directly as an event handler must not leak the event as a scope
+    await userEvent.click(screen.getByText("Full"));
+    expect(mockInvoke).toHaveBeenLastCalledWith("fix_library_album_art", undefined);
   });
 
   it("shows cancelled dialog when operation is cancelled", async () => {
@@ -88,7 +115,7 @@ describe("BackgroundArtRepairContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundArtRepair();
-      return <button onClick={start}>Start</button>;
+      return <button onClick={() => start()}>Start</button>;
     };
 
     render(
@@ -120,7 +147,7 @@ describe("BackgroundArtRepairContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundArtRepair();
-      return <button onClick={start}>Start</button>;
+      return <button onClick={() => start()}>Start</button>;
     };
 
     render(
@@ -144,7 +171,7 @@ describe("BackgroundArtRepairContext", () => {
 
     const TestConsumer = () => {
       const { start } = useBackgroundArtRepair();
-      return <button onClick={start}>Start</button>;
+      return <button onClick={() => start()}>Start</button>;
     };
 
     render(

@@ -1,8 +1,10 @@
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
+use unicode_normalization::UnicodeNormalization;
 
 use super::database::{count_lyrics_not_found, save_lyrics};
 use super::lrclib::fetch_lyrics;
@@ -81,7 +83,10 @@ fn process_track(
     }
 }
 
-/// Fetch lyrics for all tracks in the library that don't have any yet.
+/// Fetch lyrics for tracks in the library that don't have any yet.
+///
+/// When `scope_paths` is `Some`, only tracks whose file path is in the list
+/// are considered (e.g. newly imported files); otherwise the whole library.
 ///
 /// Uses a rayon thread pool with `CONCURRENT_WORKERS` threads for parallel
 /// fetching. DB lock is only held briefly for each query/update, never during
@@ -90,7 +95,12 @@ pub fn fetch_library_lyrics(
     conn_arc: &Arc<Mutex<Connection>>,
     app: &tauri::AppHandle,
     cancel_flag: &Arc<AtomicBool>,
+    scope_paths: Option<Vec<String>>,
 ) -> LyricsFetchResult {
+    // NFC-normalize both sides so paths from import match DB paths on macOS
+    let scope: Option<HashSet<String>> =
+        scope_paths.map(|paths| paths.iter().map(|p| p.nfc().collect()).collect());
+
     // Lock briefly to query tracks and count, then release
     let (tracks, skipped_not_found) = {
         let conn = match conn_arc.lock() {
@@ -128,12 +138,24 @@ pub fn fetch_library_lyrics(
                     })
                 })
                 .ok()
-                .map(|rows| rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
+                .map(|rows| {
+                    rows.filter_map(|r| r.ok())
+                        .filter(|t| match &scope {
+                            Some(s) => s.contains(&t.file_path.nfc().collect::<String>()),
+                            None => true,
+                        })
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default(),
             Err(_) => Vec::new(),
         };
 
-        let skipped = count_lyrics_not_found(&conn);
+        // Scoped tracks are newly imported, so none were previously marked not-found
+        let skipped = if scope.is_some() {
+            0
+        } else {
+            count_lyrics_not_found(&conn)
+        };
         (tracks, skipped)
     }; // lock released here
 

@@ -28,7 +28,7 @@ interface BackgroundOperationConfig<TResult> {
 export interface BackgroundOperationActions<TResult> {
   state: BackgroundOperationState;
   result: TResult | null;
-  start: () => void;
+  start: (args?: Record<string, unknown>) => void;
   cancel: () => void;
   dismissResult: () => void;
 }
@@ -47,7 +47,7 @@ export const useBackgroundOperation = <TResult>(
   const configRef = useRef(config);
   configRef.current = config;
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (args?: Record<string, unknown>) => {
     if (activeRef.current) return;
     activeRef.current = true;
     const c = configRef.current;
@@ -63,7 +63,7 @@ export const useBackgroundOperation = <TResult>(
     });
 
     try {
-      const res = await invoke<TResult>(c.startCommand);
+      const res = await invoke<TResult>(c.startCommand, args);
       setResult(res);
       configRef.current.onSuccess?.(res);
     } catch (e) {

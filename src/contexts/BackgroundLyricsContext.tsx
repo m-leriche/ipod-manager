@@ -15,7 +15,8 @@ interface LyricsFetchResult {
 
 interface BackgroundLyricsActions {
   state: BackgroundOperationState;
-  start: () => void;
+  /** Fetch missing lyrics. Pass `scopePaths` (file paths) to limit to those tracks; omit for the whole library. */
+  start: (scopePaths?: string[]) => void;
   cancel: () => void;
 }
 
@@ -63,6 +64,12 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
     }),
   });
 
+  // Guard with Array.isArray so callers can pass `start` directly as an event handler
+  const startFetch = useCallback(
+    (scopePaths?: string[]) => start(Array.isArray(scopePaths) ? { scopePaths } : undefined),
+    [start],
+  );
+
   const showRetryOption = result ? result.skipped_not_found > 0 || result.not_found > 0 : false;
 
   const handleRetryNotFound = useCallback(async () => {
@@ -72,7 +79,7 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
   }, [start, dismissResult]);
 
   return (
-    <BackgroundLyricsContext.Provider value={{ state, start, cancel }}>
+    <BackgroundLyricsContext.Provider value={{ state, start: startFetch, cancel }}>
       {children}
       {result && (
         <ConfirmDialog

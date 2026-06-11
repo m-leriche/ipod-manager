@@ -86,7 +86,8 @@ describe("useLibraryImport", () => {
       expect(mockInvoke).toHaveBeenCalledWith("set_library_location", { path: "/my-music" });
       expect(args.startProgress).toHaveBeenCalledWith("Scanning library...", expect.any(Function));
       expect(args.finishProgress).toHaveBeenCalledWith("Library scan complete");
-      expect(args.onImportComplete).toHaveBeenCalled();
+      // No imported paths on initial setup — fetches run over the whole (new) library
+      expect(args.onImportComplete).toHaveBeenCalledWith();
     });
 
     it("calls failProgress on scan error", async () => {
@@ -116,7 +117,13 @@ describe("useLibraryImport", () => {
     it("imports files when library location exists", async () => {
       mockInvoke.mockImplementation(async (cmd: string) => {
         if (cmd === "get_library_location") return "/my-music";
-        if (cmd === "import_to_library") return { copied: 3, skipped: 1, errors: [] };
+        if (cmd === "import_to_library")
+          return {
+            copied: 3,
+            skipped: 1,
+            errors: [],
+            imported_paths: ["/my-music/A/B/01-01 a.flac", "/my-music/A/B/01-02 b.flac", "/my-music/A/B/01-03 c.flac"],
+          };
         return undefined;
       });
       const args = makeArgs();
@@ -139,6 +146,11 @@ describe("useLibraryImport", () => {
         paths: ["/downloads/song1.flac", "/downloads/song2.flac"],
       });
       expect(args.finishProgress).toHaveBeenCalledWith("Imported 3 tracks, 1 skipped");
+      expect(args.onImportComplete).toHaveBeenCalledWith([
+        "/my-music/A/B/01-01 a.flac",
+        "/my-music/A/B/01-02 b.flac",
+        "/my-music/A/B/01-03 c.flac",
+      ]);
     });
 
     it("prompts for library location when none set", async () => {

@@ -62,6 +62,8 @@ pub struct InboxTrack {
     pub duration_secs: f64,
     pub format: String,
     pub bitrate_kbps: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub bit_depth: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,7 +1,9 @@
+use super::cache::{cache_tracklist, cached_tracklist};
 use super::checks::{check_tags, local_tracklist, quality_desc, quality_rank};
 use super::filing::move_file;
-use super::types::CheckStatus;
+use super::types::{CheckResult, CheckStatus};
 use crate::library::types::TrackData;
+use rusqlite::Connection;
 use std::path::Path;
 
 fn track(
@@ -168,4 +170,52 @@ fn move_file_fails_on_missing_source() {
     let tmp = tempfile::tempdir().unwrap();
     let result = move_file(Path::new("/nonexistent/file"), &tmp.path().join("dest"));
     assert!(result.is_err());
+}
+
+#[test]
+fn tracklist_cache_roundtrips_definitive_verdicts() {
+    let conn = Connection::open_in_memory().unwrap();
+    let verdict = CheckResult::pass(Some("Matches “Album” (10 tracks)".into()));
+
+    assert!(cached_tracklist(&conn, "Artist", "Album", 10).is_none());
+    cache_tracklist(&conn, "Artist", "Album", 10, &verdict);
+
+    let hit = cached_tracklist(&conn, "Artist", "Album", 10).unwrap();
+    assert_eq!(hit.status, CheckStatus::Pass);
+    assert_eq!(hit.detail.unwrap(), "Matches “Album” (10 tracks)");
+}
+
+#[test]
+fn tracklist_cache_is_case_insensitive_but_count_sensitive() {
+    let conn = Connection::open_in_memory().unwrap();
+    cache_tracklist(&conn, "Artist", "Album", 10, &CheckResult::pass(None));
+
+    assert!(cached_tracklist(&conn, "ARTIST", "album", 10).is_some());
+    assert!(cached_tracklist(&conn, "Artist", "Album", 11).is_none());
+}
+
+#[test]
+fn tracklist_cache_skips_transient_warns() {
+    let conn = Connection::open_in_memory().unwrap();
+    cache_tracklist(
+        &conn,
+        "Artist",
+        "Album",
+        10,
+        &CheckResult::warn("Could not verify: timeout".into()),
+    );
+    assert!(cached_tracklist(&conn, "Artist", "Album", 10).is_none());
+}
+
+#[test]
+fn direct_audio_children_ignores_non_audio_and_hidden_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("01.flac"), "x").unwrap();
+    std::fs::write(tmp.path().join(".hidden.flac"), "x").unwrap();
+    std::fs::write(tmp.path().join("cover.jpg"), "x").unwrap();
+    std::fs::create_dir(tmp.path().join("CD2")).unwrap();
+
+    let children = super::scan::direct_audio_children(tmp.path());
+    assert_eq!(children.len(), 1);
+    assert!(children[0].ends_with("01.flac"));
 }

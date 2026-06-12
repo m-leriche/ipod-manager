@@ -5,8 +5,8 @@ use crate::audio_utils::is_audio;
 use crate::library::read_track_for_library;
 use crate::library::types::TrackData;
 
-use super::checks;
-use super::types::{AlbumChecks, InboxAlbum, InboxTrack};
+use super::types::{AlbumChecks, CheckStatus, InboxAlbum, InboxTrack};
+use super::{cache, checks};
 
 pub fn scan_inbox(root: &str, conn: &Connection) -> Result<Vec<InboxAlbum>, String> {
     let root = Path::new(root);
@@ -86,10 +86,21 @@ fn read_album(folder: &Path, conn: &Connection) -> InboxAlbum {
     let album = data.iter().find_map(|t| t.album.clone());
     let year = data.iter().find_map(|t| t.year);
 
+    let mut tracklist = checks::local_tracklist(&data);
+    // A pending tracklist resolves from the cache when this album was already
+    // verified against MusicBrainz and nothing changed since.
+    if tracklist.status == CheckStatus::Pending {
+        if let (Some(artist), Some(album)) = (artist.as_deref(), album.as_deref()) {
+            if let Some(cached) = cache::cached_tracklist(conn, artist, album, data.len()) {
+                tracklist = cached;
+            }
+        }
+    }
+
     let checks = AlbumChecks {
         tags: checks::check_tags(&data),
         cover: checks::check_cover(folder, &paths),
-        tracklist: checks::local_tracklist(&data),
+        tracklist,
         duplicate: checks::check_duplicate(conn, artist.as_deref(), album.as_deref(), &data),
     };
 
@@ -108,6 +119,7 @@ fn read_album(folder: &Path, conn: &Connection) -> InboxAlbum {
 }
 
 fn to_inbox_track(t: TrackData) -> InboxTrack {
+    let bit_depth = read_bit_depth(Path::new(&t.file_path));
     InboxTrack {
         file_path: t.file_path,
         file_name: t.file_name,
@@ -116,5 +128,15 @@ fn to_inbox_track(t: TrackData) -> InboxTrack {
         duration_secs: t.duration_secs,
         format: t.format,
         bitrate_kbps: t.bitrate_kbps,
+        sample_rate: t.sample_rate,
+        bit_depth,
     }
+}
+
+// `read_track_for_library` doesn't surface bit depth (not a library column),
+// so probe it separately here.
+fn read_bit_depth(path: &Path) -> Option<u8> {
+    use lofty::prelude::AudioFile;
+    let tagged = lofty::probe::Probe::open(path).ok()?.read().ok()?;
+    tagged.properties().bit_depth()
 }

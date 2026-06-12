@@ -11,16 +11,31 @@ const album = (overrides: Partial<InboxAlbum> = {}): InboxAlbum => ({
   artist: "Artist",
   album: "Album",
   year: 2020,
-  tracks: [],
+  tracks: [
+    {
+      file_path: "/inbox/Artist - Album/01.flac",
+      file_name: "01.flac",
+      title: "One",
+      track_number: 1,
+      duration_secs: 100,
+      format: "FLAC",
+      bitrate_kbps: null,
+      sample_rate: 96000,
+      bit_depth: 24,
+    },
+  ],
   checks: { tags: check("pass"), cover: check("pass"), tracklist: check("pass"), duplicate: check("pass") },
   ...overrides,
 });
 
+const renderRow = (a: InboxAlbum, props: Partial<Parameters<typeof InboxAlbumRow>[0]> = {}) =>
+  render(<InboxAlbumRow album={a} disabled={false} onFileAway={vi.fn()} onConvert={vi.fn()} {...props} />);
+
 describe("InboxAlbumRow", () => {
   it("renders album info and all four check pills", () => {
-    render(<InboxAlbumRow album={album()} disabled={false} onFileAway={vi.fn()} />);
+    renderRow(album());
     expect(screen.getByText("Album")).toBeInTheDocument();
-    expect(screen.getByText(/Artist · 0 tracks · 2020/)).toBeInTheDocument();
+    expect(screen.getByText(/Artist · 1 tracks · 2020/)).toBeInTheDocument();
     for (const label of ["Tags", "Cover", "Tracklist", "Library"]) {
       expect(screen.getByText(new RegExp(label))).toBeInTheDocument();
     }
@@ -29,7 +44,7 @@ describe("InboxAlbumRow", () => {
   it("shows File Away when all checks pass", () => {
     const onFileAway = vi.fn();
     const a = album();
-    render(<InboxAlbumRow album={a} disabled={false} onFileAway={onFileAway} />);
+    renderRow(a, { onFileAway });
 
     fireEvent.click(screen.getByRole("button", { name: "File Away" }));
     expect(onFileAway).toHaveBeenCalledWith(a);
@@ -45,7 +60,7 @@ describe("InboxAlbumRow", () => {
         duplicate: check("pass"),
       },
     });
-    render(<InboxAlbumRow album={a} disabled={false} onFileAway={onFileAway} />);
+    renderRow(a, { onFileAway });
 
     expect(screen.queryByRole("button", { name: "File Away" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Override & File" }));
@@ -56,10 +71,11 @@ describe("InboxAlbumRow", () => {
     const a = album({
       checks: { tags: check("pass"), cover: check("pass"), tracklist: check("pending"), duplicate: check("pass") },
     });
-    render(<InboxAlbumRow album={a} disabled={false} onFileAway={vi.fn()} />);
+    renderRow(a);
 
     expect(screen.getByText("Checking…")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "File Away" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Override & File" })).not.toBeInTheDocument();
   });
 
   it("treats warnings as filable", () => {
@@ -71,13 +87,25 @@ describe("InboxAlbumRow", () => {
         duplicate: check("pass"),
       },
     });
-    render(<InboxAlbumRow album={a} disabled={false} onFileAway={vi.fn()} />);
+    renderRow(a);
 
     expect(screen.getByRole("button", { name: "File Away" })).toBeInTheDocument();
   });
 
-  it("disables the action while filing", () => {
-    render(<InboxAlbumRow album={album()} disabled onFileAway={vi.fn()} />);
+  it("disables the action while busy", () => {
+    renderRow(album(), { disabled: true });
     expect(screen.getByRole("button", { name: "File Away" })).toBeDisabled();
+  });
+
+  it("expands to show track files and collapses again", () => {
+    renderRow(album());
+    expect(screen.queryByText("One")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show files" }));
+    expect(screen.getByText("One")).toBeInTheDocument();
+    expect(screen.getByText("FLAC · 24-bit · 96.0 kHz")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide files" }));
+    expect(screen.queryByText("One")).not.toBeInTheDocument();
   });
 });

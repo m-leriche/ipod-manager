@@ -7,13 +7,13 @@ import { useInboxActions } from "./useInboxActions";
 import { useInboxData } from "./useInboxData";
 
 export const InboxView = () => {
-  const { location, albums, setAlbums, scanning } = useInboxData();
+  const { location, albums, setAlbums, scanning, rescan } = useInboxData();
 
   const removeAlbums = useCallback(
     (folderPaths: string[]) => setAlbums((prev) => prev.filter((a) => !folderPaths.includes(a.folder_path))),
     [setAlbums],
   );
-  const { fileAway, fileAll, filing } = useInboxActions(removeAlbums);
+  const { fileAway, fileAll, convertAlbum, busy } = useInboxActions(removeAlbums, rescan);
 
   if (location === undefined) return null;
 
@@ -44,7 +44,7 @@ export const InboxView = () => {
         {scanning && <Spinner />}
         <button
           onClick={() => void fileAll(ready)}
-          disabled={filing || ready.length === 0}
+          disabled={busy || ready.length === 0}
           className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors disabled:opacity-50"
         >
           File All Passing ({ready.length})
@@ -55,7 +55,13 @@ export const InboxView = () => {
           <p className="text-xs text-text-tertiary text-center py-12">Inbox is empty.</p>
         ) : (
           albums.map((album) => (
-            <InboxAlbumRow key={album.folder_path} album={album} disabled={filing} onFileAway={fileAway} />
+            <InboxAlbumRow
+              key={album.folder_path}
+              album={album}
+              disabled={busy}
+              onFileAway={fileAway}
+              onConvert={convertAlbum}
+            />
           ))
         )}
       </div>

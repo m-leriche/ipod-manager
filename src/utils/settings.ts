@@ -164,7 +164,7 @@ export const SETTINGS = {
   // Startup behavior
   resumeQueueOnLaunch: bool("crate-resume-queue-on-launch", true),
   rememberLastTab: bool("crate-remember-last-tab", false),
-  lastTopTab: str("crate-last-top-tab", "library", ["library", "discover", "tools"]),
+  lastTopTab: str("crate-last-top-tab", "library", ["library", "discover", "inbox", "tools"]),
 
   // Auto-fetch after library imports
   autoFetchAlbumArt: bool("crate-auto-fetch-album-art", false),

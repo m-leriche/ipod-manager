@@ -23,6 +23,8 @@ const album = (overrides: Partial<InboxAlbum> = {}): InboxAlbum => ({
       duration_secs: 100,
       format: "FLAC",
       bitrate_kbps: null,
+      sample_rate: 96000,
+      bit_depth: 24,
     },
   ],
   checks: { tags: check("pass"), cover: check("pass"), tracklist: check("pass"), duplicate: check("pass") },
@@ -150,6 +152,40 @@ describe("InboxView", () => {
 
     expect(await screen.findByRole("button", { name: "Override & File" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "File All Passing (0)" })).toBeDisabled();
+  });
+
+  it("converts an album in place and rescans", async () => {
+    mockBackend({
+      get_inbox_location: "/inbox",
+      scan_inbox: [album()],
+      convert_inbox_album: {
+        success: true,
+        cancelled: false,
+        converted: 1,
+        failed: 0,
+        errors: [],
+        output_paths: [],
+        warnings: [],
+      },
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show files" }));
+    fireEvent.click(screen.getByRole("button", { name: "Convert" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("convert_inbox_album", {
+        folderPath: "/inbox/Artist - Album",
+        targetFormat: "flac",
+        sampleRate: 44100,
+        bitDepth: 16,
+        mp3Bitrate: null,
+      });
+    });
+    // Rescan after conversion picks up the new formats
+    await waitFor(() => {
+      expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "scan_inbox").length).toBeGreaterThan(1);
+    });
   });
 
   it("files all passing albums as one bulk operation", async () => {

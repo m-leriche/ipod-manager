@@ -20,6 +20,24 @@ export interface InboxTrack {
   duration_secs: number;
   format: string;
   bitrate_kbps: number | null;
+  sample_rate: number | null;
+  bit_depth: number | null;
+}
+
+export interface ConvertTarget {
+  label: string;
+  target_format: "flac" | "mp3";
+  sample_rate: number | null;
+  bit_depth: number | null;
+  mp3_bitrate: number | null;
+}
+
+export interface ConvertProgress {
+  file_index: number;
+  total_files: number;
+  current_file: string;
+  percent: number;
+  phase: string;
 }
 
 export interface InboxAlbum {

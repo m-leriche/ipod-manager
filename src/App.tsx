@@ -80,9 +80,9 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
-type TopTab = "library" | "discover" | "tools";
+type TopTab = "library" | "discover" | "inbox" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
-type DiscoverTab = "discover" | "releases" | "inbox";
+type DiscoverTab = "discover" | "releases";
 
 const App = () => (
   <ThemeProvider>
@@ -284,6 +284,9 @@ const AppContent = () => {
                 Discover
               </TopTabButton>
             )}
+            <TopTabButton active={topTab === "inbox"} onClick={() => setTopTab("inbox")}>
+              Inbox
+            </TopTabButton>
           </div>
           <div className="flex-1" />
           <button
@@ -330,9 +333,6 @@ const AppContent = () => {
                     >
                       Releases
                     </DiscoverTabButton>
-                    <DiscoverTabButton active={discoverTab === "inbox"} onClick={() => setDiscoverTab("inbox")}>
-                      Inbox
-                    </DiscoverTabButton>
                   </div>
                 </div>
                 <div className="flex-1 min-h-0">
@@ -348,14 +348,16 @@ const AppContent = () => {
                       <NewReleasesView />
                     </ErrorBoundary>
                   )}
-                  {discoverTab === "inbox" && (
-                    <Suspense fallback={null}>
-                      <ErrorBoundary name="Inbox">
-                        <InboxView />
-                      </ErrorBoundary>
-                    </Suspense>
-                  )}
                 </div>
+              </div>
+            )}
+            {topTab === "inbox" && (
+              <div className="h-full flex flex-col pt-5 view-enter">
+                <Suspense fallback={null}>
+                  <ErrorBoundary name="Inbox">
+                    <InboxView />
+                  </ErrorBoundary>
+                </Suspense>
               </div>
             )}
             {topTab === "tools" && (

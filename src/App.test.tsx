@@ -44,10 +44,22 @@ describe("App", () => {
     expect(await screen.findByText("Crate")).toBeInTheDocument();
   });
 
-  it("shows Library and Tools top-level tabs", async () => {
+  it("shows Library, Tools, and Inbox top-level tabs", async () => {
     render(<App />);
     expect(await screen.findByRole("tab", { name: "Library" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Tools" })).toBeInTheDocument();
+    const mainNav = screen.getByRole("tablist", { name: "Main navigation" });
+    expect(within(mainNav).getByRole("tab", { name: "Inbox" })).toBeInTheDocument();
+  });
+
+  it("switches to the Inbox tab", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const mainNav = await screen.findByRole("tablist", { name: "Main navigation" });
+    await user.click(within(mainNav).getByRole("tab", { name: "Inbox" }));
+
+    expect(within(mainNav).getByRole("tab", { name: "Inbox" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("shows welcome screen when no library is configured", async () => {

@@ -1,4 +1,6 @@
+use crate::convert::ConvertResult;
 use crate::error::AppError;
+use crate::files::SyncCancel;
 use crate::inbox::{self, InboxWatcher};
 use crate::library::{self, LibraryDb};
 use crate::watcher::LibraryChangeEvent;
@@ -46,12 +48,56 @@ pub async fn verify_inbox_tracklist(
     artist: String,
     album: String,
     track_count: usize,
+    db: State<'_, LibraryDb>,
 ) -> Result<inbox::CheckResult, AppError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    // Network lookup runs without holding the DB lock; the verdict is cached
+    // afterwards so unchanged albums skip verification on future scans.
+    let (artist2, album2) = (artist.clone(), album.clone());
+    let result = tauri::async_runtime::spawn_blocking(move || {
         inbox::verify_tracklist(&artist, &album, track_count)
     })
     .await
-    .map_err(|e| AppError::Generic(format!("Task failed: {}", e)))
+    .map_err(|e| AppError::Generic(format!("Task failed: {}", e)))?;
+
+    {
+        let conn = db.lock_conn()?;
+        inbox::cache_tracklist(&conn, &artist2, &album2, track_count, &result);
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn convert_inbox_album(
+    folder_path: String,
+    target_format: String,
+    sample_rate: Option<u32>,
+    bit_depth: Option<u16>,
+    mp3_bitrate: Option<u32>,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+) -> Result<ConvertResult, AppError> {
+    if !["flac", "mp3"].contains(&target_format.as_str()) {
+        return Err(AppError::InvalidInput(format!(
+            "Unsupported target format: {}",
+            target_format
+        )));
+    }
+    let flag = cancel.new_flag();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        inbox::convert_album(
+            &folder_path,
+            &target_format,
+            sample_rate,
+            bit_depth,
+            mp3_bitrate,
+            app,
+            flag,
+        )
+    })
+    .await
+    .map_err(|e| format!("Convert failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]

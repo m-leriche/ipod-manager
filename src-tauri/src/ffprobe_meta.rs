@@ -152,7 +152,14 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
 /// all metadata. Returns Err on failure.
 pub fn write_metadata(path: &Path, updates: &[(&str, &str)]) -> Result<(), String> {
     let path_str = path.to_string_lossy();
-    let tmp_path = format!("{}.tmp_meta", path_str);
+    // The temp file must keep the original extension — ffmpeg infers the
+    // output muxer from it and fails outright on an unknown extension.
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let tmp_path = if ext.is_empty() {
+        format!("{}.tmp_meta", path_str)
+    } else {
+        format!("{}.tmp_meta.{}", path_str, ext)
+    };
 
     let mut args = vec![
         "-y".to_string(),

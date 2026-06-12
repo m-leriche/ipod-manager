@@ -1,3 +1,5 @@
+import type { LibraryTrack } from "../../../types/library";
+
 export interface HealthIssue {
   id: string;
   label: string;
@@ -10,6 +12,13 @@ export interface HealthReport {
 }
 
 export type Phase = "idle" | "loading" | "loaded";
+
+export interface AlbumGroup {
+  key: string;
+  artist: string;
+  album: string;
+  tracks: LibraryTrack[];
+}
 
 export interface AlbumYearQuery {
   artist: string;

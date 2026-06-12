@@ -5,8 +5,9 @@ import type { LibraryTrack } from "../../../types/library";
 import type { HealthIssue } from "./types";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
 import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller";
-import { buildTrackLetterMap, getTrackLetter } from "./helpers";
+import { buildLetterMap, buildTrackLetterMap, getTrackLetter, getValueLetter, groupTracksByAlbum } from "./helpers";
 import { YearLookupModal } from "./YearLookupModal";
+import { YearCell } from "./YearCell";
 import { useHealthAutoFix } from "./useHealthAutoFix";
 
 const ROW_HEIGHT = 32;
@@ -53,6 +54,7 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     handleAutoTrackNumber,
     handleYearLookup,
     handleYearApply,
+    handleSaveYears,
   } = useHealthAutoFix({ tracks, selectedIds, setSelectedIds, loadTracks, onDataChanged });
 
   const yearLookupResultsRef = useRef(yearLookupResults);
@@ -83,6 +85,11 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, tracks, setAutoFixStatus, setYearLookupResults]);
 
+  const isMissingTitle = issue.id === "missing_title";
+  const isMissingTrackNumber = issue.id === "missing_track_number";
+  const isMissingYear = issue.id === "missing_year";
+  const hasAutoFix = isMissingTitle || isMissingTrackNumber || isMissingYear;
+
   const sorted = useMemo(
     () =>
       tracks
@@ -95,6 +102,53 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
         : [],
     [tracks, sortKey, sortDir],
   );
+
+  // Missing-year view shows one row per album; entering a year applies to all its tracks
+  const albumGroups = useMemo(
+    () => (isMissingYear && tracks ? groupTracksByAlbum(tracks) : null),
+    [isMissingYear, tracks],
+  );
+
+  const albumSortField: "artist" | "album" = sortKey === "album" ? "album" : "artist";
+
+  const sortedGroups = useMemo(
+    () =>
+      albumGroups
+        ? [...albumGroups].sort((a, b) => {
+            const cmp = a[albumSortField].localeCompare(b[albumSortField], undefined, { sensitivity: "base" });
+            return sortDir === "asc" ? cmp : -cmp;
+          })
+        : null,
+    [albumGroups, albumSortField, sortDir],
+  );
+
+  // Year edits are buffered per album key and only written when Save is clicked,
+  // so years for many albums can be entered in one pass
+  const [pendingYears, setPendingYears] = useState<Map<string, string>>(new Map());
+
+  const handleYearDraftChange = useCallback((key: string, draft: string) => {
+    setPendingYears((prev) => {
+      const next = new Map(prev);
+      if (draft) next.set(key, draft);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const pendingYearCount = useMemo(
+    () => [...pendingYears.values()].filter((v) => /^\d{4}$/.test(v)).length,
+    [pendingYears],
+  );
+
+  const handleSavePendingYears = async () => {
+    if (!albumGroups) return;
+    const entries = albumGroups
+      .filter((g) => /^\d{4}$/.test(pendingYears.get(g.key) ?? ""))
+      .map((g) => ({ tracks: g.tracks, year: Number(pendingYears.get(g.key)) }));
+    if (entries.length === 0) return;
+    await handleSaveYears(entries);
+    setPendingYears(new Map());
+  };
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -130,10 +184,29 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     setAutoFixStatus(null);
   };
 
-  const isMissingTitle = issue.id === "missing_title";
-  const isMissingTrackNumber = issue.id === "missing_track_number";
-  const isMissingYear = issue.id === "missing_year";
-  const hasAutoFix = isMissingTitle || isMissingTrackNumber || isMissingYear;
+  const lastClickedGroupRef = useRef<number | null>(null);
+
+  const handleGroupRowClick = (index: number, e: React.MouseEvent) => {
+    if (!sortedGroups) return;
+    const ids = sortedGroups[index].tracks.map((t) => t.id);
+    if (e.metaKey || e.ctrlKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        const allSelected = ids.every((id) => next.has(id));
+        ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+        return next;
+      });
+    } else if (e.shiftKey && lastClickedGroupRef.current !== null) {
+      const start = Math.min(lastClickedGroupRef.current, index);
+      const end = Math.max(lastClickedGroupRef.current, index);
+      const rangeIds = sortedGroups.slice(start, end + 1).flatMap((g) => g.tracks.map((t) => t.id));
+      setSelectedIds((prev) => new Set([...prev, ...rangeIds]));
+    } else {
+      setSelectedIds(new Set(ids));
+    }
+    lastClickedGroupRef.current = index;
+    setAutoFixStatus(null);
+  };
 
   const handleContextMenu = (trackId: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -141,6 +214,17 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     if (!selectedIds.has(trackId)) {
       setSelectedIds(new Set([trackId]));
       lastClickedRef.current = trackId;
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleGroupContextMenu = (index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!sortedGroups) return;
+    const ids = sortedGroups[index].tracks.map((t) => t.id);
+    if (!ids.every((id) => selectedIds.has(id))) {
+      setSelectedIds(new Set(ids));
+      lastClickedGroupRef.current = index;
     }
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
@@ -158,16 +242,24 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     return sortDir === "asc" ? " \u25B2" : " \u25BC";
   };
 
-  const COLUMNS: { key: SortKey; label: string }[] = [
-    { key: "file_path", label: "Path" },
-    { key: "artist", label: "Artist" },
-    { key: "album", label: "Album" },
-    { key: "title", label: "Title" },
-  ];
+  const COLUMNS: { key: SortKey; label: string }[] = isMissingYear
+    ? [
+        { key: "artist", label: "Artist" },
+        { key: "album", label: "Album" },
+      ]
+    : [
+        { key: "file_path", label: "Path" },
+        { key: "artist", label: "Artist" },
+        { key: "album", label: "Album" },
+        { key: "title", label: "Title" },
+      ];
+  const colCount = COLUMNS.length + (isMissingYear ? 2 : 0);
+
+  const rowCount = sortedGroups ? sortedGroups.length : sorted.length;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: sorted.length,
+    count: rowCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
@@ -179,19 +271,30 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
     virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   const sortField = sortKey === "file_path" ? "file_name" : sortKey;
-  const letterMap = useMemo(() => buildTrackLetterMap(sorted, sortField), [sorted, sortField]);
+  const letterMap = useMemo(
+    () =>
+      sortedGroups
+        ? buildLetterMap(sortedGroups.map((g) => g[albumSortField]))
+        : buildTrackLetterMap(sorted, sortField),
+    [sortedGroups, albumSortField, sorted, sortField],
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || sorted.length === 0) return;
+    if (!el || rowCount === 0) return;
     const onScroll = () => {
-      const topIndex = Math.min(Math.floor(el.scrollTop / ROW_HEIGHT), sorted.length - 1);
-      if (topIndex >= 0) setActiveLetter(getTrackLetter(sorted[topIndex], sortField));
+      const topIndex = Math.min(Math.floor(el.scrollTop / ROW_HEIGHT), rowCount - 1);
+      if (topIndex < 0) return;
+      setActiveLetter(
+        sortedGroups
+          ? getValueLetter(sortedGroups[topIndex][albumSortField])
+          : getTrackLetter(sorted[topIndex], sortField),
+      );
     };
     onScroll();
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [sorted, sortField]);
+  }, [sorted, sortedGroups, sortField, albumSortField, rowCount]);
 
   const handleLetterSelect = useCallback(
     (_letter: string, index: number) => {
@@ -242,39 +345,81 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
                         {arrow(col.key)}
                       </th>
                     ))}
+                    {isMissingYear && (
+                      <>
+                        <th className="px-4 py-2.5 font-medium">Tracks</th>
+                        <th className="px-4 py-2.5 font-medium">Year</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {paddingTop > 0 && (
                     <tr>
-                      <td style={{ height: paddingTop, padding: 0 }} colSpan={4} />
+                      <td style={{ height: paddingTop, padding: 0 }} colSpan={colCount} />
                     </tr>
                   )}
-                  {virtualItems.map((virtualRow) => {
-                    const track = sorted[virtualRow.index];
-                    const isSelected = selectedIds.has(track.id);
-                    return (
-                      <tr
-                        key={track.id}
-                        style={{ height: ROW_HEIGHT }}
-                        onClick={(e) => handleRowClick(track.id, e)}
-                        onContextMenu={(e) => handleContextMenu(track.id, e)}
-                        className={`border-t border-border-subtle cursor-default select-none transition-colors ${
-                          isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
-                        }`}
-                      >
-                        <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
-                          {track.file_name}
-                        </td>
-                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.artist || "—"}</td>
-                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.album || "—"}</td>
-                        <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">{track.title || "—"}</td>
-                      </tr>
-                    );
-                  })}
+                  {sortedGroups
+                    ? virtualItems.map((virtualRow) => {
+                        const group = sortedGroups[virtualRow.index];
+                        const isSelected = group.tracks.every((t) => selectedIds.has(t.id));
+                        return (
+                          <tr
+                            key={group.key}
+                            style={{ height: ROW_HEIGHT }}
+                            onClick={(e) => handleGroupRowClick(virtualRow.index, e)}
+                            onContextMenu={(e) => handleGroupContextMenu(virtualRow.index, e)}
+                            className={`border-t border-border-subtle cursor-default select-none transition-colors ${
+                              isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
+                            }`}
+                          >
+                            <td className="px-4 py-2 text-text-secondary truncate max-w-[200px]">
+                              {group.artist || "—"}
+                            </td>
+                            <td className="px-4 py-2 text-text-primary truncate max-w-[260px]">{group.album || "—"}</td>
+                            <td className="px-4 py-2 text-text-tertiary">{group.tracks.length}</td>
+                            <td className="px-2 py-1">
+                              <YearCell
+                                value={pendingYears.get(group.key) ?? ""}
+                                label={`Year for ${group.album || group.artist || "unknown album"}`}
+                                disabled={saving}
+                                onChange={(draft) => handleYearDraftChange(group.key, draft)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })
+                    : virtualItems.map((virtualRow) => {
+                        const track = sorted[virtualRow.index];
+                        const isSelected = selectedIds.has(track.id);
+                        return (
+                          <tr
+                            key={track.id}
+                            style={{ height: ROW_HEIGHT }}
+                            onClick={(e) => handleRowClick(track.id, e)}
+                            onContextMenu={(e) => handleContextMenu(track.id, e)}
+                            className={`border-t border-border-subtle cursor-default select-none transition-colors ${
+                              isSelected ? "bg-accent/15" : "hover:bg-bg-hover"
+                            }`}
+                          >
+                            <td className="px-4 py-2 text-text-primary truncate max-w-[250px]" title={track.file_path}>
+                              {track.file_name}
+                            </td>
+                            <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">
+                              {track.artist || "—"}
+                            </td>
+                            <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">
+                              {track.album || "—"}
+                            </td>
+                            <td className="px-4 py-2 text-text-secondary truncate max-w-[140px]">
+                              {track.title || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   {paddingBottom > 0 && (
                     <tr>
-                      <td style={{ height: paddingBottom, padding: 0 }} colSpan={4} />
+                      <td style={{ height: paddingBottom, padding: 0 }} colSpan={colCount} />
                     </tr>
                   )}
                 </tbody>
@@ -289,8 +434,18 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
         </div>
 
         <div className="px-5 py-3 border-t border-border shrink-0 flex items-center gap-3">
-          <span className="text-[11px] text-text-tertiary">{sorted.length.toLocaleString()} tracks</span>
-          {selectedCount > 0 && <span className="text-[11px] text-text-secondary">{selectedCount} selected</span>}
+          <span className="text-[11px] text-text-tertiary">
+            {sortedGroups
+              ? `${sortedGroups.length.toLocaleString()} albums (${sorted.length.toLocaleString()} tracks)`
+              : `${sorted.length.toLocaleString()} tracks`}
+          </span>
+          {selectedCount > 0 && (
+            <span className="text-[11px] text-text-secondary">
+              {sortedGroups
+                ? `${sortedGroups.filter((g) => g.tracks.every((t) => selectedIds.has(t.id))).length} selected`
+                : `${selectedCount} selected`}
+            </span>
+          )}
           {lookupProgress && (
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <div className="w-32 bg-bg-card border border-border rounded-full h-1.5 overflow-hidden shrink-0">
@@ -329,13 +484,23 @@ export const HealthDetailModal = ({ issue, onClose, onRepairMetadata, onDataChan
               {saving ? "Applying..." : "Auto-track number from filename"}
             </button>
           )}
-          {isMissingYear && selectedCount > 0 && (
+          {isMissingYear && (
             <button
               onClick={handleYearLookup}
-              disabled={saving}
+              disabled={saving || selectedCount === 0}
+              title={selectedCount === 0 ? "Select albums to look up" : undefined}
               className="px-3 py-1.5 bg-accent/15 text-accent rounded-lg text-[11px] font-medium hover:bg-accent/25 transition-colors disabled:opacity-50"
             >
-              {saving ? "Looking up..." : "Look up year"}
+              {saving && lookupProgress ? "Looking up..." : "Look up year"}
+            </button>
+          )}
+          {isMissingYear && pendingYearCount > 0 && (
+            <button
+              onClick={handleSavePendingYears}
+              disabled={saving}
+              className="px-3 py-1.5 bg-accent text-white rounded-lg text-[11px] font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+            >
+              {saving ? "Saving..." : `Save ${pendingYearCount} year${pendingYearCount !== 1 ? "s" : ""}`}
             </button>
           )}
         </div>

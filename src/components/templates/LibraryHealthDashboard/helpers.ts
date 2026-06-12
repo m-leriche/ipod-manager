@@ -1,6 +1,6 @@
 import type { LibraryTrack } from "../../../types/library";
 import { sortKey } from "../../atoms/AlphabetScroller/helpers";
-import type { HealthIssue } from "./types";
+import type { AlbumGroup, HealthIssue } from "./types";
 
 export const issuePercentage = (count: number, total: number): string => {
   if (total === 0) return "0%";
@@ -70,28 +70,49 @@ export const extractYearFromAlbumTitle = (album: string): number | null => {
   return year;
 };
 
-/** Get the first letter for a track field value, matching the AlphabetScroller convention. */
-export const getTrackLetter = (track: LibraryTrack, field: keyof LibraryTrack): string => {
-  const val = (track[field] as string) ?? "";
-  const key = sortKey(val);
+/** Get the first letter for a string value, matching the AlphabetScroller convention. */
+export const getValueLetter = (value: string | null | undefined): string => {
+  const key = sortKey(value ?? "");
   if (!key) return "#";
   const first = key[0];
   return /[a-z]/.test(first) ? first.toUpperCase() : "#";
 };
 
-/** Build a letter → first-row-index map from a sorted track list. */
-export const buildTrackLetterMap = (
-  sortedTracks: LibraryTrack[],
-  sortField: keyof LibraryTrack,
-): Map<string, number> => {
+/** Get the first letter for a track field value, matching the AlphabetScroller convention. */
+export const getTrackLetter = (track: LibraryTrack, field: keyof LibraryTrack): string =>
+  getValueLetter(track[field] as string);
+
+/** Build a letter → first-row-index map from a sorted list of values. */
+export const buildLetterMap = (values: (string | null | undefined)[]): Map<string, number> => {
   const map = new Map<string, number>();
-  for (let i = 0; i < sortedTracks.length; i++) {
-    const letter = getTrackLetter(sortedTracks[i], sortField);
+  for (let i = 0; i < values.length; i++) {
+    const letter = getValueLetter(values[i]);
     if (!map.has(letter)) {
       map.set(letter, i);
     }
   }
   return map;
+};
+
+/** Build a letter → first-row-index map from a sorted track list. */
+export const buildTrackLetterMap = (sortedTracks: LibraryTrack[], sortField: keyof LibraryTrack): Map<string, number> =>
+  buildLetterMap(sortedTracks.map((t) => t[sortField] as string));
+
+/** Group tracks by artist + album, matching the key used by the year lookup flow. */
+export const groupTracksByAlbum = (tracks: LibraryTrack[]): AlbumGroup[] => {
+  const map = new Map<string, AlbumGroup>();
+  for (const t of tracks) {
+    const artist = t.artist || "";
+    const album = t.album || "";
+    const key = `${artist}::${album}`;
+    const group = map.get(key);
+    if (group) {
+      group.tracks.push(t);
+    } else {
+      map.set(key, { key, artist, album, tracks: [t] });
+    }
+  }
+  return [...map.values()];
 };
 
 const DISC_TRACK_EXACT = /^(\d{1,2})-(\d{1,2})[\s_]/;

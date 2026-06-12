@@ -32,7 +32,10 @@ export const useHealthAutoFix = (params: {
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       const skipped = totalSelected - updates.length;
       const parts: string[] = [`Applied ${label} to ${result.succeeded} track${result.succeeded !== 1 ? "s" : ""}`];
-      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (result.failed > 0) {
+        parts.push(`${result.failed} failed`);
+        if (result.errors.length > 0) parts.push(result.errors[0].slice(0, 120));
+      }
       if (skipped > 0) parts.push(`${skipped} skipped`);
       setAutoFixStatus(parts.join(", "));
       setSelectedIds(new Set());
@@ -140,6 +143,15 @@ export const useHealthAutoFix = (params: {
     }
   };
 
+  const handleSaveYears = async (entries: { tracks: LibraryTrack[]; year: number }[]) => {
+    if (saving) return;
+    const updates: MetadataUpdate[] = entries.flatMap((e) =>
+      e.tracks.map((t) => ({ file_path: t.file_path, year: e.year })),
+    );
+    if (updates.length === 0) return;
+    await applySaveUpdates(updates, "year", updates.length);
+  };
+
   const handleYearApply = async (accepted: AlbumYearResult[]) => {
     if (!tracks) return;
     setYearLookupResults(null);
@@ -173,5 +185,6 @@ export const useHealthAutoFix = (params: {
     handleAutoTrackNumber,
     handleYearLookup,
     handleYearApply,
+    handleSaveYears,
   };
 };

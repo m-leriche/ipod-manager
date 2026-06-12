@@ -646,7 +646,7 @@ describe("drill-down", () => {
     });
   });
 
-  it("shows look-up-year button when tracks are selected in missing_year view", async () => {
+  it("shows look-up-year button when albums are selected in missing_year view", async () => {
     const user = userEvent.setup();
     mockInvoke.mockResolvedValueOnce(MOCK_REPORT).mockResolvedValueOnce(MOCK_TRACKS);
 
@@ -658,15 +658,18 @@ describe("drill-down", () => {
 
     await user.click(screen.getByText("Missing year"));
 
+    // Missing-year view groups tracks into one row per album
     await waitFor(() => {
-      expect(screen.getByText("track_1.flac")).toBeInTheDocument();
+      expect(screen.getByText("Album A")).toBeInTheDocument();
     });
+    expect(screen.queryByText("track_1.flac")).not.toBeInTheDocument();
 
-    expect(screen.queryByText("Look up year")).not.toBeInTheDocument();
+    // Button is visible but disabled until albums are selected
+    expect(screen.getByText("Look up year")).toBeDisabled();
 
-    await user.click(screen.getByText("track_1.flac"));
+    await user.click(screen.getByText("Album A"));
 
-    expect(screen.getByText("Look up year")).toBeInTheDocument();
+    expect(screen.getByText("Look up year")).toBeEnabled();
   });
 
   it("shows year confirmation modal after lookup and applies on confirm", async () => {
@@ -708,10 +711,10 @@ describe("drill-down", () => {
     await user.click(screen.getByText("Missing year"));
 
     await waitFor(() => {
-      expect(screen.getByText("01-01 Song.flac")).toBeInTheDocument();
+      expect(screen.getByText("Abbey Road")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("01-01 Song.flac"));
+    await user.click(screen.getByText("Abbey Road"));
     await user.click(screen.getByText("Look up year"));
 
     // Confirmation modal should appear
@@ -732,6 +735,66 @@ describe("drill-down", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Applied year to 1 track")).toBeInTheDocument();
+    });
+  });
+
+  it("batches entered years across albums and saves them on Save", async () => {
+    const user = userEvent.setup();
+    const yearTracks = [
+      makeMockTrack(1, "01 One.flac", "The Beatles"),
+      makeMockTrack(2, "02 Two.flac", "The Beatles"),
+      makeMockTrack(3, "01 Money.flac", "Pink Floyd"),
+    ];
+    yearTracks[0].album = "Abbey Road";
+    yearTracks[1].album = "Abbey Road";
+    yearTracks[2].album = "Dark Side";
+
+    mockInvoke
+      .mockResolvedValueOnce(MOCK_REPORT) // get_library_health
+      .mockResolvedValueOnce(yearTracks) // get_health_issue_tracks
+      .mockResolvedValueOnce({
+        // save_metadata
+        total: 3,
+        succeeded: 3,
+        failed: 0,
+        cancelled: false,
+        errors: [],
+        undo_operations: [],
+      })
+      .mockResolvedValueOnce([]) // get_health_issue_tracks (refresh)
+      .mockResolvedValueOnce(MOCK_REPORT); // get_library_health (onDataChanged)
+
+    render(<LibraryHealthDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Missing year")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Missing year"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Abbey Road")).toBeInTheDocument();
+    });
+
+    // Nothing saved until Save is clicked
+    await user.type(screen.getByLabelText("Year for Abbey Road"), "1969");
+    await user.type(screen.getByLabelText("Year for Dark Side"), "1973");
+    expect(mockInvoke).not.toHaveBeenCalledWith("save_metadata", expect.anything());
+
+    await user.click(screen.getByText("Save 2 years"));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("save_metadata", {
+        updates: [
+          { file_path: "/music/01 One.flac", year: 1969 },
+          { file_path: "/music/02 Two.flac", year: 1969 },
+          { file_path: "/music/01 Money.flac", year: 1973 },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Applied year to 3 tracks")).toBeInTheDocument();
     });
   });
 });

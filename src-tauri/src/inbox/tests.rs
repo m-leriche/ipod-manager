@@ -1,6 +1,6 @@
 use super::cache::{cache_tracklist, cached_tracklist};
 use super::checks::{check_tags, local_tracklist, quality_desc, quality_rank};
-use super::filing::move_file;
+use super::filing::{file_album, move_file, undo_filing};
 use super::types::{CheckResult, CheckStatus};
 use crate::library::types::TrackData;
 use rusqlite::Connection;
@@ -170,6 +170,48 @@ fn move_file_fails_on_missing_source() {
     let tmp = tempfile::tempdir().unwrap();
     let result = move_file(Path::new("/nonexistent/file"), &tmp.path().join("dest"));
     assert!(result.is_err());
+}
+
+#[test]
+fn file_and_undo_roundtrip_keeps_db_consistent_with_decomposed_unicode() {
+    let tmp = tempfile::tempdir().unwrap();
+    // "è" as e + combining grave (NFD) — upsert normalizes paths to NFC, so
+    // the recorded move must match the normalized row exactly for undo.
+    let library_root = tmp.path().join("Bibliothe\u{300}que");
+    std::fs::create_dir_all(&library_root).unwrap();
+    let album_dir = tmp.path().join("inbox/Album");
+    std::fs::create_dir_all(&album_dir).unwrap();
+    let src = album_dir.join("01 Track.flac");
+    std::fs::write(&src, "not real audio").unwrap();
+
+    let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
+
+    let result = file_album(
+        library_root.to_str().unwrap(),
+        album_dir.to_str().unwrap(),
+        &conn,
+    )
+    .unwrap();
+    assert_eq!(result.moves.len(), 1);
+    assert!(!src.exists());
+
+    let mv = &result.moves[0];
+    let rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tracks WHERE file_path = ?1",
+            rusqlite::params![mv.to],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(rows, 1, "upserted row must match the recorded move path");
+
+    undo_filing(&result.moves, &conn).unwrap();
+
+    assert!(src.exists(), "file restored to inbox");
+    let rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(rows, 0, "undo must remove the ghost row");
 }
 
 #[test]

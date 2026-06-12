@@ -29,7 +29,8 @@ export const UndoProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.code !== "KeyZ" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      // e.key, not e.code — undo follows the key labeled Z on any layout
+      if (e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
       if (isEditableTarget(e.target) || busyRef.current) return;
       const entry = stackRef.current.pop();
       if (!entry) return;
@@ -40,6 +41,8 @@ export const UndoProvider = ({ children }: { children: React.ReactNode }) => {
         await entry.undo();
         toast.success(`Undone: ${entry.label}`);
       } catch (err) {
+        // Keep the entry so a transient failure can be retried
+        stackRef.current.push(entry);
         toast.error(`Undo failed: ${err}`);
       } finally {
         busyRef.current = false;

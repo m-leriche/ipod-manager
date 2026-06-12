@@ -62,6 +62,18 @@ describe("InboxView", () => {
     expect(await screen.findByText("Inbox is empty.")).toBeInTheDocument();
   });
 
+  it("surfaces scan failures instead of showing an empty inbox", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_inbox_location") return "/inbox";
+      if (cmd === "scan_inbox") throw new Error("Inbox folder not found: /inbox");
+      return undefined;
+    });
+    renderView();
+
+    expect(await screen.findByText(/Failed to scan inbox:.*not found/)).toBeInTheDocument();
+    expect(screen.queryByText("Inbox is empty.")).not.toBeInTheDocument();
+  });
+
   it("lists scanned albums with the inbox path", async () => {
     mockBackend({ get_inbox_location: "/inbox", scan_inbox: [album()] });
     renderView();
@@ -127,7 +139,7 @@ describe("InboxView", () => {
       expect(invoke).toHaveBeenCalledWith("file_inbox_album", { folderPath: "/inbox/Artist - Album" });
     });
 
-    fireEvent.keyDown(window, { code: "KeyZ", metaKey: true });
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("undo_inbox_filing", { moves });

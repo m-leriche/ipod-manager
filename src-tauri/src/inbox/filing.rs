@@ -63,7 +63,9 @@ pub fn file_album(
         dest_dir.get_or_insert_with(|| dest.parent().unwrap_or(root).to_path_buf());
         moves.push(FileMove {
             from: src.to_string_lossy().to_string(),
-            to: dest.to_string_lossy().to_string(),
+            // NFC-normalized to match the upserted row — undo deletes by
+            // exact string equality on this path.
+            to: track.file_path.clone(),
             is_audio: true,
         });
     }

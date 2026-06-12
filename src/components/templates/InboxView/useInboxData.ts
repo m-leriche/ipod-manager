@@ -8,6 +8,7 @@ export const useInboxData = () => {
   const [location, setLocation] = useState<string | null | undefined>(undefined);
   const [albums, setAlbums] = useState<InboxAlbum[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const verifyRunRef = useRef(0);
 
   // Sequential MusicBrainz verification — the backend rate-limits to ~1 req/s
@@ -39,9 +40,11 @@ export const useInboxData = () => {
     try {
       const result = await invoke<InboxAlbum[]>("scan_inbox");
       setAlbums(result);
+      setScanError(null);
       void verifyTracklists(result);
-    } catch {
+    } catch (e) {
       setAlbums([]);
+      setScanError(String(e));
     } finally {
       setScanning(false);
     }
@@ -66,5 +69,5 @@ export const useInboxData = () => {
     return () => unlisten?.();
   }, [location, rescan]);
 
-  return { location, albums, setAlbums, scanning, rescan };
+  return { location, albums, setAlbums, scanning, scanError, rescan };
 };

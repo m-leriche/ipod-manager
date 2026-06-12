@@ -7,7 +7,7 @@ import { useInboxActions } from "./useInboxActions";
 import { useInboxData } from "./useInboxData";
 
 export const InboxView = () => {
-  const { location, albums, setAlbums, scanning, rescan } = useInboxData();
+  const { location, albums, setAlbums, scanning, scanError, rescan } = useInboxData();
 
   const removeAlbums = useCallback(
     (folderPaths: string[]) => setAlbums((prev) => prev.filter((a) => !folderPaths.includes(a.folder_path))),
@@ -51,7 +51,9 @@ export const InboxView = () => {
         </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-8 pb-6 flex flex-col gap-3">
-        {albums.length === 0 && !scanning ? (
+        {scanError ? (
+          <p className="text-xs text-danger text-center py-12">Failed to scan inbox: {scanError}</p>
+        ) : albums.length === 0 && !scanning ? (
           <p className="text-xs text-text-tertiary text-center py-12">Inbox is empty.</p>
         ) : (
           albums.map((album) => (

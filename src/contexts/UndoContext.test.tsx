@@ -18,7 +18,7 @@ const setup = (entries: UndoEntry[]) => {
   fireEvent.click(screen.getByText("push"));
 };
 
-const cmdZ = (target: Element | Window = window) => fireEvent.keyDown(target, { code: "KeyZ", metaKey: true });
+const cmdZ = (target: Element | Window = window) => fireEvent.keyDown(target, { key: "z", metaKey: true });
 
 describe("UndoContext", () => {
   it("runs the pushed undo on Cmd+Z", async () => {
@@ -66,9 +66,20 @@ describe("UndoContext", () => {
     const undo = vi.fn(() => Promise.resolve());
     setup([{ label: "File away", undo }]);
 
-    fireEvent.keyDown(window, { code: "KeyZ", metaKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: "Z", metaKey: true, shiftKey: true });
 
     expect(undo).not.toHaveBeenCalled();
+  });
+
+  it("keeps the entry for retry when undo fails", async () => {
+    const undo = vi.fn().mockRejectedValueOnce(new Error("volume offline")).mockResolvedValueOnce(undefined);
+    setup([{ label: "File away", undo }]);
+
+    cmdZ();
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+
+    cmdZ();
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(2));
   });
 
   it("throws when useUndo is used outside the provider", () => {

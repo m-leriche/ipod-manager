@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter};
 
 use super::helpers::{build_codec_args, build_output_path, parse_ffmpeg_time};
 use super::probe::probe_audio;
-use super::{ConvertProgress, ConvertRequest, ConvertResult};
+use super::{ConvertProgress, ConvertRequest, ConvertResult, ConvertedPair};
 use crate::process;
 
 /// Timeout for a single file conversion (30 minutes).
@@ -24,6 +24,7 @@ pub fn convert_batch(
     let mut failed = 0usize;
     let mut errors = Vec::new();
     let mut output_paths = Vec::new();
+    let mut pairs = Vec::new();
     let mut warnings = Vec::new();
 
     log::info!("Starting batch conversion of {} files", total);
@@ -38,6 +39,7 @@ pub fn convert_batch(
                 failed,
                 errors,
                 output_paths,
+                pairs,
                 warnings,
             };
         }
@@ -56,6 +58,10 @@ pub fn convert_batch(
 
         match convert_single(req, i, total, &app, &cancel_flag) {
             Ok(path) => {
+                pairs.push(ConvertedPair {
+                    input_path: req.input_path.clone(),
+                    output_path: path.clone(),
+                });
                 output_paths.push(path);
                 converted += 1;
             }
@@ -84,6 +90,7 @@ pub fn convert_batch(
         failed,
         errors,
         output_paths,
+        pairs,
         warnings,
     }
 }

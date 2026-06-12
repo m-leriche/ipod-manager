@@ -49,20 +49,19 @@ pub fn convert_album(
         return Ok(result);
     }
 
-    for output in result.output_paths.clone() {
-        let output = Path::new(&output);
+    for pair in result.pairs.clone() {
+        let input = Path::new(&pair.input_path);
+        let output = Path::new(&pair.output_path);
         let Some(file_name) = output.file_name() else {
             continue;
         };
-        if let Some(input) = audio.iter().find(|p| p.file_stem() == output.file_stem()) {
-            if let Err(e) = fs::remove_file(input) {
-                result.errors.push(format!(
-                    "{}: failed to replace original: {}",
-                    input.display(),
-                    e
-                ));
-                continue;
-            }
+        if let Err(e) = fs::remove_file(input) {
+            result.errors.push(format!(
+                "{}: failed to replace original: {}",
+                input.display(),
+                e
+            ));
+            continue;
         }
         if let Err(e) = move_file(output, &folder.join(file_name)) {
             result

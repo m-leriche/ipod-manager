@@ -21,6 +21,10 @@ fn cache_key(artist: &str, album: &str, track_count: usize) -> String {
     )
 }
 
+/// Cached fails expire so a wrong MB match (or later-corrected MB data) can't
+/// block an album forever. Passes are stable and never expire.
+const FAIL_TTL_SECS: i64 = 7 * 24 * 3600;
+
 pub fn cached_tracklist(
     conn: &Connection,
     artist: &str,
@@ -28,20 +32,27 @@ pub fn cached_tracklist(
     track_count: usize,
 ) -> Option<CheckResult> {
     conn.execute(ENSURE_TABLE, []).ok()?;
-    let (status, detail): (String, Option<String>) = conn
+    let (status, detail, checked_at): (String, Option<String>, i64) = conn
         .query_row(
-            "SELECT status, detail FROM inbox_tracklist_cache WHERE key = ?1",
+            "SELECT status, detail, checked_at FROM inbox_tracklist_cache WHERE key = ?1",
             params![cache_key(artist, album, track_count)],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .ok()?;
 
     let status = match status.as_str() {
         "pass" => CheckStatus::Pass,
-        "fail" => CheckStatus::Fail,
+        "fail" if now_secs() - checked_at <= FAIL_TTL_SECS => CheckStatus::Fail,
         _ => return None,
     };
     Some(CheckResult { status, detail })
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 pub fn cache_tracklist(

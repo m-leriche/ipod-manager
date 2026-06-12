@@ -23,11 +23,11 @@ pub async fn set_inbox_location(
     if !std::path::Path::new(&path).is_dir() {
         return Err(AppError::InvalidInput(format!("Not a folder: {}", path)));
     }
-    {
-        let conn = db.lock_conn()?;
-        library::set_setting(&conn, inbox::INBOX_LOCATION_KEY, &path)?;
-    }
-    watcher.watch(Some(PathBuf::from(path)), app)?;
+    // Watch first — if it fails, the setting keeps its old value and the UI
+    // stays consistent with the DB.
+    watcher.watch(Some(PathBuf::from(&path)), app)?;
+    let conn = db.lock_conn()?;
+    library::set_setting(&conn, inbox::INBOX_LOCATION_KEY, &path)?;
     Ok(())
 }
 

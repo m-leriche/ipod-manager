@@ -48,16 +48,18 @@ pub(super) fn check_cover(folder: &Path, audio_paths: &[std::path::PathBuf]) -> 
 }
 
 fn has_embedded_art(audio_paths: &[std::path::PathBuf]) -> bool {
-    for path in audio_paths {
-        let Ok(tagged) = Probe::open(path).and_then(|p| p.read()) else {
-            continue;
-        };
-        let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
-            continue;
-        };
-        return !tag.pictures().is_empty();
-    }
-    false
+    audio_paths.iter().any(|path| {
+        Probe::open(path)
+            .and_then(|p| p.read())
+            .ok()
+            .and_then(|tagged| {
+                tagged
+                    .primary_tag()
+                    .or_else(|| tagged.first_tag())
+                    .map(|tag| !tag.pictures().is_empty())
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// Local track-numbering check. Pass is impossible here — a clean sequence
@@ -158,6 +160,8 @@ pub(super) fn check_duplicate(
     }
 }
 
+// All lossless ranks equal — a 24/96 inbox copy of a 16/44.1 library album
+// counts as "equal quality" and blocks (override remains available).
 pub(super) fn quality_rank(format: &str, bitrate_kbps: Option<u32>) -> u32 {
     if LOSSLESS_FORMATS.contains(&format.to_uppercase().as_str()) {
         1_000_000

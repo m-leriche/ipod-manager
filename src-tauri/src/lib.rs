@@ -11,6 +11,7 @@ mod disk;
 pub mod error;
 mod ffprobe_meta;
 mod files;
+mod inbox;
 mod ipod_info;
 mod lastfm;
 mod lastfm_queue;
@@ -91,6 +92,20 @@ pub fn run() {
             let db_arc = app.state::<LibraryDb>().conn_arc();
             let _ = watcher::restart_from_db(&folder_watcher, app.handle(), &db_arc);
             app.manage(folder_watcher);
+
+            // Start inbox watcher if an inbox folder is configured
+            let inbox_watcher = inbox::InboxWatcher::new();
+            {
+                let db = app.state::<LibraryDb>();
+                let inbox_path = db
+                    .lock_conn()
+                    .ok()
+                    .and_then(|conn| library::get_setting(&conn, inbox::INBOX_LOCATION_KEY));
+                if let Some(path) = inbox_path {
+                    let _ = inbox_watcher.watch(Some(path.into()), app.handle().clone());
+                }
+            }
+            app.manage(inbox_watcher);
 
             // Start volume monitor for external drive mount/unmount detection
             let vol_monitor = volume_monitor::VolumeMonitor::new();
@@ -396,6 +411,12 @@ pub fn run() {
             commands::save_discover_snapshot,
             commands::get_discover_enabled,
             commands::set_discover_enabled,
+            commands::get_inbox_location,
+            commands::set_inbox_location,
+            commands::scan_inbox,
+            commands::verify_inbox_tracklist,
+            commands::file_inbox_album,
+            commands::undo_inbox_filing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

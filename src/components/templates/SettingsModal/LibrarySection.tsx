@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { pickFolder } from "../../../utils/pickPath";
 import { getSetting, setSetting } from "../../../utils/settings";
 import { SORT_SETTINGS_CHANGED_EVENT } from "../LibraryPlayer/useLibraryData";
 import { SettingGroup, SettingToggle } from "./SettingGroup";
@@ -39,11 +40,26 @@ export const LibrarySection = () => {
   const [autoFetchArt, setAutoFetchArt] = useState(() => getSetting("autoFetchAlbumArt"));
   const [autoFetchLyrics, setAutoFetchLyrics] = useState(() => getSetting("autoFetchLyrics"));
   const [id3Version, setId3Version] = useState<string | null>(null);
+  const [inboxLocation, setInboxLocation] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<string>("get_id3_version")
       .then(setId3Version)
       .catch(() => setId3Version("v2.3"));
+    invoke<string | null>("get_inbox_location")
+      .then(setInboxLocation)
+      .catch(() => setInboxLocation(null));
+  }, []);
+
+  const handleSetInboxLocation = useCallback(async () => {
+    const selected = await pickFolder("Choose inbox folder");
+    if (!selected) return;
+    try {
+      await invoke("set_inbox_location", { path: selected });
+      setInboxLocation(selected);
+    } catch (e) {
+      console.warn("Failed to set inbox location:", e);
+    }
   }, []);
 
   const applySort = useCallback((key: "sortBy" | "sortDirection" | "albumSortMode", value: string) => {
@@ -144,6 +160,24 @@ export const LibrarySection = () => {
               ))}
             </select>
           </label>
+        </div>
+      </SettingGroup>
+
+      <SettingGroup
+        title="Inbox"
+        description="A watched folder where new downloads land. Albums are checked before being filed into the library from the Inbox tab."
+      >
+        <div className="flex items-center gap-3 px-4 py-3 border border-border rounded-xl">
+          <span className="text-xs text-text-secondary truncate flex-1 min-w-0" data-testid="inbox-location">
+            {inboxLocation ?? "Not configured"}
+          </span>
+          <button
+            onClick={handleSetInboxLocation}
+            className="text-[11px] text-accent hover:text-accent-hover transition-colors shrink-0"
+            data-testid="inbox-location-change"
+          >
+            {inboxLocation ? "Change" : "Choose"}
+          </button>
         </div>
       </SettingGroup>
 

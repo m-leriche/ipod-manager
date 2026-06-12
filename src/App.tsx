@@ -13,6 +13,7 @@ import { EqualizerProvider } from "./contexts/EqualizerContext";
 import { PlaylistProvider } from "./contexts/PlaylistContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ToastProvider, useToast } from "./contexts/ToastContext";
+import { UndoProvider } from "./contexts/UndoContext";
 import { LastfmProvider } from "./contexts/LastfmContext";
 import { ArtCacheProvider } from "./contexts/ArtCacheContext";
 import { BackgroundArtRepairProvider } from "./contexts/BackgroundArtRepairContext";
@@ -37,6 +38,9 @@ import { WelcomeScreen } from "./components/templates/WelcomeScreen/WelcomeScree
 
 const DiscoverView = lazy(() =>
   import("./components/templates/DiscoverView/DiscoverView").then((m) => ({ default: m.DiscoverView })),
+);
+const InboxView = lazy(() =>
+  import("./components/templates/InboxView/InboxView").then((m) => ({ default: m.InboxView })),
 );
 
 // Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
@@ -78,31 +82,33 @@ const KeyboardShortcutsDialog = lazy(() =>
 );
 type TopTab = "library" | "discover" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
-type DiscoverTab = "discover" | "releases";
+type DiscoverTab = "discover" | "releases" | "inbox";
 
 const App = () => (
   <ThemeProvider>
     <ToastProvider>
-      <LastfmProvider>
-        <ProgressProvider>
-          <ArtCacheProvider>
-            <BackgroundArtRepairProvider>
-              <BackgroundLyricsProvider>
-                <EqualizerProvider>
-                  <PlaybackProvider>
-                    <PlaylistProvider>
-                      <NewReleasesProvider>
-                        <AppContent />
-                        <ToastContainer />
-                      </NewReleasesProvider>
-                    </PlaylistProvider>
-                  </PlaybackProvider>
-                </EqualizerProvider>
-              </BackgroundLyricsProvider>
-            </BackgroundArtRepairProvider>
-          </ArtCacheProvider>
-        </ProgressProvider>
-      </LastfmProvider>
+      <UndoProvider>
+        <LastfmProvider>
+          <ProgressProvider>
+            <ArtCacheProvider>
+              <BackgroundArtRepairProvider>
+                <BackgroundLyricsProvider>
+                  <EqualizerProvider>
+                    <PlaybackProvider>
+                      <PlaylistProvider>
+                        <NewReleasesProvider>
+                          <AppContent />
+                          <ToastContainer />
+                        </NewReleasesProvider>
+                      </PlaylistProvider>
+                    </PlaybackProvider>
+                  </EqualizerProvider>
+                </BackgroundLyricsProvider>
+              </BackgroundArtRepairProvider>
+            </ArtCacheProvider>
+          </ProgressProvider>
+        </LastfmProvider>
+      </UndoProvider>
     </ToastProvider>
   </ThemeProvider>
 );
@@ -324,6 +330,9 @@ const AppContent = () => {
                     >
                       Releases
                     </DiscoverTabButton>
+                    <DiscoverTabButton active={discoverTab === "inbox"} onClick={() => setDiscoverTab("inbox")}>
+                      Inbox
+                    </DiscoverTabButton>
                   </div>
                 </div>
                 <div className="flex-1 min-h-0">
@@ -338,6 +347,13 @@ const AppContent = () => {
                     <ErrorBoundary name="New Releases">
                       <NewReleasesView />
                     </ErrorBoundary>
+                  )}
+                  {discoverTab === "inbox" && (
+                    <Suspense fallback={null}>
+                      <ErrorBoundary name="Inbox">
+                        <InboxView />
+                      </ErrorBoundary>
+                    </Suspense>
                   )}
                 </div>
               </div>

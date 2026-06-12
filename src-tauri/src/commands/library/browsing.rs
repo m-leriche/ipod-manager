@@ -8,7 +8,7 @@ pub async fn get_library_tracks(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryTrack>, AppError> {
-    db.with_db(move |conn| library::get_tracks(conn, &filter))
+    db.with_read_db(move |conn| library::get_tracks(conn, &filter))
         .await
 }
 
@@ -17,7 +17,7 @@ pub async fn get_library_browser_data(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<library::BrowserData, AppError> {
-    db.with_db(move |conn| library::get_browser_data(conn, &filter))
+    db.with_read_db(move |conn| library::get_browser_data(conn, &filter))
         .await
 }
 
@@ -26,7 +26,7 @@ pub async fn get_library_browser_data_paginated(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<library::PaginatedBrowserData, AppError> {
-    db.with_db(move |conn| library::get_browser_data_paginated(conn, &filter))
+    db.with_read_db(move |conn| library::get_browser_data_paginated(conn, &filter))
         .await
 }
 
@@ -35,7 +35,7 @@ pub async fn get_library_tracks_page(
     filter: library::LibraryFilter,
     db: State<'_, LibraryDb>,
 ) -> Result<library::PaginatedTracks, AppError> {
-    db.with_db(move |conn| library::get_tracks_paginated(conn, &filter))
+    db.with_read_db(move |conn| library::get_tracks_paginated(conn, &filter))
         .await
 }
 
@@ -43,7 +43,7 @@ pub async fn get_library_tracks_page(
 pub async fn get_library_artists(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::ArtistSummary>, AppError> {
-    db.with_db(library::get_artists).await
+    db.with_read_db(library::get_artists).await
 }
 
 #[tauri::command]
@@ -51,7 +51,7 @@ pub async fn get_library_albums(
     artist: Option<String>,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::AlbumSummary>, AppError> {
-    db.with_db(move |conn| library::get_albums(conn, artist.as_deref()))
+    db.with_read_db(move |conn| library::get_albums(conn, artist.as_deref()))
         .await
 }
 
@@ -59,7 +59,7 @@ pub async fn get_library_albums(
 pub async fn get_library_genres(
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::GenreSummary>, AppError> {
-    db.with_db(library::get_genres).await
+    db.with_read_db(library::get_genres).await
 }
 
 #[tauri::command]
@@ -67,7 +67,7 @@ pub async fn search_library(
     query: String,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryTrack>, AppError> {
-    db.with_db(move |conn| library::search_tracks(conn, &query))
+    db.with_read_db(move |conn| library::search_tracks(conn, &query))
         .await
 }
 

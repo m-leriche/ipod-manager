@@ -33,7 +33,7 @@ import type {
   MetadataTemplate,
 } from "../../../types/metadata";
 import type { Phase, View, EditableFields } from "./types";
-import { useProgress } from "../../../contexts/ProgressContext";
+import { useProgress, useProgressState } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useToast } from "../../../contexts/ToastContext";
 
@@ -44,13 +44,8 @@ export const MetadataEditor = ({
   initialPaths?: string[] | null;
   onInitialPathsConsumed?: () => void;
 } = {}) => {
-  const {
-    state: progressState,
-    start: startProgress,
-    update: updateProgress,
-    finish: finishProgress,
-    fail: failProgress,
-  } = useProgress();
+  const progressState = useProgressState();
+  const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { bumpArtCache } = useArtCache();
   const toast = useToast();
 

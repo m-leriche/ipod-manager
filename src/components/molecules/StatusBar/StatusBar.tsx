@@ -1,4 +1,4 @@
-import { useProgress } from "../../../contexts/ProgressContext";
+import { useProgress, useProgressState } from "../../../contexts/ProgressContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { useLastfmState } from "../../../contexts/LastfmContext";
@@ -10,7 +10,8 @@ interface StatusBarProps {
 }
 
 export const StatusBar = ({ librarySummary, ipodConnected }: StatusBarProps) => {
-  const { state: progress, cancel: cancelProgress } = useProgress();
+  const progress = useProgressState();
+  const { cancel: cancelProgress } = useProgress();
   const { state: artRepair, cancel: cancelArtRepair } = useBackgroundArtRepair();
   const { state: lyricsFetch, cancel: cancelLyricsFetch } = useBackgroundLyrics();
   const lastfm = useLastfmState();

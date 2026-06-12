@@ -19,12 +19,19 @@ afterEach(() => {
 // Mock ProgressContext — provides a no-op implementation for all components
 vi.mock("../contexts/ProgressContext", () => ({
   useProgress: () => ({
-    state: { active: false, title: "", completed: 0, total: 0, currentItem: "", canCancel: false },
     start: vi.fn(),
     update: vi.fn(),
     finish: vi.fn(),
     fail: vi.fn(),
     cancel: vi.fn(),
+  }),
+  useProgressState: () => ({
+    active: false,
+    title: "",
+    completed: 0,
+    total: 0,
+    currentItem: "",
+    canCancel: false,
   }),
   ProgressProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

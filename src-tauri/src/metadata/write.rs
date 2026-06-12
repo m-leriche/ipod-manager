@@ -26,6 +26,11 @@ pub fn save_metadata(
     let mut errors = Vec::new();
     let mut undo_operations = Vec::new();
 
+    // Tag writes can finish in a millisecond each; throttle progress events
+    // so large batches don't flood the webview with hundreds of updates/sec.
+    const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    let mut last_emit: Option<std::time::Instant> = None;
+
     for (i, update) in updates.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
             return MetadataSaveResult {
@@ -44,14 +49,21 @@ pub fn save_metadata(
             .unwrap_or(&update.file_path)
             .to_string();
 
-        let _ = app.emit(
-            "metadata-save-progress",
-            MetadataSaveProgress {
-                total,
-                completed: i,
-                current_file: file_name.clone(),
-            },
-        );
+        let due = match last_emit {
+            Some(t) => t.elapsed() >= PROGRESS_INTERVAL,
+            None => true,
+        };
+        if due || i + 1 == total {
+            last_emit = Some(std::time::Instant::now());
+            let _ = app.emit(
+                "metadata-save-progress",
+                MetadataSaveProgress {
+                    total,
+                    completed: i,
+                    current_file: file_name.clone(),
+                },
+            );
+        }
 
         let snapshot = super::read::read_track(Path::new(&update.file_path));
         match apply_update(update, id3_version) {

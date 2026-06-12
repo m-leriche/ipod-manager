@@ -204,12 +204,11 @@ pub fn scan_library_stats(
                     file_album = a;
                 }
             }
-            if let Some(genre) = tag.genre() {
-                let g = genre.to_string();
-                if !g.is_empty() {
-                    *genres.entry(g.clone()).or_insert(0) += 1;
-                    file_genre = g;
+            if let Some(g) = crate::metadata::read_genre(tag) {
+                for part in crate::library::split_genres(&g) {
+                    *genres.entry(part.to_string()).or_insert(0) += 1;
                 }
+                file_genre = g;
             }
             if let Some(year) = tag.year() {
                 if year > 0 {

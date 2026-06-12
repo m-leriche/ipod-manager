@@ -192,7 +192,14 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
       return tracks.filter((t) => {
         switch (action.column) {
           case "genre":
-            return t.genre != null && valSet.has(t.genre);
+            // Genre values can be "; "-joined lists — match any part
+            return (
+              t.genre != null &&
+              t.genre
+                .split(";")
+                .map((g) => g.trim())
+                .some((g) => valSet.has(g))
+            );
           case "artist":
             return t.artist != null && valSet.has(t.artist);
           case "album":

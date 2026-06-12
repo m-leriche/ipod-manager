@@ -1,4 +1,5 @@
 mod browser;
+pub(crate) mod genre;
 mod tracks;
 
 use rusqlite::functions::FunctionFlags;
@@ -86,7 +87,7 @@ pub(super) fn build_track_conditions(
     }
     if let Some(ref genres) = filter.genre {
         if !genres.is_empty() {
-            push_in_condition("genre", genres, &mut conditions, &mut params);
+            genre::push_genre_match_conditions(genres, &mut conditions, &mut params);
         }
     }
     if let Some(ref search) = filter.search {

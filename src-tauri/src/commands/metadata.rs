@@ -85,6 +85,18 @@ pub async fn save_metadata(
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
+    // Only fields that feed compute_library_dest can move files. Saves that
+    // touch nothing else (genre, year, sort fields…) skip the reorganize
+    // pass and the whole-library ghost sweep entirely.
+    let affects_paths = updates.iter().any(|u| {
+        u.title.is_some()
+            || u.artist.is_some()
+            || u.album.is_some()
+            || u.album_artist.is_some()
+            || u.track.is_some()
+            || u.disc_number.is_some()
+    });
+
     let id3_version = {
         let conn = conn_arc
             .lock()
@@ -105,93 +117,25 @@ pub async fn save_metadata(
         .await
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
-        // All DB work happens in a block so the lock is released before we
-        // emit the frontend event.
-        let is_library = {
-            let conn = conn_arc
-                .lock()
-                .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
+        // Refresh the library DB on a blocking thread, holding the lock only
+        // for short stretches so browsing and filtering stay responsive while
+        // large batches (e.g. whole-album genre applies) are processed.
+        let conn_for_db = conn_arc.clone();
+        let paths_for_db = file_paths.clone();
+        let (is_library, path_renames) = tauri::async_runtime::spawn_blocking(move || {
+            update_library_after_save(&conn_for_db, &paths_for_db, affects_paths)
+        })
+        .await
+        .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
 
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs() as i64;
-
-            for file_path in &file_paths {
-                let path = Path::new(file_path);
-                if path.exists() {
-                    let mtime = std::fs::metadata(path)
-                        .and_then(|m| m.modified())
-                        .ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(now);
-                    let track_data = library::read_track_for_library(path);
-                    library::upsert_track(&conn, &track_data, mtime, now).ok();
+        // Update undo operations with post-reorganization file paths
+        for (old_path, new_path) in &path_renames {
+            for undo_op in &mut result.undo_operations {
+                if undo_op.file_path == *old_path {
+                    undo_op.file_path = new_path.clone();
                 }
             }
-
-            if let Some(library_root) = library::get_library_location(&conn) {
-                // Track path changes so undo operations use the correct
-                // (post-reorganization) file paths.
-                let mut path_renames: Vec<(String, String)> = Vec::new();
-
-                for file_path in &file_paths {
-                    if !file_path.starts_with(&library_root) {
-                        continue;
-                    }
-                    match library::reorganize_library_file(&conn, &library_root, file_path) {
-                        Ok(Some(new_path)) => {
-                            path_renames.push((file_path.clone(), new_path));
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            log::warn!("Failed to reorganize {}: {}", file_path, e);
-                        }
-                    }
-                }
-
-                // Update undo operations with new file paths
-                for (old_path, new_path) in &path_renames {
-                    for undo_op in &mut result.undo_operations {
-                        if undo_op.file_path == *old_path {
-                            undo_op.file_path = new_path.clone();
-                        }
-                    }
-                }
-
-                let all_paths: Vec<String> = conn
-                    .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
-                    .and_then(|mut stmt| {
-                        stmt.query_map(params![format!("{}%", library_root)], |row| {
-                            row.get::<_, String>(0)
-                        })
-                        .map(|rows| rows.filter_map(|r| r.ok()).collect())
-                    })
-                    .unwrap_or_default();
-
-                let mut cleaned = 0usize;
-                for path_str in &all_paths {
-                    if library::is_ghost_path(path_str, &conn)
-                        && conn
-                            .execute(
-                                "DELETE FROM tracks WHERE file_path = ?1",
-                                params![path_str.as_str()],
-                            )
-                            .is_ok()
-                    {
-                        cleaned += 1;
-                    }
-                }
-                if cleaned > 0 {
-                    log::info!("Cleaned {} orphaned library tracks", cleaned);
-                }
-
-                true
-            } else {
-                false
-            }
-        };
+        }
 
         if is_library {
             let _ = app_clone.emit("library-files-reorganized", file_paths.len());
@@ -209,6 +153,118 @@ pub async fn save_metadata(
     }
 
     final_result
+}
+
+type PathRenames = Vec<(String, String)>;
+
+/// Upsert saved files into the library DB, reorganize them, and clean up
+/// orphaned rows. File I/O (tag re-reads, ghost checks) happens outside the
+/// DB lock, and each step takes its own short lock, so concurrent library
+/// queries are never blocked for the whole batch.
+/// Returns whether the files live in the library and any (old, new) renames.
+fn update_library_after_save(
+    conn_arc: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
+    file_paths: &[String],
+    affects_paths: bool,
+) -> Result<(bool, PathRenames), AppError> {
+    let lock_conn = || {
+        conn_arc
+            .lock()
+            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    // Re-read tags from the saved files without holding the DB lock —
+    // this is the expensive part (a full tag parse per file).
+    let track_updates: Vec<_> = file_paths
+        .iter()
+        .filter_map(|file_path| {
+            let path = Path::new(file_path);
+            if !path.exists() {
+                return None;
+            }
+            let mtime = std::fs::metadata(path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(now);
+            Some((library::read_track_for_library(path), mtime))
+        })
+        .collect();
+
+    let library_root = {
+        let conn = lock_conn()?;
+        for (track_data, mtime) in &track_updates {
+            library::upsert_track(&conn, track_data, *mtime, now).ok();
+        }
+        library::get_library_location(&conn)
+    };
+
+    let Some(library_root) = library_root else {
+        return Ok((false, Vec::new()));
+    };
+
+    // No path-affecting fields changed: files can't need renaming and no
+    // rows can be orphaned, so the rename pass and ghost sweep are no-ops.
+    if !affects_paths {
+        return Ok((true, Vec::new()));
+    }
+
+    // Track path changes so undo operations use the correct
+    // (post-reorganization) file paths.
+    let mut path_renames: PathRenames = Vec::new();
+    for file_path in file_paths {
+        if !file_path.starts_with(&library_root) {
+            continue;
+        }
+        let conn = lock_conn()?;
+        match library::reorganize_library_file(&conn, &library_root, file_path) {
+            Ok(Some(new_path)) => {
+                path_renames.push((file_path.clone(), new_path));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                log::warn!("Failed to reorganize {}: {}", file_path, e);
+            }
+        }
+    }
+
+    let all_paths: Vec<String> = {
+        let conn = lock_conn()?;
+        conn.prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
+            .and_then(|mut stmt| {
+                stmt.query_map(params![format!("{}%", library_root)], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            })
+            .unwrap_or_default()
+    };
+
+    let mut cleaned = 0usize;
+    for path_str in &all_paths {
+        let conn = lock_conn()?;
+        if library::is_ghost_path(path_str, &conn)
+            && conn
+                .execute(
+                    "DELETE FROM tracks WHERE file_path = ?1",
+                    params![path_str.as_str()],
+                )
+                .is_ok()
+        {
+            cleaned += 1;
+        }
+    }
+    if cleaned > 0 {
+        log::info!("Cleaned {} orphaned library tracks", cleaned);
+    }
+
+    Ok((true, path_renames))
 }
 
 #[tauri::command]

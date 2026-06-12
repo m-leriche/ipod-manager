@@ -38,7 +38,7 @@ pub async fn get_playlist_tracks(
     playlist_id: i64,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::PlaylistTrack>, AppError> {
-    db.with_db(move |conn| library::playlists::get_playlist_tracks(conn, playlist_id))
+    db.with_read_db(move |conn| library::playlists::get_playlist_tracks(conn, playlist_id))
         .await
 }
 
@@ -188,7 +188,7 @@ pub async fn get_smart_playlist_tracks(
     id: i64,
     db: State<'_, LibraryDb>,
 ) -> Result<Vec<library::LibraryTrack>, AppError> {
-    db.with_db(move |conn| library::smart_playlists::get_smart_playlist_tracks(conn, id))
+    db.with_read_db(move |conn| library::smart_playlists::get_smart_playlist_tracks(conn, id))
         .await
 }
 

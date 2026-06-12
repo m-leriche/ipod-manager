@@ -12,7 +12,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use axum::Router;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use tower_http::compression::CompressionLayer;
 
 /// Cached mapping of stable IDs → names, built lazily on first Subsonic request.
@@ -72,19 +72,8 @@ impl SubsonicCacheHandle {
 /// Open a read-only SQLite connection for a Subsonic request.
 ///
 /// Each call creates an independent connection so requests don't block each other.
-/// The `sort_key` SQL function is registered on each connection for ORDER BY support.
 pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
-    let conn = Connection::open_with_flags(
-        db_path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(|e| format!("DB open: {e}"))?;
-    // WAL mode is already set by init_db on the main connection.
-    // query_only prevents accidental writes from read-only handlers.
-    conn.execute_batch("PRAGMA query_only = ON;")
-        .map_err(|e| format!("pragma: {e}"))?;
-    crate::library::register_sort_key(&conn)?;
-    Ok(conn)
+    crate::library::open_read_conn(db_path)
 }
 
 /// Handle returned from `start_server` so we can shut it down later.

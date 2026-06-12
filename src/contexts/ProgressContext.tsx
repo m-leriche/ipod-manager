@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useRef } from "react";
 import { getCurrentWindow, ProgressBarStatus } from "@tauri-apps/api/window";
 import { useToast } from "./ToastContext";
 
@@ -11,8 +11,7 @@ interface ProgressState {
   canCancel: boolean;
 }
 
-interface ProgressContextValue {
-  state: ProgressState;
+interface ProgressActions {
   start: (title: string, cancelFn?: () => void) => void;
   update: (completed: number, total: number, currentItem?: string) => void;
   finish: (message: string) => void;
@@ -29,7 +28,11 @@ const initial: ProgressState = {
   canCancel: false,
 };
 
-const ProgressContext = createContext<ProgressContextValue | null>(null);
+// State and actions live in separate contexts so the many components that
+// only trigger progress (stable actions) don't re-render on every progress
+// tick — only display components subscribed via useProgressState do.
+const ProgressStateContext = createContext<ProgressState | null>(null);
+const ProgressActionsContext = createContext<ProgressActions | null>(null);
 
 export const ProgressProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<ProgressState>(initial);
@@ -123,15 +126,25 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
     cancelRef.current = null;
   }, []);
 
+  const actions = useMemo(() => ({ start, update, finish, fail, cancel }), [start, update, finish, fail, cancel]);
+
   return (
-    <ProgressContext.Provider value={{ state, start, update, finish, fail, cancel }}>
-      {children}
-    </ProgressContext.Provider>
+    <ProgressActionsContext.Provider value={actions}>
+      <ProgressStateContext.Provider value={state}>{children}</ProgressStateContext.Provider>
+    </ProgressActionsContext.Provider>
   );
 };
 
-export const useProgress = (): ProgressContextValue => {
-  const ctx = useContext(ProgressContext);
+/** Progress actions. Stable — consumers don't re-render on progress ticks. */
+export const useProgress = (): ProgressActions => {
+  const ctx = useContext(ProgressActionsContext);
   if (!ctx) throw new Error("useProgress must be used within ProgressProvider");
+  return ctx;
+};
+
+/** Live progress state. Re-renders on every tick — for display components only. */
+export const useProgressState = (): ProgressState => {
+  const ctx = useContext(ProgressStateContext);
+  if (!ctx) throw new Error("useProgressState must be used within ProgressProvider");
   return ctx;
 };

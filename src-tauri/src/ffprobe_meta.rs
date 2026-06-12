@@ -83,7 +83,8 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
     let artist = get_tag(&["artist"]);
     let album = get_tag(&["album"]);
     let album_artist = get_tag(&["album_artist"]);
-    let genre = get_tag(&["genre"]);
+    // ffprobe joins multi-value genre frames with ';' or NUL depending on format
+    let genre = get_tag(&["genre"]).map(|s| s.replace('\0', "; "));
     let sort_artist = get_tag(&["sort_artist"]);
     let sort_album_artist = get_tag(&["sort_album_artist"]);
     let compilation = get_tag(&["compilation"])

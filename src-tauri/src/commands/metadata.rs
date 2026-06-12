@@ -85,6 +85,18 @@ pub async fn save_metadata(
 
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
+    // Only fields that feed compute_library_dest can move files. Saves that
+    // touch nothing else (genre, year, sort fields…) skip the reorganize
+    // pass and the whole-library ghost sweep entirely.
+    let affects_paths = updates.iter().any(|u| {
+        u.title.is_some()
+            || u.artist.is_some()
+            || u.album.is_some()
+            || u.album_artist.is_some()
+            || u.track.is_some()
+            || u.disc_number.is_some()
+    });
+
     let id3_version = {
         let conn = conn_arc
             .lock()
@@ -111,7 +123,7 @@ pub async fn save_metadata(
         let conn_for_db = conn_arc.clone();
         let paths_for_db = file_paths.clone();
         let (is_library, path_renames) = tauri::async_runtime::spawn_blocking(move || {
-            update_library_after_save(&conn_for_db, &paths_for_db)
+            update_library_after_save(&conn_for_db, &paths_for_db, affects_paths)
         })
         .await
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
@@ -153,6 +165,7 @@ type PathRenames = Vec<(String, String)>;
 fn update_library_after_save(
     conn_arc: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
     file_paths: &[String],
+    affects_paths: bool,
 ) -> Result<(bool, PathRenames), AppError> {
     let lock_conn = || {
         conn_arc
@@ -195,6 +208,12 @@ fn update_library_after_save(
     let Some(library_root) = library_root else {
         return Ok((false, Vec::new()));
     };
+
+    // No path-affecting fields changed: files can't need renaming and no
+    // rows can be orphaned, so the rename pass and ghost sweep are no-ops.
+    if !affects_paths {
+        return Ok((true, Vec::new()));
+    }
 
     // Track path changes so undo operations use the correct
     // (post-reorganization) file paths.

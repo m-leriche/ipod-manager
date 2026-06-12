@@ -49,12 +49,14 @@ pub use types::*;
 
 pub struct LibraryDb {
     pub conn: std::sync::Arc<std::sync::Mutex<Connection>>,
+    db_path: std::path::PathBuf,
 }
 
 impl LibraryDb {
-    pub fn new(conn: Connection) -> Self {
+    pub fn new(conn: Connection, db_path: std::path::PathBuf) -> Self {
         Self {
             conn: std::sync::Arc::new(std::sync::Mutex::new(conn)),
+            db_path,
         }
     }
 
@@ -90,6 +92,41 @@ impl LibraryDb {
         .await
         .map_err(|e| crate::error::AppError::Generic(format!("Task failed: {}", e)))?
     }
+
+    /// Run a read-only closure on its own connection, bypassing the writer's
+    /// mutex entirely. WAL mode lets readers run concurrently with writes,
+    /// so browsing stays responsive during long saves and scans.
+    pub async fn with_read_db<F, T, E>(&self, f: F) -> Result<T, crate::error::AppError>
+    where
+        F: FnOnce(&Connection) -> Result<T, E> + Send + 'static,
+        T: Send + 'static,
+        E: Into<crate::error::AppError> + Send + 'static,
+    {
+        let db_path = self.db_path.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let conn = open_read_conn(&db_path).map_err(crate::error::AppError::Generic)?;
+            f(&conn).map_err(Into::into)
+        })
+        .await
+        .map_err(|e| crate::error::AppError::Generic(format!("Task failed: {}", e)))?
+    }
+}
+
+/// Open an independent read-only SQLite connection.
+///
+/// WAL mode (set by `init_db`) allows unlimited concurrent readers that never
+/// block on the writer. `query_only` prevents accidental writes from
+/// read-only callers. The `sort_key` SQL function is registered for ORDER BY.
+pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|e| format!("DB open: {e}"))?;
+    conn.execute_batch("PRAGMA query_only = ON;")
+        .map_err(|e| format!("pragma: {e}"))?;
+    register_sort_key(&conn)?;
+    Ok(conn)
 }
 
 // ── Database init ──────────────────────────────────────────────

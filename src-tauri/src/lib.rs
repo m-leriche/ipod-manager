@@ -87,7 +87,7 @@ pub fn run() {
             let conn = library::init_db(&db_path)
                 .map_err(|e| format!("Failed to initialize library database: {}", e))?;
 
-            app.manage(LibraryDb::new(conn));
+            app.manage(LibraryDb::new(conn, db_path.clone()));
 
             // Start filesystem watcher for library folders
             let folder_watcher = watcher::FolderWatcher::new();

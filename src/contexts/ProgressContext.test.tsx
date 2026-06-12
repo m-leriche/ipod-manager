@@ -16,7 +16,9 @@ vi.mock("./ToastContext", () => ({
   useToast: () => mockToast,
 }));
 
-import { ProgressProvider, useProgress } from "./ProgressContext";
+import { ProgressProvider, useProgress, useProgressState } from "./ProgressContext";
+
+const useBoth = () => ({ ...useProgress(), state: useProgressState() });
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <ProgressProvider>{children}</ProgressProvider>;
 
@@ -26,7 +28,7 @@ describe("ProgressContext", () => {
   });
 
   it("has correct initial state", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     expect(result.current.state.active).toBe(false);
     expect(result.current.state.title).toBe("");
@@ -37,7 +39,7 @@ describe("ProgressContext", () => {
   });
 
   it("start(title) sets active=true and title, resets progress", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Copying files");
@@ -51,7 +53,7 @@ describe("ProgressContext", () => {
   });
 
   it("start(title, cancelFn) makes canCancel=true", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
     const cancelFn = vi.fn();
 
     act(() => {
@@ -62,7 +64,7 @@ describe("ProgressContext", () => {
   });
 
   it("update(completed, total) updates progress values", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Processing");
@@ -77,7 +79,7 @@ describe("ProgressContext", () => {
   });
 
   it("update(completed, total, item) also updates currentItem", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Copying");
@@ -93,7 +95,7 @@ describe("ProgressContext", () => {
   });
 
   it("finish(message) resets state and shows success toast", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Working");
@@ -109,7 +111,7 @@ describe("ProgressContext", () => {
   });
 
   it("fail(message) resets state and shows error toast", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Working");
@@ -126,7 +128,7 @@ describe("ProgressContext", () => {
 
   it("cancel() calls the stored cancel function", () => {
     const cancelFn = vi.fn();
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Syncing", cancelFn);
@@ -140,7 +142,7 @@ describe("ProgressContext", () => {
   });
 
   it("cancel() is safe when no cancel function was provided", () => {
-    const { result } = renderHook(() => useProgress(), { wrapper });
+    const { result } = renderHook(() => useBoth(), { wrapper });
 
     act(() => {
       result.current.start("Working");

@@ -77,7 +77,7 @@ fn lookup_one(q: &AlbumGenreQuery, cache: &ArtistTagCache) -> AlbumGenreResult {
     if let Ok(groups) = musicbrainz::search_release_groups(&artist_norm, &album_norm) {
         if let Some(rg) = groups.first() {
             if let Ok(mut genres) = musicbrainz::fetch_release_group_genres(&rg.id) {
-                genres.sort_by(|a, b| b.count.cmp(&a.count));
+                genres.sort_by_key(|g| std::cmp::Reverse(g.count));
                 let names: Vec<String> = genres
                     .iter()
                     .take(MAX_GENRES)
@@ -94,13 +94,14 @@ fn lookup_one(q: &AlbumGenreQuery, cache: &ArtistTagCache) -> AlbumGenreResult {
 }
 
 /// Look up suggested genres for each album. Never writes anything —
-/// returns suggestions for the review step. Cancellation skips remaining
-/// albums, echoing them back without a suggestion.
+/// returns suggestions for the review step. On cancellation, albums that
+/// were never processed are dropped from the results so they aren't
+/// mistaken for genuine lookup misses.
 pub fn lookup_album_genres(
     queries: Vec<AlbumGenreQuery>,
     app: &tauri::AppHandle,
     cancel: &Arc<AtomicBool>,
-) -> GenreLookupOutcome {
+) -> Result<GenreLookupOutcome, String> {
     let total = queries.len();
     let completed = AtomicUsize::new(0);
     let cache: ArtistTagCache = Mutex::new(HashMap::new());
@@ -113,33 +114,15 @@ pub fn lookup_album_genres(
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build()
-        .or_else(|e| {
-            log::warn!(
-                "Failed to create thread pool, falling back to sequential: {}",
-                e
-            );
-            rayon::ThreadPoolBuilder::new().num_threads(1).build()
-        });
-
-    let pool = match pool {
-        Ok(p) => p,
-        Err(e) => {
-            log::warn!("Failed to create fallback thread pool: {}", e);
-            let results = queries.iter().map(|q| result_for(q, None)).collect();
-            return GenreLookupOutcome {
-                results,
-                cancelled: false,
-            };
-        }
-    };
+        .map_err(|e| format!("Failed to create thread pool: {}", e))?;
 
     let results: Vec<AlbumGenreResult> = pool.install(|| {
         use rayon::prelude::*;
         queries
             .par_iter()
-            .map(|q| {
+            .filter_map(|q| {
                 if cancel.load(Ordering::Relaxed) {
-                    return result_for(q, None);
+                    return None;
                 }
 
                 let result = lookup_one(q, &cache);
@@ -153,7 +136,7 @@ pub fn lookup_album_genres(
                         current: format!("{} — {}", q.artist, q.album),
                     },
                 );
-                result
+                Some(result)
             })
             .collect()
     });
@@ -170,5 +153,5 @@ pub fn lookup_album_genres(
         );
     }
 
-    GenreLookupOutcome { results, cancelled }
+    Ok(GenreLookupOutcome { results, cancelled })
 }

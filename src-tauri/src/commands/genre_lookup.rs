@@ -22,7 +22,7 @@ pub async fn lookup_album_genres(
     };
 
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(genre::lookup_album_genres(queries, &app, &flag))
+        genre::lookup_album_genres(queries, &app, &flag).map_err(Into::into)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

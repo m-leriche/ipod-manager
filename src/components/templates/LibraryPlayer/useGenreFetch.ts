@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useToast } from "../../../contexts/ToastContext";
 import type { LibraryTrack } from "../../../types/library";
-import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
+import type { MetadataUpdate, MetadataSaveProgress, MetadataSaveResult } from "../../../types/metadata";
 import type { AcceptedGenre, AlbumGenreQuery, GenreLookupOutcome, GenreLookupProgress } from "./types";
 
 const albumKey = (artist: string, album: string): string => `${artist}::${album}`;
@@ -74,6 +74,7 @@ export const useGenreFetch = (fetchBrowserData: () => Promise<void>) => {
       setGenreResults(null);
       if (accepted.length === 0) return;
 
+      let unlisten: (() => void) | undefined;
       try {
         // Fetch every track of each accepted album so the whole album is
         // updated, not just the tracks that were selected for the lookup.
@@ -88,21 +89,32 @@ export const useGenreFetch = (fetchBrowserData: () => Promise<void>) => {
         }
         if (updates.length === 0) return;
 
+        startProgress(`Applying genres to ${updates.length} track${updates.length === 1 ? "" : "s"}…`, () =>
+          invoke("cancel_sync"),
+        );
+        unlisten = await listen<MetadataSaveProgress>("metadata-save-progress", (e) => {
+          updateProgress(e.payload.completed, e.payload.total, e.payload.current_file);
+        });
+
         const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
         const albums = accepted.length;
-        if (result.failed > 0) {
-          toast.error(`Genres applied to ${result.succeeded} tracks, ${result.failed} failed`);
+        if (result.cancelled) {
+          failProgress("Genre apply cancelled");
+        } else if (result.failed > 0) {
+          failProgress(`Genres applied to ${result.succeeded} tracks, ${result.failed} failed`);
         } else {
-          toast.success(
+          finishProgress(
             `Genres applied to ${result.succeeded} track${result.succeeded === 1 ? "" : "s"} across ${albums} album${albums === 1 ? "" : "s"}`,
           );
         }
         await fetchBrowserData();
       } catch (e) {
-        toast.error(`Failed to apply genres: ${e}`);
+        failProgress(`Failed to apply genres: ${e}`);
+      } finally {
+        unlisten?.();
       }
     },
-    [fetchBrowserData, toast],
+    [fetchBrowserData, startProgress, updateProgress, finishProgress, failProgress],
   );
 
   return { genreResults, fetching, fetchForTracks, fetchForLibrary, applyResults, dismissResults };

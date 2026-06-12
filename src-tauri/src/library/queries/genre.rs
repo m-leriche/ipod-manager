@@ -25,11 +25,15 @@ pub(crate) const GENRE_MATCH_NOCASE: &str =
 
 /// Push an OR-joined whole-genre match for a multi-value genre filter.
 /// A track matches when any of its genres equals any selected value.
+/// An empty value list pushes no condition.
 pub(crate) fn push_genre_match_conditions(
     values: &[String],
     conditions: &mut Vec<String>,
     params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
 ) {
+    if values.is_empty() {
+        return;
+    }
     let ors: Vec<&str> = values.iter().map(|_| GENRE_MATCH).collect();
     conditions.push(format!("({})", ors.join(" OR ")));
     for v in values {
@@ -120,6 +124,15 @@ mod tests {
         assert_eq!(count_matching(&conn, &["Rock"]), 3);
         assert_eq!(count_matching(&conn, &["Pop Rock"]), 1);
         assert_eq!(count_matching(&conn, &["Jazz"]), 0);
+    }
+
+    #[test]
+    fn empty_values_push_no_condition() {
+        let mut conditions = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        push_genre_match_conditions(&[], &mut conditions, &mut params);
+        assert!(conditions.is_empty());
+        assert!(params.is_empty());
     }
 
     #[test]

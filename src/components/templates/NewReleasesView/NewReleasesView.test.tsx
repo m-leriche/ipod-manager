@@ -114,6 +114,43 @@ describe("NewReleasesView", () => {
     expect(screen.getByText("In Library")).toBeInTheDocument();
   });
 
+  it("allows dismissing releases marked in library", () => {
+    const dismissRelease = vi.fn();
+    mockUseNewReleases.mockReturnValue({
+      ...baseContext,
+      watchedArtists: [
+        {
+          id: 1,
+          name: "Radiohead",
+          mb_artist_id: "abc",
+          mb_artist_name: "Radiohead",
+          match_status: "matched",
+          created_at: 0,
+          last_checked_at: 0,
+        },
+      ],
+      releases: [
+        {
+          id: 2,
+          watched_artist_id: 1,
+          mb_release_group_id: "rg2",
+          title: "Amnesiac",
+          artist_name: "Radiohead",
+          release_type: "Album",
+          first_release_date: "2001-06-04",
+          discovered_at: 0,
+          dismissed: false,
+          in_library: true,
+        },
+      ],
+      dismissRelease,
+    });
+    render(<NewReleasesView />);
+
+    fireEvent.click(screen.getByLabelText("Dismiss"));
+    expect(dismissRelease).toHaveBeenCalledWith(2);
+  });
+
   it("calls startCheck when Check Now clicked", () => {
     const startCheck = vi.fn();
     mockUseNewReleases.mockReturnValue({

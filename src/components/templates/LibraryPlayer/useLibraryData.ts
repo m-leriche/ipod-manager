@@ -368,14 +368,6 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   // ── Column selection handlers ─────────────────────────────────
 
-  const handleSelectGenre = useCallback((genres: Set<string>) => {
-    setSelectedGenres(genres);
-  }, []);
-
-  const handleSelectArtist = useCallback((artists: Set<string>) => {
-    setSelectedArtists(artists);
-  }, []);
-
   const handleSelectAlbum = useCallback((albums: Set<string>) => {
     setSelectedAlbums(albums);
     if (albums.size > 0) {
@@ -386,6 +378,25 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       setSortDirection(getSetting("sortDirection") as "asc" | "desc");
     }
   }, []);
+
+  // Selecting in a column resets selections in columns to its right
+  // (filters cascade left to right, iTunes-style)
+  const handleSelectGenre = useCallback(
+    (genres: Set<string>) => {
+      setSelectedGenres(genres);
+      setSelectedArtists(new Set());
+      handleSelectAlbum(new Set());
+    },
+    [handleSelectAlbum],
+  );
+
+  const handleSelectArtist = useCallback(
+    (artists: Set<string>) => {
+      setSelectedArtists(artists);
+      handleSelectAlbum(new Set());
+    },
+    [handleSelectAlbum],
+  );
 
   const handlePlayColumn = useCallback(() => {
     playAfterFetchRef.current = true;

@@ -356,8 +356,11 @@ fn browser_data_filters_albums_by_artist() {
     assert!(!album_names.contains(&"The Wall"));
     assert!(!album_names.contains(&"Kind of Blue"));
 
-    assert_eq!(data.genres.len(), 1);
-    assert_eq!(data.genres[0].name, "Rock");
+    // Columns left of the artist selection are not narrowed by it
+    let genre_names: Vec<&str> = data.genres.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(data.genres.len(), 2);
+    assert!(genre_names.contains(&"Rock"));
+    assert!(genre_names.contains(&"Jazz"));
 
     assert_eq!(data.artists.len(), 3);
 }

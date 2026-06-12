@@ -132,3 +132,71 @@ fn undo_all_fields_changed() {
     assert_eq!(undo.year, Some(1999));
     assert_eq!(undo.genre, Some("Rock".to_string()));
 }
+
+fn make_test_m4a(name: &str) -> Option<std::path::PathBuf> {
+    let ffmpeg_ok = std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !ffmpeg_ok {
+        eprintln!("ffmpeg not available, skipping");
+        return None;
+    }
+    let dir = std::env::temp_dir().join("crate_write_tests");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(name);
+    let status = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=44100:cl=mono",
+            "-t",
+            "1",
+            "-c:a",
+            "aac",
+        ])
+        .arg(&path)
+        .status()
+        .ok()?;
+    status.success().then_some(path)
+}
+
+fn year_only_update(path: &std::path::Path, year: u32) -> MetadataUpdate {
+    MetadataUpdate {
+        file_path: path.to_string_lossy().to_string(),
+        title: None,
+        artist: None,
+        album: None,
+        album_artist: None,
+        sort_artist: None,
+        sort_album_artist: None,
+        track: None,
+        track_total: None,
+        disc_number: None,
+        disc_total: None,
+        year: Some(year),
+        genre: None,
+        compilation: None,
+    }
+}
+
+#[test]
+fn m4a_year_roundtrip() {
+    let Some(path) = make_test_m4a("year_roundtrip.m4a") else {
+        return;
+    };
+    apply_update(&year_only_update(&path, 1994), Id3WriteVersion::V23).unwrap();
+    assert_eq!(super::super::read::read_track(&path).year, Some(1994));
+}
+
+#[test]
+fn m4a_year_via_ffmpeg_fallback() {
+    let Some(path) = make_test_m4a("year_ffmpeg_fallback.m4a") else {
+        return;
+    };
+    apply_update_ffmpeg(&path, &year_only_update(&path, 2001)).unwrap();
+    assert_eq!(super::super::read::read_track(&path).year, Some(2001));
+}

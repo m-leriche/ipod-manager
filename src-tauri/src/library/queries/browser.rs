@@ -320,25 +320,26 @@ fn where_clause(conditions: &[String]) -> String {
 type BrowserAggregates = (Vec<GenreSummary>, Vec<ArtistSummary>, Vec<AlbumSummary>);
 
 /// Fetch aggregate data (genres, artists, albums) for the column browser.
-/// Each dimension excludes its own filter so the browser shows valid options.
+/// Filters cascade left to right (iTunes-style): genre narrows artists and
+/// albums, artist narrows albums only. Selections never narrow columns to
+/// their left, so those lists stay stable while browsing.
 fn get_browser_aggregates(
     conn: &Connection,
     filter: &LibraryFilter,
 ) -> Result<BrowserAggregates, String> {
     let genre = filter_strs(&filter.genre);
     let artist = filter_strs(&filter.artist);
-    let album = filter_strs(&filter.album);
     let search = filter.search.as_deref();
     let flagged_only = filter.flagged_only;
     let rating_min = filter.rating_min;
     let rating_max = filter.rating_max;
 
-    // Genres: filtered by artist + album (NOT genre) + search
+    // Genres: filtered by search only — never by artist/album selections
     let genres = {
         let (mut conds, params) = build_filter_conditions(
             None,
-            artist,
-            album,
+            None,
+            None,
             search,
             flagged_only,
             rating_min,
@@ -369,12 +370,12 @@ fn get_browser_aggregates(
         results
     };
 
-    // Artists: filtered by genre + album (NOT artist) + search
+    // Artists: filtered by genre + search — never by album selection
     let artists = {
         let (mut conds, params) = build_filter_conditions(
             genre,
             None,
-            album,
+            None,
             search,
             flagged_only,
             rating_min,

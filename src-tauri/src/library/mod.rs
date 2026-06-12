@@ -29,6 +29,7 @@ pub use delete::delete_tracks;
 pub use folders::{add_folder, get_folders, remove_folder};
 pub(crate) use import::compute_library_dest;
 pub use import::import_to_library;
+pub(crate) use queries::genre::split_genres;
 pub(crate) use queries::register_sort_key;
 pub use queries::{
     get_albums, get_albums_sorted, get_artists, get_browser_data, get_browser_data_paginated,

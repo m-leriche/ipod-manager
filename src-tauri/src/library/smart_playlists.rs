@@ -2,6 +2,7 @@ use rusqlite::Connection;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::now_epoch;
+use super::queries::genre::GENRE_MATCH_NOCASE;
 use super::types::{LibraryTrack, SmartPlaylist, SmartPlaylistRuleGroup};
 
 // ── Rule engine: convert rules to parameterized SQL ──────────
@@ -14,6 +15,19 @@ fn rule_to_sql(
     let field_type = field_type(&rule.field);
 
     match rule.operator.as_str() {
+        // Genre values can be "; "-joined lists, so equality means "any of
+        // the track's genres equals the value" rather than full-string match.
+        "equals" if rule.field == "genre" => {
+            params.push(Box::new(rule.value.trim().to_string()));
+            Ok(GENRE_MATCH_NOCASE.to_string())
+        }
+        "not_equals" if rule.field == "genre" => {
+            params.push(Box::new(rule.value.trim().to_string()));
+            Ok(format!(
+                "(genre IS NOT NULL AND NOT ({}))",
+                GENRE_MATCH_NOCASE
+            ))
+        }
         "equals" => {
             params.push(box_val(&rule.value, field_type));
             Ok(format!("{} = ? COLLATE NOCASE", col))

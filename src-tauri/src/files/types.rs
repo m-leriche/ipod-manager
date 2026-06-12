@@ -84,3 +84,7 @@ cancel_flag!(
     /// Independent cancel flag for new releases checking.
     NewReleasesCancel
 );
+cancel_flag!(
+    /// Independent cancel flag for album genre lookups.
+    GenreLookupCancel
+);

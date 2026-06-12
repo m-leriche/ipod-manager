@@ -69,9 +69,22 @@ pub fn read_track(path: &Path) -> TrackMetadata {
         disc_number: tag.disk(),
         disc_total: tag.disk_total(),
         year: tag.year(),
-        genre: tag.genre().map(|s| s.to_string()),
+        genre: read_genre(tag),
         compilation: Some(is_compilation),
     }
+}
+
+/// Join all genre values into one "; "-separated string. lofty stores each
+/// genre as a separate item (ID3v2.4 null-separated TCON, multiple Vorbis
+/// GENRE fields), and the plain `genre()` accessor returns only the first.
+pub(crate) fn read_genre(tag: &lofty::tag::Tag) -> Option<String> {
+    let joined = tag
+        .get_strings(&ItemKey::Genre)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    (!joined.is_empty()).then_some(joined)
 }
 
 pub(super) fn empty_track(file_path: String, file_name: String) -> TrackMetadata {

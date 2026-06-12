@@ -41,6 +41,9 @@ interface TrackTableProps {
   onRemoveLyrics?: (tracks: LibraryTrack[]) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
+  onFetchGenres?: (tracks: LibraryTrack[]) => void;
+  onFetchAllGenres?: () => void;
+  isFetchingGenres?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   activePlaylistId?: number | null;
 }
@@ -64,6 +67,9 @@ export const TrackTable = memo(function TrackTable({
   onRemoveLyrics,
   onFetchAllLyrics,
   isFetchingAllLyrics,
+  onFetchGenres,
+  onFetchAllGenres,
+  isFetchingGenres,
   onRepairMetadata,
   activePlaylistId,
 }: TrackTableProps) {
@@ -244,6 +250,9 @@ export const TrackTable = memo(function TrackTable({
     onRemoveLyrics,
     onFetchAllLyrics,
     isFetchingAllLyrics,
+    onFetchGenres,
+    onFetchAllGenres,
+    isFetchingGenres,
     onRepairMetadata,
     onClose: useCallback(() => setContextMenu(null), []),
     onDeleteRequest: useCallback((ids: number[]) => setDeleteConfirm(ids), []),

@@ -95,6 +95,7 @@ pub struct MetadataSaveResult {
     pub undo_operations: Vec<MetadataUpdate>,
 }
 
+pub(crate) use read::read_genre;
 pub use read::{scan_metadata, scan_metadata_paths};
 pub use write::save_metadata;
 
@@ -137,5 +138,22 @@ mod tests {
         for v in [Id3WriteVersion::V23, Id3WriteVersion::V24] {
             assert_eq!(Id3WriteVersion::from_setting(Some(v.as_setting())), v);
         }
+    }
+
+    #[test]
+    fn read_genre_joins_multiple_values() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        let mut tag = Tag::new(TagType::VorbisComments);
+        for g in ["Rock", " Grunge ", ""] {
+            tag.push(TagItem::new(
+                lofty::tag::ItemKey::Genre,
+                ItemValue::Text(g.to_string()),
+            ));
+        }
+        assert_eq!(read_genre(&tag).as_deref(), Some("Rock; Grunge"));
+
+        let empty = Tag::new(TagType::VorbisComments);
+        assert_eq!(read_genre(&empty), None);
     }
 }

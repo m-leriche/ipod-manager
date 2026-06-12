@@ -154,7 +154,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
             tag.disk(),
             tag.disk_total(),
             tag.year(),
-            tag.genre().and_then(|s| trim_tag(&s)),
+            crate::metadata::read_genre(tag),
             pc,
             is_compilation,
             embedded_lyrics,

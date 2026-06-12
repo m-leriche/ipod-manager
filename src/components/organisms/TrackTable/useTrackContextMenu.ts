@@ -20,6 +20,9 @@ interface UseTrackContextMenuOptions {
   onRemoveLyrics?: (tracks: LibraryTrack[]) => void;
   onFetchAllLyrics?: () => void;
   isFetchingAllLyrics?: boolean;
+  onFetchGenres?: (tracks: LibraryTrack[]) => void;
+  onFetchAllGenres?: () => void;
+  isFetchingGenres?: boolean;
   onRepairMetadata?: (tracks: LibraryTrack[]) => void;
   onClose: () => void;
   onDeleteRequest: (ids: number[]) => void;
@@ -39,6 +42,9 @@ export const useTrackContextMenu = ({
   onRemoveLyrics,
   onFetchAllLyrics,
   isFetchingAllLyrics,
+  onFetchGenres,
+  onFetchAllGenres,
+  isFetchingGenres,
   onRepairMetadata,
   onClose,
   onDeleteRequest,
@@ -227,6 +233,48 @@ export const useTrackContextMenu = ({
             },
           ]
         : []),
+      ...(onFetchGenres || onFetchAllGenres
+        ? [
+            {
+              type: "submenu" as const,
+              label: "Genres",
+              children: [
+                ...(onFetchGenres
+                  ? [
+                      {
+                        label: (() => {
+                          const albumCount = new Set(
+                            tracks
+                              .filter((t) => ids.includes(t.id))
+                              .map((t) => `${t.album_artist || t.artist}::${t.album}`),
+                          ).size;
+                          return albumCount > 1 ? `Fetch for Selected (${albumCount} albums)` : "Fetch Genres";
+                        })(),
+                        onClick: () => {
+                          onFetchGenres(tracks.filter((t) => ids.includes(t.id)));
+                          onClose();
+                        },
+                        disabled: isFetchingGenres,
+                      },
+                    ]
+                  : []),
+                ...(onFetchAllGenres
+                  ? [
+                      { type: "separator" as const },
+                      {
+                        label: "Fetch for Entire Library",
+                        onClick: () => {
+                          onFetchAllGenres();
+                          onClose();
+                        },
+                        disabled: isFetchingGenres,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
       ...(onRepairMetadata
         ? [
             {
@@ -243,6 +291,8 @@ export const useTrackContextMenu = ({
       onFetchLyrics ||
       onRemoveLyrics ||
       onFetchAllLyrics ||
+      onFetchGenres ||
+      onFetchAllGenres ||
       onRepairMetadata
         ? [{ type: "separator" as const }]
         : []),
@@ -285,6 +335,9 @@ export const useTrackContextMenu = ({
     onRemoveLyrics,
     onFetchAllLyrics,
     isFetchingAllLyrics,
+    onFetchGenres,
+    onFetchAllGenres,
+    isFetchingGenres,
     onRepairMetadata,
     onClose,
     onDeleteRequest,

@@ -11,6 +11,7 @@ mod disk;
 pub mod error;
 mod ffprobe_meta;
 mod files;
+mod genre;
 mod inbox;
 mod ipod_info;
 mod lastfm;
@@ -37,7 +38,7 @@ mod volume_monitor;
 mod watcher;
 mod youtube;
 
-use files::{ArtRepairCancel, LyricsCancel, NewReleasesCancel, SyncCancel};
+use files::{ArtRepairCancel, GenreLookupCancel, LyricsCancel, NewReleasesCancel, SyncCancel};
 use library::LibraryDb;
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -74,6 +75,7 @@ pub fn run() {
         .manage(ArtRepairCancel::new())
         .manage(LyricsCancel::new())
         .manage(NewReleasesCancel::new())
+        .manage(GenreLookupCancel::new())
         .setup(|app| {
             // Initialize library database
             let db_path = app
@@ -287,6 +289,8 @@ pub fn run() {
             commands::repair_analyze,
             commands::repair_compare_release,
             commands::lookup_album_years,
+            commands::lookup_album_genres,
+            commands::cancel_genre_lookup,
             commands::scan_audio_quality,
             commands::scan_audio_quality_paths,
             commands::generate_spectrogram,

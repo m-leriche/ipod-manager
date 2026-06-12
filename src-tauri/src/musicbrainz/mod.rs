@@ -1,4 +1,6 @@
+mod genres;
 pub mod normalization;
+pub use genres::fetch_release_group_genres;
 pub use normalization::normalize_for_search;
 
 use serde::Serialize;

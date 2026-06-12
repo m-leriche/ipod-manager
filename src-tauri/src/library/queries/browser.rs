@@ -3,6 +3,7 @@ use rusqlite::Connection;
 use super::super::types::{
     AlbumSummary, ArtistSummary, BrowserData, GenreSummary, LibraryFilter, PaginatedBrowserData,
 };
+use super::genre::{aggregate_genre_counts, push_genre_match_conditions};
 use super::tracks::{get_tracks, get_tracks_paginated};
 use super::{push_in_condition, sort_key};
 
@@ -102,16 +103,15 @@ pub fn get_genres(conn: &Connection) -> Result<Vec<GenreSummary>, String> {
 
     let rows = stmt
         .query_map([], |row| {
-            Ok(GenreSummary {
-                name: row.get(0)?,
-                track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
-            })
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
         })
         .map_err(|e| format!("Query failed: {}", e))?;
 
-    let mut results: Vec<_> = rows
+    let raw: Vec<(String, usize)> = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row read failed: {}", e))?;
+
+    let mut results = aggregate_genre_counts(raw);
     results.sort_by_key(|a| sort_key(&a.name));
     Ok(results)
 }
@@ -270,7 +270,7 @@ fn build_filter_conditions(
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(genres) = genre {
-        push_in_condition("genre", genres, &mut conditions, &mut params);
+        push_genre_match_conditions(genres, &mut conditions, &mut params);
     }
     if let Some(artists) = artist {
         push_in_condition(
@@ -357,15 +357,13 @@ fn get_browser_aggregates(
         let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt
             .query_map(refs.as_slice(), |row| {
-                Ok(GenreSummary {
-                    name: row.get(0)?,
-                    track_count: row.get::<_, i64>(1).map(|v| v as usize)?,
-                })
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
             })
             .map_err(|e| format!("Query failed: {}", e))?;
-        let mut results: Vec<_> = rows
+        let raw: Vec<(String, usize)> = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Row read failed: {}", e))?;
+        let mut results = aggregate_genre_counts(raw);
         results.sort_by_key(|a| sort_key(&a.name));
         results
     };

@@ -21,6 +21,8 @@ import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import { useLibraryImport } from "./useLibraryImport";
 import { useLibraryData } from "./useLibraryData";
 import { useLibraryActions } from "./useLibraryActions";
+import { useGenreFetch } from "./useGenreFetch";
+import { GenreLookupModal } from "./GenreLookupModal";
 import type { LibraryTrack, SmartPlaylist } from "../../../types/library";
 import type { LibrarySummary } from "../../molecules/StatusBar/types";
 import { LibraryLoadingSkeleton } from "../../atoms/Skeleton/Skeleton";
@@ -108,6 +110,7 @@ export const LibraryPlayer = ({
   // ── Action handlers ───────────────────────────────────────────
 
   const actions = useLibraryActions(data.fetchBrowserData, data.tracks);
+  const genreFetch = useGenreFetch(data.fetchBrowserData);
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 
@@ -348,6 +351,9 @@ export const LibraryPlayer = ({
               onRemoveLyrics={actions.handleRemoveLyrics}
               onFetchAllLyrics={startLyricsFetch}
               isFetchingAllLyrics={lyricsState.active}
+              onFetchGenres={genreFetch.fetchForTracks}
+              onFetchAllGenres={genreFetch.fetchForLibrary}
+              isFetchingGenres={genreFetch.fetching}
               onRepairMetadata={onRepairMetadata}
               activePlaylistId={activePlaylistId}
             />
@@ -373,6 +379,15 @@ export const LibraryPlayer = ({
             <LibraryStats libraryPath={data.libraryPath} />
           </ErrorBoundary>
         </div>
+      )}
+
+      {/* Genre lookup review modal */}
+      {genreFetch.genreResults && (
+        <GenreLookupModal
+          outcome={genreFetch.genreResults}
+          onApply={genreFetch.applyResults}
+          onCancel={genreFetch.dismissResults}
+        />
       )}
 
       {/* Smart playlist editor modal */}

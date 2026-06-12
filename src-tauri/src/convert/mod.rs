@@ -42,6 +42,12 @@ pub struct ConvertProgress {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ConvertedPair {
+    pub input_path: String,
+    pub output_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ConvertResult {
     pub success: bool,
     pub cancelled: bool,
@@ -49,5 +55,9 @@ pub struct ConvertResult {
     pub failed: usize,
     pub errors: Vec<String>,
     pub output_paths: Vec<String>,
+    /// Explicit input → output mapping. The output file name can differ from
+    /// the input stem (sanitization, collision suffixes), so callers must not
+    /// reverse-engineer it.
+    pub pairs: Vec<ConvertedPair>,
     pub warnings: Vec<String>,
 }

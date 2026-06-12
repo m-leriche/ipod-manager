@@ -51,7 +51,7 @@ fn compute_library_filename(track: &TrackData) -> String {
     format!("{:02}-{:02} {}.{}", disc, track_num, sanitized_title, ext)
 }
 
-pub(super) fn compute_library_dest(library_root: &Path, track: &TrackData) -> PathBuf {
+pub(crate) fn compute_library_dest(library_root: &Path, track: &TrackData) -> PathBuf {
     let artist_name = track
         .album_artist
         .as_deref()

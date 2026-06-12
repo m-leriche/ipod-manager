@@ -27,6 +27,7 @@ use unicode_normalization::UnicodeNormalization;
 
 pub use delete::delete_tracks;
 pub use folders::{add_folder, get_folders, remove_folder};
+pub(crate) use import::compute_library_dest;
 pub use import::import_to_library;
 pub(crate) use queries::register_sort_key;
 pub use queries::{

@@ -9,7 +9,7 @@ import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { pickFile } from "../../../utils/pickPath";
 import type { LibraryTrack, LibraryFilter, AlbumSummary } from "../../../types/library";
 
-export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks: LibraryTrack[]) => {
+export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks: (LibraryTrack | undefined)[]) => {
   const { playTrack, addToQueue } = usePlayback();
   const { addTracks: addToPlaylistCtx } = usePlaylist();
   const toast = useToast();
@@ -189,7 +189,8 @@ export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks:
   const getTracksForColumnAction = useCallback(
     (action: { column: string; values: string[] }) => {
       const valSet = new Set(action.values);
-      return tracks.filter((t) => {
+      return tracks.filter((t): t is LibraryTrack => {
+        if (!t) return false;
         switch (action.column) {
           case "genre":
             // Genre values can be "; "-joined lists — match any part

@@ -20,6 +20,9 @@ import { getSetting, setSetting } from "../../../utils/settings";
 import { matchesShortcut } from "../../../utils/shortcuts";
 
 const PAGE_SIZE = 500;
+/** Cap on simultaneous page fetches so a fast scrollbar drag can't queue
+    dozens of stale pages ahead of the one the user lands on. */
+const MAX_INFLIGHT_PAGES = 4;
 
 /** Window event fired by Settings when the default sort preferences change. */
 export const SORT_SETTINGS_CHANGED_EVENT = "crate:sort-settings-changed";
@@ -45,13 +48,14 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const [flaggedOnly, setFlaggedOnly] = useState(() => getSetting("flaggedFilter"));
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<number>>(new Set());
 
-  // Backend data
-  const [tracks, setTracks] = useState<LibraryTrack[]>([]);
+  // Backend data. `tracks` is sparse in library view: pages load on demand at
+  // any offset (scrollbar jumps included), so unloaded slots are undefined.
+  const [tracks, setTracks] = useState<(LibraryTrack | undefined)[]>([]);
   const [genreList, setGenreList] = useState<GenreSummary[]>([]);
   const [artistList, setArtistList] = useState<ArtistSummary[]>([]);
   const [albumList, setAlbumList] = useState<AlbumSummary[]>([]);
   const [totalTrackCount, setTotalTrackCount] = useState(0);
-  const isLoadingPageRef = useRef(false);
+  const pendingPageOffsetsRef = useRef<Set<number>>(new Set());
 
   // Library state
   const [hasLibrary, setHasLibrary] = useState<boolean | null>(null);
@@ -107,9 +111,10 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     const q = debouncedSearch.toLowerCase();
     return baseTracks.filter(
       (t) =>
-        (t.title ?? t.file_name ?? "").toLowerCase().includes(q) ||
-        (t.artist ?? "").toLowerCase().includes(q) ||
-        (t.album ?? "").toLowerCase().includes(q),
+        !!t &&
+        ((t.title ?? t.file_name ?? "").toLowerCase().includes(q) ||
+          (t.artist ?? "").toLowerCase().includes(q) ||
+          (t.album ?? "").toLowerCase().includes(q)),
     );
   }, [
     activeSmartPlaylistId,
@@ -123,12 +128,12 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   // ── Derived selected tracks ───────────────────────────────────
 
   const selectedTracks = useMemo(
-    () => displayedTracks.filter((t) => selectedTrackIds.has(t.id)),
+    () => displayedTracks.filter((t): t is LibraryTrack => !!t && selectedTrackIds.has(t.id)),
     [displayedTracks, selectedTrackIds],
   );
 
   useEffect(() => {
-    const currentIds = new Set(displayedTracks.map((t) => t.id));
+    const currentIds = new Set(displayedTracks.map((t) => t?.id));
     setSelectedTrackIds((prev) => {
       const pruned = new Set([...prev].filter((id) => currentIds.has(id)));
       return pruned.size === prev.size ? prev : pruned;
@@ -147,6 +152,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   const fetchBrowserData = useCallback(async () => {
     const id = ++fetchIdRef.current;
+    pendingPageOffsetsRef.current.clear();
     const isUnfiltered =
       selectedGenres.size === 0 &&
       selectedArtists.size === 0 &&
@@ -238,19 +244,24 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     }
   }, [toast]);
 
-  // ── Load more tracks (scroll pagination) ──────────────────────
+  // ── Load tracks page on demand (scroll pagination) ────────────
+  // Random access: fetches the page containing `index` directly, so jumping
+  // the scrollbar deep into the list never waits on intermediate pages.
 
   const loadMoreTracks = useCallback(
-    async (startIndex: number) => {
-      if (isLoadingPageRef.current || startIndex >= totalTrackCount) return;
+    async (index: number) => {
+      if (index < 0 || index >= totalTrackCount) return;
       if (activePlaylistId !== null || activeSmartPlaylistId !== null) return;
+      const offset = Math.floor(index / PAGE_SIZE) * PAGE_SIZE;
+      const pending = pendingPageOffsetsRef.current;
+      if (pending.has(offset) || pending.size >= MAX_INFLIGHT_PAGES) return;
       const generation = fetchIdRef.current;
-      isLoadingPageRef.current = true;
+      pending.add(offset);
       try {
         const filter: LibraryFilter = {
           sort_by: sortBy,
           sort_direction: sortDirection,
-          offset: startIndex,
+          offset,
           limit: PAGE_SIZE,
           skip_count: true,
           ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
@@ -261,11 +272,19 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
         };
         const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
         if (generation !== fetchIdRef.current) return;
-        setTracks((prev) => [...prev, ...page.tracks]);
+        setTracks((prev) => {
+          const next = prev.slice();
+          // Pad explicitly so the array never has holes (holes are skipped
+          // by map/filter, which would make index-based logic inconsistent).
+          while (next.length < offset) next.push(undefined);
+          for (let i = 0; i < page.tracks.length; i++) next[offset + i] = page.tracks[i];
+          return next;
+        });
       } catch (e) {
         console.error("Failed to load tracks page:", e);
       } finally {
-        isLoadingPageRef.current = false;
+        // A newer generation owns the set after a filter/sort change — leave it alone.
+        if (generation === fetchIdRef.current) pending.delete(offset);
       }
     },
     [
@@ -359,7 +378,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       const { trackId } = (e as CustomEvent<{ trackId: number }>).detail;
       const now = Math.floor(Date.now() / 1000);
       setTracks((prev) =>
-        prev.map((t) => (t.id === trackId ? { ...t, play_count: t.play_count + 1, last_played: now } : t)),
+        prev.map((t) => (t?.id === trackId ? { ...t, play_count: t.play_count + 1, last_played: now } : t)),
       );
     };
     window.addEventListener("play-count-updated", handler);

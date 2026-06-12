@@ -14,7 +14,7 @@ import { useColumnOrder } from "./useColumnOrder";
 import { useTrackContextMenu } from "./useTrackContextMenu";
 import { TrackRow } from "./TrackRow";
 import { getAlbumTracks } from "./helpers";
-import { COLUMNS, ROW_HEIGHT, SORT_KEY_TO_TRACK_FIELD } from "./constants";
+import { COLUMNS, ROW_HEIGHT, LOAD_AHEAD_ROWS, SORT_KEY_TO_TRACK_FIELD } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
 import type { ContextMenuState } from "./types";
 
@@ -23,9 +23,10 @@ let dragPayload: LibraryTrack[] = [];
 export const getDragPayload = (): LibraryTrack[] => dragPayload;
 
 interface TrackTableProps {
-  tracks: LibraryTrack[];
+  /** Sparse in paginated library view — unloaded rows are undefined. */
+  tracks: (LibraryTrack | undefined)[];
   totalTrackCount?: number;
-  onLoadMore?: (startIndex: number) => void;
+  onLoadMore?: (index: number) => void;
   sortBy: string;
   sortDirection: "asc" | "desc";
   onSort: (key: string) => void;
@@ -107,22 +108,32 @@ export const TrackTable = memo(function TrackTable({
     overscan: 20,
   });
 
+  // Tracks loaded so far, dense — for consumers that need a plain list
+  // (album grouping, context menu, drag payload). Index-based logic must
+  // use the sparse `tracks` so positions stay aligned with the virtualizer.
+  const loadedTracks = useMemo(() => tracks.filter((t): t is LibraryTrack => t !== undefined), [tracks]);
+
+  // Request every missing row in (and just past) the viewport. The hook
+  // behind onLoadMore page-aligns and dedupes, so jumping the scrollbar
+  // deep into the list fetches that page directly instead of chain-loading
+  // everything before it.
   const virtualItems = virtualizer.getVirtualItems();
   useEffect(() => {
     if (!onLoadMore || !totalTrackCount) return;
     if (virtualItems.length === 0) return;
-    const lastItem = virtualItems[virtualItems.length - 1];
-    if (lastItem.index >= tracks.length - 100 && tracks.length < totalTrackCount) {
-      onLoadMore(tracks.length);
+    const first = virtualItems[0].index;
+    const last = Math.min(virtualItems[virtualItems.length - 1].index + LOAD_AHEAD_ROWS, totalTrackCount - 1);
+    for (let i = first; i <= last; i++) {
+      if (!tracks[i]) onLoadMore(i);
     }
-  }, [virtualItems, tracks.length, totalTrackCount, onLoadMore]);
+  }, [virtualItems, tracks, totalTrackCount, onLoadMore]);
 
   // ── Keyboard navigation ──────────────────────────────────────
 
   const lastClickedIndexRef = useRef(0);
   const searchField = SORT_KEY_TO_TRACK_FIELD[sortBy] ?? "title";
   const searchLabels = useMemo(
-    () => tracks.map((t) => String(t[searchField] ?? t.title ?? t.file_name ?? "")),
+    () => tracks.map((t) => (t ? String(t[searchField] ?? t.title ?? t.file_name ?? "") : "")),
     [tracks, searchField],
   );
 
@@ -136,7 +147,12 @@ export const TrackTable = memo(function TrackTable({
       } else {
         const anchor = lastClickedIndexRef.current;
         const [start, end] = [Math.min(anchor, index), Math.max(anchor, index)];
-        const rangeIds = new Set(tracks.slice(start, end + 1).map((t) => t.id));
+        const rangeIds = new Set(
+          tracks
+            .slice(start, end + 1)
+            .filter((t): t is LibraryTrack => t !== undefined)
+            .map((t) => t.id),
+        );
         setSelected(rangeIds);
       }
       onTrackSelect?.(track);
@@ -147,9 +163,9 @@ export const TrackTable = memo(function TrackTable({
   const handleKeyboardActivate = useCallback(
     (index: number) => {
       const track = tracks[index];
-      if (track) playTrack(track, getAlbumTracks(track, tracks));
+      if (track) playTrack(track, getAlbumTracks(track, loadedTracks));
     },
-    [tracks, playTrack],
+    [tracks, loadedTracks, playTrack],
   );
 
   const { onKeyDown: handleNavKeyDown, focusedIndexRef } = useKeyboardNavigation({
@@ -164,6 +180,7 @@ export const TrackTable = memo(function TrackTable({
   const handleTypeToSelectMatch = useCallback(
     (index: number) => {
       const track = tracks[index];
+      if (!track) return;
       setSelected(new Set([track.id]));
       lastClickedIndexRef.current = index;
       focusedIndexRef.current = index;
@@ -191,7 +208,7 @@ export const TrackTable = memo(function TrackTable({
   const handleClick = useCallback(
     (e: React.MouseEvent, track: LibraryTrack) => {
       const sel = selectedRef.current;
-      const clickedIndex = tracks.findIndex((t) => t.id === track.id);
+      const clickedIndex = tracks.findIndex((t) => t?.id === track.id);
       if (e.metaKey || e.ctrlKey) {
         setSelected((prev) => {
           const next = new Set(prev);
@@ -200,11 +217,13 @@ export const TrackTable = memo(function TrackTable({
           return next;
         });
       } else if (e.shiftKey && sel.size > 0) {
-        const trackIds = tracks.map((t) => t.id);
         const lastIdx = lastClickedIndexRef.current;
         const currentIdx = clickedIndex;
         const [start, end] = [Math.min(lastIdx, currentIdx), Math.max(lastIdx, currentIdx)];
-        const range = new Set(trackIds.slice(start, end + 1));
+        const range = tracks
+          .slice(start, end + 1)
+          .filter((t): t is LibraryTrack => t !== undefined)
+          .map((t) => t.id);
         setSelected((prev) => new Set([...prev, ...range]));
       } else {
         setSelected(new Set([track.id]));
@@ -220,10 +239,10 @@ export const TrackTable = memo(function TrackTable({
 
   const handleDoubleClick = useCallback(
     (track: LibraryTrack) => {
-      const contextTracks = activePlaylistId != null ? tracks : getAlbumTracks(track, tracks);
+      const contextTracks = activePlaylistId != null ? loadedTracks : getAlbumTracks(track, loadedTracks);
       playTrack(track, contextTracks);
     },
-    [playTrack, tracks, activePlaylistId],
+    [playTrack, loadedTracks, activePlaylistId],
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, track: LibraryTrack) => {
@@ -237,7 +256,7 @@ export const TrackTable = memo(function TrackTable({
   // ── Context menu items ────────────────────────────────────────
 
   const contextMenuItems = useTrackContextMenu({
-    tracks,
+    tracks: loadedTracks,
     selected,
     contextMenu,
     activePlaylistId,
@@ -394,7 +413,7 @@ export const TrackTable = memo(function TrackTable({
           }
         }}
         onDragStartCapture={() => {
-          dragPayload = selected.size > 0 ? tracks.filter((t) => selected.has(t.id)) : [];
+          dragPayload = selected.size > 0 ? loadedTracks.filter((t) => selected.has(t.id)) : [];
         }}
       >
         <table className="table-fixed border-separate" style={{ width: totalWidth, borderSpacing: 0 }}>

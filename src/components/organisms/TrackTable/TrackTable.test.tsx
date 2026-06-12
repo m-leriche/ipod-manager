@@ -1,8 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { TrackTable } from "./TrackTable";
 import type { LibraryTrack } from "../../../types/library";
+
+// jsdom has no layout, so the real virtualizer renders zero rows. Stub it to
+// render the first rows of the list so row-dependent behavior is testable.
+const VISIBLE_ROWS = 40;
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => {
+    const size = estimateSize();
+    const items = Array.from({ length: Math.min(count, VISIBLE_ROWS) }, (_, i) => ({
+      index: i,
+      start: i * size,
+      end: (i + 1) * size,
+      key: i,
+      size,
+    }));
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => count * size,
+      scrollToIndex: vi.fn(),
+      measureElement: vi.fn(),
+    };
+  },
+}));
 
 const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
   id: 1,
@@ -43,30 +65,6 @@ const defaultProps = {
   sortDirection: "asc" as const,
   onSort: vi.fn(),
 };
-
-// Virtual scrolling needs a scroll container with measurable height.
-// In jsdom, elements have zero dimensions by default. Mock getBoundingClientRect
-// on the scroll container so @tanstack/react-virtual renders rows.
-beforeEach(() => {
-  const original = Element.prototype.getBoundingClientRect;
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    // The scroll container has class "flex-1 min-h-0 overflow-auto outline-none"
-    if (this.classList?.contains("overflow-auto")) {
-      return {
-        x: 0,
-        y: 0,
-        width: 1200,
-        height: 600,
-        top: 0,
-        left: 0,
-        right: 1200,
-        bottom: 600,
-        toJSON: () => {},
-      } as DOMRect;
-    }
-    return original.call(this);
-  });
-});
 
 describe("TrackTable", () => {
   it("renders the Sync column header", () => {
@@ -134,6 +132,31 @@ describe("TrackTable", () => {
         expect(onFlagTracks).toHaveBeenCalledWith([42], true);
       }
     }
+  });
+
+  it("renders skeleton rows for unloaded tracks in a sparse list", () => {
+    const tracks: (LibraryTrack | undefined)[] = [makeTrack()];
+    const { container } = render(
+      <TrackTable {...defaultProps} tracks={tracks} totalTrackCount={1000} onLoadMore={vi.fn()} />,
+    );
+    const skeletons = container.querySelectorAll("tr .animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
+  });
+
+  it("requests the missing rows in view rather than only the tail of the loaded list", () => {
+    const onLoadMore = vi.fn();
+    render(<TrackTable {...defaultProps} tracks={[makeTrack()]} totalTrackCount={1000} onLoadMore={onLoadMore} />);
+    const requested = onLoadMore.mock.calls.map(([i]) => i as number);
+    // Row 0 is loaded; the visible missing rows right after it are requested
+    expect(requested).not.toContain(0);
+    expect(requested).toContain(1);
+  });
+
+  it("does not request rows when the list is fully loaded", () => {
+    const onLoadMore = vi.fn();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
+    render(<TrackTable {...defaultProps} tracks={tracks} totalTrackCount={2} onLoadMore={onLoadMore} />);
+    expect(onLoadMore).not.toHaveBeenCalled();
   });
 
   it("calls onFlagTracks to unflag already-flagged track", async () => {

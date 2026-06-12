@@ -94,6 +94,9 @@ export const COLUMN_DEFS = COLUMNS.map((c) => c.def);
 
 export const ROW_HEIGHT = 31;
 
+/** Rows past the viewport to prefetch so slow scrolling never shows skeletons. */
+export const LOAD_AHEAD_ROWS = 100;
+
 export const SORT_KEY_TO_TRACK_FIELD: Record<string, keyof LibraryTrack> = {
   title: "title",
   artist: "artist",

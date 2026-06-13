@@ -215,6 +215,32 @@ fn file_and_undo_roundtrip_keeps_db_consistent_with_decomposed_unicode() {
 }
 
 #[test]
+fn file_album_deletes_folder_with_leftover_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let library_root = tmp.path().join("Library");
+    std::fs::create_dir_all(&library_root).unwrap();
+    let album_dir = tmp.path().join("inbox/Album");
+    std::fs::create_dir_all(&album_dir).unwrap();
+    std::fs::write(album_dir.join("01 Track.flac"), "not real audio").unwrap();
+    std::fs::write(album_dir.join("lyrics.lrc"), "[00:00] hi").unwrap();
+    std::fs::write(album_dir.join("notes.txt"), "ripped from CD").unwrap();
+
+    let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
+
+    file_album(
+        library_root.to_str().unwrap(),
+        album_dir.to_str().unwrap(),
+        &conn,
+    )
+    .unwrap();
+
+    assert!(
+        !album_dir.exists(),
+        "album folder must be removed even with leftover non-audio files"
+    );
+}
+
+#[test]
 fn tracklist_cache_roundtrips_definitive_verdicts() {
     let conn = Connection::open_in_memory().unwrap();
     let verdict = CheckResult::pass(Some("Matches “Album” (10 tracks)".into()));

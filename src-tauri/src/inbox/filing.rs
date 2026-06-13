@@ -8,6 +8,7 @@ use crate::audio_utils::normalize_path;
 use crate::library::{compute_library_dest, read_track_for_library, upsert_track};
 
 use super::scan::direct_audio_children;
+use super::tags::strip_import_tags;
 use super::types::{FileAwayResult, FileMove};
 
 /// Move an inbox album's audio files (and cover, if any) into the library,
@@ -32,6 +33,17 @@ pub fn file_album(
     let mut dest_dir: Option<PathBuf> = None;
 
     for src in &audio {
+        // Strip Sort Artist / Album Artist tags and clear the compilation flag
+        // before reading metadata, so the destination folder is computed from
+        // the remaining Artist field rather than the album artist we removed.
+        if let Err(e) = strip_import_tags(src) {
+            let name = src
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            errors.push(format!("{}: tag cleanup failed: {}", name, e));
+        }
+
         let mut track = read_track_for_library(src);
         let dest = compute_library_dest(root, &track);
 
@@ -84,7 +96,9 @@ pub fn file_album(
         }
     }
 
-    let _ = fs::remove_dir(folder); // only succeeds if now empty
+    // The album now lives in the library, so drop its inbox folder along with
+    // any leftover files (lyrics, .txt, etc.) that weren't moved.
+    let _ = fs::remove_dir_all(folder);
 
     Ok(FileAwayResult { moves, errors })
 }

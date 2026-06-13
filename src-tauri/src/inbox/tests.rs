@@ -215,6 +215,72 @@ fn file_and_undo_roundtrip_keeps_db_consistent_with_decomposed_unicode() {
 }
 
 #[test]
+fn file_album_deletes_folder_with_leftover_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let library_root = tmp.path().join("Library");
+    std::fs::create_dir_all(&library_root).unwrap();
+    let album_dir = tmp.path().join("inbox/Album");
+    std::fs::create_dir_all(&album_dir).unwrap();
+    std::fs::write(album_dir.join("01 Track.flac"), "not real audio").unwrap();
+    std::fs::write(album_dir.join("lyrics.lrc"), "[00:00] hi").unwrap();
+    std::fs::write(album_dir.join("notes.txt"), "ripped from CD").unwrap();
+
+    let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
+
+    file_album(
+        library_root.to_str().unwrap(),
+        album_dir.to_str().unwrap(),
+        &conn,
+    )
+    .unwrap();
+
+    assert!(
+        !album_dir.exists(),
+        "album folder must be removed even with leftover non-audio files"
+    );
+}
+
+#[test]
+fn file_album_keeps_folder_when_audio_already_in_library() {
+    let tmp = tempfile::tempdir().unwrap();
+    let library_root = tmp.path().join("Library");
+    std::fs::create_dir_all(&library_root).unwrap();
+    let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
+
+    let make_album = || {
+        let album_dir = tmp.path().join("inbox/Album");
+        std::fs::create_dir_all(&album_dir).unwrap();
+        std::fs::write(album_dir.join("01 Track.flac"), "not real audio").unwrap();
+        album_dir
+    };
+
+    // First import moves the file into the library and clears the empty folder.
+    let album_dir = make_album();
+    file_album(
+        library_root.to_str().unwrap(),
+        album_dir.to_str().unwrap(),
+        &conn,
+    )
+    .unwrap();
+    assert!(!album_dir.exists());
+
+    // Re-creating the same album means the destination already exists, so the
+    // source must NOT be deleted — the folder is kept intact.
+    let album_dir = make_album();
+    let result = file_album(
+        library_root.to_str().unwrap(),
+        album_dir.to_str().unwrap(),
+        &conn,
+    )
+    .unwrap();
+    assert!(result.moves.is_empty());
+    assert!(
+        album_dir.join("01 Track.flac").exists(),
+        "un-imported audio must survive in the inbox"
+    );
+}
+
+#[test]
 fn tracklist_cache_roundtrips_definitive_verdicts() {
     let conn = Connection::open_in_memory().unwrap();
     let verdict = CheckResult::pass(Some("Matches “Album” (10 tracks)".into()));

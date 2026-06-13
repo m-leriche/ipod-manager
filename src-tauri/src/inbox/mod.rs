@@ -3,6 +3,7 @@ mod checks;
 mod convert;
 mod filing;
 mod scan;
+mod tags;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

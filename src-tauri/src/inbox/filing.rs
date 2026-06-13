@@ -8,6 +8,7 @@ use crate::audio_utils::normalize_path;
 use crate::library::{compute_library_dest, read_track_for_library, upsert_track};
 
 use super::scan::direct_audio_children;
+use super::tags::strip_import_tags;
 use super::types::{FileAwayResult, FileMove};
 
 /// Move an inbox album's audio files (and cover, if any) into the library,
@@ -30,17 +31,31 @@ pub fn file_album(
     let mut moves = Vec::new();
     let mut errors = Vec::new();
     let mut dest_dir: Option<PathBuf> = None;
+    let mut unmoved_audio = 0;
 
     for src in &audio {
+        // Strip Sort Artist / Album Artist tags and clear the compilation flag
+        // before reading metadata, so the destination folder is computed from
+        // the remaining Artist field rather than the album artist we removed.
+        if let Err(e) = strip_import_tags(src) {
+            let name = src
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            errors.push(format!("{}: tag cleanup failed: {}", name, e));
+        }
+
         let mut track = read_track_for_library(src);
         let dest = compute_library_dest(root, &track);
 
         if dest.exists() {
             errors.push(format!("{}: already exists in library", track.file_name));
+            unmoved_audio += 1;
             continue;
         }
         if let Err(e) = move_file(src, &dest) {
             errors.push(format!("{}: {}", track.file_name, e));
+            unmoved_audio += 1;
             continue;
         }
 
@@ -84,7 +99,15 @@ pub fn file_album(
         }
     }
 
-    let _ = fs::remove_dir(folder); // only succeeds if now empty
+    // The album now lives in the library, so drop its inbox folder along with
+    // any leftover files (lyrics, .txt, etc.). If any audio file wasn't moved
+    // (already in the library, or a move error), keep the folder so un-imported
+    // audio is never destroyed — remove_dir only succeeds when it's empty.
+    if unmoved_audio == 0 {
+        let _ = fs::remove_dir_all(folder);
+    } else {
+        let _ = fs::remove_dir(folder);
+    }
 
     Ok(FileAwayResult { moves, errors })
 }

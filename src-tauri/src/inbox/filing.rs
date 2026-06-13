@@ -31,6 +31,7 @@ pub fn file_album(
     let mut moves = Vec::new();
     let mut errors = Vec::new();
     let mut dest_dir: Option<PathBuf> = None;
+    let mut unmoved_audio = 0;
 
     for src in &audio {
         // Strip Sort Artist / Album Artist tags and clear the compilation flag
@@ -49,10 +50,12 @@ pub fn file_album(
 
         if dest.exists() {
             errors.push(format!("{}: already exists in library", track.file_name));
+            unmoved_audio += 1;
             continue;
         }
         if let Err(e) = move_file(src, &dest) {
             errors.push(format!("{}: {}", track.file_name, e));
+            unmoved_audio += 1;
             continue;
         }
 
@@ -97,8 +100,14 @@ pub fn file_album(
     }
 
     // The album now lives in the library, so drop its inbox folder along with
-    // any leftover files (lyrics, .txt, etc.) that weren't moved.
-    let _ = fs::remove_dir_all(folder);
+    // any leftover files (lyrics, .txt, etc.). If any audio file wasn't moved
+    // (already in the library, or a move error), keep the folder so un-imported
+    // audio is never destroyed — remove_dir only succeeds when it's empty.
+    if unmoved_audio == 0 {
+        let _ = fs::remove_dir_all(folder);
+    } else {
+        let _ = fs::remove_dir(folder);
+    }
 
     Ok(FileAwayResult { moves, errors })
 }

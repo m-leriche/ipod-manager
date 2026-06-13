@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { MapPoint } from "./types";
-import { galaxyRotation, introProgress, pointPosition, twinkleAlpha } from "./motion";
+import { introProgress, pointPosition, twinkleAlpha } from "./motion";
 import { INTRO_DURATION_MS, INTRO_STAGGER_MS } from "./constants";
 
 const point = (overrides: Partial<MapPoint> = {}): MapPoint =>
@@ -46,13 +46,10 @@ describe("pointPosition", () => {
     expect(Math.hypot(x, y)).toBe(0);
   });
 
-  it("orbits the cluster center (itself rotated by the galaxy spin) once the intro completes", () => {
+  it("orbits the cluster center once the intro completes", () => {
     const p = point();
     const { x, y } = pointPosition(p, 5, 1);
-    const rotation = galaxyRotation(5);
-    const cx = p.clusterX * Math.cos(rotation) - p.clusterY * Math.sin(rotation);
-    const cy = p.clusterX * Math.sin(rotation) + p.clusterY * Math.cos(rotation);
-    expect(Math.hypot(x - cx, y - cy)).toBeCloseTo(p.orbitRadius);
+    expect(Math.hypot(x - p.clusterX, y - p.clusterY)).toBeCloseTo(p.orbitRadius);
   });
 
   it("matches the layout position at t=0 after the intro", () => {

@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GenreMapLayout, MapPoint, ViewTransform } from "./types";
+import type { NebulaLayout, MapPoint, ViewTransform } from "./types";
 import { MAX_ZOOM, MIN_ZOOM, PAN_FRICTION, ZOOM_SMOOTHING } from "./constants";
 import { introProgress, pointPositionInto } from "./motion";
 import { createSprites, createStarfield, drawFrame } from "./renderer";
 import { buildHeatField, computeContours, createHeatCanvas } from "./heatfield";
 
-interface GenreMapCanvasProps {
-  layout: GenreMapLayout;
+interface NebulaCanvasProps {
+  layout: NebulaLayout;
   onSelectTrack: (point: MapPoint) => void;
 }
 
 const DRAG_THRESHOLD_PX = 4;
 const HOVER_RADIUS_PX = 8;
 const HOVER_THROTTLE_MS = 40;
+const TOOLTIP_OFFSET_PX = 14;
+// Rough tooltip footprint — only used to decide which way to flip near edges.
+const TOOLTIP_EST_WIDTH = 280;
+const TOOLTIP_EST_HEIGHT = 84;
 
 // Retina sharpness is wasted on glow sprites; capping the backing
 // resolution nearly halves the per-frame fill cost on 2x displays.
@@ -26,24 +30,34 @@ const FIT_FILL = 0.92;
 // load; the edges overflow and the user can scroll out to reveal the rest.
 const INITIAL_ZOOM = 1.5;
 
-// Fit so the (roughly square) galaxy fills the entire rectangular viewport:
-// a base uniform scale binds the smaller axis, then a screen-aligned stretch
-// spreads the larger axis edge to edge. The stretch is derived from the base
-// scale, so multiplying scale by INITIAL_ZOOM zooms in (overflowing the
-// edges) while keeping the aspect fill correct.
-const fitView = (width: number, height: number, extent: number): ViewTransform => {
+// The base uniform scale binds the smaller axis; the screen-aligned stretch
+// then spreads the larger axis edge to edge so a square mass fills the
+// rectangle. Shared by the initial fit and the resize reflow.
+const stretchFor = (width: number, height: number, extent: number) => {
   const span = extent * 2;
   const baseScale = Math.max((Math.min(width, height) / span) * FIT_FILL, MIN_ZOOM);
   return {
-    scale: baseScale * INITIAL_ZOOM,
+    baseScale,
     stretchX: (width * FIT_FILL) / (span * baseScale),
     stretchY: (height * FIT_FILL) / (span * baseScale),
+  };
+};
+
+// Fit so the (roughly square) galaxy fills the entire rectangular viewport.
+// The stretch is derived from the base scale, so multiplying scale by
+// INITIAL_ZOOM zooms in (overflowing the edges) while keeping the fill correct.
+const fitView = (width: number, height: number, extent: number): ViewTransform => {
+  const { baseScale, stretchX, stretchY } = stretchFor(width, height, extent);
+  return {
+    scale: baseScale * INITIAL_ZOOM,
+    stretchX,
+    stretchY,
     offsetX: width / 2,
     offsetY: height / 2,
   };
 };
 
-export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) => {
+export const NebulaCanvas = ({ layout, onSelectTrack }: NebulaCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<ViewTransform | null>(null);
@@ -67,9 +81,9 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
   const heatCanvas = useMemo(() => createHeatCanvas(heat), [heat]);
   const contours = useMemo(() => computeContours(heat), [heat]);
 
-  // Size the canvas to its container and fit the galaxy to fill it. Runs on
-  // mount, on every new layout (refitting + restarting the intro), and on
-  // resize — refitting so the stretch always matches the current aspect.
+  // Size the canvas to its container and fit the galaxy. Runs on mount and on
+  // every new layout (a full fit that restarts the intro). A later resize only
+  // updates the aspect stretch and preserves the user's current zoom/pan.
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -77,22 +91,40 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
 
     let lastWidth = 0;
     let lastHeight = 0;
-    const fit = (width: number, height: number) => {
-      lastWidth = width;
-      lastHeight = height;
+    const sizeCanvas = (width: number, height: number) => {
       const dpr = getDpr();
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
+      lastWidth = width;
+      lastHeight = height;
+    };
+
+    const fit = (width: number, height: number) => {
+      sizeCanvas(width, height);
       viewRef.current = fitView(width, height, layout.extent);
       zoomRef.current = null;
       velocityRef.current = { x: 0, y: 0 };
+    };
+
+    // Recompute only the aspect stretch so the mass keeps filling the frame
+    // after a resize, without throwing away the user's zoom and pan.
+    const reflow = (width: number, height: number) => {
+      const view = viewRef.current;
+      if (!view) {
+        fit(width, height);
+        return;
+      }
+      sizeCanvas(width, height);
+      const { stretchX, stretchY } = stretchFor(width, height, layout.extent);
+      view.stretchX = stretchX;
+      view.stretchY = stretchY;
     };
 
     fit(container.clientWidth, container.clientHeight);
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (Math.abs(width - lastWidth) < 1 && Math.abs(height - lastHeight) < 1) return;
-      fit(width, height);
+      reflow(width, height);
     });
     observer.observe(container);
     return () => observer.disconnect();
@@ -263,12 +295,20 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
     setHovered(null);
   }, []);
 
+  // Flip the tooltip to the other side of the cursor when it would overflow the
+  // container's right/bottom edge, so it stays fully inside the panel.
+  const container = containerRef.current;
+  const flipX =
+    !!hovered && !!container && hovered.screenX + TOOLTIP_OFFSET_PX + TOOLTIP_EST_WIDTH > container.clientWidth;
+  const flipY =
+    !!hovered && !!container && hovered.screenY + TOOLTIP_OFFSET_PX + TOOLTIP_EST_HEIGHT > container.clientHeight;
+
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden">
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Genre map of library tracks"
+        aria-label="Nebula map of library tracks"
         className={`absolute inset-0 w-full h-full ${hovered ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -278,7 +318,11 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
       {hovered && (
         <div
           className="absolute pointer-events-none z-10 px-3 py-2 rounded-md bg-bg-card border border-border shadow-lg max-w-xs"
-          style={{ left: hovered.screenX + 14, top: hovered.screenY + 14 }}
+          style={{
+            left: hovered.screenX + (flipX ? -TOOLTIP_OFFSET_PX : TOOLTIP_OFFSET_PX),
+            top: hovered.screenY + (flipY ? -TOOLTIP_OFFSET_PX : TOOLTIP_OFFSET_PX),
+            transform: `translate(${flipX ? "-100%" : "0"}, ${flipY ? "-100%" : "0"})`,
+          }}
         >
           <div className="text-xs font-medium text-text-primary truncate">
             {hovered.point.track.title ?? hovered.point.track.file_name}

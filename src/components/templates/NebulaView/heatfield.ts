@@ -1,4 +1,4 @@
-import type { GenreMapLayout } from "./types";
+import type { NebulaLayout } from "./types";
 import { HEAT_GRID_SIZE, HEAT_FIELD_MARGIN, CONTOUR_LEVELS } from "./constants";
 
 export interface HeatField {
@@ -46,7 +46,7 @@ const boxBlur = (values: Float32Array, gridSize: number, radius: number) => {
  * gaussian kernel. The result is the elevation model behind the heat
  * shading and the topographic contours.
  */
-export const buildHeatField = (layout: GenreMapLayout): HeatField => {
+export const buildHeatField = (layout: NebulaLayout): HeatField => {
   const gridSize = HEAT_GRID_SIZE;
   const worldExtent = layout.extent * HEAT_FIELD_MARGIN;
   const values = new Float32Array(gridSize * gridSize);

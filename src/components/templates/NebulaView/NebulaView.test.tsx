@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
-import { GenreMapView } from "./GenreMapView";
+import { NebulaView } from "./NebulaView";
 import type { LibraryTrack } from "../../../types/library";
 
 beforeEach(() => {
@@ -44,31 +44,31 @@ const track = (id: number, genre: string | null): LibraryTrack => ({
   replay_gain_album_db: null,
 });
 
-describe("GenreMapView", () => {
+describe("NebulaView", () => {
   it("shows a loading state while fetching", () => {
     vi.mocked(invoke).mockImplementation(() => new Promise(() => {}));
-    render(<GenreMapView />);
+    render(<NebulaView />);
     expect(screen.getByText("Loading library...")).toBeInTheDocument();
   });
 
   it("shows an empty state when the library has no tracks", async () => {
     vi.mocked(invoke).mockResolvedValue([]);
-    render(<GenreMapView />);
+    render(<NebulaView />);
     expect(await screen.findByText("No tracks in your library yet.")).toBeInTheDocument();
   });
 
   it("shows an error state with retry when loading fails", async () => {
     vi.mocked(invoke).mockRejectedValue("db locked");
-    render(<GenreMapView />);
+    render(<NebulaView />);
     expect(await screen.findByText(/Failed to load library: db locked/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("renders the map with track and genre counts", async () => {
     vi.mocked(invoke).mockResolvedValue([track(1, "Rock"), track(2, "Rock"), track(3, "Jazz")]);
-    render(<GenreMapView />);
+    render(<NebulaView />);
 
-    expect(await screen.findByRole("img", { name: "Genre map of library tracks" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Nebula map of library tracks" })).toBeInTheDocument();
     expect(screen.getByText(/3 tracks · 2 genres/)).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("get_library_tracks", { filter: { limit: 500000 } });
   });

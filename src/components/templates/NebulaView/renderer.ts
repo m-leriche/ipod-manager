@@ -1,7 +1,7 @@
-import type { GenreMapLayout, MapPoint, Star, ViewTransform } from "./types";
+import type { NebulaLayout, MapPoint, Star, ViewTransform } from "./types";
 import type { ContourLevel, HeatField } from "./heatfield";
 import { INTRO_DURATION_MS, INTRO_STAGGER_MS, LABEL_MIN_SCREEN_RADIUS, STAR_COUNT } from "./constants";
-import { easeOutCubic, galaxyRotation, introProgress, pointPositionInto, twinkleAlpha } from "./motion";
+import { easeOutCubic, introProgress, pointPositionInto, twinkleAlpha } from "./motion";
 
 /** Seeded PRNG (mulberry32) so the starfield is stable across renders. */
 const createRng = (seed: number) => () => {
@@ -42,7 +42,7 @@ const createGlowSprite = (color: string): HTMLCanvasElement => {
   return canvas;
 };
 
-export const createSprites = (layout: GenreMapLayout): Map<string, HTMLCanvasElement> => {
+export const createSprites = (layout: NebulaLayout): Map<string, HTMLCanvasElement> => {
   const glows = new Map<string, HTMLCanvasElement>();
   for (const cluster of layout.clusters) {
     if (!glows.has(cluster.color)) glows.set(cluster.color, createGlowSprite(cluster.color));
@@ -55,7 +55,7 @@ export interface FrameParams {
   width: number;
   height: number;
   view: ViewTransform;
-  layout: GenreMapLayout;
+  layout: NebulaLayout;
   stars: Star[];
   glows: Map<string, HTMLCanvasElement>;
   heat: HeatField;
@@ -108,11 +108,10 @@ const drawHeat = (params: FrameParams, intro: number) => {
   ctx.globalAlpha = (0.55 + 0.1 * Math.sin(timeSec * 0.35)) * intro;
   ctx.imageSmoothingEnabled = true;
   ctx.save();
-  // Stretch is applied outside the rotation (screen-aligned) so the terrain
-  // keeps filling the rectangle as the galaxy spins.
+  // The screen-aligned stretch maps the square density field onto the
+  // rectangular viewport, matching the per-point path at full intro.
   ctx.translate(view.offsetX, view.offsetY);
   ctx.scale(view.stretchX, view.stretchY);
-  ctx.rotate(galaxyRotation(timeSec));
   ctx.scale(k, k);
   ctx.drawImage(heatCanvas, -half, -half, half * 2, half * 2);
   ctx.restore();
@@ -141,14 +140,13 @@ const contourPaths = (contours: ContourLevel[]): Path2D[] => {
 
 /** Topographic iso-lines over the heat terrain, denser levels drawn brighter. */
 const drawContours = (params: FrameParams, intro: number) => {
-  const { ctx, view, contours, timeSec } = params;
+  const { ctx, view, contours } = params;
   const k = view.scale * intro;
   if (k <= 0) return;
   const paths = contourPaths(contours);
   ctx.save();
   ctx.translate(view.offsetX, view.offsetY);
   ctx.scale(view.stretchX, view.stretchY);
-  ctx.rotate(galaxyRotation(timeSec));
   ctx.scale(k, k);
   ctx.lineWidth = 1 / k;
   ctx.strokeStyle = "rgb(160 200 255)";
@@ -162,6 +160,10 @@ const drawContours = (params: FrameParams, intro: number) => {
 
 const scratchPos = { x: 0, y: 0 };
 
+// Cost is O(tracks) per frame: every point runs pointPositionInto + twinkle
+// each tick (hitTest likewise). Fine into the low thousands; a 20k+ library
+// will drop frames. If that becomes real, cap rendered points or freeze the
+// orbit math when zoomed far enough out that the drift is sub-pixel.
 const drawPoints = (params: FrameParams) => {
   const { ctx, width, height, view, layout, glows, timeSec, introElapsedMs, hovered } = params;
   const { scale, stretchX, stretchY, offsetX, offsetY } = view;
@@ -193,18 +195,15 @@ const drawPoints = (params: FrameParams) => {
 };
 
 const drawLabels = (params: FrameParams, intro: number) => {
-  const { ctx, width, height, view, layout, timeSec } = params;
+  const { ctx, width, height, view, layout } = params;
   if (intro < 0.6) return;
-  const rotation = galaxyRotation(timeSec);
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
   ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const cluster of layout.clusters) {
     if (cluster.radius * view.scale < LABEL_MIN_SCREEN_RADIUS) continue;
-    const sx = (cluster.x * cos - cluster.y * sin) * view.stretchX * view.scale + view.offsetX;
-    const sy = (cluster.x * sin + cluster.y * cos) * view.stretchY * view.scale + view.offsetY;
+    const sx = cluster.x * view.stretchX * view.scale + view.offsetX;
+    const sy = cluster.y * view.stretchY * view.scale + view.offsetY;
     if (sx < 0 || sx > width || sy < 0 || sy > height) continue;
     ctx.globalAlpha = (intro - 0.6) / 0.4;
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";

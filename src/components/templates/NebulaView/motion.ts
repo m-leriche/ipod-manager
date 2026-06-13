@@ -1,5 +1,5 @@
 import type { MapPoint } from "./types";
-import { GALAXY_SPIN, INTRO_DURATION_MS, INTRO_STAGGER_MS, INTRO_SWIRL } from "./constants";
+import { INTRO_DURATION_MS, INTRO_STAGGER_MS, INTRO_SWIRL } from "./constants";
 
 export const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
 
@@ -14,22 +14,23 @@ export const introProgress = (point: MapPoint, elapsedMs: number): number => {
   return easeOutCubic(local);
 };
 
-/** Rotation of the whole galaxy around its center at time t. */
-export const galaxyRotation = (timeSec: number): number => timeSec * GALAXY_SPIN;
-
 /**
- * Animated world position: the point orbits its cluster center while the
- * whole galaxy slowly spins, and during the intro everything swirls in
- * from the center. Writes into `out` so per-frame rendering allocates
- * nothing.
+ * Animated world position: the point orbits its cluster center, and during
+ * the big-bang intro it swirls in from the galaxy center as it eases out to
+ * rest. Writes into `out` so per-frame rendering allocates nothing.
  */
 export const pointPositionInto = (point: MapPoint, timeSec: number, intro: number, out: { x: number; y: number }) => {
   const angle = point.orbitAngle + point.orbitSpeed * timeSec;
   const x = point.clusterX + Math.cos(angle) * point.orbitRadius;
   const y = point.clusterY + Math.sin(angle) * point.orbitRadius;
-  const rotation = galaxyRotation(timeSec) + (intro < 1 ? (1 - intro) * INTRO_SWIRL : 0);
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
+  if (intro >= 1) {
+    out.x = x;
+    out.y = y;
+    return;
+  }
+  const swirl = (1 - intro) * INTRO_SWIRL;
+  const cos = Math.cos(swirl);
+  const sin = Math.sin(swirl);
   out.x = (x * cos - y * sin) * intro;
   out.y = (x * sin + y * cos) * intro;
 };

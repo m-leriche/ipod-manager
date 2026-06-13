@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { LibraryTrack } from "../../../types/library";
-import { buildGenreMapLayout, genreColors, primaryGenre } from "./helpers";
+import { buildNebulaLayout, genreColors, primaryGenre } from "./helpers";
 import { UNKNOWN_GENRE } from "./constants";
 
 const track = (id: number, genre: string | null, overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
@@ -65,17 +65,17 @@ describe("genreColors", () => {
   });
 });
 
-describe("buildGenreMapLayout", () => {
+describe("buildNebulaLayout", () => {
   const tracks = [track(1, "Rock"), track(2, "Rock"), track(3, "Rock; Pop"), track(4, "Jazz"), track(5, null)];
 
   it("creates one point per track and one cluster per primary genre", () => {
-    const layout = buildGenreMapLayout(tracks);
+    const layout = buildNebulaLayout(tracks);
     expect(layout.points).toHaveLength(5);
     expect(layout.clusters.map((c) => c.name).sort()).toEqual(["Jazz", "Rock", UNKNOWN_GENRE]);
   });
 
   it("keeps every point within the square half-side extent", () => {
-    const layout = buildGenreMapLayout(tracks);
+    const layout = buildNebulaLayout(tracks);
     for (const point of layout.points) {
       expect(Math.max(Math.abs(point.x), Math.abs(point.y))).toBeLessThanOrEqual(layout.extent);
     }
@@ -83,7 +83,7 @@ describe("buildGenreMapLayout", () => {
 
   it("fills the rectangle's corners rather than leaving a centred ellipse", () => {
     const many = Array.from({ length: 200 }, (_, i) => track(i + 1, `Genre ${i % 12}`));
-    const { points, extent } = buildGenreMapLayout(many);
+    const { points, extent } = buildNebulaLayout(many);
     // A round blob never populates corners; the square reshape must put some
     // point well into one (both axes far from centre at once).
     const inCorner = points.some((p) => Math.abs(p.x) > 0.5 * extent && Math.abs(p.y) > 0.5 * extent);
@@ -91,11 +91,11 @@ describe("buildGenreMapLayout", () => {
   });
 
   it("is deterministic for the same input", () => {
-    expect(buildGenreMapLayout(tracks)).toEqual(buildGenreMapLayout(tracks));
+    expect(buildNebulaLayout(tracks)).toEqual(buildNebulaLayout(tracks));
   });
 
   it("colors points to match their cluster", () => {
-    const layout = buildGenreMapLayout(tracks);
+    const layout = buildNebulaLayout(tracks);
     const clusterColor = new Map(layout.clusters.map((c) => [c.name, c.color]));
     for (const point of layout.points) {
       expect(point.color).toBe(clusterColor.get(point.genre));

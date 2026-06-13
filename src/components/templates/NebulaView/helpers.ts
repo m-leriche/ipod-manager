@@ -1,5 +1,5 @@
 import type { LibraryTrack } from "../../../types/library";
-import type { GenreCluster, GenreMapLayout, MapPoint } from "./types";
+import type { GenreCluster, NebulaLayout, MapPoint } from "./types";
 import {
   CLUSTER_GAP,
   DISC_SPREAD,
@@ -175,7 +175,7 @@ const reshapeToSquare = (clusters: GenreCluster[], points: MapPoint[]) => {
   }
 };
 
-export const buildGenreMapLayout = (tracks: LibraryTrack[]): GenreMapLayout => {
+export const buildNebulaLayout = (tracks: LibraryTrack[]): NebulaLayout => {
   const byGenre = new Map<string, LibraryTrack[]>();
   for (const track of tracks) {
     const genre = primaryGenre(track.genre);

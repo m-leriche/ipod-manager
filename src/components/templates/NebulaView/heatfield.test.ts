@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { LibraryTrack } from "../../../types/library";
-import { buildGenreMapLayout } from "./helpers";
+import { buildNebulaLayout } from "./helpers";
 import { buildHeatField, computeContours } from "./heatfield";
 import { CONTOUR_LEVELS } from "./constants";
 
@@ -36,7 +36,7 @@ const track = (id: number, genre: string, playCount = 0): LibraryTrack => ({
   replay_gain_album_db: null,
 });
 
-const layout = buildGenreMapLayout([
+const layout = buildNebulaLayout([
   ...Array.from({ length: 40 }, (_, i) => track(i + 1, "Rock", 10)),
   ...Array.from({ length: 10 }, (_, i) => track(i + 100, "Jazz")),
 ]);

@@ -31,7 +31,7 @@ export interface GenreCluster {
   trackCount: number;
 }
 
-export interface GenreMapLayout {
+export interface NebulaLayout {
   points: MapPoint[];
   clusters: GenreCluster[];
   /** Half-width of the square world region containing all clusters. */

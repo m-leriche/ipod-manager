@@ -25,11 +25,6 @@ export const SCATTER_BLEED = 1.35;
 /** Fraction of a genre's tracks scattered as fringe satellites. */
 export const OUTLIER_FRACTION = 0.18;
 
-/** Perpetual rotation of the whole galaxy, radians per second. Disabled: a
- * rigid spin rotates the rectangular mass out of the frame. Per-point orbital
- * drift (ORBIT_BASE_SPEED) keeps the galaxy in continuous motion instead. */
-export const GALAXY_SPIN = 0;
-
 /** Smallest cluster radius so tiny genres still read as a blob. */
 export const MIN_CLUSTER_RADIUS = 14;
 

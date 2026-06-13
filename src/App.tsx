@@ -42,8 +42,8 @@ const DiscoverView = lazy(() =>
 const InboxView = lazy(() =>
   import("./components/templates/InboxView/InboxView").then((m) => ({ default: m.InboxView })),
 );
-const GenreMapView = lazy(() =>
-  import("./components/templates/GenreMapView/GenreMapView").then((m) => ({ default: m.GenreMapView })),
+const NebulaView = lazy(() =>
+  import("./components/templates/NebulaView/NebulaView").then((m) => ({ default: m.NebulaView })),
 );
 
 // Lazy-loaded tool tabs and modals (only loaded when the user navigates to them)
@@ -83,9 +83,9 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
-type TopTab = "library" | "discover" | "inbox" | "genremap" | "tools";
+type TopTab = "library" | "discover" | "inbox" | "tools";
 type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
-type DiscoverTab = "discover" | "releases";
+type DiscoverTab = "discover" | "releases" | "nebula";
 
 const App = () => (
   <ThemeProvider>
@@ -290,9 +290,6 @@ const AppContent = () => {
             <TopTabButton active={topTab === "inbox"} onClick={() => setTopTab("inbox")}>
               Inbox
             </TopTabButton>
-            <TopTabButton active={topTab === "genremap"} onClick={() => setTopTab("genremap")}>
-              Genre Map
-            </TopTabButton>
           </div>
           <div className="flex-1" />
           <button
@@ -339,6 +336,9 @@ const AppContent = () => {
                     >
                       Releases
                     </DiscoverTabButton>
+                    <DiscoverTabButton active={discoverTab === "nebula"} onClick={() => setDiscoverTab("nebula")}>
+                      Nebula
+                    </DiscoverTabButton>
                   </div>
                 </div>
                 <div className="flex-1 min-h-0">
@@ -354,6 +354,13 @@ const AppContent = () => {
                       <NewReleasesView />
                     </ErrorBoundary>
                   )}
+                  {discoverTab === "nebula" && (
+                    <Suspense fallback={null}>
+                      <ErrorBoundary name="Nebula">
+                        <NebulaView />
+                      </ErrorBoundary>
+                    </Suspense>
+                  )}
                 </div>
               </div>
             )}
@@ -362,15 +369,6 @@ const AppContent = () => {
                 <Suspense fallback={null}>
                   <ErrorBoundary name="Inbox">
                     <InboxView />
-                  </ErrorBoundary>
-                </Suspense>
-              </div>
-            )}
-            {topTab === "genremap" && (
-              <div className="h-full flex flex-col pt-5 view-enter">
-                <Suspense fallback={null}>
-                  <ErrorBoundary name="Genre Map">
-                    <GenreMapView />
                   </ErrorBoundary>
                 </Suspense>
               </div>

@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { usePlayback } from "../../../contexts/PlaybackContext";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import { GenreMapCanvas } from "./GenreMapCanvas";
-import { useGenreMapData } from "./useGenreMapData";
+import { NebulaCanvas } from "./NebulaCanvas";
+import { useNebulaData } from "./useNebulaData";
 import type { MapPoint } from "./types";
 
-export const GenreMapView = () => {
-  const { layout, trackCount, loading, error, reload } = useGenreMapData();
+export const NebulaView = () => {
+  const { layout, trackCount, loading, error, reload } = useNebulaData();
   const { playTrack } = usePlayback();
 
   const handleSelectTrack = useCallback(
@@ -51,14 +51,14 @@ export const GenreMapView = () => {
   return (
     <div className="h-full flex flex-col">
       <div className="px-8 pb-3 shrink-0 flex items-baseline gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">Genre Map</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Nebula</h2>
         <p className="text-[11px] text-text-tertiary">
           {trackCount.toLocaleString()} tracks · {layout.clusters.length} genres · color = genre · drag = pan · scroll =
           zoom · click = play
         </p>
       </div>
       <div className="flex-1 min-h-0 mx-8 mb-6 rounded-lg border border-border bg-bg-secondary overflow-hidden">
-        <GenreMapCanvas layout={layout} onSelectTrack={handleSelectTrack} />
+        <NebulaCanvas layout={layout} onSelectTrack={handleSelectTrack} />
       </div>
     </div>
   );

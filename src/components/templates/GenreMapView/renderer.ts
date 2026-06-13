@@ -31,9 +31,11 @@ const createGlowSprite = (color: string): HTMLCanvasElement => {
   if (!ctx) return canvas;
   const half = size / 2;
   const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 0.95)");
-  gradient.addColorStop(0.2, color);
-  gradient.addColorStop(0.55, color.replace(")", " / 0.25)"));
+  // Tiny white pinpoint, then the genre hue takes over fast and carries most
+  // of the glow — so dots read as their colour instead of blowing out white.
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.85)");
+  gradient.addColorStop(0.1, color);
+  gradient.addColorStop(0.45, color.replace(")", " / 0.4)"));
   gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
@@ -99,13 +101,19 @@ const drawStars = (params: FrameParams) => {
 /** Infrared-style heat shading: the density field drawn as one glowing image. */
 const drawHeat = (params: FrameParams, intro: number) => {
   const { ctx, view, heat, heatCanvas, timeSec } = params;
-  const half = heat.worldExtent * view.scale * intro;
-  // Slow breathing so the terrain feels alive rather than printed
-  ctx.globalAlpha = (0.88 + 0.12 * Math.sin(timeSec * 0.35)) * intro;
+  const half = heat.worldExtent;
+  const k = view.scale * intro;
+  // Ambient underglow so the genre colours stay the star of the show; slow
+  // breathing keeps the terrain feeling alive rather than printed.
+  ctx.globalAlpha = (0.55 + 0.1 * Math.sin(timeSec * 0.35)) * intro;
   ctx.imageSmoothingEnabled = true;
   ctx.save();
+  // Stretch is applied outside the rotation (screen-aligned) so the terrain
+  // keeps filling the rectangle as the galaxy spins.
   ctx.translate(view.offsetX, view.offsetY);
+  ctx.scale(view.stretchX, view.stretchY);
   ctx.rotate(galaxyRotation(timeSec));
+  ctx.scale(k, k);
   ctx.drawImage(heatCanvas, -half, -half, half * 2, half * 2);
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -139,6 +147,7 @@ const drawContours = (params: FrameParams, intro: number) => {
   const paths = contourPaths(contours);
   ctx.save();
   ctx.translate(view.offsetX, view.offsetY);
+  ctx.scale(view.stretchX, view.stretchY);
   ctx.rotate(galaxyRotation(timeSec));
   ctx.scale(k, k);
   ctx.lineWidth = 1 / k;
@@ -155,15 +164,15 @@ const scratchPos = { x: 0, y: 0 };
 
 const drawPoints = (params: FrameParams) => {
   const { ctx, width, height, view, layout, glows, timeSec, introElapsedMs, hovered } = params;
-  const { scale, offsetX, offsetY } = view;
+  const { scale, stretchX, stretchY, offsetX, offsetY } = view;
   for (const point of layout.points) {
     const sprite = glows.get(point.color);
     if (!sprite) continue;
     const intro = introProgress(point, introElapsedMs);
     if (intro === 0) continue;
     pointPositionInto(point, timeSec, intro, scratchPos);
-    const sx = scratchPos.x * scale + offsetX;
-    const sy = scratchPos.y * scale + offsetY;
+    const sx = scratchPos.x * stretchX * scale + offsetX;
+    const sy = scratchPos.y * stretchY * scale + offsetY;
     const isHovered = point === hovered;
     const radius = Math.max(point.radius * scale, 1.4) * (isHovered ? 1.6 : 1);
     // Cap the halo so deep zooms don't melt the GPU on fill rate
@@ -194,8 +203,8 @@ const drawLabels = (params: FrameParams, intro: number) => {
   ctx.textBaseline = "middle";
   for (const cluster of layout.clusters) {
     if (cluster.radius * view.scale < LABEL_MIN_SCREEN_RADIUS) continue;
-    const sx = (cluster.x * cos - cluster.y * sin) * view.scale + view.offsetX;
-    const sy = (cluster.x * sin + cluster.y * cos) * view.scale + view.offsetY;
+    const sx = (cluster.x * cos - cluster.y * sin) * view.stretchX * view.scale + view.offsetX;
+    const sy = (cluster.x * sin + cluster.y * cos) * view.stretchY * view.scale + view.offsetY;
     if (sx < 0 || sx > width || sy < 0 || sy > height) continue;
     ctx.globalAlpha = (intro - 0.6) / 0.4;
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";

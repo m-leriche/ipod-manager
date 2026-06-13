@@ -18,12 +18,30 @@ const HOVER_THROTTLE_MS = 40;
 // resolution nearly halves the per-frame fill cost on 2x displays.
 const getDpr = () => Math.min(window.devicePixelRatio || 1, 1.5);
 
-// Fit at 0.7 so the galaxy floats in empty space instead of filling the frame
-const fitView = (width: number, height: number, extent: number): ViewTransform => ({
-  scale: Math.max((Math.min(width, height) / (extent * 2)) * 0.7, MIN_ZOOM),
-  offsetX: width / 2,
-  offsetY: height / 2,
-});
+// Fraction of each axis the galaxy spans on load — near 1 so it uses the
+// whole rectangle while leaving a hair of margin so edge points don't clip.
+const FIT_FILL = 0.92;
+
+// Start zoomed in past the full fit so the dense centre fills the frame on
+// load; the edges overflow and the user can scroll out to reveal the rest.
+const INITIAL_ZOOM = 1.5;
+
+// Fit so the (roughly square) galaxy fills the entire rectangular viewport:
+// a base uniform scale binds the smaller axis, then a screen-aligned stretch
+// spreads the larger axis edge to edge. The stretch is derived from the base
+// scale, so multiplying scale by INITIAL_ZOOM zooms in (overflowing the
+// edges) while keeping the aspect fill correct.
+const fitView = (width: number, height: number, extent: number): ViewTransform => {
+  const span = extent * 2;
+  const baseScale = Math.max((Math.min(width, height) / span) * FIT_FILL, MIN_ZOOM);
+  return {
+    scale: baseScale * INITIAL_ZOOM,
+    stretchX: (width * FIT_FILL) / (span * baseScale),
+    stretchY: (height * FIT_FILL) / (span * baseScale),
+    offsetX: width / 2,
+    offsetY: height / 2,
+  };
+};
 
 export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,35 +67,32 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
   const heatCanvas = useMemo(() => createHeatCanvas(heat), [heat]);
   const contours = useMemo(() => computeContours(heat), [heat]);
 
-  // Refit and restart the big-bang intro whenever a new layout arrives
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const dpr = getDpr();
-      viewRef.current = fitView(canvas.width / dpr, canvas.height / dpr, layout.extent);
-    } else {
-      viewRef.current = null;
-    }
-    zoomRef.current = null;
-    velocityRef.current = { x: 0, y: 0 };
-  }, [layout]);
-
-  // Keep the canvas backing store in sync with its container size
+  // Size the canvas to its container and fit the galaxy to fill it. Runs on
+  // mount, on every new layout (refitting + restarting the intro), and on
+  // resize — refitting so the stretch always matches the current aspect.
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
-    const resize = (width: number, height: number) => {
+    let lastWidth = 0;
+    let lastHeight = 0;
+    const fit = (width: number, height: number) => {
+      lastWidth = width;
+      lastHeight = height;
       const dpr = getDpr();
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
-      if (!viewRef.current) viewRef.current = fitView(width, height, layout.extent);
+      viewRef.current = fitView(width, height, layout.extent);
+      zoomRef.current = null;
+      velocityRef.current = { x: 0, y: 0 };
     };
 
-    resize(container.clientWidth, container.clientHeight);
+    fit(container.clientWidth, container.clientHeight);
     const observer = new ResizeObserver(([entry]) => {
-      resize(entry.contentRect.width, entry.contentRect.height);
+      const { width, height } = entry.contentRect;
+      if (Math.abs(width - lastWidth) < 1 && Math.abs(height - lastHeight) < 1) return;
+      fit(width, height);
     });
     observer.observe(container);
     return () => observer.disconnect();
@@ -174,8 +189,8 @@ export const GenreMapCanvas = ({ layout, onSelectTrack }: GenreMapCanvasProps) =
         const intro = introProgress(point, introElapsedMs);
         if (intro === 0) continue;
         pointPositionInto(point, timeSec, intro, pos);
-        const dx = pos.x * view.scale + view.offsetX - cx;
-        const dy = pos.y * view.scale + view.offsetY - cy;
+        const dx = pos.x * view.stretchX * view.scale + view.offsetX - cx;
+        const dy = pos.y * view.stretchY * view.scale + view.offsetY - cy;
         const distSq = dx * dx + dy * dy;
         const hitRadius = Math.max(point.radius * view.scale, HOVER_RADIUS_PX);
         if (distSq <= hitRadius * hitRadius && distSq < bestDistSq) {

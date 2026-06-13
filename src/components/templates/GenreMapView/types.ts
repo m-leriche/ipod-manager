@@ -39,7 +39,12 @@ export interface GenreMapLayout {
 }
 
 export interface ViewTransform {
+  /** Uniform zoom factor, driven by scroll. */
   scale: number;
+  /** Screen-aligned anisotropic stretch that spreads the round galaxy to
+   * fill the rectangular viewport. Stays fixed while zooming/panning. */
+  stretchX: number;
+  stretchY: number;
   offsetX: number;
   offsetY: number;
 }

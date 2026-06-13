@@ -2,13 +2,14 @@ import type { LibraryTrack } from "../../../types/library";
 import type { GenreCluster, GenreMapLayout, MapPoint } from "./types";
 import {
   CLUSTER_GAP,
-  CLUSTER_OVERLAP,
+  DISC_SPREAD,
   MIN_CLUSTER_RADIUS,
   ORBIT_BASE_SPEED,
   OUTLIER_FRACTION,
   POINT_SPACING,
   SCATTER_BLEED,
-  SPIRAL_TIGHTNESS,
+  SPIRAL_TURNS_MAX,
+  SPIRAL_TURNS_MIN,
   UNKNOWN_GENRE,
 } from "./constants";
 
@@ -44,7 +45,9 @@ export const genreColors = (names: string[]): Map<string, string> => {
   const colors = new Map<string, string>();
   sorted.forEach((name, i) => {
     const hue = Math.round((i / sorted.length) * 360);
-    colors.set(name, `hsl(${hue} 85% 62%)`);
+    // High saturation, mid lightness → vivid, fully-colored stars rather than
+    // pale ones that wash toward white when blended.
+    colors.set(name, `hsl(${hue} 95% 55%)`);
   });
   colors.set(UNKNOWN_GENRE, "hsl(0 0% 55%)");
   return colors;
@@ -54,30 +57,29 @@ const clusterRadius = (trackCount: number): number =>
   Math.max(MIN_CLUSTER_RADIUS, POINT_SPACING * Math.sqrt(trackCount));
 
 /**
- * Wind the clusters along one continuous spiral in alphabetical (= hue)
- * order, each center placed inside its neighbour's radius. Adjacent hues
- * sit side by side and overlap, so the colors flow through one
- * intertwined mass instead of separated discs.
+ * Place the clusters on a Fermat (sunflower) spiral in alphabetical (= hue)
+ * order: the √-distributed radius fills a disc evenly for any number of
+ * genres — three or three hundred — so the mass never degenerates into a
+ * thin arm, while a fixed number of turns keeps adjacent hues next to each
+ * other so the rainbow still flows through one enmeshed body.
  */
 const placeClusters = (
   genres: { name: string; count: number }[],
 ): Map<string, { x: number; y: number; radius: number }> => {
   const ordered = [...genres].sort((a, b) => a.name.localeCompare(b.name));
-  const positions = new Map<string, { x: number; y: number; radius: number }>();
+  const n = ordered.length;
+  const radii = ordered.map((g) => clusterRadius(g.count));
+  const avgRadius = radii.reduce((sum, r) => sum + r, 0) / Math.max(n, 1);
+  // Disc sized so neighbouring clusters overlap into one mass regardless of n
+  const discRadius = DISC_SPREAD * avgRadius * Math.sqrt(n);
+  const turns = Math.min(Math.max(n / 12, SPIRAL_TURNS_MIN), SPIRAL_TURNS_MAX);
+  const angleStep = (Math.PI * 2 * turns) / Math.max(n, 1);
 
-  let angle = 0;
-  let dist = 0;
-  let prevRadius = 0;
+  const positions = new Map<string, { x: number; y: number; radius: number }>();
   ordered.forEach((genre, i) => {
-    const radius = clusterRadius(genre.count);
-    if (i > 0) {
-      const step = (prevRadius + radius) * CLUSTER_OVERLAP;
-      dist = Math.max(dist, step);
-      angle += step / dist;
-      dist += step * SPIRAL_TIGHTNESS;
-    }
-    positions.set(genre.name, { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, radius });
-    prevRadius = radius;
+    const dist = discRadius * Math.sqrt((i + 0.5) / n);
+    const angle = i * angleStep;
+    positions.set(genre.name, { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, radius: radii[i] });
   });
 
   return positions;
@@ -140,6 +142,39 @@ const placeTracks = (tracks: LibraryTrack[], cluster: GenreCluster): MapPoint[] 
   });
 };
 
+/**
+ * Radial disc→square map: scales a point outward by a factor that depends
+ * only on its angle (1 on the axes, up to √2 on the diagonals), pushing a
+ * round mass out to fill a square while staying connected and centre-dense.
+ * The view's anisotropic stretch then maps that square onto the rectangular
+ * viewport, so the galaxy fills the frame corner to corner.
+ */
+const squareFactor = (x: number, y: number): number => {
+  const cheb = Math.max(Math.abs(x), Math.abs(y));
+  if (cheb < 1e-6) return 1;
+  return Math.hypot(x, y) / cheb;
+};
+
+/**
+ * Reshape the round galaxy into a square. Cluster centres move outward;
+ * each point keeps its orbit offset relative to its (moved) centre so the
+ * animation and heat field follow the new shape.
+ */
+const reshapeToSquare = (clusters: GenreCluster[], points: MapPoint[]) => {
+  for (const cluster of clusters) {
+    const f = squareFactor(cluster.x, cluster.y);
+    cluster.x *= f;
+    cluster.y *= f;
+  }
+  for (const point of points) {
+    const f = squareFactor(point.clusterX, point.clusterY);
+    point.clusterX *= f;
+    point.clusterY *= f;
+    point.x = point.clusterX + Math.cos(point.orbitAngle) * point.orbitRadius;
+    point.y = point.clusterY + Math.sin(point.orbitAngle) * point.orbitRadius;
+  }
+};
+
 export const buildGenreMapLayout = (tracks: LibraryTrack[]): GenreMapLayout => {
   const byGenre = new Map<string, LibraryTrack[]>();
   for (const track of tracks) {
@@ -168,7 +203,10 @@ export const buildGenreMapLayout = (tracks: LibraryTrack[]): GenreMapLayout => {
     points.push(...placeTracks(genreTracks, cluster));
   }
 
-  // Satellites reach past their cluster radius, so size the world to the points
-  const extent = points.reduce((max, p) => Math.max(max, Math.hypot(p.x, p.y)), 0) + CLUSTER_GAP;
+  reshapeToSquare(clusters, points);
+
+  // The mass now fills a square, so size the world to its half-side (the
+  // largest Chebyshev distance) — fitView maps that square onto the viewport.
+  const extent = points.reduce((max, p) => Math.max(max, Math.abs(p.x), Math.abs(p.y)), 0) + CLUSTER_GAP;
   return { points, clusters, extent };
 };

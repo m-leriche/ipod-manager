@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { LibraryTrack } from "../../../types/library";
 import { buildGenreMapLayout, genreColors, primaryGenre } from "./helpers";
-import { CLUSTER_GAP, UNKNOWN_GENRE } from "./constants";
+import { UNKNOWN_GENRE } from "./constants";
 
 const track = (id: number, genre: string | null, overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
   id,
@@ -74,21 +74,20 @@ describe("buildGenreMapLayout", () => {
     expect(layout.clusters.map((c) => c.name).sort()).toEqual(["Jazz", "Rock", UNKNOWN_GENRE]);
   });
 
-  it("keeps every point inside the map extent", () => {
+  it("keeps every point within the square half-side extent", () => {
     const layout = buildGenreMapLayout(tracks);
     for (const point of layout.points) {
-      expect(Math.hypot(point.x, point.y)).toBeLessThanOrEqual(layout.extent + CLUSTER_GAP);
+      expect(Math.max(Math.abs(point.x), Math.abs(point.y))).toBeLessThanOrEqual(layout.extent);
     }
   });
 
-  it("keeps alphabetically adjacent genres touching so hues flow through one mass", () => {
+  it("fills the rectangle's corners rather than leaving a centred ellipse", () => {
     const many = Array.from({ length: 200 }, (_, i) => track(i + 1, `Genre ${i % 12}`));
-    const { clusters } = buildGenreMapLayout(many);
-    const ordered = [...clusters].sort((a, b) => a.name.localeCompare(b.name));
-    for (let i = 1; i < ordered.length; i++) {
-      const dist = Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].y - ordered[i - 1].y);
-      expect(dist).toBeLessThanOrEqual(ordered[i].radius + ordered[i - 1].radius);
-    }
+    const { points, extent } = buildGenreMapLayout(many);
+    // A round blob never populates corners; the square reshape must put some
+    // point well into one (both axes far from centre at once).
+    const inCorner = points.some((p) => Math.abs(p.x) > 0.5 * extent && Math.abs(p.y) > 0.5 * extent);
+    expect(inCorner).toBe(true);
   });
 
   it("is deterministic for the same input", () => {

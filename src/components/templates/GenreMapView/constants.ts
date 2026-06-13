@@ -8,12 +8,15 @@ export const POINT_SPACING = 7;
 /** World-space padding added around the outermost point. */
 export const CLUSTER_GAP = 36;
 
-/** Spacing between consecutive cluster centers as a fraction of their summed
- * radii — well below 1 so neighbouring genres stack into one enmeshed mass. */
-export const CLUSTER_OVERLAP = 0.42;
+/** Disc radius as a multiple of avg cluster radius × √(genre count). Sets how
+ * spread out the clusters are; lower = more overlap / denser enmeshing. */
+export const DISC_SPREAD = 1.3;
 
-/** How quickly the cluster spiral winds outward from the galaxy core. */
-export const SPIRAL_TIGHTNESS = 0.22;
+/** Number of turns the hue-ordered arm winds across the whole genre set,
+ * scaled mildly by count. Keeps adjacent hues adjacent while the √-radius
+ * distribution fills the disc evenly for any number of genres. */
+export const SPIRAL_TURNS_MIN = 1;
+export const SPIRAL_TURNS_MAX = 2.5;
 
 /** Core scatter reaches this far past the nominal cluster radius, so each
  * genre's points bleed deep into its neighbours. */
@@ -22,8 +25,10 @@ export const SCATTER_BLEED = 1.35;
 /** Fraction of a genre's tracks scattered as fringe satellites. */
 export const OUTLIER_FRACTION = 0.18;
 
-/** Perpetual rotation of the whole galaxy, radians per second. */
-export const GALAXY_SPIN = 0.015;
+/** Perpetual rotation of the whole galaxy, radians per second. Disabled: a
+ * rigid spin rotates the rectangular mass out of the frame. Per-point orbital
+ * drift (ORBIT_BASE_SPEED) keeps the galaxy in continuous motion instead. */
+export const GALAXY_SPIN = 0;
 
 /** Smallest cluster radius so tiny genres still read as a blob. */
 export const MIN_CLUSTER_RADIUS = 14;

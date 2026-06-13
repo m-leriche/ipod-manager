@@ -111,7 +111,7 @@ export const createHeatCanvas = (field: HeatField): HTMLCanvasElement => {
     image.data[i * 4] = r;
     image.data[i * 4 + 1] = g;
     image.data[i * 4 + 2] = b;
-    image.data[i * 4 + 3] = Math.round(Math.min(Math.max((t - 0.02) / 0.38, 0), 1) * 235);
+    image.data[i * 4 + 3] = Math.round(Math.min(Math.max((t - 0.02) / 0.38, 0), 1) * 150);
   }
   ctx.putImageData(image, 0, 0);
   return canvas;

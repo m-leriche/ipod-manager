@@ -195,6 +195,11 @@ fn resolve_candidates(
         // Smart playlists follow their rules: surface owned tracks only when
         // they match the rules. Un-owned discoveries can't be rule-checked, so
         // they pass through to keep the bar populated and on-theme.
+        //
+        // Mostly a safety net: smart-playlist seeds are the full rule-matched
+        // set, so on-theme owned candidates are already excluded as existing
+        // seeds in fetch_candidates. This still catches owned candidates whose
+        // seed was skipped (e.g. blank title) and would otherwise leak in.
         if is_smart && in_library && !track_id.is_some_and(|id| rule_ids.contains(&id)) {
             continue;
         }

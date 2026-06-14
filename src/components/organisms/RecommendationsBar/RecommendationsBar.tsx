@@ -90,7 +90,7 @@ export const RecommendationsBar = ({ playlistId, smartPlaylistId, refreshKey }: 
                 rec={rec}
                 canAdd={canAdd}
                 onAdd={handleAdd}
-                adding={addingId === rec.track_id}
+                adding={rec.track_id !== null && addingId === rec.track_id}
               />
             ))}
           </div>

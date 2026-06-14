@@ -74,8 +74,10 @@ export const LibraryPlayer = ({
   const {
     playlists,
     activePlaylistId,
+    activePlaylistTracks,
     setActivePlaylist,
     activeSmartPlaylistId,
+    activeSmartPlaylistTracks,
     createSmartPlaylist,
     updateSmartPlaylist,
   } = usePlaylist();
@@ -87,11 +89,17 @@ export const LibraryPlayer = ({
 
   const data = useLibraryData(onRefreshRef);
 
-  // Refetch recommendations whenever the active playlist's track set changes.
-  const recommendationsKey = useMemo(
-    () => data.displayedTracks.map((t) => t?.id ?? "").join(","),
-    [data.displayedTracks],
-  );
+  // Refetch recommendations only when playlist membership changes. Keyed off
+  // the raw playlist track set (not the search-filtered/sorted view), sorted so
+  // reordering doesn't trigger an identical refetch — the backend seeds from the
+  // whole playlist regardless of the displayed order or filter.
+  const recommendationsKey = useMemo(() => {
+    const tracks = activeSmartPlaylistId !== null ? activeSmartPlaylistTracks : activePlaylistTracks;
+    return tracks
+      .map((t) => t?.id ?? 0)
+      .sort((a, b) => a - b)
+      .join(",");
+  }, [activeSmartPlaylistId, activePlaylistTracks, activeSmartPlaylistTracks]);
 
   // ── Push library summary to parent ────────────────────────────
 

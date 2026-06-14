@@ -1,8 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { TrackTable } from "./TrackTable";
 import type { LibraryTrack } from "../../../types/library";
+
+// Capture moveTrack so drag-reorder can be asserted (the global mock returns a
+// fresh fn per render, which can't be asserted against).
+const moveTrack = vi.fn();
+vi.mock("../../../contexts/PlaylistContext", () => ({
+  usePlaylist: () => ({
+    playlists: [],
+    addTracks: vi.fn(),
+    removeTracks: vi.fn(),
+    moveTrack,
+  }),
+}));
 
 // jsdom has no layout, so the real virtualizer renders zero rows. Stub it to
 // render the first rows of the list so row-dependent behavior is testable.
@@ -157,6 +169,35 @@ describe("TrackTable", () => {
     const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
     render(<TrackTable {...defaultProps} tracks={tracks} totalTrackCount={2} onLoadMore={onLoadMore} />);
     expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
+  it("reorders a playlist track via drag and drop", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: "", dropEffect: "" };
+
+    fireEvent.dragStart(rows[0], { dataTransfer });
+    fireEvent.dragOver(rows[2], { dataTransfer });
+    fireEvent.drop(rows[2], { dataTransfer });
+
+    // Drag row 0 onto row 2 → lands at final index 2.
+    expect(moveTrack).toHaveBeenCalledWith(5, 0, 2);
+  });
+
+  it("does not reorder outside a playlist view", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: "", dropEffect: "" };
+
+    fireEvent.dragStart(rows[0], { dataTransfer });
+    fireEvent.dragOver(rows[1], { dataTransfer });
+    fireEvent.drop(rows[1], { dataTransfer });
+
+    expect(moveTrack).not.toHaveBeenCalled();
   });
 
   it("calls onFlagTracks to unflag already-flagged track", async () => {

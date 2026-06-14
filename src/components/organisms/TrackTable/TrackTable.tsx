@@ -80,10 +80,9 @@ export const TrackTable = memo(function TrackTable({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
-  const [reorderDragOver, setReorderDragOver] = useState<number | null>(null);
-  const reorderFromRef = useRef<number | null>(null);
-  const reorderStartYRef = useRef(0);
-  const reorderActiveRef = useRef(false);
+  // Playlist drag-reorder: the gap (0..rowCount) where the dragged row will land.
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const dragFromIndexRef = useRef<number | null>(null);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -277,63 +276,58 @@ export const TrackTable = memo(function TrackTable({
     onDeleteRequest: useCallback((ids: number[]) => setDeleteConfirm(ids), []),
   });
 
-  // ── Playlist drag-to-reorder ──────────────────────────────────
+  // ── Playlist drag-to-reorder (native HTML5 DnD) ───────────────
 
   const isPlaylistView = activePlaylistId != null;
 
-  const handleReorderMouseDown = useCallback(
-    (e: React.MouseEvent, index: number) => {
-      if (!isPlaylistView || e.button !== 0) return;
-      reorderFromRef.current = index;
-      reorderStartYRef.current = e.clientY;
-      reorderActiveRef.current = false;
+  // Which gap the cursor is over: top half of a row = before it, bottom = after.
+  const gapForEvent = (e: React.DragEvent, index: number): number => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientY - rect.top < rect.height / 2 ? index : index + 1;
+  };
 
-      const handleMouseMove = (ev: MouseEvent) => {
-        if (!reorderActiveRef.current && Math.abs(ev.clientY - reorderStartYRef.current) > 5) {
-          reorderActiveRef.current = true;
-        }
-        if (!reorderActiveRef.current || !scrollRef.current) return;
-        const rows = scrollRef.current.querySelectorAll("tbody tr[data-index]");
-        let targetIndex: number | null = null;
-        for (const row of rows) {
-          const rect = row.getBoundingClientRect();
-          if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
-            targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
-            break;
-          }
-        }
-        setReorderDragOver(targetIndex);
-      };
+  const handleReorderStart = useCallback((index: number) => {
+    dragFromIndexRef.current = index;
+  }, []);
 
-      const handleMouseUp = (ev: MouseEvent) => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-        if (reorderActiveRef.current && reorderFromRef.current !== null && activePlaylistId != null) {
-          const rows = scrollRef.current?.querySelectorAll("tbody tr[data-index]");
-          let targetIndex: number | null = null;
-          if (rows) {
-            for (const row of rows) {
-              const rect = row.getBoundingClientRect();
-              if (ev.clientY >= rect.top && ev.clientY < rect.bottom) {
-                targetIndex = parseInt((row as HTMLElement).dataset.index!, 10);
-                break;
-              }
-            }
-          }
-          if (targetIndex !== null && targetIndex !== reorderFromRef.current) {
-            moveTrack(activePlaylistId, reorderFromRef.current, targetIndex);
-          }
-        }
-        reorderFromRef.current = null;
-        reorderActiveRef.current = false;
-        setReorderDragOver(null);
-      };
+  const handleReorderDragOver = useCallback((e: React.DragEvent, index: number) => {
+    // Only intercept when a reorder is in progress (a row from this table).
+    if (dragFromIndexRef.current === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropIndex(gapForEvent(e, index));
+  }, []);
 
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+  const handleReorderDrop = useCallback(
+    (e: React.DragEvent, index: number) => {
+      const from = dragFromIndexRef.current;
+      dragFromIndexRef.current = null;
+      setDropIndex(null);
+      if (from === null || activePlaylistId == null) return;
+      e.preventDefault();
+      // Map the insertion gap to a final index: dropping into a gap below the
+      // dragged row shifts the target down by one once the row is removed.
+      const gap = gapForEvent(e, index);
+      const to = from < gap ? gap - 1 : gap;
+      if (to !== from) moveTrack(activePlaylistId, from, to);
     },
-    [isPlaylistView, activePlaylistId, moveTrack],
+    [activePlaylistId, moveTrack],
   );
+
+  const handleReorderDragEnd = useCallback(() => {
+    dragFromIndexRef.current = null;
+    setDropIndex(null);
+  }, []);
+
+  // Auto-scroll when dragging near the top/bottom edge of a long playlist.
+  const handleContainerDragOver = useCallback((e: React.DragEvent) => {
+    if (dragFromIndexRef.current === null || !scrollRef.current) return;
+    const el = scrollRef.current;
+    const rect = el.getBoundingClientRect();
+    const EDGE = 40;
+    if (e.clientY < rect.top + EDGE) el.scrollTop -= 10;
+    else if (e.clientY > rect.bottom - EDGE) el.scrollTop += 10;
+  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -412,6 +406,7 @@ export const TrackTable = memo(function TrackTable({
             headerScrollRef.current.scrollLeft = scrollRef.current.scrollLeft;
           }
         }}
+        onDragOver={isPlaylistView ? handleContainerDragOver : undefined}
         onDragStartCapture={() => {
           dragPayload = selected.size > 0 ? loadedTracks.filter((t) => selected.has(t.id)) : [];
         }}
@@ -448,12 +443,16 @@ export const TrackTable = memo(function TrackTable({
                   isCurrentTrack={currentTrackId === track.id}
                   isPlaying={currentTrackId === track.id && isActivePlaying}
                   isSelected={selected.has(track.id)}
-                  isDragOver={reorderDragOver === virtualRow.index}
+                  dropAbove={isPlaylistView && dropIndex === virtualRow.index}
+                  dropBelow={isPlaylistView && dropIndex === rowCount && virtualRow.index === rowCount - 1}
                   selectedCount={selected.size}
                   onClick={handleClick}
                   onDoubleClick={handleDoubleClick}
                   onContextMenu={handleContextMenu}
-                  onMouseDown={isPlaylistView ? handleReorderMouseDown : undefined}
+                  onReorderStart={isPlaylistView ? handleReorderStart : undefined}
+                  onReorderDragOver={isPlaylistView ? handleReorderDragOver : undefined}
+                  onReorderDrop={isPlaylistView ? handleReorderDrop : undefined}
+                  onReorderDragEnd={isPlaylistView ? handleReorderDragEnd : undefined}
                 />
               );
             })}

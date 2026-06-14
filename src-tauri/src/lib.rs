@@ -28,6 +28,7 @@ mod network;
 mod playlist_export;
 mod process;
 mod profiles;
+mod recommend;
 mod rockbox;
 mod sanitize;
 mod streaming;
@@ -350,6 +351,7 @@ pub fn run() {
             commands::update_smart_playlist,
             commands::delete_smart_playlist,
             commands::get_smart_playlist_tracks,
+            commands::get_playlist_recommendations,
             commands::media_set_metadata,
             commands::media_set_playback,
             commands::check_fpcalc,

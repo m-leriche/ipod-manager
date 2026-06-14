@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ErrorBoundary } from "../../atoms/ErrorBoundary/ErrorBoundary";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
@@ -9,6 +9,7 @@ import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPa
 import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { PlaylistSidebar } from "./PlaylistSidebar";
 import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
+import { RecommendationsBar } from "../../organisms/RecommendationsBar/RecommendationsBar";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { LibraryToolbar } from "./LibraryToolbar";
 import { useProgress } from "../../../contexts/ProgressContext";
@@ -85,6 +86,12 @@ export const LibraryPlayer = ({
   // ── Data management ───────────────────────────────────────────
 
   const data = useLibraryData(onRefreshRef);
+
+  // Refetch recommendations whenever the active playlist's track set changes.
+  const recommendationsKey = useMemo(
+    () => data.displayedTracks.map((t) => t?.id ?? "").join(","),
+    [data.displayedTracks],
+  );
 
   // ── Push library summary to parent ────────────────────────────
 
@@ -356,6 +363,16 @@ export const LibraryPlayer = ({
               isFetchingGenres={genreFetch.fetching}
               onRepairMetadata={onRepairMetadata}
               activePlaylistId={activePlaylistId}
+            />
+          </ErrorBoundary>
+        )}
+
+        {isPlaylistView && (
+          <ErrorBoundary name="Recommendations" compact>
+            <RecommendationsBar
+              playlistId={activePlaylistId}
+              smartPlaylistId={activeSmartPlaylistId}
+              refreshKey={recommendationsKey}
             />
           </ErrorBoundary>
         )}

@@ -171,19 +171,41 @@ describe("TrackTable", () => {
     expect(onLoadMore).not.toHaveBeenCalled();
   });
 
-  it("reorders a playlist track via drag and drop", () => {
+  // jsdom has no layout; give rows a deterministic 20px-tall stacked geometry.
+  const stubRowGeometry = (rows: NodeListOf<Element>) => {
+    rows.forEach((row, i) => {
+      (row as HTMLElement).getBoundingClientRect = () =>
+        ({ top: i * 20, bottom: i * 20 + 20, height: 20, left: 0, right: 0, width: 0, x: 0, y: i * 20 }) as DOMRect;
+    });
+  };
+
+  it("reorders a playlist track via pointer drag", () => {
     moveTrack.mockClear();
     const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
     const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
     const rows = container.querySelectorAll("tbody tr[data-index]");
-    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: "", dropEffect: "" };
+    stubRowGeometry(rows);
 
-    fireEvent.dragStart(rows[0], { dataTransfer });
-    fireEvent.dragOver(rows[2], { dataTransfer });
-    fireEvent.drop(rows[2], { dataTransfer });
+    // Grab row 0, drag down into the bottom half of row 2 (y=55 → gap 3).
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 55 });
+    fireEvent.pointerUp(window, { clientY: 55 });
 
-    // Drag row 0 onto row 2 → lands at final index 2.
+    // gap 3 with from 0 → final index 2.
     expect(moveTrack).toHaveBeenCalledWith(5, 0, 2);
+  });
+
+  it("treats a click (no movement) as selection, not a reorder", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerUp(window, { clientY: 6 }); // < 5px threshold
+
+    expect(moveTrack).not.toHaveBeenCalled();
   });
 
   it("does not reorder outside a playlist view", () => {
@@ -191,11 +213,11 @@ describe("TrackTable", () => {
     const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
     const { container } = render(<TrackTable {...defaultProps} tracks={tracks} />);
     const rows = container.querySelectorAll("tbody tr[data-index]");
-    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: "", dropEffect: "" };
+    stubRowGeometry(rows);
 
-    fireEvent.dragStart(rows[0], { dataTransfer });
-    fireEvent.dragOver(rows[1], { dataTransfer });
-    fireEvent.drop(rows[1], { dataTransfer });
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 35 });
+    fireEvent.pointerUp(window, { clientY: 35 });
 
     expect(moveTrack).not.toHaveBeenCalled();
   });

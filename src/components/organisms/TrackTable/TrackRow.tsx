@@ -15,14 +15,15 @@ interface TrackRowProps {
   dropAbove?: boolean;
   dropBelow?: boolean;
   selectedCount: number;
+  /** HTML5 drag (to the play queue). Disabled in playlist view, where rows
+   *  reorder via pointer events instead — see onReorderPointerDown. */
+  draggable: boolean;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
-  /** Playlist reorder via native drag-and-drop. */
-  onReorderStart?: (index: number) => void;
-  onReorderDragOver?: (e: React.DragEvent, index: number) => void;
-  onReorderDrop?: (e: React.DragEvent, index: number) => void;
-  onReorderDragEnd?: () => void;
+  /** Pointer-based playlist reorder (avoids HTML5 DnD, which the Tauri
+   *  webview hijacks for OS file-drop). */
+  onReorderPointerDown?: (e: React.PointerEvent, index: number) => void;
 }
 
 export const TrackRow = memo(function TrackRow({
@@ -35,34 +36,33 @@ export const TrackRow = memo(function TrackRow({
   dropAbove,
   dropBelow,
   selectedCount,
+  draggable,
   onClick,
   onDoubleClick,
   onContextMenu,
-  onReorderStart,
-  onReorderDragOver,
-  onReorderDrop,
-  onReorderDragEnd,
+  onReorderPointerDown,
 }: TrackRowProps) {
   return (
     <tr
       data-index={index}
-      draggable
-      onDragStart={(e) => {
-        const count = isSelected && selectedCount > 1 ? selectedCount : 1;
-        const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
-        e.dataTransfer.setData("application/x-crate-queue-drag", "1");
-        e.dataTransfer.effectAllowed = "copyMove";
-        const el = document.createElement("div");
-        el.textContent = label;
-        el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
-        document.body.appendChild(el);
-        e.dataTransfer.setDragImage(el, 0, 0);
-        requestAnimationFrame(() => el.remove());
-        onReorderStart?.(index);
-      }}
-      onDragOver={onReorderDragOver ? (e) => onReorderDragOver(e, index) : undefined}
-      onDrop={onReorderDrop ? (e) => onReorderDrop(e, index) : undefined}
-      onDragEnd={onReorderDragEnd}
+      draggable={draggable}
+      onDragStart={
+        draggable
+          ? (e) => {
+              const count = isSelected && selectedCount > 1 ? selectedCount : 1;
+              const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
+              e.dataTransfer.setData("application/x-crate-queue-drag", "1");
+              e.dataTransfer.effectAllowed = "copy";
+              const el = document.createElement("div");
+              el.textContent = label;
+              el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
+              document.body.appendChild(el);
+              e.dataTransfer.setDragImage(el, 0, 0);
+              requestAnimationFrame(() => el.remove());
+            }
+          : undefined
+      }
+      onPointerDown={onReorderPointerDown ? (e) => onReorderPointerDown(e, index) : undefined}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}

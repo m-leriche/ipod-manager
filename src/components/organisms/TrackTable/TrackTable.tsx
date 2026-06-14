@@ -82,7 +82,6 @@ export const TrackTable = memo(function TrackTable({
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
   // Playlist drag-reorder: the gap (0..rowCount) where the dragged row will land.
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const dragFromIndexRef = useRef<number | null>(null);
   const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
   const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
@@ -276,58 +275,73 @@ export const TrackTable = memo(function TrackTable({
     onDeleteRequest: useCallback((ids: number[]) => setDeleteConfirm(ids), []),
   });
 
-  // ── Playlist drag-to-reorder (native HTML5 DnD) ───────────────
+  // ── Playlist drag-to-reorder (pointer events) ─────────────────
+  //
+  // We can't use HTML5 drag-and-drop here: the Tauri webview hijacks native
+  // drags for OS file-drop (showing the import overlay and swallowing the
+  // drop). Pointer events sidestep that entirely.
 
   const isPlaylistView = activePlaylistId != null;
 
-  // Which gap the cursor is over: top half of a row = before it, bottom = after.
-  const gapForEvent = (e: React.DragEvent, index: number): number => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    return e.clientY - rect.top < rect.height / 2 ? index : index + 1;
-  };
-
-  const handleReorderStart = useCallback((index: number) => {
-    dragFromIndexRef.current = index;
+  // The insertion gap (0..rowCount) the cursor is over: top half of a row =
+  // before it, bottom half = after.
+  const computeGap = useCallback((clientY: number): number | null => {
+    const container = scrollRef.current;
+    if (!container) return null;
+    const rows = Array.from(container.querySelectorAll<HTMLElement>("tbody tr[data-index]"));
+    if (rows.length === 0) return null;
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect();
+      if (clientY >= rect.top && clientY < rect.bottom) {
+        const idx = parseInt(row.dataset.index!, 10);
+        return clientY < rect.top + rect.height / 2 ? idx : idx + 1;
+      }
+    }
+    // Outside any rendered row: clamp to the first/last gap.
+    if (clientY < rows[0].getBoundingClientRect().top) return parseInt(rows[0].dataset.index!, 10);
+    return parseInt(rows[rows.length - 1].dataset.index!, 10) + 1;
   }, []);
 
-  const handleReorderDragOver = useCallback((e: React.DragEvent, index: number) => {
-    // Only intercept when a reorder is in progress (a row from this table).
-    if (dragFromIndexRef.current === null) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDropIndex(gapForEvent(e, index));
-  }, []);
+  const handleReorderPointerDown = useCallback(
+    (e: React.PointerEvent, index: number) => {
+      if (!isPlaylistView || e.button !== 0) return;
+      const startY = e.clientY;
+      const state = { from: index, active: false };
 
-  const handleReorderDrop = useCallback(
-    (e: React.DragEvent, index: number) => {
-      const from = dragFromIndexRef.current;
-      dragFromIndexRef.current = null;
-      setDropIndex(null);
-      if (from === null || activePlaylistId == null) return;
-      e.preventDefault();
-      // Map the insertion gap to a final index: dropping into a gap below the
-      // dragged row shifts the target down by one once the row is removed.
-      const gap = gapForEvent(e, index);
-      const to = from < gap ? gap - 1 : gap;
-      if (to !== from) moveTrack(activePlaylistId, from, to);
+      const onMove = (ev: PointerEvent) => {
+        if (!state.active) {
+          if (Math.abs(ev.clientY - startY) < 5) return; // ignore tiny moves (a click)
+          state.active = true;
+        }
+        // Auto-scroll near the top/bottom edge of a long playlist.
+        const el = scrollRef.current;
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const EDGE = 40;
+          if (ev.clientY < rect.top + EDGE) el.scrollTop -= 10;
+          else if (ev.clientY > rect.bottom - EDGE) el.scrollTop += 10;
+        }
+        setDropIndex(computeGap(ev.clientY));
+      };
+
+      const onUp = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        setDropIndex(null);
+        if (!state.active || activePlaylistId == null) return;
+        const gap = computeGap(ev.clientY);
+        if (gap === null) return;
+        // Dropping into a gap below the dragged row shifts the target down by
+        // one once the row itself is removed.
+        const to = state.from < gap ? gap - 1 : gap;
+        if (to !== state.from) moveTrack(activePlaylistId, state.from, to);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
     },
-    [activePlaylistId, moveTrack],
+    [isPlaylistView, activePlaylistId, moveTrack, computeGap],
   );
-
-  const handleReorderDragEnd = useCallback(() => {
-    dragFromIndexRef.current = null;
-    setDropIndex(null);
-  }, []);
-
-  // Auto-scroll when dragging near the top/bottom edge of a long playlist.
-  const handleContainerDragOver = useCallback((e: React.DragEvent) => {
-    if (dragFromIndexRef.current === null || !scrollRef.current) return;
-    const el = scrollRef.current;
-    const rect = el.getBoundingClientRect();
-    const EDGE = 40;
-    if (e.clientY < rect.top + EDGE) el.scrollTop -= 10;
-    else if (e.clientY > rect.bottom - EDGE) el.scrollTop += 10;
-  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -406,7 +420,6 @@ export const TrackTable = memo(function TrackTable({
             headerScrollRef.current.scrollLeft = scrollRef.current.scrollLeft;
           }
         }}
-        onDragOver={isPlaylistView ? handleContainerDragOver : undefined}
         onDragStartCapture={() => {
           dragPayload = selected.size > 0 ? loadedTracks.filter((t) => selected.has(t.id)) : [];
         }}
@@ -446,13 +459,11 @@ export const TrackTable = memo(function TrackTable({
                   dropAbove={isPlaylistView && dropIndex === virtualRow.index}
                   dropBelow={isPlaylistView && dropIndex === rowCount && virtualRow.index === rowCount - 1}
                   selectedCount={selected.size}
+                  draggable={!isPlaylistView}
                   onClick={handleClick}
                   onDoubleClick={handleDoubleClick}
                   onContextMenu={handleContextMenu}
-                  onReorderStart={isPlaylistView ? handleReorderStart : undefined}
-                  onReorderDragOver={isPlaylistView ? handleReorderDragOver : undefined}
-                  onReorderDrop={isPlaylistView ? handleReorderDrop : undefined}
-                  onReorderDragEnd={isPlaylistView ? handleReorderDragEnd : undefined}
+                  onReorderPointerDown={isPlaylistView ? handleReorderPointerDown : undefined}
                 />
               );
             })}

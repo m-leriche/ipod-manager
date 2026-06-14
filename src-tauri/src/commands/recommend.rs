@@ -3,7 +3,9 @@ use tauri::State;
 use crate::library::LibraryDb;
 use crate::recommend::{self, TrackRecommendation};
 
-const DEFAULT_LIMIT: usize = 24;
+// Larger than what the bar shows at once, so dismissing a card can reveal a
+// fresh suggestion from the reserve without another Last.fm round-trip.
+const DEFAULT_LIMIT: usize = 32;
 
 /// Recommend tracks for a playlist. Pass exactly one of `playlist_id` /
 /// `smart_playlist_id`. Returns an empty list when neither is set, the

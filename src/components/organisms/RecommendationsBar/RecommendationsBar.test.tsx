@@ -10,6 +10,11 @@ vi.mock("../../../contexts/PlaylistContext", () => ({
   usePlaylist: () => ({ addTracks }),
 }));
 
+// AlbumArtwork (used for owned recommendations) reads the art cache.
+vi.mock("../../../contexts/ArtCacheContext", () => ({
+  useArtCache: () => ({ artCacheBust: 0, bumpArtCache: vi.fn() }),
+}));
+
 const mockInvoke = vi.mocked(invoke);
 
 const rec = (over: Partial<TrackRecommendation>): TrackRecommendation => ({
@@ -17,6 +22,7 @@ const rec = (over: Partial<TrackRecommendation>): TrackRecommendation => ({
   artist: "Artist",
   album: null,
   image_url: null,
+  folder_path: null,
   in_library: true,
   track_id: 1,
   score: 0.9,
@@ -85,5 +91,37 @@ describe("RecommendationsBar", () => {
     render(<RecommendationsBar playlistId={7} smartPlaylistId={null} refreshKey="a" />);
 
     expect(await screen.findByText("Couldn't load recommendations.")).toBeInTheDocument();
+  });
+
+  it("dismisses a card and reveals the next reserve item", async () => {
+    // 13 results: only the first 12 are visible; #13 is held in reserve.
+    const recs = Array.from({ length: 13 }, (_, i) =>
+      rec({ title: `Song ${i + 1}`, artist: `Artist ${i + 1}`, track_id: null, in_library: false }),
+    );
+    mockInvoke.mockResolvedValueOnce(recs);
+
+    render(<RecommendationsBar playlistId={7} smartPlaylistId={null} refreshKey="a" />);
+
+    expect(await screen.findByText("Song 1")).toBeInTheDocument();
+    expect(screen.queryByText("Song 13")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Dismiss Song 1"));
+
+    await waitFor(() => expect(screen.queryByText("Song 1")).not.toBeInTheDocument());
+    // Reserve item slides into the visible window.
+    expect(screen.getByText("Song 13")).toBeInTheDocument();
+  });
+
+  it("refetches when Refresh is clicked", async () => {
+    mockInvoke.mockResolvedValueOnce([rec({ title: "First", track_id: null, in_library: false })]);
+
+    render(<RecommendationsBar playlistId={7} smartPlaylistId={null} refreshKey="a" />);
+    expect(await screen.findByText("First")).toBeInTheDocument();
+
+    mockInvoke.mockResolvedValueOnce([rec({ title: "Second", track_id: null, in_library: false })]);
+    fireEvent.click(screen.getByTitle("Refresh recommendations"));
+
+    expect(await screen.findByText("Second")).toBeInTheDocument();
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
   });
 });

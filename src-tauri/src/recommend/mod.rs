@@ -33,13 +33,16 @@ pub fn recommend_for_playlist(
     limit: usize,
 ) -> Result<Vec<TrackRecommendation>, String> {
     // ── Phase 1: gather seeds + exclusions (brief lock) ──
-    let (seeds, existing, rule_ids) = {
+    let (mut seeds, existing, rule_ids) = {
         let conn = conn_arc.lock().map_err(|e| format!("DB lock: {}", e))?;
         gather_seeds(&conn, playlist_id, smart_playlist_id)?
     };
     if seeds.is_empty() {
         return Ok(Vec::new());
     }
+    // Shuffle so each call (e.g. "refresh") seeds from a different sample of
+    // the playlist and surfaces fresh recommendations.
+    fastrand::shuffle(&mut seeds);
 
     // ── Phase 2: Last.fm fan-out (no lock held) ──
     let candidates = fetch_candidates(&seeds, &existing);
@@ -145,14 +148,12 @@ fn rule_matched_ids(conn: &Connection, smart_playlist_id: i64) -> Result<HashSet
 
 // ── Phase 2 helpers ─────────────────────────────────────────────
 
-/// Fetch and dedupe similar-track candidates from an evenly-spread sample of
-/// seeds, skipping anything already in the playlist.
+/// Fetch and dedupe similar-track candidates from a sample of seeds, skipping
+/// anything already in the playlist. Seeds are pre-shuffled by the caller.
 fn fetch_candidates(seeds: &[Seed], existing: &HashSet<String>) -> Vec<SimilarTrack> {
-    let stride = (seeds.len() / SEED_SAMPLE).max(1);
-
     let mut candidates = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    for seed in seeds.iter().step_by(stride).take(SEED_SAMPLE) {
+    for seed in seeds.iter().take(SEED_SAMPLE) {
         let similar = match fetch_similar_tracks(&seed.artist, &seed.title, PER_SEED) {
             Ok(s) => s,
             Err(e) => {
@@ -187,9 +188,9 @@ fn resolve_candidates(
     let mut out = Vec::new();
     for st in candidates {
         let found = lookup_library_track(conn, &st.artist, &st.title);
-        let (in_library, track_id, album) = match found {
-            Some((id, album)) => (true, Some(id), album),
-            None => (false, None, None),
+        let (in_library, track_id, album, folder_path) = match found {
+            Some((id, album, folder_path)) => (true, Some(id), album, Some(folder_path)),
+            None => (false, None, None, None),
         };
 
         // Smart playlists follow their rules: surface owned tracks only when
@@ -209,6 +210,7 @@ fn resolve_candidates(
             artist: st.artist,
             album,
             image_url: st.image_url,
+            folder_path,
             in_library,
             track_id,
             score: st.score,
@@ -221,14 +223,20 @@ fn lookup_library_track(
     conn: &Connection,
     artist: &str,
     title: &str,
-) -> Option<(i64, Option<String>)> {
+) -> Option<(i64, Option<String>, String)> {
     conn.query_row(
-        "SELECT id, album FROM tracks
+        "SELECT id, album, folder_path FROM tracks
          WHERE lower(COALESCE(album_artist, artist)) = lower(?1)
            AND lower(title) = lower(?2)
          LIMIT 1",
         rusqlite::params![artist, title],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        },
     )
     .ok()
 }
@@ -257,9 +265,9 @@ mod tests {
     fn resolve_drops_off_theme_owned_tracks_for_smart_playlists() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album_artist TEXT, album TEXT);
-             INSERT INTO tracks (id, title, artist, album) VALUES (1, 'Owned A', 'Band', 'Album A');
-             INSERT INTO tracks (id, title, artist, album) VALUES (2, 'Owned B', 'Band', 'Album B');",
+            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album_artist TEXT, album TEXT, folder_path TEXT NOT NULL DEFAULT '');
+             INSERT INTO tracks (id, title, artist, album, folder_path) VALUES (1, 'Owned A', 'Band', 'Album A', '/m/a');
+             INSERT INTO tracks (id, title, artist, album, folder_path) VALUES (2, 'Owned B', 'Band', 'Album B', '/m/b');",
         )
         .unwrap();
 
@@ -298,8 +306,8 @@ mod tests {
     fn resolve_keeps_all_for_regular_playlists() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album_artist TEXT, album TEXT);
-             INSERT INTO tracks (id, title, artist, album) VALUES (1, 'Owned', 'Band', 'Album');",
+            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album_artist TEXT, album TEXT, folder_path TEXT NOT NULL DEFAULT '');
+             INSERT INTO tracks (id, title, artist, album, folder_path) VALUES (1, 'Owned', 'Band', 'Album', '/m/o');",
         )
         .unwrap();
 

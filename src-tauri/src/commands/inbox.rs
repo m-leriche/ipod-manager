@@ -126,6 +126,18 @@ pub async fn file_inbox_album(
 }
 
 #[tauri::command]
+pub async fn delete_inbox_folders(folder_paths: Vec<String>) -> Result<(), AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        for folder in folder_paths {
+            inbox::delete_filed_folder(&folder);
+        }
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("Folder cleanup failed: {}", e)))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn undo_inbox_filing(
     moves: Vec<inbox::FileMove>,
     app: AppHandle,

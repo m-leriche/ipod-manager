@@ -125,6 +125,52 @@ describe("InboxView", () => {
     });
   });
 
+  it("deletes the original folder after confirming the modal", async () => {
+    mockBackend({
+      get_inbox_location: "/inbox",
+      scan_inbox: [album()],
+      file_inbox_album: {
+        moves: [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }],
+        errors: [],
+      },
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
+
+    const dialog = await screen.findByRole("dialog", { name: /imported successfully/i });
+    expect(dialog).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("delete_inbox_folders", { folderPaths: ["/inbox/Artist - Album"] });
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the original folder when the modal is cancelled", async () => {
+    mockBackend({
+      get_inbox_location: "/inbox",
+      scan_inbox: [album()],
+      file_inbox_album: {
+        moves: [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }],
+        errors: [],
+      },
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
+    await screen.findByRole("dialog", { name: /imported successfully/i });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(invoke).not.toHaveBeenCalledWith("delete_inbox_folders", expect.anything());
+  });
+
   it("undoes a filing with Cmd+Z", async () => {
     const moves = [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }];
     mockBackend({

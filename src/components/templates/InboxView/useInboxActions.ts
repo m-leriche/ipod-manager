@@ -12,6 +12,7 @@ import type { ConvertProgress, ConvertTarget, FileAwayResult, FileMove, InboxAlb
 export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, rescan: () => Promise<void>) => {
   const [filing, setFiling] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
   const toast = useToast();
   const { push } = useUndo();
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
@@ -45,12 +46,27 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
         } else if (filed.length > 0) {
           toast.success(`${label} — ⌘Z to undo`);
         }
+        // Originals only get deleted once the user confirms.
+        if (filed.length > 0) setPendingDelete(filed);
       } finally {
         setFiling(false);
       }
     },
     [push, removeAlbums, toast],
   );
+
+  const confirmDeleteOriginals = useCallback(async () => {
+    if (!pendingDelete) return;
+    const folderPaths = pendingDelete;
+    setPendingDelete(null);
+    try {
+      await invoke<void>("delete_inbox_folders", { folderPaths });
+    } catch (e) {
+      toast.warning(`Could not delete original folder(s): ${e}`);
+    }
+  }, [pendingDelete, toast]);
+
+  const cancelDeleteOriginals = useCallback(() => setPendingDelete(null), []);
 
   const fileAway = useCallback(
     (album: InboxAlbum) => fileAlbums([album], `File away ${albumLabel(album)}`),
@@ -99,5 +115,13 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
     [startProgress, updateProgress, finishProgress, failProgress, rescan],
   );
 
-  return { fileAway, fileAll, convertAlbum, busy: filing || converting };
+  return {
+    fileAway,
+    fileAll,
+    convertAlbum,
+    busy: filing || converting,
+    pendingDelete,
+    confirmDeleteOriginals,
+    cancelDeleteOriginals,
+  };
 };

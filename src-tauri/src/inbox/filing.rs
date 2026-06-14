@@ -31,7 +31,6 @@ pub fn file_album(
     let mut moves = Vec::new();
     let mut errors = Vec::new();
     let mut dest_dir: Option<PathBuf> = None;
-    let mut unmoved_audio = 0;
 
     for src in &audio {
         // Strip Sort Artist / Album Artist tags and clear the compilation flag
@@ -50,12 +49,10 @@ pub fn file_album(
 
         if dest.exists() {
             errors.push(format!("{}: already exists in library", track.file_name));
-            unmoved_audio += 1;
             continue;
         }
         if let Err(e) = move_file(src, &dest) {
             errors.push(format!("{}: {}", track.file_name, e));
-            unmoved_audio += 1;
             continue;
         }
 
@@ -99,17 +96,21 @@ pub fn file_album(
         }
     }
 
-    // The album now lives in the library, so drop its inbox folder along with
-    // any leftover files (lyrics, .txt, etc.). If any audio file wasn't moved
-    // (already in the library, or a move error), keep the folder so un-imported
-    // audio is never destroyed — remove_dir only succeeds when it's empty.
-    if unmoved_audio == 0 {
-        let _ = fs::remove_dir_all(folder);
-    } else {
-        let _ = fs::remove_dir(folder);
-    }
-
     Ok(FileAwayResult { moves, errors })
+}
+
+/// Delete an inbox folder after its album was filed away, along with any
+/// leftover files (lyrics, .txt, etc.). Called only once the user confirms.
+/// If any audio remains (already in the library, or a move error), the folder
+/// is kept intact so un-imported audio is never destroyed — that's a success,
+/// not a failure. A genuine filesystem error (e.g. permissions) propagates so
+/// the caller can surface it.
+pub fn delete_filed_folder(folder: &str) -> Result<(), String> {
+    let folder = Path::new(folder);
+    if !direct_audio_children(folder).is_empty() {
+        return Ok(());
+    }
+    fs::remove_dir_all(folder).map_err(|e| format!("{}: {}", folder.display(), e))
 }
 
 /// Reverse a set of moves: restore files to the inbox, remove the tracks from

@@ -1,6 +1,6 @@
 use super::cache::{cache_tracklist, cached_tracklist};
 use super::checks::{check_tags, local_tracklist, quality_desc, quality_rank};
-use super::filing::{file_album, move_file, undo_filing};
+use super::filing::{delete_filed_folder, file_album, move_file, undo_filing};
 use super::types::{CheckResult, CheckStatus};
 use crate::library::types::TrackData;
 use rusqlite::Connection;
@@ -215,14 +215,13 @@ fn file_and_undo_roundtrip_keeps_db_consistent_with_decomposed_unicode() {
 }
 
 #[test]
-fn file_album_deletes_folder_with_leftover_files() {
+fn file_album_keeps_inbox_folder_for_user_confirmation() {
     let tmp = tempfile::tempdir().unwrap();
     let library_root = tmp.path().join("Library");
     std::fs::create_dir_all(&library_root).unwrap();
     let album_dir = tmp.path().join("inbox/Album");
     std::fs::create_dir_all(&album_dir).unwrap();
     std::fs::write(album_dir.join("01 Track.flac"), "not real audio").unwrap();
-    std::fs::write(album_dir.join("lyrics.lrc"), "[00:00] hi").unwrap();
     std::fs::write(album_dir.join("notes.txt"), "ripped from CD").unwrap();
 
     let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
@@ -235,48 +234,40 @@ fn file_album_deletes_folder_with_leftover_files() {
     .unwrap();
 
     assert!(
-        !album_dir.exists(),
-        "album folder must be removed even with leftover non-audio files"
+        album_dir.exists(),
+        "file_album must leave the inbox folder so the user can confirm deletion"
     );
 }
 
 #[test]
-fn file_album_keeps_folder_when_audio_already_in_library() {
+fn delete_filed_folder_removes_folder_with_leftover_files() {
     let tmp = tempfile::tempdir().unwrap();
-    let library_root = tmp.path().join("Library");
-    std::fs::create_dir_all(&library_root).unwrap();
-    let conn = crate::library::init_db(&tmp.path().join("test.db")).unwrap();
+    let album_dir = tmp.path().join("inbox/Album");
+    std::fs::create_dir_all(&album_dir).unwrap();
+    std::fs::write(album_dir.join("lyrics.lrc"), "[00:00] hi").unwrap();
+    std::fs::write(album_dir.join("notes.txt"), "ripped from CD").unwrap();
 
-    let make_album = || {
-        let album_dir = tmp.path().join("inbox/Album");
-        std::fs::create_dir_all(&album_dir).unwrap();
-        std::fs::write(album_dir.join("01 Track.flac"), "not real audio").unwrap();
-        album_dir
-    };
+    delete_filed_folder(album_dir.to_str().unwrap()).unwrap();
 
-    // First import moves the file into the library and clears the empty folder.
-    let album_dir = make_album();
-    file_album(
-        library_root.to_str().unwrap(),
-        album_dir.to_str().unwrap(),
-        &conn,
-    )
-    .unwrap();
-    assert!(!album_dir.exists());
-
-    // Re-creating the same album means the destination already exists, so the
-    // source must NOT be deleted — the folder is kept intact.
-    let album_dir = make_album();
-    let result = file_album(
-        library_root.to_str().unwrap(),
-        album_dir.to_str().unwrap(),
-        &conn,
-    )
-    .unwrap();
-    assert!(result.moves.is_empty());
     assert!(
-        album_dir.join("01 Track.flac").exists(),
-        "un-imported audio must survive in the inbox"
+        !album_dir.exists(),
+        "delete_filed_folder must remove the folder and its leftover non-audio files"
+    );
+}
+
+#[test]
+fn delete_filed_folder_keeps_folder_with_unimported_audio() {
+    let tmp = tempfile::tempdir().unwrap();
+    let album_dir = tmp.path().join("inbox/Album");
+    std::fs::create_dir_all(&album_dir).unwrap();
+    let track = album_dir.join("01 Track.flac");
+    std::fs::write(&track, "not real audio").unwrap();
+
+    delete_filed_folder(album_dir.to_str().unwrap()).unwrap();
+
+    assert!(
+        track.exists(),
+        "un-imported audio must survive — the folder is kept when audio remains"
     );
 }
 

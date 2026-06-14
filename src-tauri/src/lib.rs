@@ -421,6 +421,7 @@ pub fn run() {
             commands::verify_inbox_tracklist,
             commands::convert_inbox_album,
             commands::file_inbox_album,
+            commands::delete_inbox_folders,
             commands::undo_inbox_filing,
         ])
         .run(tauri::generate_context!())

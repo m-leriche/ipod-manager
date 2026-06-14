@@ -119,7 +119,9 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
     fileAway,
     fileAll,
     convertAlbum,
-    busy: filing || converting,
+    // Block further filing while a delete confirmation is open so its pending
+    // folder list can't be silently overwritten by another File Away.
+    busy: filing || converting || pendingDelete !== null,
     pendingDelete,
     confirmDeleteOriginals,
     cancelDeleteOriginals,

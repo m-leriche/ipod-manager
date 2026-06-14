@@ -102,15 +102,15 @@ pub fn file_album(
 /// Delete an inbox folder after its album was filed away, along with any
 /// leftover files (lyrics, .txt, etc.). Called only once the user confirms.
 /// If any audio remains (already in the library, or a move error), the folder
-/// is kept so un-imported audio is never destroyed — `remove_dir` only succeeds
-/// when the folder is empty.
-pub fn delete_filed_folder(folder: &str) {
+/// is kept intact so un-imported audio is never destroyed — that's a success,
+/// not a failure. A genuine filesystem error (e.g. permissions) propagates so
+/// the caller can surface it.
+pub fn delete_filed_folder(folder: &str) -> Result<(), String> {
     let folder = Path::new(folder);
-    if direct_audio_children(folder).is_empty() {
-        let _ = fs::remove_dir_all(folder);
-    } else {
-        let _ = fs::remove_dir(folder);
+    if !direct_audio_children(folder).is_empty() {
+        return Ok(());
     }
+    fs::remove_dir_all(folder).map_err(|e| format!("{}: {}", folder.display(), e))
 }
 
 /// Reverse a set of moves: restore files to the inbox, remove the tracks from

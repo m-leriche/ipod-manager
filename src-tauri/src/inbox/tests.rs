@@ -247,7 +247,7 @@ fn delete_filed_folder_removes_folder_with_leftover_files() {
     std::fs::write(album_dir.join("lyrics.lrc"), "[00:00] hi").unwrap();
     std::fs::write(album_dir.join("notes.txt"), "ripped from CD").unwrap();
 
-    delete_filed_folder(album_dir.to_str().unwrap());
+    delete_filed_folder(album_dir.to_str().unwrap()).unwrap();
 
     assert!(
         !album_dir.exists(),
@@ -263,7 +263,7 @@ fn delete_filed_folder_keeps_folder_with_unimported_audio() {
     let track = album_dir.join("01 Track.flac");
     std::fs::write(&track, "not real audio").unwrap();
 
-    delete_filed_folder(album_dir.to_str().unwrap());
+    delete_filed_folder(album_dir.to_str().unwrap()).unwrap();
 
     assert!(
         track.exists(),

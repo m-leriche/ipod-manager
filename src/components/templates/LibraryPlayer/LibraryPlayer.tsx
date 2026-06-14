@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ErrorBoundary } from "../../atoms/ErrorBoundary/ErrorBoundary";
 import { AlbumGrid } from "../../organisms/AlbumGrid/AlbumGrid";
 import { ArtworkCarousel } from "../../organisms/ArtworkCarousel/ArtworkCarousel";
@@ -9,6 +9,7 @@ import { TrackDetailPanel } from "../../organisms/TrackDetailPanel/TrackDetailPa
 import { LibraryStats } from "../LibraryStats/LibraryStats";
 import { PlaylistSidebar } from "./PlaylistSidebar";
 import { SmartPlaylistEditor } from "../../organisms/SmartPlaylistEditor/SmartPlaylistEditor";
+import { RecommendationsBar } from "../../organisms/RecommendationsBar/RecommendationsBar";
 import { LibraryStatusBar } from "./LibraryStatusBar";
 import { LibraryToolbar } from "./LibraryToolbar";
 import { useProgress } from "../../../contexts/ProgressContext";
@@ -73,8 +74,10 @@ export const LibraryPlayer = ({
   const {
     playlists,
     activePlaylistId,
+    activePlaylistTracks,
     setActivePlaylist,
     activeSmartPlaylistId,
+    activeSmartPlaylistTracks,
     createSmartPlaylist,
     updateSmartPlaylist,
   } = usePlaylist();
@@ -85,6 +88,18 @@ export const LibraryPlayer = ({
   // ── Data management ───────────────────────────────────────────
 
   const data = useLibraryData(onRefreshRef);
+
+  // Refetch recommendations only when playlist membership changes. Keyed off
+  // the raw playlist track set (not the search-filtered/sorted view), sorted so
+  // reordering doesn't trigger an identical refetch — the backend seeds from the
+  // whole playlist regardless of the displayed order or filter.
+  const recommendationsKey = useMemo(() => {
+    const tracks = activeSmartPlaylistId !== null ? activeSmartPlaylistTracks : activePlaylistTracks;
+    return tracks
+      .map((t) => t?.id ?? 0)
+      .sort((a, b) => a - b)
+      .join(",");
+  }, [activeSmartPlaylistId, activePlaylistTracks, activeSmartPlaylistTracks]);
 
   // ── Push library summary to parent ────────────────────────────
 
@@ -356,6 +371,16 @@ export const LibraryPlayer = ({
               isFetchingGenres={genreFetch.fetching}
               onRepairMetadata={onRepairMetadata}
               activePlaylistId={activePlaylistId}
+            />
+          </ErrorBoundary>
+        )}
+
+        {isPlaylistView && (
+          <ErrorBoundary name="Recommendations" compact>
+            <RecommendationsBar
+              playlistId={activePlaylistId}
+              smartPlaylistId={activeSmartPlaylistId}
+              refreshKey={recommendationsKey}
             />
           </ErrorBoundary>
         )}

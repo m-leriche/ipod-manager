@@ -1,8 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { TrackTable } from "./TrackTable";
 import type { LibraryTrack } from "../../../types/library";
+
+// Capture moveTrack so drag-reorder can be asserted (the global mock returns a
+// fresh fn per render, which can't be asserted against).
+const moveTrack = vi.fn();
+vi.mock("../../../contexts/PlaylistContext", () => ({
+  usePlaylist: () => ({
+    playlists: [],
+    addTracks: vi.fn(),
+    removeTracks: vi.fn(),
+    moveTrack,
+  }),
+}));
 
 // jsdom has no layout, so the real virtualizer renders zero rows. Stub it to
 // render the first rows of the list so row-dependent behavior is testable.
@@ -157,6 +169,57 @@ describe("TrackTable", () => {
     const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
     render(<TrackTable {...defaultProps} tracks={tracks} totalTrackCount={2} onLoadMore={onLoadMore} />);
     expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
+  // jsdom has no layout; give rows a deterministic 20px-tall stacked geometry.
+  const stubRowGeometry = (rows: NodeListOf<Element>) => {
+    rows.forEach((row, i) => {
+      (row as HTMLElement).getBoundingClientRect = () =>
+        ({ top: i * 20, bottom: i * 20 + 20, height: 20, left: 0, right: 0, width: 0, x: 0, y: i * 20 }) as DOMRect;
+    });
+  };
+
+  it("reorders a playlist track via pointer drag", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    // Grab row 0, drag down into the bottom half of row 2 (y=55 → gap 3).
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 55 });
+    fireEvent.pointerUp(window, { clientY: 55 });
+
+    // gap 3 with from 0 → final index 2.
+    expect(moveTrack).toHaveBeenCalledWith(5, 0, 2);
+  });
+
+  it("treats a click (no movement) as selection, not a reorder", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerUp(window, { clientY: 6 }); // < 5px threshold
+
+    expect(moveTrack).not.toHaveBeenCalled();
+  });
+
+  it("does not reorder outside a playlist view", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 35 });
+    fireEvent.pointerUp(window, { clientY: 35 });
+
+    expect(moveTrack).not.toHaveBeenCalled();
   });
 
   it("calls onFlagTracks to unflag already-flagged track", async () => {

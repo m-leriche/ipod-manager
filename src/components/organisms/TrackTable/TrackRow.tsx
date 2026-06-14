@@ -11,12 +11,19 @@ interface TrackRowProps {
   isCurrentTrack: boolean;
   isPlaying: boolean;
   isSelected: boolean;
-  isDragOver?: boolean;
+  /** Insertion-line indicators for playlist drag-reorder. */
+  dropAbove?: boolean;
+  dropBelow?: boolean;
   selectedCount: number;
+  /** HTML5 drag (to the play queue). Disabled in playlist view, where rows
+   *  reorder via pointer events instead — see onReorderPointerDown. */
+  draggable: boolean;
   onClick: (e: React.MouseEvent, track: LibraryTrack) => void;
   onDoubleClick: (track: LibraryTrack) => void;
   onContextMenu: (e: React.MouseEvent, track: LibraryTrack) => void;
-  onMouseDown?: (e: React.MouseEvent, index: number) => void;
+  /** Pointer-based playlist reorder (avoids HTML5 DnD, which the Tauri
+   *  webview hijacks for OS file-drop). */
+  onReorderPointerDown?: (e: React.PointerEvent, index: number) => void;
 }
 
 export const TrackRow = memo(function TrackRow({
@@ -26,33 +33,39 @@ export const TrackRow = memo(function TrackRow({
   isCurrentTrack,
   isPlaying,
   isSelected,
-  isDragOver,
+  dropAbove,
+  dropBelow,
   selectedCount,
+  draggable,
   onClick,
   onDoubleClick,
   onContextMenu,
-  onMouseDown,
+  onReorderPointerDown,
 }: TrackRowProps) {
   return (
     <tr
       data-index={index}
-      draggable
-      onDragStart={(e) => {
-        const count = isSelected && selectedCount > 1 ? selectedCount : 1;
-        const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
-        e.dataTransfer.setData("application/x-crate-queue-drag", "1");
-        e.dataTransfer.effectAllowed = "copy";
-        const el = document.createElement("div");
-        el.textContent = label;
-        el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
-        document.body.appendChild(el);
-        e.dataTransfer.setDragImage(el, 0, 0);
-        requestAnimationFrame(() => el.remove());
-      }}
+      draggable={draggable}
+      onDragStart={
+        draggable
+          ? (e) => {
+              const count = isSelected && selectedCount > 1 ? selectedCount : 1;
+              const label = count > 1 ? `${count} tracks` : track.title || track.file_name;
+              e.dataTransfer.setData("application/x-crate-queue-drag", "1");
+              e.dataTransfer.effectAllowed = "copy";
+              const el = document.createElement("div");
+              el.textContent = label;
+              el.className = "fixed -top-[100px] left-0 px-2 py-1 bg-accent text-white text-[11px] rounded";
+              document.body.appendChild(el);
+              e.dataTransfer.setDragImage(el, 0, 0);
+              requestAnimationFrame(() => el.remove());
+            }
+          : undefined
+      }
+      onPointerDown={onReorderPointerDown ? (e) => onReorderPointerDown(e, index) : undefined}
       onClick={(e) => onClick(e, track)}
       onDoubleClick={() => onDoubleClick(track)}
       onContextMenu={(e) => onContextMenu(e, track)}
-      onMouseDown={onMouseDown ? (e) => onMouseDown(e, index) : undefined}
       className={`group cursor-default select-none transition-colors ${
         isSelected ? "" : isCurrentTrack ? "bg-accent/8 border-l-2 border-l-accent" : "hover:bg-bg-hover/50"
       }`}
@@ -60,7 +73,7 @@ export const TrackRow = memo(function TrackRow({
       {columns.map((col) => (
         <td
           key={col.key}
-          className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""} ${isDragOver ? "border-t-2 border-t-accent" : ""}`}
+          className={`${CELL_CLASSES[col.key]} ${isSelected ? "!bg-accent !text-white" : ""} ${dropAbove ? "border-t-2 border-t-accent" : ""} ${dropBelow ? "border-b-2 border-b-accent" : ""}`}
         >
           {getCellContent(col.key, track, index, isCurrentTrack, isPlaying, isSelected)}
         </td>

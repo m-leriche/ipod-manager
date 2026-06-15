@@ -87,6 +87,8 @@ export const TrackTable = memo(function TrackTable({
   const { widths, onResizeStart } = useColumnResize(orderedDefs);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
+  // Teardown for the active playlist-reorder drag (removes its window listeners).
+  const reorderCleanupRef = useRef<(() => void) | null>(null);
 
   // Ref for selected so handleClick doesn't depend on selected state
   const selectedRef = useRef(selected);
@@ -305,10 +307,30 @@ export const TrackTable = memo(function TrackTable({
   const handleReorderPointerDown = useCallback(
     (e: React.PointerEvent, index: number) => {
       if (!isPlaylistView || e.button !== 0) return;
+      // If a previous drag never received its pointerup (e.g. the button was
+      // released outside the window), its window listeners would still be
+      // live and the next click would fire a stale move from the wrong row.
+      // Tear any such ghost drag down before starting a new one.
+      reorderCleanupRef.current?.();
+
       const startY = e.clientY;
       const state = { from: index, active: false };
 
+      const cleanup = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", cleanup);
+        reorderCleanupRef.current = null;
+        setDropIndex(null);
+      };
+
       const onMove = (ev: PointerEvent) => {
+        // No button held means the pointerup never reached us — abort so a
+        // later stray click can't trigger a move from this stale source row.
+        if (ev.buttons === 0) {
+          cleanup();
+          return;
+        }
         if (!state.active) {
           if (Math.abs(ev.clientY - startY) < 5) return; // ignore tiny moves (a click)
           state.active = true;
@@ -325,10 +347,9 @@ export const TrackTable = memo(function TrackTable({
       };
 
       const onUp = (ev: PointerEvent) => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        setDropIndex(null);
-        if (!state.active || activePlaylistId == null) return;
+        const wasActive = state.active;
+        cleanup();
+        if (!wasActive || activePlaylistId == null) return;
         const gap = computeGap(ev.clientY);
         if (gap === null) return;
         // Dropping into a gap below the dragged row shifts the target down by
@@ -337,11 +358,16 @@ export const TrackTable = memo(function TrackTable({
         if (to !== state.from) moveTrack(activePlaylistId, state.from, to);
       };
 
+      reorderCleanupRef.current = cleanup;
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", cleanup);
     },
     [isPlaylistView, activePlaylistId, moveTrack, computeGap],
   );
+
+  // Tear down a drag in flight if the table unmounts mid-reorder.
+  useEffect(() => () => reorderCleanupRef.current?.(), []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;

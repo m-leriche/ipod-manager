@@ -1228,3 +1228,98 @@ fn remove_non_nfc_duplicates_ignores_already_nfc_paths() {
         .unwrap();
     assert_eq!(count, 2);
 }
+
+// ── Playlist reorder ──────────────────────────────────────────────
+
+fn playlist_db() -> Connection {
+    let conn = test_db();
+    conn.execute_batch(
+        "CREATE TABLE playlists (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE playlist_tracks (
+            id INTEGER PRIMARY KEY,
+            playlist_id INTEGER NOT NULL,
+            track_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            UNIQUE(playlist_id, track_id)
+        );
+        INSERT INTO playlists (id, name) VALUES (1, 'P');",
+    )
+    .unwrap();
+    conn
+}
+
+/// track_ids in their current display order (ORDER BY position).
+fn ordered_track_ids(conn: &Connection, playlist_id: i64) -> Vec<i64> {
+    let mut stmt = conn
+        .prepare("SELECT track_id FROM playlist_tracks WHERE playlist_id = ?1 ORDER BY position")
+        .unwrap();
+    stmt.query_map([playlist_id], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
+fn seed_playlist_tracks(conn: &Connection, positions: &[(i64, i64)]) {
+    for (track_id, position) in positions {
+        conn.execute(
+            "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (1, ?1, ?2)",
+            rusqlite::params![track_id, position],
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn move_playlist_track_reorders_by_rank() {
+    let conn = playlist_db();
+    // Contiguous positions: rank == position value.
+    seed_playlist_tracks(&conn, &[(10, 0), (20, 1), (30, 2), (40, 3), (50, 4)]);
+
+    // Move rank 0 to rank 3 (drag the first track down).
+    playlists::move_playlist_track(&conn, 1, 0, 3).unwrap();
+    assert_eq!(ordered_track_ids(&conn, 1), vec![20, 30, 40, 10, 50]);
+
+    // Move it back to the top.
+    playlists::move_playlist_track(&conn, 1, 3, 0).unwrap();
+    assert_eq!(ordered_track_ids(&conn, 1), vec![10, 20, 30, 40, 50]);
+}
+
+#[test]
+fn move_playlist_track_handles_gapped_positions() {
+    let conn = playlist_db();
+    // Non-contiguous positions (gaps), as an older playlist can accumulate.
+    // Display order by position is: 10, 20, 30, 40, 50.
+    seed_playlist_tracks(&conn, &[(10, 0), (20, 3), (30, 7), (40, 8), (50, 20)]);
+
+    // Drag the first track (rank 0) to rank 4 (the end). The frontend's
+    // insertion line lands it after track 50, so the result order must be
+    // 20, 30, 40, 50, 10 — regardless of the original gappy position values.
+    playlists::move_playlist_track(&conn, 1, 0, 4).unwrap();
+    assert_eq!(ordered_track_ids(&conn, 1), vec![20, 30, 40, 50, 10]);
+
+    // And positions are rewritten contiguously, healing the gaps.
+    let positions: Vec<i64> = {
+        let mut stmt = conn
+            .prepare("SELECT position FROM playlist_tracks WHERE playlist_id = 1 ORDER BY position")
+            .unwrap();
+        stmt.query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    };
+    assert_eq!(positions, vec![0, 1, 2, 3, 4]);
+}
+
+#[test]
+fn move_playlist_track_rejects_out_of_range() {
+    let conn = playlist_db();
+    seed_playlist_tracks(&conn, &[(10, 0), (20, 1)]);
+    assert!(playlists::move_playlist_track(&conn, 1, 0, 5).is_err());
+    // The list is untouched on a rejected move.
+    assert_eq!(ordered_track_ids(&conn, 1), vec![10, 20]);
+}

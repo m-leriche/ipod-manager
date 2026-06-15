@@ -188,11 +188,50 @@ describe("TrackTable", () => {
 
     // Grab row 0, drag down into the bottom half of row 2 (y=55 → gap 3).
     fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
-    fireEvent.pointerMove(window, { clientY: 55 });
-    fireEvent.pointerUp(window, { clientY: 55 });
+    fireEvent.pointerMove(window, { clientY: 55, buttons: 1 });
+    fireEvent.pointerUp(window, { clientY: 55, buttons: 1 });
 
     // gap 3 with from 0 → final index 2.
     expect(moveTrack).toHaveBeenCalledWith(5, 0, 2);
+  });
+
+  it("aborts a drag whose pointerup was missed, so a later click can't move a stale row", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    // Drag row 0, but the pointerup is never delivered (released off-window).
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 35, buttons: 1 });
+
+    // The next bare mouse move (no button) signals the drag already ended.
+    fireEvent.pointerMove(window, { clientY: 55, buttons: 0 });
+    // A later click anywhere must not resurrect the stale drag.
+    fireEvent.pointerUp(window, { clientY: 55, buttons: 0 });
+
+    expect(moveTrack).not.toHaveBeenCalled();
+  });
+
+  it("does not let a stale drag fire when a new drag starts", () => {
+    moveTrack.mockClear();
+    const tracks = [makeTrack({ id: 1 }), makeTrack({ id: 2 }), makeTrack({ id: 3 })];
+    const { container } = render(<TrackTable {...defaultProps} tracks={tracks} activePlaylistId={5} />);
+    const rows = container.querySelectorAll("tbody tr[data-index]");
+    stubRowGeometry(rows);
+
+    // First drag from row 0 loses its pointerup.
+    fireEvent.pointerDown(rows[0], { button: 0, clientY: 5 });
+    fireEvent.pointerMove(window, { clientY: 35, buttons: 1 });
+
+    // A fresh drag from row 2 must replace the stale one, not run alongside it.
+    fireEvent.pointerDown(rows[2], { button: 0, clientY: 45 });
+    fireEvent.pointerMove(window, { clientY: 5, buttons: 1 });
+    fireEvent.pointerUp(window, { clientY: 5, buttons: 0 });
+
+    expect(moveTrack).toHaveBeenCalledTimes(1);
+    expect(moveTrack).toHaveBeenCalledWith(5, 2, 0);
   });
 
   it("treats a click (no movement) as selection, not a reorder", () => {

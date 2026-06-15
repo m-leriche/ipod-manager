@@ -197,36 +197,45 @@ pub fn move_playlist_track(
         return Ok(());
     }
 
-    // Get track_id at from_position
-    let track_id: i64 = conn
-        .query_row(
-            "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?1 AND position = ?2",
-            rusqlite::params![playlist_id, from_position],
-            |row| row.get(0),
-        )
-        .map_err(|_| "Track not found at position".to_string())?;
+    // The frontend addresses tracks by their RANK in the position-ordered list
+    // (0, 1, 2, …), not by the stored `position` value. Those agree only when
+    // positions are a contiguous 0-based run — older playlists can have gaps or
+    // duplicates (there is no UNIQUE constraint on position). Reorder by rank
+    // and rewrite every position contiguously so the two can never drift apart.
+    let mut ids: Vec<i64> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?1 ORDER BY position",
+            )
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let ids = stmt
+            .query_map(rusqlite::params![playlist_id], |row| row.get(0))
+            .map_err(|e| format!("Query failed: {}", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Row read failed: {}", e))?;
+        ids
+    };
 
-    if from_position < to_position {
-        conn.execute(
-            "UPDATE playlist_tracks SET position = position - 1
-             WHERE playlist_id = ?1 AND position > ?2 AND position <= ?3",
-            rusqlite::params![playlist_id, from_position, to_position],
-        )
-        .map_err(|e| format!("Reorder failed: {}", e))?;
-    } else {
-        conn.execute(
-            "UPDATE playlist_tracks SET position = position + 1
-             WHERE playlist_id = ?1 AND position >= ?2 AND position < ?3",
-            rusqlite::params![playlist_id, to_position, from_position],
-        )
-        .map_err(|e| format!("Reorder failed: {}", e))?;
+    let (from, to) = (from_position as usize, to_position as usize);
+    if from >= ids.len() || to >= ids.len() {
+        return Err("Reorder index out of range".to_string());
     }
 
-    conn.execute(
-        "UPDATE playlist_tracks SET position = ?1 WHERE playlist_id = ?2 AND track_id = ?3",
-        rusqlite::params![to_position, playlist_id, track_id],
-    )
-    .map_err(|e| format!("Reorder failed: {}", e))?;
+    let id = ids.remove(from);
+    ids.insert(to, id);
+
+    {
+        let mut update = conn
+            .prepare(
+                "UPDATE playlist_tracks SET position = ?1 WHERE playlist_id = ?2 AND track_id = ?3",
+            )
+            .map_err(|e| format!("Prepare failed: {}", e))?;
+        for (i, track_id) in ids.iter().enumerate() {
+            update
+                .execute(rusqlite::params![i as i64, playlist_id, track_id])
+                .map_err(|e| format!("Reorder failed: {}", e))?;
+        }
+    }
 
     touch_playlist(conn, playlist_id);
     Ok(())

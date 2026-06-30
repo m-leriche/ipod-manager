@@ -6,7 +6,7 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
     validate_url(url)?;
 
     let output = Command::new("yt-dlp")
-        .args(["--dump-json", "--no-download", url])
+        .args(["--ignore-config", "--dump-json", "--no-download", "--", url])
         .output()
         .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 

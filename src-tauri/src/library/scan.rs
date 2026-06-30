@@ -33,7 +33,13 @@ pub fn scan_folder(
     collect_audio_files(root, &mut audio_files);
     let total = audio_files.len();
 
-    sync_files(conn, &audio_files, Some(app), cancel_flag)?;
+    sync_files(
+        conn,
+        &audio_files,
+        Some(folder_path),
+        Some(app),
+        cancel_flag,
+    )?;
 
     // Remove tracks whose files no longer exist on disk for this folder.
     delete_orphans(conn, folder_path, |p, _| !Path::new(p).exists())?;
@@ -52,7 +58,7 @@ pub fn rescan_all_folders(
     };
 
     let all_files = collect_folder_files(&folders);
-    sync_files(conn, &all_files, Some(app), cancel_flag)?;
+    sync_files(conn, &all_files, None, Some(app), cancel_flag)?;
 
     for folder in &folders {
         delete_orphans(conn, &folder.path, super::is_ghost_path)?;
@@ -75,7 +81,7 @@ pub fn background_rescan_all_folders(
     let all_files = collect_folder_files(&folders);
     let total = all_files.len();
 
-    let changed = sync_files(conn, &all_files, None, cancel_flag)?;
+    let changed = sync_files(conn, &all_files, None, None, cancel_flag)?;
 
     let mut removed = {
         let c = super::lock_shared(conn)?;
@@ -129,6 +135,7 @@ fn scan_pool() -> &'static rayon::ThreadPool {
 fn sync_files(
     conn: &super::SharedConn,
     files: &[PathBuf],
+    scope: Option<&str>,
     app: Option<&AppHandle>,
     cancel_flag: &Arc<AtomicBool>,
 ) -> Result<usize, String> {
@@ -136,8 +143,9 @@ fn sync_files(
         return Ok(0);
     }
 
-    // One query for every stored mtime beats a SELECT per file.
-    let existing = load_mtimes(conn)?;
+    // One query for every stored mtime beats a SELECT per file; scope it to the
+    // folder being scanned so a single-folder import doesn't load the whole table.
+    let existing = load_mtimes(conn, scope)?;
     let progress = ScanProgress::new(app, files.len());
     let now = now_epoch();
 
@@ -181,17 +189,36 @@ fn sync_files(
     Ok(written)
 }
 
-fn load_mtimes(conn: &super::SharedConn) -> Result<HashMap<String, i64>, String> {
+/// Preload stored `(file_path → mtime)` pairs for the skip-unchanged check.
+/// `scope` restricts the query to one folder prefix (single-folder scans);
+/// `None` loads the whole library (full rescans, which touch every folder).
+fn load_mtimes(
+    conn: &super::SharedConn,
+    scope: Option<&str>,
+) -> Result<HashMap<String, i64>, String> {
     let c = super::lock_shared(conn)?;
-    let mut stmt = c
-        .prepare("SELECT file_path, modified_at FROM tracks")
-        .map_err(|e| format!("Query failed: {}", e))?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })
-        .map_err(|e| format!("Query failed: {}", e))?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let to_pair = |row: &rusqlite::Row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?));
+    let map = match scope {
+        Some(folder) => {
+            let mut stmt = c
+                .prepare("SELECT file_path, modified_at FROM tracks WHERE file_path LIKE ?1")
+                .map_err(|e| format!("Query failed: {}", e))?;
+            let rows = stmt
+                .query_map(params![format!("{}%", folder)], to_pair)
+                .map_err(|e| format!("Query failed: {}", e))?;
+            rows.filter_map(|r| r.ok()).collect()
+        }
+        None => {
+            let mut stmt = c
+                .prepare("SELECT file_path, modified_at FROM tracks")
+                .map_err(|e| format!("Query failed: {}", e))?;
+            let rows = stmt
+                .query_map([], to_pair)
+                .map_err(|e| format!("Query failed: {}", e))?;
+            rows.filter_map(|r| r.ok()).collect()
+        }
+    };
+    Ok(map)
 }
 
 fn file_mtime(path: &Path) -> i64 {
@@ -224,7 +251,7 @@ impl<'a> ScanProgress<'a> {
     }
 
     fn tick(&self, file_path: &Path) {
-        let completed = self.completed.fetch_add(1, Ordering::Relaxed) + 1;
+        self.completed.fetch_add(1, Ordering::Relaxed);
         let Some(app) = self.app else {
             return;
         };
@@ -232,6 +259,9 @@ impl<'a> ScanProgress<'a> {
         let Ok(mut last) = self.last_emit.try_lock() else {
             return;
         };
+        // Read the counter under the lock so serialized emits stay monotonic
+        // (a worker that incremented to 100 can't emit after one that hit 101).
+        let completed = self.completed.load(Ordering::Relaxed);
         let now = Instant::now();
         if now.duration_since(*last) < PROGRESS_INTERVAL && completed != self.total {
             return;
@@ -386,11 +416,11 @@ mod tests {
         ];
 
         // First scan writes both files.
-        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 2);
+        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 2);
         assert_eq!(track_count(&db), 2);
 
         // Re-scan with nothing changed writes nothing.
-        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 0);
+        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 0);
         assert_eq!(track_count(&db), 2);
     }
 
@@ -402,15 +432,15 @@ mod tests {
         let f = write_fake_audio(tmp.path(), "a.mp3");
         let files = vec![f.clone()];
 
-        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 1);
-        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 0);
+        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 1);
+        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 0);
 
         // mtime is second-granularity, so wait past a second boundary before
         // rewriting to guarantee a distinct modified time.
         std::thread::sleep(Duration::from_millis(1100));
         fs::write(&f, b"changed content").unwrap();
 
-        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 1);
+        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 1);
         assert_eq!(track_count(&db), 1);
     }
 
@@ -421,8 +451,28 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(true));
         let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
 
-        assert!(sync_files(&db, &files, None, &cancel).is_err());
+        assert!(sync_files(&db, &files, None, None, &cancel).is_err());
         assert_eq!(track_count(&db), 0);
+    }
+
+    #[test]
+    fn sync_files_folder_scoped_skips_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
+        let scope = tmp.path().to_string_lossy().to_string();
+
+        // First scoped scan inserts; a second with the same scope skips it.
+        assert_eq!(
+            sync_files(&db, &files, Some(&scope), None, &cancel).unwrap(),
+            1
+        );
+        assert_eq!(
+            sync_files(&db, &files, Some(&scope), None, &cancel).unwrap(),
+            0
+        );
+        assert_eq!(track_count(&db), 1);
     }
 
     #[test]
@@ -433,7 +483,7 @@ mod tests {
 
         let present = write_fake_audio(tmp.path(), "present.mp3");
         let gone = write_fake_audio(tmp.path(), "gone.mp3");
-        sync_files(&db, &[present.clone(), gone.clone()], None, &cancel).unwrap();
+        sync_files(&db, &[present.clone(), gone.clone()], None, None, &cancel).unwrap();
         assert_eq!(track_count(&db), 2);
 
         // The file backing one row disappears from disk.
@@ -464,7 +514,7 @@ mod tests {
             write_fake_audio(tmp.path(), "a.mp3"),
             write_fake_audio(tmp.path(), "b.mp3"),
         ];
-        sync_files(&db, &files, None, &cancel).unwrap();
+        sync_files(&db, &files, None, None, &cancel).unwrap();
 
         let removed = delete_orphans(&db, &tmp.path().to_string_lossy(), |_, _| false).unwrap();
         assert_eq!(removed, 0);

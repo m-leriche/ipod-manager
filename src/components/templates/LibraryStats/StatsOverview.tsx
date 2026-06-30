@@ -1,6 +1,7 @@
 import type { LibraryStats } from "../../../types/libstats";
 import type { StatsFilter } from "./types";
-import { formatBytes, formatDuration, formatBitrate, formatPercentage, formatNumber } from "./helpers";
+import { formatBitrate, formatPercentage, formatNumber } from "./helpers";
+import { formatBytes, formatDurationLong } from "../../../utils/format";
 
 const FORMAT_COLORS: Record<string, string> = {
   FLAC: "bg-success",
@@ -36,7 +37,7 @@ export const StatsOverview = ({
       <div className="grid grid-cols-2 gap-2">
         <StatCard label="Total Tracks" value={formatNumber(stats.total_tracks)} />
         <StatCard label="Total Size" value={formatBytes(stats.total_size)} />
-        <StatCard label="Total Duration" value={formatDuration(stats.total_duration_secs)} />
+        <StatCard label="Total Duration" value={formatDurationLong(stats.total_duration_secs)} />
         <StatCard label="Avg Bitrate" value={formatBitrate(stats.average_bitrate_kbps)} />
         <StatCard label="Artists" value={formatNumber(stats.artist_count)} />
         <StatCard label="Albums" value={formatNumber(stats.album_count)} />

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ExportResult, ImportResult, ExportPhase, ImportPhase } from "./types";
-import { formatBytes, defaultExportFilename } from "./helpers";
+import { defaultExportFilename } from "./helpers";
+import { formatBytes } from "../../../utils/format";
 
 export const LibraryExport = () => {
   const [exportPhase, setExportPhase] = useState<ExportPhase>("idle");

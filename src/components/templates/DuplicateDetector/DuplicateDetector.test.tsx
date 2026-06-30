@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DuplicateDetector } from "./DuplicateDetector";
-import { formatSize, formatDuration, qualityLabel } from "./helpers";
+import { qualityLabel } from "./helpers";
 
 const mockInvoke = vi.mocked(invoke);
 const mockListen = vi.mocked(listen);
@@ -288,21 +288,6 @@ describe("DuplicateDetector", () => {
       expect(screen.getByText("1411k")).toBeInTheDocument();
       expect(screen.getByText("320k")).toBeInTheDocument();
     });
-  });
-});
-
-describe("formatSize", () => {
-  it("formats bytes", () => expect(formatSize(500)).toBe("500 B"));
-  it("formats KB", () => expect(formatSize(1536)).toBe("1.5 KB"));
-  it("formats MB", () => expect(formatSize(12_000_000)).toBe("11.4 MB"));
-  it("formats GB", () => expect(formatSize(2_147_483_648)).toBe("2.00 GB"));
-});
-
-describe("formatDuration", () => {
-  it("formats seconds", () => {
-    expect(formatDuration(0)).toBe("0:00");
-    expect(formatDuration(65)).toBe("1:05");
-    expect(formatDuration(245)).toBe("4:05");
   });
 });
 

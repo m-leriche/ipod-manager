@@ -14,7 +14,8 @@ import { pickFile } from "../../../utils/pickPath";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
-import { formatDuration, formatSize, computeBatchFields, buildMetadataUpdates } from "./helpers";
+import { computeBatchFields, buildMetadataUpdates } from "./helpers";
+import { formatDuration, formatBytes } from "../../../utils/format";
 
 interface TrackDetailPanelProps {
   tracks: LibraryTrack[];
@@ -348,7 +349,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       {isSingle && (
         <div className="px-4 pb-3 space-y-1.5 border-t border-border pt-3">
           <DetailRow label="Length" value={formatDuration(track.duration_secs)} />
-          <DetailRow label="Size" value={formatSize(track.file_size)} />
+          <DetailRow label="Size" value={formatBytes(track.file_size)} />
           <DetailRow label="Format" value={track.format} />
           {track.bitrate_kbps && <DetailRow label="Bitrate" value={`${track.bitrate_kbps} kbps`} />}
           {track.sample_rate && (

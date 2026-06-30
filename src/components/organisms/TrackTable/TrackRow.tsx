@@ -3,6 +3,7 @@ import { StarRating } from "../../atoms/StarRating/StarRating";
 import { CELL_CLASSES } from "./constants";
 import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
+import { formatDuration } from "../../../utils/format";
 
 interface TrackRowProps {
   track: LibraryTrack;
@@ -83,13 +84,6 @@ export const TrackRow = memo(function TrackRow({
 });
 
 // ── Cell renderers ──────────────────────────────────────────────
-
-const formatDuration = (secs: number): string => {
-  if (!isFinite(secs) || secs < 0) return "\u2014";
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
 
 const formatDateAdded = (epoch: number): string => {
   if (!epoch) return "\u2014";

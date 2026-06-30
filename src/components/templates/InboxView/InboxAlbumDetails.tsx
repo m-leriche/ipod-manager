@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDuration } from "../AudioConverter/helpers";
+import { formatDuration } from "../../../utils/format";
 import { CONVERT_TARGETS } from "./constants";
 import { formatTrackQuality } from "./helpers";
 import type { ConvertTarget, InboxAlbum } from "./types";

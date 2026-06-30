@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDuration, formatSize, trackToEditable, computeBatchFields, buildMetadataUpdates } from "./helpers";
+import { trackToEditable, computeBatchFields, buildMetadataUpdates } from "./helpers";
 import type { LibraryTrack } from "../../../types/library";
 
 const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
@@ -33,27 +33,6 @@ const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
   compilation: false,
   replay_gain_album_db: null,
   ...overrides,
-});
-
-describe("formatDuration", () => {
-  it("formats seconds to M:SS", () => {
-    expect(formatDuration(240)).toBe("4:00");
-    expect(formatDuration(65)).toBe("1:05");
-    expect(formatDuration(0)).toBe("0:00");
-  });
-
-  it("returns dash for invalid values", () => {
-    expect(formatDuration(-1)).toBe("—");
-    expect(formatDuration(Infinity)).toBe("—");
-  });
-});
-
-describe("formatSize", () => {
-  it("formats bytes to human readable", () => {
-    expect(formatSize(500)).toBe("500 B");
-    expect(formatSize(1536)).toBe("1.5 KB");
-    expect(formatSize(5242880)).toBe("5.0 MB");
-  });
 });
 
 describe("trackToEditable", () => {

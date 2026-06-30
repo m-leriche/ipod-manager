@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { VideoExtractor } from "./VideoExtractor";
-import { parseTimestamp, formatDuration, buildChapters } from "./helpers";
+import { parseTimestamp, buildChapters } from "./helpers";
 
 const mockInvoke = vi.mocked(invoke);
 const mockOpen = vi.mocked(open);
@@ -318,18 +318,6 @@ describe("parseTimestamp", () => {
 
   it("rejects negative values", () => {
     expect(parseTimestamp("-1:00")).toBeNull();
-  });
-});
-
-describe("formatDuration", () => {
-  it("formats seconds under an hour", () => {
-    expect(formatDuration(0)).toBe("0:00");
-    expect(formatDuration(65)).toBe("1:05");
-    expect(formatDuration(600)).toBe("10:00");
-  });
-
-  it("formats seconds over an hour", () => {
-    expect(formatDuration(3661)).toBe("1:01:01");
   });
 });
 

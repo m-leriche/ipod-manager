@@ -9,6 +9,7 @@ import { VolumeControl } from "../../molecules/VolumeControl/VolumeControl";
 import { LyricsPanel } from "../LyricsPanel/LyricsPanel";
 import { getDragPayload } from "../TrackTable/TrackTable";
 import { matchesShortcut } from "../../../utils/shortcuts";
+import { formatDuration } from "../../../utils/format";
 import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import type { LibraryTrack } from "../../../types/library";
 
@@ -223,13 +224,6 @@ export const NowPlayingBar = ({ onToggleQueue, queueOpen, onToggleMiniPlayer, mi
   );
 };
 
-const formatTime = (seconds: number): string => {
-  if (!isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
 const MiniPlayerView = ({
   track,
   isPlaying,
@@ -315,9 +309,11 @@ const MiniPlayerView = ({
 
       {/* Seek bar */}
       <div className="px-4 flex items-center gap-2 shrink-0">
-        <span className="text-[9px] text-text-tertiary tabular-nums w-6 text-right">{formatTime(currentTime)}</span>
+        <span className="text-[9px] text-text-tertiary tabular-nums min-w-6 text-right">
+          {formatDuration(currentTime, "0:00")}
+        </span>
         <SeekBar value={fraction} onChange={onSeek} className="flex-1" />
-        <span className="text-[9px] text-text-tertiary tabular-nums w-6">{formatTime(duration)}</span>
+        <span className="text-[9px] text-text-tertiary tabular-nums min-w-6">{formatDuration(duration, "0:00")}</span>
       </div>
 
       {/* Transport controls */}

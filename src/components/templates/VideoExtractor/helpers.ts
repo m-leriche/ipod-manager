@@ -1,5 +1,6 @@
 import type { EditableChapter } from "./types";
 import type { Chapter } from "../../../types/audio";
+import { formatDuration } from "../../../utils/format";
 
 export const parseTimestamp = (ts: string): number | null => {
   const trimmed = ts.trim();
@@ -17,14 +18,6 @@ export const parseTimestamp = (ts: string): number | null => {
     return h * 3600 + m * 60 + s;
   }
   return null;
-};
-
-export const formatDuration = (secs: number): string => {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
 export const buildChapters = (

@@ -5,23 +5,27 @@ use notify_debouncer_full::{new_debouncer, notify, DebounceEventResult, Debounce
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 /// Tauri-managed state for the filesystem watcher.
 ///
-/// The `suppressed` flag prevents the debouncer's background thread from
-/// modifying the database after `stop()` is called.  `notify-debouncer-full`'s
-/// `Drop` impl only sets a stop flag with `Ordering::Relaxed` and does NOT
-/// join the thread — so the thread can execute one final callback *after* the
-/// debouncer is dropped, racing with `save_metadata`'s tag-writing and
-/// creating ghost records from partially-written files.  The suppression flag
-/// is checked at the very start of the callback, before any DB access.
+/// `generation` guards against the debouncer's background thread modifying the
+/// database after `stop()` or a restart.  `notify-debouncer-full`'s `Drop` impl
+/// only sets a stop flag with `Ordering::Relaxed` and does NOT join the thread —
+/// so the thread can execute one final callback *after* the debouncer is
+/// dropped, racing with `save_metadata`'s tag-writing and creating ghost records
+/// from partially-written files.  Each `watch()` bumps `generation` and the
+/// callback captures the value current at its creation; once a newer watcher (or
+/// `stop()`) bumps the counter, any lingering old callback sees a mismatch and
+/// bails before touching the DB.  A generation counter — unlike a boolean
+/// suppress flag that has to be set then cleared — leaves no window in which a
+/// stale callback could slip through.
 pub struct FolderWatcher {
     inner: Mutex<Option<WatcherInner>>,
-    suppressed: Arc<AtomicBool>,
+    generation: Arc<AtomicU64>,
 }
 
 struct WatcherInner {
@@ -39,14 +43,14 @@ impl FolderWatcher {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
-            suppressed: Arc::new(AtomicBool::new(false)),
+            generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
     /// Start (or restart) watching the given folder paths.
     ///
-    /// Suppresses the old watcher's lingering callbacks before dropping it,
-    /// then clears the flag for the new callback.
+    /// Bumps the generation so the old watcher's lingering callbacks bail, then
+    /// drops it and installs a fresh one bound to the new generation.
     pub fn watch(
         &self,
         paths: Vec<PathBuf>,
@@ -58,25 +62,22 @@ impl FolderWatcher {
             .lock()
             .map_err(|e| format!("Lock error: {}", e))?;
 
-        // Suppress before dropping so the old debouncer's lingering thread
-        // can't sneak in a callback between the drop and the flag clear.
-        self.suppressed.store(true, Ordering::SeqCst);
+        // Bumping first means any lingering callback from the dropped debouncer
+        // sees a generation mismatch and returns — no window to sneak through.
+        let my_gen = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         *guard = None;
-        // Now safe to clear — old thread is suppressed, new closure below
-        // will capture the Arc after this store.
-        self.suppressed.store(false, Ordering::SeqCst);
 
         if paths.is_empty() {
             return Ok(());
         }
 
-        let suppressed = self.suppressed.clone();
+        let generation = self.generation.clone();
         let mut debouncer = new_debouncer(
             Duration::from_secs(3),
             None,
             move |events: DebounceEventResult| {
-                if suppressed.load(Ordering::SeqCst) {
-                    log::debug!("Watcher callback suppressed — discarding events");
+                if generation.load(Ordering::SeqCst) != my_gen {
+                    log::debug!("Watcher callback from a stale generation — discarding events");
                     return;
                 }
                 handle_fs_events(events, &app, &db);
@@ -100,14 +101,14 @@ impl FolderWatcher {
 
     /// Stop watching and suppress any lingering callbacks.
     ///
-    /// The suppression flag is set *before* the debouncer is dropped because
+    /// The generation is bumped *before* the debouncer is dropped because
     /// `notify-debouncer-full`'s `Drop` uses `Ordering::Relaxed` and does not
     /// join its background thread.  That thread can fire one last callback
-    /// after the drop — the flag ensures it returns immediately.
+    /// after the drop — the bump ensures it sees a mismatch and returns.
     ///
     /// Use [`restart_from_db`] to start a fresh watcher afterward.
     pub fn stop(&self) {
-        self.suppressed.store(true, Ordering::SeqCst);
+        self.generation.fetch_add(1, Ordering::SeqCst);
         if let Ok(mut guard) = self.inner.lock() {
             *guard = None;
             log::info!("File watcher stopped (suppressed)");

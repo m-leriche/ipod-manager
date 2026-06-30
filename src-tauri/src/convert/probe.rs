@@ -22,6 +22,9 @@ pub fn probe_audio(path: &str) -> Result<AudioProbeInfo, String> {
             "-show_streams",
             "-select_streams",
             "a:0",
+            // `--` ends option parsing so a path beginning with `-` is treated
+            // as a filename, not an ffprobe flag.
+            "--",
             path,
         ])
         .output()

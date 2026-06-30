@@ -50,10 +50,7 @@ pub async fn set_library_location(
     }
 
     tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::scan_folder(&conn, &path, &app, &flag)
+        library::scan_folder(&conn_arc, &path, &app, &flag)
     })
     .await
     .map_err(|e| format!("Scan failed: {}", e))??;
@@ -81,10 +78,7 @@ pub async fn import_to_library(
     };
 
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::import_to_library(&library_root, &paths, &conn, &app, &flag)
+        library::import_to_library(&library_root, &paths, &conn_arc, &app, &flag)
     })
     .await
     .map_err(|e| format!("Import failed: {}", e))?
@@ -113,10 +107,7 @@ pub async fn add_library_folder(
     }
 
     tauri::async_runtime::spawn_blocking(move || {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| format!("DB lock failed: {}", e))?;
-        library::scan_folder(&conn, &path, &app, &flag)
+        library::scan_folder(&conn_arc, &path, &app, &flag)
     })
     .await
     .map_err(|e| format!("Scan failed: {}", e))??;
@@ -134,8 +125,12 @@ pub async fn refresh_library(
 ) -> Result<(), AppError> {
     auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
-    db.with_db(move |conn| library::rescan_all_folders(conn, &app, &flag))
-        .await?;
+    let conn_arc = db.conn_arc();
+    tauri::async_runtime::spawn_blocking(move || {
+        library::rescan_all_folders(&conn_arc, &app, &flag)
+    })
+    .await
+    .map_err(|e| format!("Rescan failed: {}", e))??;
     cache.invalidate();
     Ok(())
 }
@@ -149,9 +144,12 @@ pub async fn background_rescan(
 ) -> Result<library::BackgroundScanResult, AppError> {
     auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
-    let result = db
-        .with_db(move |conn| library::background_rescan_all_folders(conn, &flag))
-        .await?;
+    let conn_arc = db.conn_arc();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        library::background_rescan_all_folders(&conn_arc, &flag)
+    })
+    .await
+    .map_err(|e| format!("Background rescan failed: {}", e))??;
 
     if result.changed > 0 || result.removed > 0 {
         let _ = app.emit(

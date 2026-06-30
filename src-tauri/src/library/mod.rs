@@ -47,6 +47,18 @@ pub use types::*;
 
 // ── Database state ─────────────────────────────────────────────
 
+/// Shared writer-connection handle. Scan and import lock this per step —
+/// releasing it during slow tag reads and file copies — so they don't block
+/// every other writer (metadata saves, lyrics, playlists, backups) for the
+/// full duration of the operation.
+pub(crate) type SharedConn = std::sync::Arc<std::sync::Mutex<Connection>>;
+
+pub(crate) fn lock_shared(
+    conn: &SharedConn,
+) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+    conn.lock().map_err(|e| format!("DB lock failed: {}", e))
+}
+
 pub struct LibraryDb {
     pub conn: std::sync::Arc<std::sync::Mutex<Connection>>,
     db_path: std::path::PathBuf,

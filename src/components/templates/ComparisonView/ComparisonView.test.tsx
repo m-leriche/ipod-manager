@@ -45,8 +45,33 @@ const ENTRIES = [
   },
 ];
 
+// The tree is virtualized; @tanstack/react-virtual measures via offsetHeight,
+// which jsdom always reports as 0. Give the scroll container a viewport height
+// and each row a fixed height (and fire ResizeObserver) so rows actually render.
 beforeEach(() => {
   mockInvoke.mockReset();
+
+  (globalThis as Record<string, unknown>).ResizeObserver = class {
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(target: Element) {
+      this.callback([{ target } as unknown as ResizeObserverEntry], this);
+    }
+    disconnect() {}
+    unobserve() {}
+  };
+
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.classList?.contains("overflow-y-auto")) return 600;
+      if (this.hasAttribute("data-index")) return 32;
+      return 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 400 });
 });
 
 describe("ComparisonView", () => {

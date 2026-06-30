@@ -1,8 +1,9 @@
+import { memo } from "react";
 import { fmtSize, lastSegment } from "../ComparisonView/helpers";
 import { LEFT_CELL_BG, RIGHT_CELL_BG, GHOST_BORDER, GUTTER_ICON } from "./constants";
 import type { SplitFileRowProps } from "./types";
 
-export const SplitFileRow = ({ entry, depth, selected, onToggleFile }: SplitFileRowProps) => {
+const SplitFileRowImpl = ({ entry, depth, isSelected, onToggleFile }: SplitFileRowProps) => {
   const name = lastSegment(entry.relative_path);
   const { status } = entry;
   const isActionable = status !== "same";
@@ -23,7 +24,7 @@ export const SplitFileRow = ({ entry, depth, selected, onToggleFile }: SplitFile
           {isActionable && status !== "target_only" ? (
             <input
               type="checkbox"
-              checked={selected.has(entry.relative_path)}
+              checked={isSelected}
               onChange={() => onToggleFile(entry.relative_path)}
               className="w-3 h-3 cursor-pointer accent-accent rounded"
             />
@@ -53,7 +54,7 @@ export const SplitFileRow = ({ entry, depth, selected, onToggleFile }: SplitFile
           {isActionable && status === "target_only" ? (
             <input
               type="checkbox"
-              checked={selected.has(entry.relative_path)}
+              checked={isSelected}
               onChange={() => onToggleFile(entry.relative_path)}
               className="w-3 h-3 cursor-pointer accent-accent rounded"
             />
@@ -68,3 +69,5 @@ export const SplitFileRow = ({ entry, depth, selected, onToggleFile }: SplitFile
     </div>
   );
 };
+
+export const SplitFileRow = memo(SplitFileRowImpl);

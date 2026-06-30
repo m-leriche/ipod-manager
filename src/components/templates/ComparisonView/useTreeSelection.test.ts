@@ -22,6 +22,10 @@ const makeNode = (path: string, files: CompareEntry[], children: TreeNode[] = []
   totalFiles: files.length,
   hasDifferences: files.some((f) => f.status !== "same"),
   dominant: "mixed",
+  actionablePaths: [
+    ...files.filter((f) => f.status !== "same").map((f) => f.relative_path),
+    ...children.flatMap((c) => c.actionablePaths),
+  ],
 });
 
 describe("useTreeSelection", () => {

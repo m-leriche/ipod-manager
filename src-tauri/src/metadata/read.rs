@@ -162,24 +162,35 @@ fn scan_files(
     let total = audio_files.len();
     let mut tracks = Vec::with_capacity(total);
 
+    // Reads can finish in well under a millisecond each; throttle progress so a
+    // large library doesn't flood the webview with thousands of events.
+    const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    let mut last_emit: Option<std::time::Instant> = None;
+
     for (i, file_path) in audio_files.iter().enumerate() {
         if cancel_flag.load(Ordering::SeqCst) {
             return Err("Cancelled".to_string());
         }
 
-        let file_name = file_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let _ = app.emit(
-            "metadata-scan-progress",
-            MetadataScanProgress {
-                total,
-                completed: i,
-                current_file: file_name,
-            },
-        );
+        let due = match last_emit {
+            Some(t) => t.elapsed() >= PROGRESS_INTERVAL,
+            None => true,
+        };
+        if due || i + 1 == total {
+            last_emit = Some(std::time::Instant::now());
+            let file_name = file_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let _ = app.emit(
+                "metadata-scan-progress",
+                MetadataScanProgress {
+                    total,
+                    completed: i,
+                    current_file: file_name,
+                },
+            );
+        }
 
         tracks.push(read_track(file_path));
     }

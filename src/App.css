@@ -27,6 +27,33 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ─── Keyboard focus ring ───
+   Many components clear the default outline with `outline-none` but never add a
+   replacement, leaving keyboard focus invisible. This rule is unlayered, so it
+   beats Tailwind's utilities layer — a single accent ring covers every
+   focusable control. It only triggers on keyboard focus (:focus-visible), and
+   per-theme `input:focus` rules (higher specificity) keep their own styling.
+   No `border-radius` here: `outline` already follows each element's radius. */
+:where(
+    button,
+    a,
+    input,
+    select,
+    textarea,
+    summary,
+    [tabindex],
+    [role="button"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="tab"],
+    [role="option"],
+    [role="switch"],
+    [role="checkbox"]
+  ):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

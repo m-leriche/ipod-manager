@@ -1,16 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { usePlayback } from "../../../contexts/PlaybackContext";
+import { formatDuration } from "../../../utils/format";
 
 interface QueuePanelProps {
   onClose: () => void;
 }
-
-const formatDuration = (secs: number): string => {
-  if (!isFinite(secs) || secs < 0) return "—";
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
 
 export const QueuePanel = ({ onClose }: QueuePanelProps) => {
   const { state, removeFromQueue, reorderQueue, clearQueue, playTrack } = usePlayback();

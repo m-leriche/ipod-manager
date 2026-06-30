@@ -4,8 +4,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { LibraryStats } from "./LibraryStats";
 import {
-  formatBytes,
-  formatDuration,
   formatTrackDuration,
   formatBitrate,
   formatPercentage,
@@ -174,19 +172,6 @@ describe("LibraryStats", () => {
 });
 
 describe("helpers", () => {
-  describe("formatBytes", () => {
-    it("formats bytes", () => expect(formatBytes(500)).toBe("500 B"));
-    it("formats KB", () => expect(formatBytes(1536)).toBe("1.5 KB"));
-    it("formats MB", () => expect(formatBytes(5_242_880)).toBe("5.0 MB"));
-    it("formats GB", () => expect(formatBytes(2_147_483_648)).toBe("2.00 GB"));
-  });
-
-  describe("formatDuration", () => {
-    it("formats minutes only", () => expect(formatDuration(300)).toBe("5m"));
-    it("formats hours and minutes", () => expect(formatDuration(7200)).toBe("2h 0m"));
-    it("formats days", () => expect(formatDuration(100000)).toBe("1d 3h 46m"));
-  });
-
   describe("formatTrackDuration", () => {
     it("formats ms to mm:ss", () => expect(formatTrackDuration(240000)).toBe("4:00"));
     it("pads seconds", () => expect(formatTrackDuration(65000)).toBe("1:05"));

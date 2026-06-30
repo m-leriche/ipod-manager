@@ -1,23 +1,6 @@
 import type { FileDetail, RockboxTrack } from "../../../types/libstats";
 import type { DetailSortDir, DetailSortKey, PlayDataSort, StatsFilter } from "./types";
 
-export const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-};
-
-export const formatDuration = (totalSeconds: number): string => {
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-};
-
 export const formatTrackDuration = (ms: number): string => {
   const totalSec = Math.floor(ms / 1000);
   const min = Math.floor(totalSec / 60);

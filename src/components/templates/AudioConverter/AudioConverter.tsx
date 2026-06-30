@@ -8,7 +8,8 @@ import { useProgress } from "../../../contexts/ProgressContext";
 import { useDependencyCheck } from "../../../hooks/useDependencyCheck";
 import { FolderPicker } from "../../atoms/FolderPicker/FolderPicker";
 import { Spinner } from "../../atoms/Spinner/Spinner";
-import { FLAC_PRESETS, formatDuration, formatFileInfo } from "./helpers";
+import { FLAC_PRESETS, formatFileInfo } from "./helpers";
+import { formatDuration } from "../../../utils/format";
 import type { AudioProbeInfo, ConvertProgress, ConvertResult, ConvertRequest, TargetFormat, FlacPreset } from "./types";
 
 const AUDIO_FILTERS = [

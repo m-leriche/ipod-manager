@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { AudioConverter } from "./AudioConverter";
-import { formatDuration, formatFileInfo, FLAC_PRESETS } from "./helpers";
+import { formatFileInfo, FLAC_PRESETS } from "./helpers";
 
 vi.mock("../../../utils/pickPath", () => ({
   pickFiles: vi.fn(),
@@ -307,14 +307,6 @@ describe("AudioConverter", () => {
       expect(screen.getByText("Lossless")).toBeInTheDocument();
       expect(screen.getByText("Lossy")).toBeInTheDocument();
     });
-  });
-});
-
-describe("formatDuration", () => {
-  it("formats seconds under an hour", () => {
-    expect(formatDuration(0)).toBe("0:00");
-    expect(formatDuration(65)).toBe("1:05");
-    expect(formatDuration(600)).toBe("10:00");
   });
 });
 

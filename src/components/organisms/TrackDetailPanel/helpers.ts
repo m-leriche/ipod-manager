@@ -2,19 +2,6 @@ import type { LibraryTrack } from "../../../types/library";
 import type { MetadataUpdate } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
 
-export const formatDuration = (secs: number): string => {
-  if (!isFinite(secs) || secs < 0) return "—";
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
-export const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
-
 export const trackToEditable = (track: LibraryTrack): EditableTrackFields => ({
   title: track.title ?? "",
   artist: track.artist ?? "",

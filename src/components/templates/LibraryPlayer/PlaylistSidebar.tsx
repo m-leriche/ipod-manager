@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { PlaylistContextMenu, SmartPlaylistIcon, formatExportResult } from "./PlaylistContextMenu";
 import type { PlaylistContextMenuState } from "./PlaylistContextMenu";
 import type { Playlist, SmartPlaylist } from "../../../types/library";
+import { formatDurationLong } from "../../../utils/format";
 
 interface PlaylistSidebarProps {
   onPlaylistSelect: (id: number | null) => void;
@@ -148,13 +149,6 @@ export const PlaylistSidebar = ({
     },
     [creating, editingId, handleCreate, handleRename],
   );
-
-  const formatDuration = (secs: number): string => {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  };
 
   const builtinSmartPlaylists = smartPlaylists.filter((sp) => sp.is_builtin);
   const userSmartPlaylists = smartPlaylists.filter((sp) => !sp.is_builtin);
@@ -326,7 +320,7 @@ export const PlaylistSidebar = ({
                 <div className="text-[11px] truncate">{p.name}</div>
                 <div className="text-[9px] text-text-tertiary">
                   {p.track_count} track{p.track_count !== 1 ? "s" : ""}
-                  {p.total_duration > 0 && ` \u00B7 ${formatDuration(p.total_duration)}`}
+                  {p.total_duration > 0 && ` \u00B7 ${formatDurationLong(p.total_duration)}`}
                 </div>
               </button>
             )}

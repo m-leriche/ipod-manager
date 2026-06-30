@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { LibraryExport } from "./LibraryExport";
-import { formatBytes, defaultExportFilename } from "./helpers";
+import { defaultExportFilename } from "./helpers";
 import type { ExportResult, ImportResult } from "./types";
 
 const mockInvoke = vi.mocked(invoke);
@@ -211,14 +211,6 @@ describe("LibraryExport — import", () => {
 });
 
 describe("helpers", () => {
-  describe("formatBytes", () => {
-    it("formats bytes", () => expect(formatBytes(500)).toBe("500 B"));
-    it("formats KB", () => expect(formatBytes(1536)).toBe("1.5 KB"));
-    it("formats MB", () => expect(formatBytes(2_500_000)).toBe("2.4 MB"));
-    it("formats GB", () => expect(formatBytes(2_147_483_648)).toBe("2.00 GB"));
-    it("handles zero", () => expect(formatBytes(0)).toBe("0 B"));
-  });
-
   describe("defaultExportFilename", () => {
     it("returns a filename with today's date", () => {
       const name = defaultExportFilename();

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useToast } from "../../../contexts/ToastContext";
 import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
-import { formatSize, formatDuration } from "./helpers";
+import { formatBytes, formatDuration } from "../../../utils/format";
 import type { DuplicateDetectionResult, DuplicateDetectionProgress, DuplicateGroup } from "../../../types/library";
 
 export const DuplicateDetector = () => {
@@ -142,7 +142,7 @@ export const DuplicateDetector = () => {
             <strong className="text-text-primary">{result.total_duplicate_tracks}</strong> total tracks
           </span>
           <span className="text-[11px] text-text-secondary">
-            <strong className="text-text-primary">{formatSize(result.potential_space_savings)}</strong> potential
+            <strong className="text-text-primary">{formatBytes(result.potential_space_savings)}</strong> potential
             savings
           </span>
         </div>
@@ -206,7 +206,7 @@ export const DuplicateDetector = () => {
               disabled={deleting}
               className="px-4 py-1.5 bg-danger text-white rounded-lg text-[11px] font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-40"
             >
-              {deleting ? "Deleting..." : `Delete ${selectedForDeletion.size} tracks (${formatSize(selectedSize)})`}
+              {deleting ? "Deleting..." : `Delete ${selectedForDeletion.size} tracks (${formatBytes(selectedSize)})`}
             </button>
           )}
         </div>
@@ -216,7 +216,7 @@ export const DuplicateDetector = () => {
       {confirmDelete && (
         <ConfirmDialog
           title="Delete Duplicate Tracks"
-          message={`This will permanently delete ${selectedForDeletion.size} track${selectedForDeletion.size !== 1 ? "s" : ""} (${formatSize(selectedSize)}) from your library. This cannot be undone.`}
+          message={`This will permanently delete ${selectedForDeletion.size} track${selectedForDeletion.size !== 1 ? "s" : ""} (${formatBytes(selectedSize)}) from your library. This cannot be undone.`}
           confirmLabel="Delete"
           danger
           onConfirm={handleDelete}
@@ -287,7 +287,7 @@ const DuplicateGroupCard = ({
             <span className="text-text-tertiary tabular-nums shrink-0 w-12">
               {formatDuration(dt.track.duration_secs)}
             </span>
-            <span className="text-text-tertiary tabular-nums shrink-0 w-14">{formatSize(dt.track.file_size)}</span>
+            <span className="text-text-tertiary tabular-nums shrink-0 w-14">{formatBytes(dt.track.file_size)}</span>
             <span className="flex-1 text-text-tertiary truncate text-[10px]" title={dt.track.file_path}>
               {dt.track.file_name}
             </span>

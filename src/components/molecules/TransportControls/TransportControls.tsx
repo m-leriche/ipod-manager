@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { PlaybackButton } from "../../atoms/PlaybackButton/PlaybackButton";
 import { SeekBar } from "../../atoms/SeekBar/SeekBar";
+import { formatDuration } from "../../../utils/format";
 
 interface TransportControlsProps {
   isPlaying: boolean;
@@ -15,13 +16,6 @@ interface TransportControlsProps {
   onToggleShuffle: () => void;
   onCycleRepeat: () => void;
 }
-
-const formatTime = (seconds: number): string => {
-  if (!isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
 
 export const TransportControls = ({
   isPlaying,
@@ -110,9 +104,11 @@ export const TransportControls = ({
       </div>
 
       <div className="flex items-center gap-2 w-full">
-        <span className="text-[10px] text-text-tertiary tabular-nums w-8 text-right">{formatTime(displayTime)}</span>
+        <span className="text-[10px] text-text-tertiary tabular-nums w-8 text-right">
+          {formatDuration(displayTime, "0:00")}
+        </span>
         <SeekBar value={fraction} onChange={onSeek} onScrub={handleScrub} className="flex-1" />
-        <span className="text-[10px] text-text-tertiary tabular-nums w-8">{formatTime(duration)}</span>
+        <span className="text-[10px] text-text-tertiary tabular-nums w-8">{formatDuration(duration, "0:00")}</span>
       </div>
     </div>
   );

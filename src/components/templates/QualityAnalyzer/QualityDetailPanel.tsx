@@ -4,7 +4,8 @@ import { Spinner } from "../../atoms/Spinner/Spinner";
 import { MiniPlayer } from "../../molecules/MiniPlayer/MiniPlayer";
 import type { AudioPlaybackState } from "../../molecules/MiniPlayer/types";
 import type { AudioFileInfo, SpectrogramResult, WaveformResult } from "../../../types/quality";
-import { formatBitrate, formatSampleRate, formatBitDepth, formatDuration, verdictColor } from "./helpers";
+import { formatBitrate, formatSampleRate, formatBitDepth, verdictColor } from "./helpers";
+import { formatDuration } from "../../../utils/format";
 
 interface QualityDetailPanelProps {
   file: AudioFileInfo;

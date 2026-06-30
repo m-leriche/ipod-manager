@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import type { FileDetail } from "../../../types/libstats";
 import type { StatsFilter, DetailSortKey, DetailSortDir } from "./types";
-import { filterFileDetails, sortFileDetails, formatBytes, formatNumber } from "./helpers";
+import { filterFileDetails, sortFileDetails, formatNumber } from "./helpers";
+import { formatBytes } from "../../../utils/format";
 
 interface StatsDetailModalProps {
   filter: StatsFilter;

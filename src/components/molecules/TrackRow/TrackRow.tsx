@@ -1,4 +1,5 @@
 import type { LibraryTrack } from "../../../types/library";
+import { formatDuration } from "../../../utils/format";
 
 interface TrackRowProps {
   track: LibraryTrack;
@@ -9,13 +10,6 @@ interface TrackRowProps {
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
-
-const formatDuration = (secs: number): string => {
-  if (!isFinite(secs) || secs < 0) return "—";
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
 
 export const TrackRow = ({
   track,

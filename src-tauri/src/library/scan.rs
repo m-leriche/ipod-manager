@@ -1,17 +1,22 @@
 use crate::audio_utils::collect_audio_files;
+use rayon::prelude::*;
 use rusqlite::{params, Connection};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use unicode_normalization::UnicodeNormalization;
 
 use super::folders::get_folders;
 use super::now_epoch;
 use super::track_io::{read_track_for_library, upsert_track};
-use super::types::LibraryScanProgress;
+use super::types::{LibraryScanProgress, TrackData};
+
+/// Emit at most one progress event per file completion within this window.
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
 pub fn scan_folder(
     conn: &super::SharedConn,
@@ -26,41 +31,16 @@ pub fn scan_folder(
 
     let mut audio_files = Vec::new();
     collect_audio_files(root, &mut audio_files);
-
     let total = audio_files.len();
-    let now = now_epoch();
-    let mut scanned = 0;
 
-    for (i, file_path) in audio_files.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
-        }
-
-        let file_name = file_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let _ = app.emit(
-            "library-scan-progress",
-            LibraryScanProgress {
-                total,
-                completed: i,
-                current_file: file_name,
-            },
-        );
-
-        // `scanned` counts every file seen, whether or not it needed rewriting.
-        upsert_if_changed(conn, file_path, now)?;
-        scanned += 1;
-    }
+    sync_files(conn, &audio_files, Some(app), cancel_flag)?;
 
     // Remove tracks whose files no longer exist on disk for this folder.
     let db_paths = paths_under_folder(conn, folder_path)?;
     let orphans: Vec<&String> = db_paths.iter().filter(|p| !Path::new(p).exists()).collect();
     delete_paths(conn, &orphans)?;
 
-    Ok(scanned)
+    Ok(total)
 }
 
 pub fn rescan_all_folders(
@@ -74,43 +54,11 @@ pub fn rescan_all_folders(
     };
 
     let all_files = collect_folder_files(&folders);
-    let total = all_files.len();
-    let now = now_epoch();
-
-    for (i, (file_path, _folder_path)) in all_files.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
-        }
-
-        let file_name = file_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let _ = app.emit(
-            "library-scan-progress",
-            LibraryScanProgress {
-                total,
-                completed: i,
-                current_file: file_name,
-            },
-        );
-
-        upsert_if_changed(conn, file_path, now)?;
-    }
+    sync_files(conn, &all_files, Some(app), cancel_flag)?;
 
     for folder in &folders {
         remove_ghosts(conn, &folder.path)?;
     }
-
-    let _ = app.emit(
-        "library-scan-progress",
-        LibraryScanProgress {
-            total,
-            completed: total,
-            current_file: String::new(),
-        },
-    );
 
     Ok(())
 }
@@ -128,18 +76,8 @@ pub fn background_rescan_all_folders(
 
     let all_files = collect_folder_files(&folders);
     let total = all_files.len();
-    let now = now_epoch();
-    let mut changed = 0;
 
-    for (file_path, _folder_path) in &all_files {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
-        }
-
-        if upsert_if_changed(conn, file_path, now)? {
-            changed += 1;
-        }
-    }
+    let changed = sync_files(conn, &all_files, None, cancel_flag)?;
 
     let mut removed = {
         let c = super::lock_shared(conn)?;
@@ -157,7 +95,7 @@ pub fn background_rescan_all_folders(
     // Persist the scan timestamp so we know when the last successful scan ran
     {
         let c = super::lock_shared(conn)?;
-        let _ = super::settings::set_setting(&c, "last_scan_timestamp", &now.to_string());
+        let _ = super::settings::set_setting(&c, "last_scan_timestamp", &now_epoch().to_string());
     }
 
     Ok(super::types::BackgroundScanResult {
@@ -167,10 +105,96 @@ pub fn background_rescan_all_folders(
     })
 }
 
-// ── Per-file helpers ───────────────────────────────────────────
-//
-// These keep the DB lock short: it is held only for the mtime lookup and the
-// upsert, never across the slow tag read in `read_track_for_library`.
+// ── Parallel scan core ─────────────────────────────────────────
+
+/// Dedicated pool for tag reads. Bounded so the occasional `ffprobe` fallback
+/// can't spawn one subprocess per CPU thread on a huge library.
+fn scan_pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .clamp(2, 8);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .thread_name(|i| format!("scan-worker-{}", i))
+            .build()
+            .expect("static thread pool with fixed config")
+    })
+}
+
+/// Read tags (in parallel) for every file whose on-disk mtime differs from the
+/// stored value, then bulk-upsert the changes in one transaction. Returns the
+/// number of tracks (re)written. The slow tag reads hold no DB lock; the lock
+/// is taken only for the mtime preload and the final transaction.
+fn sync_files(
+    conn: &super::SharedConn,
+    files: &[PathBuf],
+    app: Option<&AppHandle>,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<usize, String> {
+    if files.is_empty() {
+        return Ok(0);
+    }
+
+    // One query for every stored mtime beats a SELECT per file.
+    let existing = load_mtimes(conn)?;
+    let progress = ScanProgress::new(app, files.len());
+    let now = now_epoch();
+
+    // Parallel stat + tag read, fully lock-free. Unchanged files yield None.
+    let changed: Vec<(TrackData, i64)> = scan_pool().install(|| {
+        files
+            .par_iter()
+            .filter_map(|file_path| {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    return None;
+                }
+                progress.tick(file_path);
+
+                let file_path_str = file_path.to_string_lossy().to_string();
+                let mtime = file_mtime(file_path);
+                if existing.get(&file_path_str) == Some(&mtime) {
+                    return None;
+                }
+                Some((read_track_for_library(file_path), mtime))
+            })
+            .collect()
+    });
+
+    if cancel_flag.load(Ordering::SeqCst) {
+        return Err("Cancelled".to_string());
+    }
+
+    let written = changed.len();
+    if written > 0 {
+        let c = super::lock_shared(conn)?;
+        let tx = c
+            .unchecked_transaction()
+            .map_err(|e| format!("Transaction failed: {}", e))?;
+        for (track_data, mtime) in &changed {
+            upsert_track(&tx, track_data, *mtime, now)?;
+        }
+        tx.commit().map_err(|e| format!("Commit failed: {}", e))?;
+    }
+
+    progress.emit_final();
+    Ok(written)
+}
+
+fn load_mtimes(conn: &super::SharedConn) -> Result<HashMap<String, i64>, String> {
+    let c = super::lock_shared(conn)?;
+    let mut stmt = c
+        .prepare("SELECT file_path, modified_at FROM tracks")
+        .map_err(|e| format!("Query failed: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| format!("Query failed: {}", e))?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
 
 fn file_mtime(path: &Path) -> i64 {
     fs::metadata(path)
@@ -181,45 +205,76 @@ fn file_mtime(path: &Path) -> i64 {
         .unwrap_or(0)
 }
 
-/// Read a track's tags and upsert it, but only if its mtime differs from the
-/// stored value. Returns `true` when the track was (re)written.
-fn upsert_if_changed(conn: &super::SharedConn, file_path: &Path, now: i64) -> Result<bool, String> {
-    let file_path_str = file_path.to_string_lossy().to_string();
-    let mtime = file_mtime(file_path);
-
-    let existing_mtime: Option<i64> = {
-        let c = super::lock_shared(conn)?;
-        c.query_row(
-            "SELECT modified_at FROM tracks WHERE file_path = ?1",
-            params![file_path_str],
-            |row| row.get(0),
-        )
-        .ok()
-    };
-
-    if existing_mtime == Some(mtime) {
-        return Ok(false);
-    }
-
-    // Slow tag read runs without the DB lock held.
-    let track_data = read_track_for_library(file_path);
-    let c = super::lock_shared(conn)?;
-    upsert_track(&c, &track_data, mtime, now)?;
-    Ok(true)
+/// Throttled, thread-safe scan progress emitter. Emits `library-scan-progress`
+/// at most once per [`PROGRESS_INTERVAL`]; `app` is `None` for silent scans.
+struct ScanProgress<'a> {
+    app: Option<&'a AppHandle>,
+    total: usize,
+    completed: AtomicUsize,
+    last_emit: Mutex<Instant>,
 }
 
-fn collect_folder_files(folders: &[super::types::LibraryFolder]) -> Vec<(PathBuf, String)> {
-    let mut all_files: Vec<(PathBuf, String)> = Vec::new();
+impl<'a> ScanProgress<'a> {
+    fn new(app: Option<&'a AppHandle>, total: usize) -> Self {
+        Self {
+            app,
+            total,
+            completed: AtomicUsize::new(0),
+            // Backdate so the very first completed file emits immediately.
+            last_emit: Mutex::new(Instant::now() - PROGRESS_INTERVAL),
+        }
+    }
+
+    fn tick(&self, file_path: &Path) {
+        let completed = self.completed.fetch_add(1, Ordering::Relaxed) + 1;
+        let Some(app) = self.app else {
+            return;
+        };
+        // try_lock: if another worker is mid-emit, skip this tick rather than block.
+        let Ok(mut last) = self.last_emit.try_lock() else {
+            return;
+        };
+        let now = Instant::now();
+        if now.duration_since(*last) < PROGRESS_INTERVAL && completed != self.total {
+            return;
+        }
+        *last = now;
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let _ = app.emit(
+            "library-scan-progress",
+            LibraryScanProgress {
+                total: self.total,
+                completed,
+                current_file: file_name,
+            },
+        );
+    }
+
+    fn emit_final(&self) {
+        if let Some(app) = self.app {
+            let _ = app.emit(
+                "library-scan-progress",
+                LibraryScanProgress {
+                    total: self.total,
+                    completed: self.total,
+                    current_file: String::new(),
+                },
+            );
+        }
+    }
+}
+
+fn collect_folder_files(folders: &[super::types::LibraryFolder]) -> Vec<PathBuf> {
+    let mut all_files: Vec<PathBuf> = Vec::new();
     for folder in folders {
         let root = Path::new(&folder.path);
         if !root.exists() {
             continue; // External drive may be disconnected — skip silently
         }
-        let mut folder_files = Vec::new();
-        collect_audio_files(root, &mut folder_files);
-        for f in folder_files {
-            all_files.push((f, folder.path.clone()));
-        }
+        collect_audio_files(root, &mut all_files);
     }
     all_files
 }
@@ -300,4 +355,77 @@ pub(super) fn remove_non_nfc_duplicates(conn: &Connection) -> Result<usize, Stri
         }
     }
     Ok(removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::{init_db, lock_shared, SharedConn};
+
+    fn make_db(dir: &Path) -> SharedConn {
+        let conn = init_db(&dir.join("library.db")).expect("init db");
+        Arc::new(Mutex::new(conn))
+    }
+
+    fn write_fake_audio(dir: &Path, name: &str) -> PathBuf {
+        let p = dir.join(name);
+        fs::write(&p, b"not really audio").expect("write file");
+        p
+    }
+
+    fn track_count(db: &SharedConn) -> i64 {
+        let c = lock_shared(db).unwrap();
+        c.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn sync_files_inserts_then_skips_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let files = vec![
+            write_fake_audio(tmp.path(), "a.mp3"),
+            write_fake_audio(tmp.path(), "b.mp3"),
+        ];
+
+        // First scan writes both files.
+        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 2);
+        assert_eq!(track_count(&db), 2);
+
+        // Re-scan with nothing changed writes nothing.
+        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 0);
+        assert_eq!(track_count(&db), 2);
+    }
+
+    #[test]
+    fn sync_files_rewrites_on_mtime_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let f = write_fake_audio(tmp.path(), "a.mp3");
+        let files = vec![f.clone()];
+
+        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 1);
+        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 0);
+
+        // mtime is second-granularity, so wait past a second boundary before
+        // rewriting to guarantee a distinct modified time.
+        std::thread::sleep(Duration::from_millis(1100));
+        fs::write(&f, b"changed content").unwrap();
+
+        assert_eq!(sync_files(&db, &files, None, &cancel).unwrap(), 1);
+        assert_eq!(track_count(&db), 1);
+    }
+
+    #[test]
+    fn sync_files_bails_when_cancelled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(true));
+        let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
+
+        assert!(sync_files(&db, &files, None, &cancel).is_err());
+        assert_eq!(track_count(&db), 0);
+    }
 }

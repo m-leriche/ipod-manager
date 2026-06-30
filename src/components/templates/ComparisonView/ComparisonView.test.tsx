@@ -296,4 +296,29 @@ describe("ComparisonView", () => {
       expect(screen.getByRole("button", { name: "Matching" })).toBeInTheDocument();
     });
   });
+
+  it("Expand All re-expands collapsed folders", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(ENTRIES);
+    render(
+      <ComparisonView
+        sourcePath="/source"
+        targetPath="/target"
+        exclusions={[]}
+        onAddExclusion={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    // Diff folders auto-expand, so a file is visible to start.
+    await waitFor(() => expect(screen.getByText("song1.mp3")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Collapse All" }));
+    expect(screen.queryByText("song1.mp3")).not.toBeInTheDocument();
+
+    // Regression: Expand All must use the real tree (was a no-op when the
+    // expansion hook captured an empty tree), so files reappear.
+    await user.click(screen.getByRole("button", { name: "Expand All" }));
+    await waitFor(() => expect(screen.getByText("song1.mp3")).toBeInTheDocument());
+  });
 });

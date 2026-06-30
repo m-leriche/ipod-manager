@@ -109,21 +109,21 @@ describe("useTreeExpansion", () => {
   const tree: TreeNode[] = [makeNode("a", [], [makeNode("a/b", []), makeNode("a/c", [])]), makeNode("d", [])];
 
   it("starts with empty expansion", () => {
-    const { result } = renderHook(() => useTreeExpansion(tree));
+    const { result } = renderHook(() => useTreeExpansion());
     expect(result.current.expanded.size).toBe(0);
   });
 
   it("toggleExpand adds and removes a path", () => {
-    const { result } = renderHook(() => useTreeExpansion(tree));
+    const { result } = renderHook(() => useTreeExpansion());
     act(() => result.current.toggleExpand("a"));
     expect(result.current.expanded.has("a")).toBe(true);
     act(() => result.current.toggleExpand("a"));
     expect(result.current.expanded.has("a")).toBe(false);
   });
 
-  it("expandAll expands all tree paths", () => {
-    const { result } = renderHook(() => useTreeExpansion(tree));
-    act(() => result.current.expandAll());
+  it("expandAll expands all paths of the tree passed at call time", () => {
+    const { result } = renderHook(() => useTreeExpansion());
+    act(() => result.current.expandAll(tree));
     expect(result.current.expanded.has("a")).toBe(true);
     expect(result.current.expanded.has("a/b")).toBe(true);
     expect(result.current.expanded.has("a/c")).toBe(true);
@@ -131,14 +131,14 @@ describe("useTreeExpansion", () => {
   });
 
   it("collapseAll clears expansion", () => {
-    const { result } = renderHook(() => useTreeExpansion(tree));
-    act(() => result.current.expandAll());
+    const { result } = renderHook(() => useTreeExpansion());
+    act(() => result.current.expandAll(tree));
     act(() => result.current.collapseAll());
     expect(result.current.expanded.size).toBe(0);
   });
 
   it("setExpanded replaces entire state", () => {
-    const { result } = renderHook(() => useTreeExpansion(tree));
+    const { result } = renderHook(() => useTreeExpansion());
     act(() => result.current.setExpanded(new Set(["a", "d"])));
     expect(result.current.expanded.size).toBe(2);
     expect(result.current.expanded.has("a")).toBe(true);

@@ -36,7 +36,7 @@ export const useTreeSelection = (filtered: CompareEntry[]) => {
   return { selected, toggle, toggleNodeSelection, selAll, selNone, reset };
 };
 
-export const useTreeExpansion = (tree: TreeNode[]) => {
+export const useTreeExpansion = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleExpand = useCallback((path: string) => {
@@ -48,7 +48,9 @@ export const useTreeExpansion = (tree: TreeNode[]) => {
     });
   }, []);
 
-  const expandAll = useCallback(() => setExpanded(new Set(collectPaths(tree))), [tree]);
+  // `tree` is passed at call time, not captured: this hook runs before
+  // useComparison produces the tree, so capturing it here would expand nothing.
+  const expandAll = useCallback((tree: TreeNode[]) => setExpanded(new Set(collectPaths(tree))), []);
   const collapseAll = useCallback(() => setExpanded(new Set()), []);
 
   return { expanded, setExpanded, toggleExpand, expandAll, collapseAll };

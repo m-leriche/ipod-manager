@@ -23,7 +23,7 @@ export const SplitComparisonView = ({
 }: ComparisonViewProps) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderPath: string } | null>(null);
 
-  const { expanded, setExpanded, toggleExpand, expandAll, collapseAll } = useTreeExpansion([]);
+  const { expanded, setExpanded, toggleExpand, expandAll, collapseAll } = useTreeExpansion();
 
   const onCompared = useCallback(
     (newExpanded: Set<string>) => {
@@ -71,6 +71,12 @@ export const SplitComparisonView = ({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 32,
     overscan: 15,
+    // Key measurements by content, not index, so a row's measured height
+    // travels with it when expand/collapse/filter reshuffles the flat list.
+    getItemKey: (index) => {
+      const row = flatRows[index];
+      return row.kind === "folder" ? `f:${row.node.path}` : `e:${row.entry.relative_path}`;
+    },
   });
 
   const handleContextMenu = useCallback(
@@ -135,7 +141,7 @@ export const SplitComparisonView = ({
           ))}
         </div>
         <div className="flex gap-1 text-[10px]">
-          <Pill onClick={expandAll}>Expand All</Pill>
+          <Pill onClick={() => expandAll(tree)}>Expand All</Pill>
           <Pill onClick={collapseAll}>Collapse All</Pill>
           <span className="w-px bg-border mx-1" />
           <Pill onClick={selAll}>Select All</Pill>

@@ -41,7 +41,17 @@ export interface TreeNode {
   totalFiles: number;
   hasDifferences: boolean;
   dominant: Status | "mixed";
+  /** All actionable (status !== "same") file paths under this node, including
+   *  descendants. Precomputed once so rows don't re-walk the subtree on every
+   *  render. */
+  actionablePaths: string[];
 }
+
+/** A single rendered row in the flattened, virtualized tree — either a folder
+ *  header or one of its files. `depth` is the owning folder's depth. */
+export type FlatRow =
+  | { kind: "folder"; node: TreeNode; depth: number }
+  | { kind: "file"; entry: CompareEntry; depth: number };
 
 export interface ComparisonViewProps {
   sourcePath: string;
@@ -51,15 +61,22 @@ export interface ComparisonViewProps {
   onBack: () => void;
 }
 
-export interface TreeNodeRowProps {
+export interface FolderRowProps {
   node: TreeNode;
   depth: number;
-  expanded: Set<string>;
-  selected: Set<string>;
+  isExpanded: boolean;
+  allChecked: boolean;
+  someChecked: boolean;
   onToggleExpand: (path: string) => void;
   onToggleNodeSelection: (node: TreeNode) => void;
-  onToggleFile: (path: string) => void;
   onContextMenu: (x: number, y: number, folderPath: string) => void;
+}
+
+export interface FileRowProps {
+  entry: CompareEntry;
+  depth: number;
+  isSelected: boolean;
+  onToggleFile: (path: string) => void;
 }
 
 export interface SyncActionsProps {

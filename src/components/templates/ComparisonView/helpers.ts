@@ -1,4 +1,4 @@
-import type { CompareEntry, Status, TreeNode } from "./types";
+import type { CompareEntry, FlatRow, Status, TreeNode } from "./types";
 
 export const fmtSize = (b: number | null): string => {
   if (b === null || b === 0) return "\u2014";
@@ -62,21 +62,34 @@ export const buildTree = (entries: CompareEntry[]): TreeNode[] => {
 
     const totalCounts: Record<Status, number> = { source_only: 0, target_only: 0, modified: 0, same: 0 };
     let totalFiles = 0;
+    const actionablePaths: string[] = [];
 
     for (const f of raw.files) {
       totalCounts[f.status]++;
       totalFiles++;
+      if (f.status !== "same") actionablePaths.push(f.relative_path);
     }
     for (const c of children) {
       for (const s of Object.keys(totalCounts) as Status[]) totalCounts[s] += c.totalCounts[s];
       totalFiles += c.totalFiles;
+      actionablePaths.push(...c.actionablePaths);
     }
 
     const hasDifferences = totalCounts.source_only > 0 || totalCounts.target_only > 0 || totalCounts.modified > 0;
     const statuses = (Object.keys(totalCounts) as Status[]).filter((s) => totalCounts[s] > 0);
     const dominant: Status | "mixed" = statuses.length === 1 ? statuses[0] : "mixed";
 
-    return { name, path: raw.fullPath, files: raw.files, children, totalCounts, totalFiles, hasDifferences, dominant };
+    return {
+      name,
+      path: raw.fullPath,
+      files: raw.files,
+      children,
+      totalCounts,
+      totalFiles,
+      hasDifferences,
+      dominant,
+      actionablePaths,
+    };
   };
 
   const treeChildren: TreeNode[] = [];
@@ -99,6 +112,7 @@ export const buildTree = (entries: CompareEntry[]): TreeNode[] => {
       totalFiles: root.files.length,
       hasDifferences: hasDiff,
       dominant: sts.length === 1 ? sts[0] : "mixed",
+      actionablePaths: root.files.filter((f) => f.status !== "same").map((f) => f.relative_path),
     });
   }
 
@@ -127,10 +141,36 @@ export const collectDiffPaths = (nodes: TreeNode[]): string[] => {
   return paths;
 };
 
-/** Collect all actionable file paths under a node (recursively) */
-export const collectActionableFiles = (node: TreeNode): string[] => {
-  const paths: string[] = [];
-  for (const f of node.files) if (f.status !== "same") paths.push(f.relative_path);
-  for (const c of node.children) paths.push(...collectActionableFiles(c));
-  return paths;
+/**
+ * Flatten the visible tree into a linear list of rows for virtualization.
+ * Respects the expansion set: a collapsed folder contributes only its own row.
+ *
+ * `filesFirst` controls ordering within an expanded folder — the split view
+ * lists files above sub-folders, the tree view lists sub-folders first.
+ */
+export const flattenTree = (nodes: TreeNode[], expanded: Set<string>, filesFirst = false): FlatRow[] => {
+  const rows: FlatRow[] = [];
+
+  const walk = (node: TreeNode, depth: number) => {
+    rows.push({ kind: "folder", node, depth });
+    if (!expanded.has(node.path)) return;
+
+    const pushFiles = () => {
+      for (const entry of node.files) rows.push({ kind: "file", entry, depth });
+    };
+    const pushChildren = () => {
+      for (const child of node.children) walk(child, depth + 1);
+    };
+
+    if (filesFirst) {
+      pushFiles();
+      pushChildren();
+    } else {
+      pushChildren();
+      pushFiles();
+    }
+  };
+
+  for (const node of nodes) walk(node, 0);
+  return rows;
 };

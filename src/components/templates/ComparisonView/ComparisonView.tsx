@@ -1,20 +1,22 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Pill } from "../../atoms/Pill/Pill";
 import { ContextMenu } from "../../molecules/ContextMenu/ContextMenu";
-import { TreeNodeRow } from "./TreeNodeRow";
+import { FolderRow } from "./FolderRow";
+import { FileRow } from "./FileRow";
 import { SyncActions } from "./SyncActions";
 import { useComparison } from "./useComparison";
 import { useSync } from "./useSync";
 import { useTreeSelection, useTreeExpansion } from "./useTreeSelection";
+import { flattenTree } from "./helpers";
 import type { ContextMenuItem } from "../../molecules/ContextMenu/types";
 import type { ComparisonViewProps } from "./types";
 import { FILTERS } from "./constants";
-import { useState } from "react";
 
 export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclusion, onBack }: ComparisonViewProps) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderPath: string } | null>(null);
 
-  const { expanded, setExpanded, toggleExpand, expandAll, collapseAll } = useTreeExpansion([]);
+  const { expanded, setExpanded, toggleExpand, expandAll, collapseAll } = useTreeExpansion();
 
   const onCompared = useCallback(
     (newExpanded: Set<string>) => {
@@ -51,6 +53,29 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
     return e && e.status === "target_only";
   }).length;
   const nMirror = stats.source_only + stats.modified + stats.target_only;
+
+  // Flatten the visible tree once per tree/expansion change, then virtualize so
+  // only on-screen rows render — a large sync tree can be tens of thousands.
+  const flatRows = useMemo(() => flattenTree(tree, expanded), [tree, expanded]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 32,
+    overscan: 15,
+    // Key measurements by content, not index, so a row's measured height
+    // travels with it when expand/collapse/filter reshuffles the flat list.
+    getItemKey: (index) => {
+      const row = flatRows[index];
+      return row.kind === "folder" ? `f:${row.node.path}` : `e:${row.entry.relative_path}`;
+    },
+  });
+
+  const handleContextMenu = useCallback(
+    (x: number, y: number, folderPath: string) => setContextMenu({ x, y, folderPath }),
+    [],
+  );
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -109,7 +134,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
           ))}
         </div>
         <div className="flex gap-1 text-[10px]">
-          <Pill onClick={expandAll}>Expand All</Pill>
+          <Pill onClick={() => expandAll(tree)}>Expand All</Pill>
           <Pill onClick={collapseAll}>Collapse All</Pill>
           <span className="w-px bg-border mx-1" />
           <Pill onClick={selAll}>Select All</Pill>
@@ -137,26 +162,56 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
 
       {/* Tree view */}
       {!loading && !error && (
-        <div className="flex-1 overflow-y-auto bg-bg-secondary border border-border rounded-2xl min-h-0">
-          {tree.length === 0 ? (
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto bg-bg-secondary border border-border rounded-2xl min-h-0"
+        >
+          {flatRows.length === 0 ? (
             <div className="py-12 text-center text-text-tertiary text-xs">
               {filter === "differences" ? "In sync \u2014 no differences found." : "No files match this filter."}
             </div>
           ) : (
-            <div className="divide-y divide-border-subtle">
-              {tree.map((node) => (
-                <TreeNodeRow
-                  key={node.path}
-                  node={node}
-                  depth={0}
-                  expanded={expanded}
-                  selected={selected}
-                  onToggleExpand={toggleExpand}
-                  onToggleNodeSelection={toggleNodeSelection}
-                  onToggleFile={toggle}
-                  onContextMenu={(x, y, folderPath) => setContextMenu({ x, y, folderPath })}
-                />
-              ))}
+            <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              {virtualizer.getVirtualItems().map((vi) => {
+                const row = flatRows[vi.index];
+                return (
+                  <div
+                    key={vi.key}
+                    data-index={vi.index}
+                    ref={virtualizer.measureElement}
+                    className="border-b border-border-subtle"
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${vi.start}px)`,
+                    }}
+                  >
+                    {row.kind === "folder" ? (
+                      <FolderRow
+                        node={row.node}
+                        depth={row.depth}
+                        isExpanded={expanded.has(row.node.path)}
+                        allChecked={
+                          row.node.actionablePaths.length > 0 && row.node.actionablePaths.every((p) => selected.has(p))
+                        }
+                        someChecked={row.node.actionablePaths.some((p) => selected.has(p))}
+                        onToggleExpand={toggleExpand}
+                        onToggleNodeSelection={toggleNodeSelection}
+                        onContextMenu={handleContextMenu}
+                      />
+                    ) : (
+                      <FileRow
+                        entry={row.entry}
+                        depth={row.depth}
+                        isSelected={selected.has(row.entry.relative_path)}
+                        onToggleFile={toggle}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

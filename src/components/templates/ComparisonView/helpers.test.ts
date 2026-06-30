@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTree, collectPaths, collectDiffPaths, collectActionableFiles, fmtSize, lastSegment } from "./helpers";
+import { buildTree, collectPaths, collectDiffPaths, flattenTree, fmtSize, lastSegment } from "./helpers";
 import type { CompareEntry } from "./types";
 
 const entry = (relative_path: string, status: CompareEntry["status"] = "source_only"): CompareEntry => ({
@@ -134,14 +134,14 @@ describe("collectDiffPaths", () => {
   });
 });
 
-describe("collectActionableFiles", () => {
+describe("buildTree actionablePaths", () => {
   it("excludes same-status files", () => {
     const tree = buildTree([
       entry("folder/new.txt", "source_only"),
       entry("folder/old.txt", "same"),
       entry("folder/changed.txt", "modified"),
     ]);
-    const actionable = collectActionableFiles(tree[0]);
+    const actionable = tree[0].actionablePaths;
     expect(actionable).toContain("folder/new.txt");
     expect(actionable).toContain("folder/changed.txt");
     expect(actionable).not.toContain("folder/old.txt");
@@ -149,13 +149,57 @@ describe("collectActionableFiles", () => {
 
   it("collects from nested children", () => {
     const tree = buildTree([entry("a/b/deep.txt", "target_only")]);
-    const actionable = collectActionableFiles(tree[0]);
-    expect(actionable).toContain("a/b/deep.txt");
+    expect(tree[0].actionablePaths).toContain("a/b/deep.txt");
   });
 
-  it("returns empty for all-same tree", () => {
+  it("is empty for an all-same tree", () => {
     const tree = buildTree([entry("folder/file.txt", "same")]);
-    const actionable = collectActionableFiles(tree[0]);
-    expect(actionable).toEqual([]);
+    expect(tree[0].actionablePaths).toEqual([]);
+  });
+});
+
+describe("flattenTree", () => {
+  it("returns only folder rows when nothing is expanded", () => {
+    const tree = buildTree([entry("Music/song.mp3"), entry("Photos/pic.jpg")]);
+    const rows = flattenTree(tree, new Set());
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.kind === "folder")).toBe(true);
+  });
+
+  it("includes file rows for expanded folders", () => {
+    const tree = buildTree([entry("Music/a.mp3"), entry("Music/b.mp3")]);
+    const rows = flattenTree(tree, new Set(["Music"]));
+    expect(rows.filter((r) => r.kind === "file")).toHaveLength(2);
+    expect(rows[0].kind).toBe("folder");
+  });
+
+  it("orders sub-folders before files by default, files first when requested", () => {
+    const tree = buildTree([entry("top/file.mp3"), entry("top/sub/deep.mp3")]);
+    const expanded = new Set(["top", "top/sub"]);
+
+    const childrenFirst = flattenTree(tree, expanded, false);
+    const fileFirst = flattenTree(tree, expanded, true);
+
+    // children-first: top, sub, deep.mp3, file.mp3
+    expect(childrenFirst.map((r) => (r.kind === "folder" ? r.node.name : lastSegment(r.entry.relative_path)))).toEqual([
+      "top",
+      "sub",
+      "deep.mp3",
+      "file.mp3",
+    ]);
+    // files-first: top, file.mp3, sub, deep.mp3
+    expect(fileFirst.map((r) => (r.kind === "folder" ? r.node.name : lastSegment(r.entry.relative_path)))).toEqual([
+      "top",
+      "file.mp3",
+      "sub",
+      "deep.mp3",
+    ]);
+  });
+
+  it("carries the owning folder depth on file rows", () => {
+    const tree = buildTree([entry("a/b/deep.mp3")]);
+    const rows = flattenTree(tree, new Set(["a", "a/b"]));
+    const fileRow = rows.find((r) => r.kind === "file");
+    expect(fileRow?.depth).toBe(1); // a=0, b=1
   });
 });

@@ -51,6 +51,9 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
             "json",
             "-show_format",
             "-show_streams",
+            // `--` ends option parsing so a path beginning with `-` is treated
+            // as a filename, not an ffprobe flag.
+            "--",
         ])
         .arg(path)
         .output()
@@ -178,6 +181,9 @@ pub fn write_metadata(path: &Path, updates: &[(&str, &str)]) -> Result<(), Strin
         args.push(format!("{}={}", key, value));
     }
 
+    // `--` ends option parsing so an output path beginning with `-` is treated
+    // as a filename, not an ffmpeg flag.
+    args.push("--".to_string());
     args.push(tmp_path.clone());
 
     let output = Command::new("ffmpeg")

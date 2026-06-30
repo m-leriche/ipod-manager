@@ -1,5 +1,4 @@
 use crate::audio_utils;
-use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -68,7 +67,7 @@ pub(crate) fn compute_library_dest(library_root: &Path, track: &TrackData) -> Pa
 pub fn import_to_library(
     library_root: &str,
     source_paths: &[String],
-    conn: &Connection,
+    conn: &super::SharedConn,
     app: &AppHandle,
     cancel_flag: &Arc<AtomicBool>,
 ) -> Result<ImportResult, String> {
@@ -151,7 +150,10 @@ pub fn import_to_library(
         },
     );
 
-    add_folder(conn, library_root)?;
+    {
+        let c = super::lock_shared(conn)?;
+        add_folder(&c, library_root)?;
+    }
     scan_folder(conn, library_root, app, cancel_flag)?;
 
     Ok(ImportResult {

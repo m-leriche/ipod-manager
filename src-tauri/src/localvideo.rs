@@ -56,7 +56,17 @@ pub fn probe_video(path: &str) -> Result<VideoProbe, String> {
     }
 
     let output = Command::new("ffprobe")
-        .args(["-v", "quiet", "-print_format", "json", "-show_format", path])
+        .args([
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            // `--` ends option parsing so a path beginning with `-` is treated
+            // as a filename, not an ffprobe flag.
+            "--",
+            path,
+        ])
         .output()
         .map_err(|e| format!("Failed to run ffprobe: {}", e))?;
 
@@ -181,6 +191,9 @@ fn extract_single(
         "pipe:1".to_string(),
         "-nostats".to_string(),
         "-y".to_string(),
+        // `--` ends option parsing so an output path beginning with `-` is
+        // treated as a filename, not an ffmpeg flag.
+        "--".to_string(),
         output_path.clone(),
     ]);
 
@@ -375,6 +388,9 @@ fn extract_chapters(
             "-metadata".to_string(),
             format!("title={}", chapter.title),
             "-y".to_string(),
+            // `--` ends option parsing so an output path beginning with `-` is
+            // treated as a filename, not an ffmpeg flag.
+            "--".to_string(),
             output_path.clone(),
         ]);
 

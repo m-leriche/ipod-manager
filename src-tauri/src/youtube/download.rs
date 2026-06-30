@@ -46,6 +46,7 @@ pub fn download_audio(
     let output_template = format!("{}/%(title)s.%(ext)s", output_dir);
 
     let mut args = vec![
+        "--ignore-config".to_string(),
         "-x".to_string(),
         "--audio-format".to_string(),
         format.to_string(),
@@ -64,6 +65,9 @@ pub fn download_audio(
         output_template,
         "--newline".to_string(),
         "--no-mtime".to_string(),
+        // `--` terminates option parsing so a URL beginning with `-` can't be
+        // interpreted as a yt-dlp flag (e.g. --exec for arbitrary execution).
+        "--".to_string(),
         url.to_string(),
     ]);
 
@@ -307,6 +311,9 @@ fn split_chapters(
             "-metadata".to_string(),
             format!("title={}", chapter.title),
             "-y".to_string(),
+            // `--` ends option parsing so an output path beginning with `-` is
+            // treated as a filename, not an ffmpeg flag.
+            "--".to_string(),
             output_path.clone(),
         ]);
 

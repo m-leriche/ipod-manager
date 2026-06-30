@@ -218,12 +218,17 @@ fn sanitize_lofty(
     let pictures_to_keep: Vec<Picture> = match &options.picture_action {
         PictureAction::ClearAll => vec![],
         PictureAction::RetainFrontCover => front_cover.into_iter().collect(),
-        PictureAction::MoveFrontCoverToFile { filename } => {
-            if let Some(ref pic) = front_cover {
-                export_cover(path, filename, pic.data(), cover_exported_dirs);
-            }
-            vec![]
-        }
+        PictureAction::MoveFrontCoverToFile { filename } => match front_cover {
+            Some(pic) => match export_cover(path, filename, pic.data(), cover_exported_dirs) {
+                Ok(()) => vec![],
+                // Export failed — keep the embedded cover so the art isn't lost.
+                Err(e) => {
+                    log::warn!("Keeping embedded cover for {}: {}", path.display(), e);
+                    vec![pic]
+                }
+            },
+            None => vec![],
+        },
     };
 
     // 4. Extract ReplayGain
@@ -389,8 +394,15 @@ fn sanitize_id3(
             }
         }
         PictureAction::MoveFrontCoverToFile { filename } => {
-            if let Some(ref pic) = front_cover {
-                export_cover(path, filename, &pic.data, cover_exported_dirs);
+            if let Some(pic) = front_cover {
+                if let Err(e) = export_cover(path, filename, &pic.data, cover_exported_dirs) {
+                    // Export failed — keep the embedded cover so the art isn't lost.
+                    log::warn!("Keeping embedded cover for {}: {}", path.display(), e);
+                    new_tag.add_frame(id3::frame::Frame::with_content(
+                        "APIC",
+                        id3::Content::Picture(pic),
+                    ));
+                }
             }
         }
     }
@@ -418,23 +430,31 @@ fn sanitize_id3(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
+/// Write the front cover to a sidecar file beside the audio file. Returns `Ok`
+/// once a sidecar exists for this directory — either freshly written, or already
+/// present (which we trust without inspecting; validating that an existing
+/// `cover.jpg` is a non-empty image of the right album is a follow-up) — so the
+/// caller may drop the embedded copy from the tag. On `Err` (the write failed)
+/// the caller must retain the embedded cover to avoid losing it.
 fn export_cover(
     audio_path: &Path,
     filename: &str,
     data: &[u8],
     exported: &mut HashSet<std::path::PathBuf>,
-) {
+) -> Result<(), String> {
     let Some(dir) = audio_path.parent() else {
-        return;
+        return Err("audio file has no parent directory".to_string());
     };
     if exported.contains(dir) {
-        return;
+        return Ok(());
     }
     let out_path = dir.join(filename);
     if !out_path.exists() {
-        let _ = fs::write(&out_path, data);
+        fs::write(&out_path, data)
+            .map_err(|e| format!("failed to write {}: {}", out_path.display(), e))?;
     }
     exported.insert(dir.to_path_buf());
+    Ok(())
 }
 
 // ── Tests ───────────────────────────────────────────────────────
@@ -442,6 +462,43 @@ fn export_cover(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn export_cover_writes_file_and_marks_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let audio = tmp.path().join("track.flac");
+        let mut exported = HashSet::new();
+
+        assert!(export_cover(&audio, "cover.jpg", b"art-bytes", &mut exported).is_ok());
+
+        let out = tmp.path().join("cover.jpg");
+        assert_eq!(fs::read(&out).unwrap(), b"art-bytes");
+        assert!(exported.contains(tmp.path()));
+    }
+
+    #[test]
+    fn export_cover_skips_when_dir_already_exported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let audio = tmp.path().join("track.flac");
+        let mut exported = HashSet::new();
+        exported.insert(tmp.path().to_path_buf());
+
+        // Already exported for this dir — succeeds without writing the file.
+        assert!(export_cover(&audio, "cover.jpg", b"art-bytes", &mut exported).is_ok());
+        assert!(!tmp.path().join("cover.jpg").exists());
+    }
+
+    #[test]
+    fn export_cover_errs_when_write_fails() {
+        // Parent directory does not exist, so the write must fail — and the
+        // caller relies on this Err to keep the embedded cover in the tag.
+        let audio = Path::new("/no/such/dir/track.flac");
+        let mut exported = HashSet::new();
+
+        let result = export_cover(audio, "cover.jpg", b"art-bytes", &mut exported);
+        assert!(result.is_err());
+        assert!(!exported.contains(Path::new("/no/such/dir")));
+    }
 
     #[test]
     fn field_mapping_covers_common_fields() {

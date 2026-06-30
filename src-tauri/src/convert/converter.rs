@@ -136,6 +136,9 @@ fn convert_single(
         "pipe:1".to_string(),
         "-nostats".to_string(),
         "-y".to_string(),
+        // `--` ends option parsing so an output path beginning with `-` is
+        // treated as a filename, not an ffmpeg flag.
+        "--".to_string(),
         output_path.clone(),
     ]);
 

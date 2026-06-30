@@ -36,9 +36,7 @@ pub fn scan_folder(
     sync_files(conn, &audio_files, Some(app), cancel_flag)?;
 
     // Remove tracks whose files no longer exist on disk for this folder.
-    let db_paths = paths_under_folder(conn, folder_path)?;
-    let orphans: Vec<&String> = db_paths.iter().filter(|p| !Path::new(p).exists()).collect();
-    delete_paths(conn, &orphans)?;
+    delete_orphans(conn, folder_path, |p, _| !Path::new(p).exists())?;
 
     Ok(total)
 }
@@ -57,7 +55,7 @@ pub fn rescan_all_folders(
     sync_files(conn, &all_files, Some(app), cancel_flag)?;
 
     for folder in &folders {
-        remove_ghosts(conn, &folder.path)?;
+        delete_orphans(conn, &folder.path, super::is_ghost_path)?;
     }
 
     Ok(())
@@ -89,7 +87,7 @@ pub fn background_rescan_all_folders(
         if !Path::new(&folder.path).exists() {
             continue;
         }
-        removed += remove_ghosts(conn, &folder.path)?;
+        removed += delete_orphans(conn, &folder.path, super::is_ghost_path)?;
     }
 
     // Persist the scan timestamp so we know when the last successful scan ran
@@ -281,39 +279,35 @@ fn collect_folder_files(folders: &[super::types::LibraryFolder]) -> Vec<PathBuf>
 
 // ── Orphan-deletion helpers ────────────────────────────────────
 
-fn paths_under_folder(conn: &super::SharedConn, folder_path: &str) -> Result<Vec<String>, String> {
+/// Delete rows under `folder_path` for which `should_delete` returns true.
+/// Returns the number of rows removed.
+///
+/// The snapshot query, the per-row check, and the DELETE all run under a single
+/// lock so a row a concurrent writer (e.g. an import) inserts mid-scan can't be
+/// caught in a stale snapshot and wrongly deleted. The check is a cheap
+/// filesystem stat — the expensive tag reads already ran unlocked — so holding
+/// the lock across the loop is fine.
+fn delete_orphans(
+    conn: &super::SharedConn,
+    folder_path: &str,
+    should_delete: impl Fn(&str, &Connection) -> bool,
+) -> Result<usize, String> {
     let c = super::lock_shared(conn)?;
-    let mut stmt = c
-        .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
-        .map_err(|e| format!("Query failed: {}", e))?;
-    let paths = stmt
-        .query_map(params![format!("{}%", folder_path)], |row| row.get(0))
-        .map_err(|e| format!("Query failed: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(paths)
-}
+    let db_paths: Vec<String> = {
+        let mut stmt = c
+            .prepare("SELECT file_path FROM tracks WHERE file_path LIKE ?1")
+            .map_err(|e| format!("Query failed: {}", e))?;
+        let paths = stmt
+            .query_map(params![format!("{}%", folder_path)], |row| row.get(0))
+            .map_err(|e| format!("Query failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        paths
+    };
 
-fn delete_paths(conn: &super::SharedConn, paths: &[&String]) -> Result<(), String> {
-    if paths.is_empty() {
-        return Ok(());
-    }
-    let c = super::lock_shared(conn)?;
-    for db_path in paths {
-        c.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
-            .ok();
-    }
-    Ok(())
-}
-
-/// Delete rows under `folder_path` whose paths are "ghosts" (missing file, or a
-/// case/normalization duplicate). Returns the number of rows removed.
-fn remove_ghosts(conn: &super::SharedConn, folder_path: &str) -> Result<usize, String> {
-    let db_paths = paths_under_folder(conn, folder_path)?;
     let mut removed = 0;
-    let c = super::lock_shared(conn)?;
     for db_path in &db_paths {
-        if super::is_ghost_path(db_path, &c) {
+        if should_delete(db_path, &c) {
             c.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
                 .ok();
             removed += 1;
@@ -361,10 +355,12 @@ pub(super) fn remove_non_nfc_duplicates(conn: &Connection) -> Result<usize, Stri
 mod tests {
     use super::*;
     use crate::library::{init_db, lock_shared, SharedConn};
+    use std::sync::Mutex;
 
     fn make_db(dir: &Path) -> SharedConn {
-        let conn = init_db(&dir.join("library.db")).expect("init db");
-        Arc::new(Mutex::new(conn))
+        Arc::new(Mutex::new(
+            init_db(&dir.join("library.db")).expect("init db"),
+        ))
     }
 
     fn write_fake_audio(dir: &Path, name: &str) -> PathBuf {
@@ -427,5 +423,51 @@ mod tests {
 
         assert!(sync_files(&db, &files, None, &cancel).is_err());
         assert_eq!(track_count(&db), 0);
+    }
+
+    #[test]
+    fn delete_orphans_removes_only_missing_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(false));
+
+        let present = write_fake_audio(tmp.path(), "present.mp3");
+        let gone = write_fake_audio(tmp.path(), "gone.mp3");
+        sync_files(&db, &[present.clone(), gone.clone()], None, &cancel).unwrap();
+        assert_eq!(track_count(&db), 2);
+
+        // The file backing one row disappears from disk.
+        fs::remove_file(&gone).unwrap();
+
+        let removed = delete_orphans(&db, &tmp.path().to_string_lossy(), |p, _| {
+            !Path::new(p).exists()
+        })
+        .unwrap();
+        assert_eq!(removed, 1);
+        assert_eq!(track_count(&db), 1);
+
+        // The row whose file still exists must survive.
+        let survivor: String = {
+            let c = lock_shared(&db).unwrap();
+            c.query_row("SELECT file_path FROM tracks", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(survivor, present.to_string_lossy());
+    }
+
+    #[test]
+    fn delete_orphans_keeps_everything_when_predicate_is_false() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = make_db(tmp.path());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let files = vec![
+            write_fake_audio(tmp.path(), "a.mp3"),
+            write_fake_audio(tmp.path(), "b.mp3"),
+        ];
+        sync_files(&db, &files, None, &cancel).unwrap();
+
+        let removed = delete_orphans(&db, &tmp.path().to_string_lossy(), |_, _| false).unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(track_count(&db), 2);
     }
 }

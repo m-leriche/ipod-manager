@@ -431,9 +431,11 @@ fn sanitize_id3(
 // ── Helpers ─────────────────────────────────────────────────────
 
 /// Write the front cover to a sidecar file beside the audio file. Returns `Ok`
-/// only when the cover is safely on disk (just written, already present, or
-/// already exported for this directory) — the caller may then drop it from the
-/// tag. On `Err` the caller must retain the embedded cover to avoid losing it.
+/// once a sidecar exists for this directory — either freshly written, or already
+/// present (which we trust without inspecting; validating that an existing
+/// `cover.jpg` is a non-empty image of the right album is a follow-up) — so the
+/// caller may drop the embedded copy from the tag. On `Err` (the write failed)
+/// the caller must retain the embedded cover to avoid losing it.
 fn export_cover(
     audio_path: &Path,
     filename: &str,

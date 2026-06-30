@@ -3,18 +3,18 @@ import type { CompareEntry, TreeNode } from "../ComparisonView/types";
 export interface SplitFileRowProps {
   entry: CompareEntry;
   depth: number;
-  selected: Set<string>;
+  isSelected: boolean;
   onToggleFile: (path: string) => void;
 }
 
-export interface SplitTreeNodeRowProps {
+export interface SplitFolderRowProps {
   node: TreeNode;
   depth: number;
-  expanded: Set<string>;
-  selected: Set<string>;
+  isExpanded: boolean;
+  allChecked: boolean;
+  someChecked: boolean;
   onToggleExpand: (path: string) => void;
   onToggleNodeSelection: (node: TreeNode) => void;
-  onToggleFile: (path: string) => void;
   onContextMenu: (x: number, y: number, folderPath: string) => void;
 }
 

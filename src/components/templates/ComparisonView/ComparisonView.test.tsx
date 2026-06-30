@@ -45,8 +45,33 @@ const ENTRIES = [
   },
 ];
 
+// The tree is virtualized; @tanstack/react-virtual measures via offsetHeight,
+// which jsdom always reports as 0. Give the scroll container a viewport height
+// and each row a fixed height (and fire ResizeObserver) so rows actually render.
 beforeEach(() => {
   mockInvoke.mockReset();
+
+  (globalThis as Record<string, unknown>).ResizeObserver = class {
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(target: Element) {
+      this.callback([{ target } as unknown as ResizeObserverEntry], this);
+    }
+    disconnect() {}
+    unobserve() {}
+  };
+
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.classList?.contains("overflow-y-auto")) return 600;
+      if (this.hasAttribute("data-index")) return 32;
+      return 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 400 });
 });
 
 describe("ComparisonView", () => {
@@ -270,5 +295,30 @@ describe("ComparisonView", () => {
       expect(screen.getByRole("button", { name: "Modified" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Matching" })).toBeInTheDocument();
     });
+  });
+
+  it("Expand All re-expands collapsed folders", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValue(ENTRIES);
+    render(
+      <ComparisonView
+        sourcePath="/source"
+        targetPath="/target"
+        exclusions={[]}
+        onAddExclusion={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    // Diff folders auto-expand, so a file is visible to start.
+    await waitFor(() => expect(screen.getByText("song1.mp3")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Collapse All" }));
+    expect(screen.queryByText("song1.mp3")).not.toBeInTheDocument();
+
+    // Regression: Expand All must use the real tree (was a no-op when the
+    // expansion hook captured an empty tree), so files reappear.
+    await user.click(screen.getByRole("button", { name: "Expand All" }));
+    await waitFor(() => expect(screen.getByText("song1.mp3")).toBeInTheDocument());
   });
 });

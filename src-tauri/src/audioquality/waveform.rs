@@ -18,6 +18,9 @@ fn get_duration(file_path: &str) -> Result<f64, String> {
             "-print_format",
             "json",
             "-show_format",
+            // `--` ends option parsing so a path beginning with `-` is treated
+            // as a filename, not an ffprobe flag.
+            "--",
             file_path,
         ])
         .output()

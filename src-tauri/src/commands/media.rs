@@ -70,6 +70,9 @@ pub async fn get_accurate_duration(path: String) -> Result<f64, AppError> {
                 "-print_format",
                 "json",
                 "-show_format",
+                // `--` ends option parsing so a path beginning with `-` is
+                // treated as a filename, not an ffprobe flag.
+                "--",
                 &path,
             ])
             .output()

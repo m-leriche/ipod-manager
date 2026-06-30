@@ -19,6 +19,9 @@ pub(super) fn probe_audio_file(path: &Path) -> Result<AudioFileInfo, String> {
             "json",
             "-show_streams",
             "-show_format",
+            // `--` ends option parsing so a path beginning with `-` is treated
+            // as a filename, not an ffprobe flag.
+            "--",
             &file_path,
         ])
         .output()

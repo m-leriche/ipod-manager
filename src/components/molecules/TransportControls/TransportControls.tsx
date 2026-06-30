@@ -104,11 +104,11 @@ export const TransportControls = ({
       </div>
 
       <div className="flex items-center gap-2 w-full">
-        <span className="text-[10px] text-text-tertiary tabular-nums w-8 text-right">
+        <span className="text-[10px] text-text-tertiary tabular-nums min-w-8 text-right">
           {formatDuration(displayTime, "0:00")}
         </span>
         <SeekBar value={fraction} onChange={onSeek} onScrub={handleScrub} className="flex-1" />
-        <span className="text-[10px] text-text-tertiary tabular-nums w-8">{formatDuration(duration, "0:00")}</span>
+        <span className="text-[10px] text-text-tertiary tabular-nums min-w-8">{formatDuration(duration, "0:00")}</span>
       </div>
     </div>
   );

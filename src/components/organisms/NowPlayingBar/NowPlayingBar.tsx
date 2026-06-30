@@ -309,11 +309,11 @@ const MiniPlayerView = ({
 
       {/* Seek bar */}
       <div className="px-4 flex items-center gap-2 shrink-0">
-        <span className="text-[9px] text-text-tertiary tabular-nums w-6 text-right">
+        <span className="text-[9px] text-text-tertiary tabular-nums min-w-6 text-right">
           {formatDuration(currentTime, "0:00")}
         </span>
         <SeekBar value={fraction} onChange={onSeek} className="flex-1" />
-        <span className="text-[9px] text-text-tertiary tabular-nums w-6">{formatDuration(duration, "0:00")}</span>
+        <span className="text-[9px] text-text-tertiary tabular-nums min-w-6">{formatDuration(duration, "0:00")}</span>
       </div>
 
       {/* Transport controls */}

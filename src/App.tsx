@@ -384,65 +384,67 @@ const AppContent = () => {
               </div>
             )}
             {topTab === "tools" && (
-              <div className="flex gap-6 p-6 h-full view-enter">
-                <ErrorBoundary name="Mount Panel">
-                  <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
-                </ErrorBoundary>
-                <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-                  <ToolTabBar active={toolTab} onSelect={setToolTab} />
-                  <Suspense fallback={null}>
-                    <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
-                      {toolTab === "ipod" && (
-                        <ErrorBoundary name="iPod Summary">
-                          <IpodSummary
-                            diskInfo={diskInfo}
-                            isMounted={ipodMounted}
-                            cachedInfo={ipodInfo}
-                            onInfoLoaded={setIpodInfo}
-                          />
+              <div className="flex flex-col gap-3 p-6 h-full view-enter">
+                <ToolTabBar active={toolTab} onSelect={setToolTab} />
+                <Suspense fallback={null}>
+                  <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
+                    {toolTab === "ipod" && (
+                      <div className="flex gap-6 flex-1 min-h-0">
+                        <ErrorBoundary name="Mount Panel">
+                          <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
                         </ErrorBoundary>
-                      )}
-                      {toolTab === "files" && (
-                        <ErrorBoundary name="File Manager">
-                          <FileManager />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "metadata" && (
-                        <ErrorBoundary name="Metadata Editor">
-                          <MetadataEditor
-                            initialPaths={metadataRepairPaths}
-                            onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
-                          />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "audio" && (
-                        <ErrorBoundary name="Audio Extractor">
-                          <AudioExtractor />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "duplicates" && (
-                        <ErrorBoundary name="Duplicate Detector">
-                          <DuplicateDetector />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "convert" && (
-                        <ErrorBoundary name="Audio Converter">
-                          <AudioConverter />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "health" && (
-                        <ErrorBoundary name="Library Health">
-                          <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
-                        </ErrorBoundary>
-                      )}
-                      {toolTab === "export" && (
-                        <ErrorBoundary name="Library Export">
-                          <LibraryExport />
-                        </ErrorBoundary>
-                      )}
-                    </div>
-                  </Suspense>
-                </div>
+                        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+                          <ErrorBoundary name="iPod Summary">
+                            <IpodSummary
+                              diskInfo={diskInfo}
+                              isMounted={ipodMounted}
+                              cachedInfo={ipodInfo}
+                              onInfoLoaded={setIpodInfo}
+                            />
+                          </ErrorBoundary>
+                        </div>
+                      </div>
+                    )}
+                    {toolTab === "files" && (
+                      <ErrorBoundary name="File Manager">
+                        <FileManager />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "metadata" && (
+                      <ErrorBoundary name="Metadata Editor">
+                        <MetadataEditor
+                          initialPaths={metadataRepairPaths}
+                          onInitialPathsConsumed={() => setMetadataRepairPaths(null)}
+                        />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "audio" && (
+                      <ErrorBoundary name="Audio Extractor">
+                        <AudioExtractor />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "duplicates" && (
+                      <ErrorBoundary name="Duplicate Detector">
+                        <DuplicateDetector />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "convert" && (
+                      <ErrorBoundary name="Audio Converter">
+                        <AudioConverter />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "health" && (
+                      <ErrorBoundary name="Library Health">
+                        <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
+                      </ErrorBoundary>
+                    )}
+                    {toolTab === "export" && (
+                      <ErrorBoundary name="Library Export">
+                        <LibraryExport />
+                      </ErrorBoundary>
+                    )}
+                  </div>
+                </Suspense>
               </div>
             )}
           </div>

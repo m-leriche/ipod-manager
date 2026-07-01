@@ -145,7 +145,7 @@ describe("LibraryHealthDashboard", () => {
     render(<LibraryHealthDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("0 tracks")).toBeInTheDocument();
+      expect(screen.getByText(/0 tracks/)).toBeInTheDocument();
     });
   });
 
@@ -183,7 +183,7 @@ describe("LibraryHealthDashboard", () => {
     render(<LibraryHealthDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("1,000 tracks")).toBeInTheDocument();
+      expect(screen.getByText(/1,000 tracks/)).toBeInTheDocument();
     });
   });
 

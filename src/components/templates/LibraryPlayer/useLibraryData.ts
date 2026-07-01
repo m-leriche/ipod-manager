@@ -69,6 +69,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const disposedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
   const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
@@ -326,7 +327,11 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
           sortDirection: getSetting("sortDirection"),
         };
         setDataLoaded(true);
-        rescanTimerRef.current = setTimeout(backgroundRescan, BACKGROUND_RESCAN_DELAY_MS);
+        // checkLibrary resumes after an await, so the unmount cleanup may have
+        // already run — don't schedule a timer nothing will ever clear.
+        if (!disposedRef.current) {
+          rescanTimerRef.current = setTimeout(backgroundRescan, BACKGROUND_RESCAN_DELAY_MS);
+        }
         return;
       }
     }
@@ -346,8 +351,12 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   }, [fetchBrowserData, backgroundRescan]);
 
   useEffect(() => {
+    disposedRef.current = false;
     checkLibrary();
-    return () => clearTimeout(rescanTimerRef.current);
+    return () => {
+      disposedRef.current = true;
+      clearTimeout(rescanTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

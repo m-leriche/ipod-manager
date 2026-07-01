@@ -18,10 +18,12 @@ use super::types::{LibraryScanProgress, TrackData};
 /// Emit at most one progress event per file completion within this window.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
-/// Minimum interval between launch-time background rescans. The filesystem
-/// watcher picks up changes while the app runs, and Refresh forces a full
-/// pass — so a recent scan makes the launch walk redundant.
-const BACKGROUND_RESCAN_MIN_INTERVAL_SECS: i64 = 60 * 60;
+/// Minimum interval between launch-time background rescans — a guard against
+/// rapid relaunches (dev loops, crash cycles), not a general cache. Kept short
+/// deliberately: files changed while the app was closed are invisible to the
+/// FS watcher, so a launch inside this window shows a stale library until the
+/// next launch or a manual Refresh. Five minutes bounds that staleness tightly.
+const BACKGROUND_RESCAN_MIN_INTERVAL_SECS: i64 = 5 * 60;
 
 pub fn scan_folder(
     conn: &super::SharedConn,
@@ -47,7 +49,7 @@ pub fn scan_folder(
     )?;
 
     // Remove tracks whose files no longer exist on disk for this folder.
-    delete_orphans(conn, folder_path, &walked_set(&audio_files))?;
+    delete_orphans(conn, folder_path, &walked_set(&audio_files), None)?;
 
     Ok(total)
 }
@@ -67,9 +69,10 @@ pub fn rescan_all_folders(
 
     let walked = walked_set(&all_files);
     for folder in &folders {
-        delete_orphans(conn, &folder.path, &walked)?;
+        delete_orphans(conn, &folder.path, &walked, None)?;
     }
 
+    stamp_last_scan(conn)?;
     Ok(())
 }
 
@@ -78,6 +81,7 @@ pub fn rescan_all_folders(
 pub fn background_rescan_all_folders(
     conn: &super::SharedConn,
     cancel_flag: &Arc<AtomicBool>,
+    db_path: Option<&Path>,
 ) -> Result<super::types::BackgroundScanResult, String> {
     let folders = {
         let c = super::lock_shared(conn)?;
@@ -96,31 +100,33 @@ pub fn background_rescan_all_folders(
 
     let changed = sync_files(conn, &all_files, None, None, cancel_flag)?;
 
-    let mut removed = {
-        let c = super::lock_shared(conn)?;
-        run_nfc_dedup_once(&c)?
-    };
-
-    // Remove orphaned tracks (files deleted from disk)
+    // Remove orphaned tracks (files deleted from disk). This path has no
+    // upfront auto-backup, so delete_orphans snapshots the DB itself before
+    // its first (rare) deletion.
+    let mut removed = 0;
     let walked = walked_set(&all_files);
     for folder in &folders {
         if !Path::new(&folder.path).exists() {
             continue;
         }
-        removed += delete_orphans(conn, &folder.path, &walked)?;
+        removed += delete_orphans(conn, &folder.path, &walked, db_path)?;
     }
 
-    // Persist the scan timestamp so we know when the last successful scan ran
-    {
-        let c = super::lock_shared(conn)?;
-        let _ = super::settings::set_setting(&c, "last_scan_timestamp", &now_epoch().to_string());
-    }
+    stamp_last_scan(conn)?;
 
     Ok(super::types::BackgroundScanResult {
         changed,
         removed,
         total_scanned: total,
     })
+}
+
+/// Persist the completion time of a successful full scan; the launch-time
+/// freshness gate reads this.
+fn stamp_last_scan(conn: &super::SharedConn) -> Result<(), String> {
+    let c = super::lock_shared(conn)?;
+    let _ = super::settings::set_setting(&c, "last_scan_timestamp", &now_epoch().to_string());
+    Ok(())
 }
 
 // ── Parallel scan core ─────────────────────────────────────────
@@ -332,8 +338,9 @@ fn last_scan_is_fresh(c: &Connection) -> bool {
 }
 
 /// One-time cleanup of pre-normalization NFD duplicates, guarded by a settings
-/// flag so the full-table scan doesn't run on every launch.
-fn run_nfc_dedup_once(c: &Connection) -> Result<usize, String> {
+/// flag so the full-table scan doesn't run on every launch. Called from
+/// `init_db` so it isn't hostage to the rescan freshness gate.
+pub(super) fn run_nfc_dedup_once(c: &Connection) -> Result<usize, String> {
     const FLAG: &str = "nfc_dedup_done";
     if super::settings::get_setting(c, FLAG).as_deref() == Some("1") {
         return Ok(0);
@@ -362,10 +369,15 @@ fn walked_set(files: &[PathBuf]) -> HashSet<String> {
 /// lock so a row a concurrent writer (e.g. an import) inserts mid-scan can't be
 /// caught in a stale snapshot and wrongly deleted. With the set check doing the
 /// bulk of the work, holding the lock across the loop is cheap.
+///
+/// `backup_db_path` (used by the launch path, which has no upfront backup)
+/// triggers a rate-limited DB snapshot before the first deletion — deletions
+/// are rare, so this costs nothing on the common no-orphans launch.
 fn delete_orphans(
     conn: &super::SharedConn,
     folder_path: &str,
     walked: &HashSet<String>,
+    backup_db_path: Option<&Path>,
 ) -> Result<usize, String> {
     let c = super::lock_shared(conn)?;
     let db_paths: Vec<String> = {
@@ -380,18 +392,23 @@ fn delete_orphans(
         paths
     };
 
-    let mut removed = 0;
-    for db_path in &db_paths {
-        if walked.contains(db_path) {
-            continue;
-        }
-        if super::is_ghost_path(db_path, &c) {
-            c.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
-                .ok();
-            removed += 1;
-        }
+    let ghosts: Vec<&String> = db_paths
+        .iter()
+        .filter(|p| !walked.contains(*p) && super::is_ghost_path(p, &c))
+        .collect();
+    if ghosts.is_empty() {
+        return Ok(0);
     }
-    Ok(removed)
+
+    if let Some(db_path) = backup_db_path {
+        super::backup::auto_backup_if_due(&c, db_path);
+    }
+
+    for db_path in &ghosts {
+        c.execute("DELETE FROM tracks WHERE file_path = ?1", params![db_path])
+            .ok();
+    }
+    Ok(ghosts.len())
 }
 
 /// Remove non-NFC duplicate entries left over from before path normalization.
@@ -430,216 +447,5 @@ pub(super) fn remove_non_nfc_duplicates(conn: &Connection) -> Result<usize, Stri
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::library::{init_db, lock_shared, SharedConn};
-    use std::sync::Mutex;
-
-    fn make_db(dir: &Path) -> SharedConn {
-        Arc::new(Mutex::new(
-            init_db(&dir.join("library.db")).expect("init db"),
-        ))
-    }
-
-    fn write_fake_audio(dir: &Path, name: &str) -> PathBuf {
-        let p = dir.join(name);
-        fs::write(&p, b"not really audio").expect("write file");
-        p
-    }
-
-    fn track_count(db: &SharedConn) -> i64 {
-        let c = lock_shared(db).unwrap();
-        c.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
-            .unwrap()
-    }
-
-    #[test]
-    fn sync_files_inserts_then_skips_unchanged() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let files = vec![
-            write_fake_audio(tmp.path(), "a.mp3"),
-            write_fake_audio(tmp.path(), "b.mp3"),
-        ];
-
-        // First scan writes both files.
-        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 2);
-        assert_eq!(track_count(&db), 2);
-
-        // Re-scan with nothing changed writes nothing.
-        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 0);
-        assert_eq!(track_count(&db), 2);
-    }
-
-    #[test]
-    fn sync_files_rewrites_on_mtime_change() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let f = write_fake_audio(tmp.path(), "a.mp3");
-        let files = vec![f.clone()];
-
-        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 1);
-        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 0);
-
-        // mtime is second-granularity, so wait past a second boundary before
-        // rewriting to guarantee a distinct modified time.
-        std::thread::sleep(Duration::from_millis(1100));
-        fs::write(&f, b"changed content").unwrap();
-
-        assert_eq!(sync_files(&db, &files, None, None, &cancel).unwrap(), 1);
-        assert_eq!(track_count(&db), 1);
-    }
-
-    #[test]
-    fn sync_files_bails_when_cancelled() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(true));
-        let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
-
-        assert!(sync_files(&db, &files, None, None, &cancel).is_err());
-        assert_eq!(track_count(&db), 0);
-    }
-
-    #[test]
-    fn sync_files_folder_scoped_skips_unchanged() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
-        let scope = tmp.path().to_string_lossy().to_string();
-
-        // First scoped scan inserts; a second with the same scope skips it.
-        assert_eq!(
-            sync_files(&db, &files, Some(&scope), None, &cancel).unwrap(),
-            1
-        );
-        assert_eq!(
-            sync_files(&db, &files, Some(&scope), None, &cancel).unwrap(),
-            0
-        );
-        assert_eq!(track_count(&db), 1);
-    }
-
-    #[test]
-    fn delete_orphans_removes_only_missing_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-
-        let present = write_fake_audio(tmp.path(), "present.mp3");
-        let gone = write_fake_audio(tmp.path(), "gone.mp3");
-        sync_files(&db, &[present.clone(), gone.clone()], None, None, &cancel).unwrap();
-        assert_eq!(track_count(&db), 2);
-
-        // The file backing one row disappears from disk.
-        fs::remove_file(&gone).unwrap();
-
-        let walked = walked_set(&[present.clone()]);
-        let removed = delete_orphans(&db, &tmp.path().to_string_lossy(), &walked).unwrap();
-        assert_eq!(removed, 1);
-        assert_eq!(track_count(&db), 1);
-
-        // The row whose file still exists must survive.
-        let survivor: String = {
-            let c = lock_shared(&db).unwrap();
-            c.query_row("SELECT file_path FROM tracks", [], |r| r.get(0))
-                .unwrap()
-        };
-        assert_eq!(survivor, present.to_string_lossy());
-    }
-
-    #[test]
-    fn delete_orphans_keeps_walked_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let files = vec![
-            write_fake_audio(tmp.path(), "a.mp3"),
-            write_fake_audio(tmp.path(), "b.mp3"),
-        ];
-        sync_files(&db, &files, None, None, &cancel).unwrap();
-
-        let removed =
-            delete_orphans(&db, &tmp.path().to_string_lossy(), &walked_set(&files)).unwrap();
-        assert_eq!(removed, 0);
-        assert_eq!(track_count(&db), 2);
-    }
-
-    #[test]
-    fn delete_orphans_keeps_unwalked_files_still_on_disk() {
-        // A file the walk missed (e.g. an unreadable directory) but that still
-        // exists on disk must survive — is_ghost_path re-verifies against the
-        // real filesystem before anything is deleted.
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        let files = vec![write_fake_audio(tmp.path(), "a.mp3")];
-        sync_files(&db, &files, None, None, &cancel).unwrap();
-
-        let removed = delete_orphans(&db, &tmp.path().to_string_lossy(), &HashSet::new()).unwrap();
-        assert_eq!(removed, 0);
-        assert_eq!(track_count(&db), 1);
-    }
-
-    #[test]
-    fn background_rescan_skips_when_recently_scanned() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let cancel = Arc::new(AtomicBool::new(false));
-        write_fake_audio(tmp.path(), "a.mp3");
-        {
-            let c = lock_shared(&db).unwrap();
-            crate::library::add_folder(&c, &tmp.path().to_string_lossy()).unwrap();
-        }
-
-        // First rescan walks the folder and stamps last_scan_timestamp.
-        let first = background_rescan_all_folders(&db, &cancel).unwrap();
-        assert_eq!(first.total_scanned, 1);
-
-        // A file added right after must NOT be picked up by an immediate
-        // second rescan — the freshness gate skips the walk entirely.
-        write_fake_audio(tmp.path(), "b.mp3");
-        let second = background_rescan_all_folders(&db, &cancel).unwrap();
-        assert_eq!(second.total_scanned, 0);
-        assert_eq!(second.changed, 0);
-
-        // Expiring the timestamp re-enables the scan.
-        {
-            let c = lock_shared(&db).unwrap();
-            let stale = now_epoch() - BACKGROUND_RESCAN_MIN_INTERVAL_SECS - 1;
-            crate::library::set_setting(&c, "last_scan_timestamp", &stale.to_string()).unwrap();
-        }
-        let third = background_rescan_all_folders(&db, &cancel).unwrap();
-        assert_eq!(third.total_scanned, 2);
-        assert_eq!(third.changed, 1);
-    }
-
-    #[test]
-    fn nfc_dedup_runs_once_then_is_flag_gated() {
-        let tmp = tempfile::tempdir().unwrap();
-        let db = make_db(tmp.path());
-        let c = lock_shared(&db).unwrap();
-
-        assert_eq!(run_nfc_dedup_once(&c).unwrap(), 0);
-        assert_eq!(
-            crate::library::get_setting(&c, "nfc_dedup_done").as_deref(),
-            Some("1")
-        );
-
-        // Insert an NFD duplicate that a real dedup pass would remove — the
-        // flag-gated call must skip it.
-        let nfc = "/music/álbum.mp3".to_string();
-        let nfd: String = nfc.chars().nfd().collect();
-        for p in [&nfc, &nfd] {
-            c.execute(
-                "INSERT INTO tracks (file_path, file_name, folder_path, format) VALUES (?1, ?2, ?3, ?4)",
-                params![p, "álbum.mp3", "/music", "mp3"],
-            )
-            .unwrap();
-        }
-        assert_eq!(run_nfc_dedup_once(&c).unwrap(), 0);
-    }
-}
+#[path = "scan_tests.rs"]
+mod tests;

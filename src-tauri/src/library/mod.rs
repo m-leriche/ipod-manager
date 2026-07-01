@@ -251,6 +251,12 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let _ =
         conn.execute_batch("ALTER TABLE tracks ADD COLUMN compilation INTEGER NOT NULL DEFAULT 0");
 
+    // One-time cleanup of pre-normalization NFD duplicate rows (flag-guarded,
+    // so it costs one settings read on every launch after the first).
+    if let Err(e) = scan::run_nfc_dedup_once(&conn) {
+        log::warn!("NFC dedup migration failed (non-fatal): {}", e);
+    }
+
     // Smart playlists table
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS smart_playlists (
@@ -404,8 +410,12 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 /// NFD on HFS+), symlink resolution, or other path transformations.
 pub(crate) fn is_ghost_path(db_path: &str, conn: &Connection) -> bool {
     let p = Path::new(db_path);
-    if !p.exists() {
-        return true;
+    match p.try_exists() {
+        Ok(false) => return true,
+        // Transient stat failure (permissions, a volume mid-disconnect) —
+        // treat the file as present rather than risk deleting a live row.
+        Err(_) => return false,
+        Ok(true) => {}
     }
     let canon = match p.canonicalize() {
         Ok(c) => c,

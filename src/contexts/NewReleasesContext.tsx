@@ -161,8 +161,13 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
       const now = Math.floor(Date.now() / 1000);
       if (now - lastCheckTime <= TWENTY_FOUR_HOURS) return;
 
-      // The initial load has long since populated the ref — no second fetch.
-      if (watchedArtistsRef.current.length === 0) return;
+      // The initial load has normally populated the ref by now; re-fetch as a
+      // fallback so a transient launch-time failure doesn't skip the session.
+      let artists = watchedArtistsRef.current;
+      if (artists.length === 0) {
+        artists = await invoke<WatchedArtist[]>("get_watched_artists");
+      }
+      if (artists.length === 0) return;
       startCheck();
     };
     const timer = setTimeout(() => {

@@ -394,23 +394,30 @@ const AppContent = () => {
                   </div>
                   <Suspense fallback={null}>
                     <div key={toolTab} className="flex-1 min-h-0 flex flex-col p-6 view-enter">
-                      {toolTab === "ipod" && (
-                        <div className="flex gap-6 flex-1 min-h-0">
-                          <ErrorBoundary name="Mount Panel">
-                            <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
-                          </ErrorBoundary>
-                          <div className="flex-1 min-w-0 flex flex-col min-h-0">
-                            <ErrorBoundary name="iPod Summary">
-                              <IpodSummary
-                                diskInfo={diskInfo}
-                                isMounted={ipodMounted}
-                                cachedInfo={ipodInfo}
-                                onInfoLoaded={setIpodInfo}
-                              />
+                      {toolTab === "ipod" &&
+                        (ipodMounted ? (
+                          <div className="flex gap-6 flex-1 min-h-0">
+                            <ErrorBoundary name="Mount Panel">
+                              <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
+                            </ErrorBoundary>
+                            <div className="flex-1 min-w-0 flex flex-col min-h-0">
+                              <ErrorBoundary name="iPod Summary">
+                                <IpodSummary
+                                  diskInfo={diskInfo}
+                                  isMounted={ipodMounted}
+                                  cachedInfo={ipodInfo}
+                                  onInfoLoaded={setIpodInfo}
+                                />
+                              </ErrorBoundary>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 min-h-0 flex items-center justify-center">
+                            <ErrorBoundary name="Mount Panel">
+                              <MountPanel onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
                             </ErrorBoundary>
                           </div>
-                        </div>
-                      )}
+                        ))}
                       {toolTab === "files" && (
                         <ErrorBoundary name="File Manager">
                           <FileManager />

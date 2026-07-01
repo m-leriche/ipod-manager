@@ -174,9 +174,62 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
         ? "bg-success/10 text-success"
         : "bg-bg-elevated text-text-secondary";
 
+  // Centered "connect your iPod" hero — used when no iPod is mounted yet.
+  if (!compact) {
+    const busy = status === "detecting" || status === "mounting" || status === "unmounting";
+    const hero = HERO_COPY[status];
+    return (
+      <div className="w-full max-w-sm flex flex-col items-center text-center">
+        <div className="w-20 h-20 rounded-2xl bg-bg-secondary border border-border flex items-center justify-center text-text-tertiary mb-5">
+          {busy ? <Spinner /> : <IpodGlyph />}
+        </div>
+        <h2 className="text-base font-semibold text-text-primary mb-1.5">{hero.title}</h2>
+        <p className="text-xs text-text-tertiary leading-relaxed mb-5 max-w-[17rem]">
+          {status === "found" ? `Enter your macOS password to mount ${diskInfo?.name || "your iPod"}.` : hero.subtitle}
+        </p>
+
+        {status === "found" && (
+          <input
+            type="password"
+            placeholder="macOS password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            className="w-full mb-3 px-3.5 py-2.5 bg-bg-card border border-border rounded-xl text-text-primary text-xs outline-none focus:border-border-active transition-colors placeholder:text-text-tertiary"
+          />
+        )}
+
+        {status === "found" ? (
+          <button
+            disabled={!password}
+            onClick={handleMount}
+            className="w-full py-2.5 bg-text-primary text-bg-primary rounded-xl text-xs font-medium transition-all hover:not-disabled:opacity-90 disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            Mount iPod
+          </button>
+        ) : (
+          <button
+            disabled={busy}
+            onClick={detectIPod}
+            className="px-6 py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:not-disabled:bg-bg-hover hover:not-disabled:text-text-primary disabled:opacity-30"
+          >
+            {busy ? "Scanning…" : "Scan Again"}
+          </button>
+        )}
+
+        {message && (
+          <div className={`mt-4 w-full px-3 py-2 rounded-xl text-[11px] leading-relaxed ${msgClass}`}>
+            {message.text}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-5 w-[260px] shrink-0" : "p-6 w-full max-w-md"}`}
+      className={`bg-bg-secondary border border-border rounded-2xl ${compact ? "p-5 w-[260px] shrink-0 self-start" : "p-6 w-full max-w-md"}`}
     >
       <div className="retro-titlebar flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
@@ -243,6 +296,36 @@ export const MountPanel = ({ onMountChange, onDiskInfoChange, compact = false }:
     </div>
   );
 };
+
+const HERO_COPY: Record<Status, { title: string; subtitle: string }> = {
+  detecting: { title: "Scanning for iPod…", subtitle: "Looking for a connected device." },
+  not_found: {
+    title: "No iPod connected",
+    subtitle: "Connect your iPod with a USB cable and it'll show up here, ready to mount.",
+  },
+  found: { title: "iPod found", subtitle: "Enter your macOS password to mount it." },
+  mounted: { title: "iPod mounted", subtitle: "Your iPod is ready." },
+  mounting: { title: "Mounting iPod…", subtitle: "Unlocking and mounting the device." },
+  unmounting: { title: "Ejecting iPod…", subtitle: "Safely unmounting the device." },
+};
+
+const IpodGlyph = () => (
+  <svg
+    width={44}
+    height={44}
+    viewBox="0 0 48 64"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="2" width="40" height="60" rx="6" />
+    <rect x="10" y="7" width="28" height="20" rx="2" />
+    <circle cx="24" cy="44" r="12" />
+    <circle cx="24" cy="44" r="5" />
+  </svg>
+);
 
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="flex justify-between items-center py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">

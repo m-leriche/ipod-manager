@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { TOOL_GROUPS } from "./constants";
 import type { ToolTab } from "./types";
 
@@ -6,51 +7,58 @@ interface ToolTabBarProps {
   onSelect: (tab: ToolTab) => void;
 }
 
-const ToolTabButton = ({
-  active,
-  onClick,
-  title,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <button
-    role="tab"
-    aria-selected={active}
-    onClick={onClick}
-    title={title}
-    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-      active
-        ? "bg-bg-card text-text-primary border border-border-active"
-        : "text-text-tertiary border border-transparent hover:text-text-secondary"
-    }`}
-  >
-    {children}
-  </button>
-);
+export const ToolTabBar = ({ active, onSelect }: ToolTabBarProps) => {
+  const activeGroup = useMemo(
+    () => TOOL_GROUPS.find((group) => group.tabs.some((tab) => tab.id === active)) ?? TOOL_GROUPS[0],
+    [active],
+  );
 
-export const ToolTabBar = ({ active, onSelect }: ToolTabBarProps) => (
-  <div className="flex items-center gap-2 shrink-0 flex-wrap" role="tablist" aria-label="Tool tabs">
-    {TOOL_GROUPS.map((group, index) => (
-      <div key={group.label} className="flex items-center gap-1.5">
-        {index > 0 && <span aria-hidden="true" className="w-px h-5 bg-border mx-1" />}
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary/70 mr-0.5">
-          {group.label}
-        </span>
-        {group.tabs.map((tab) => (
-          <ToolTabButton
-            key={tab.id}
-            active={active === tab.id}
-            onClick={() => onSelect(tab.id)}
-            title={tab.description}
-          >
-            {tab.label}
-          </ToolTabButton>
-        ))}
+  return (
+    <div className="flex flex-col gap-3 shrink-0">
+      <div
+        role="tablist"
+        aria-label="Tool categories"
+        className="inline-flex self-start gap-0.5 p-0.5 bg-bg-card/40 border border-border rounded-lg"
+      >
+        {TOOL_GROUPS.map((group) => {
+          const selected = group.label === activeGroup.label;
+          return (
+            <button
+              key={group.label}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => onSelect(group.tabs[0].id)}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                selected ? "bg-bg-card text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              {group.label}
+            </button>
+          );
+        })}
       </div>
-    ))}
-  </div>
-);
+
+      <div role="tablist" aria-label={`${activeGroup.label} tools`} className="flex items-center gap-1.5">
+        {activeGroup.tabs.map((tab) => {
+          const selected = active === tab.id;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => onSelect(tab.id)}
+              title={tab.description}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                selected
+                  ? "bg-bg-card text-text-primary border border-border-active"
+                  : "text-text-tertiary border border-transparent hover:text-text-secondary"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

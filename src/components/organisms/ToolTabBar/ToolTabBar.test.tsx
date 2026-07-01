@@ -4,39 +4,68 @@ import { describe, it, expect, vi } from "vitest";
 import { ToolTabBar } from "./ToolTabBar";
 import { TOOL_GROUPS } from "./constants";
 
-describe("ToolTabBar", () => {
-  it("renders every tool tab across all groups", () => {
-    render(<ToolTabBar active="files" onSelect={vi.fn()} />);
-    const allTabs = TOOL_GROUPS.flatMap((g) => g.tabs);
-    for (const tab of allTabs) {
-      expect(screen.getByRole("tab", { name: tab.label })).toBeInTheDocument();
-    }
-  });
+const [fileSync, libraryQuality, audioTools] = TOOL_GROUPS;
 
-  it("renders each group label", () => {
+describe("ToolTabBar", () => {
+  it("renders every category as a tab", () => {
     render(<ToolTabBar active="files" onSelect={vi.fn()} />);
     for (const group of TOOL_GROUPS) {
-      expect(screen.getByText(group.label)).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: group.label })).toBeInTheDocument();
     }
   });
 
-  it("marks the active tab as selected", () => {
-    render(<ToolTabBar active="health" onSelect={vi.fn()} />);
-    expect(screen.getByRole("tab", { name: "Health" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "iPod" })).toHaveAttribute("aria-selected", "false");
+  it("shows only the active category's sub-tools", () => {
+    render(<ToolTabBar active="files" onSelect={vi.fn()} />);
+    // File & Sync tools are visible
+    for (const tab of fileSync.tabs) {
+      expect(screen.getByRole("tab", { name: tab.label })).toBeInTheDocument();
+    }
+    // Other categories' tools are hidden
+    for (const tab of [...libraryQuality.tabs, ...audioTools.tabs]) {
+      expect(screen.queryByRole("tab", { name: tab.label })).not.toBeInTheDocument();
+    }
   });
 
-  it("calls onSelect with the tab id when clicked", async () => {
+  it("marks the category containing the active tool as selected", () => {
+    render(<ToolTabBar active="health" onSelect={vi.fn()} />);
+    expect(screen.getByRole("tab", { name: libraryQuality.label })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: fileSync.label })).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("reveals a category's tools when its category tab is clicked", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(<ToolTabBar active="files" onSelect={onSelect} />);
-    await user.click(screen.getByRole("tab", { name: "Duplicates" }));
-    expect(onSelect).toHaveBeenCalledWith("duplicates");
+    await user.click(screen.getByRole("tab", { name: audioTools.label }));
+    // Selecting a category jumps to its first tool
+    expect(onSelect).toHaveBeenCalledWith(audioTools.tabs[0].id);
   });
 
-  it("exposes each tab's description as a tooltip", () => {
+  it("shows the sub-tools for whichever category owns the active tool", () => {
+    render(<ToolTabBar active="convert" onSelect={vi.fn()} />);
+    for (const tab of audioTools.tabs) {
+      expect(screen.getByRole("tab", { name: tab.label })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("tab", { name: "iPod" })).not.toBeInTheDocument();
+  });
+
+  it("marks the active sub-tool as selected", () => {
+    render(<ToolTabBar active="duplicates" onSelect={vi.fn()} />);
+    expect(screen.getByRole("tab", { name: "Duplicates" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Health" })).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("calls onSelect with the tool id when a sub-tool is clicked", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ToolTabBar active="health" onSelect={onSelect} />);
+    await user.click(screen.getByRole("tab", { name: "Metadata" }));
+    expect(onSelect).toHaveBeenCalledWith("metadata");
+  });
+
+  it("exposes each sub-tool's description as a tooltip", () => {
     render(<ToolTabBar active="files" onSelect={vi.fn()} />);
-    const ipod = TOOL_GROUPS[0].tabs.find((t) => t.id === "ipod");
+    const ipod = fileSync.tabs.find((t) => t.id === "ipod");
     expect(screen.getByRole("tab", { name: "iPod" })).toHaveAttribute("title", ipod?.description);
   });
 });

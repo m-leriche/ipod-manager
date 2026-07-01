@@ -100,11 +100,24 @@ describe("App", () => {
     );
   });
 
-  it("switches to Tools tab and shows tool sub-tabs", async () => {
+  it("switches to Tools tab and shows tool categories with the active category's sub-tabs", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
+    // Category tabs
+    expect(screen.getByRole("tab", { name: "File & Sync" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Library Quality" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Audio Tools" })).toBeInTheDocument();
+    // Active category's sub-tools are visible; other categories' are not
     expect(screen.getByRole("tab", { name: "File Manager" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Metadata" })).not.toBeInTheDocument();
+  });
+
+  it("reveals a category's sub-tools when its category tab is clicked", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("tab", { name: "Tools" }));
+    await user.click(screen.getByRole("tab", { name: "Library Quality" }));
     expect(screen.getByRole("tab", { name: "Metadata" })).toBeInTheDocument();
   });
 

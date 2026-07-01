@@ -5,6 +5,7 @@ pub mod export;
 mod folders;
 pub mod health;
 mod import;
+mod indexing;
 pub mod playlists;
 mod queries;
 mod reorganize;
@@ -250,6 +251,9 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         .execute_batch("ALTER TABLE tracks ADD COLUMN lyrics_not_found INTEGER NOT NULL DEFAULT 0");
     let _ =
         conn.execute_batch("ALTER TABLE tracks ADD COLUMN compilation INTEGER NOT NULL DEFAULT 0");
+
+    // Derived sort-key columns + FTS index (trigger-maintained, one-time backfill).
+    indexing::install(&conn)?;
 
     // One-time cleanup of pre-normalization NFD duplicate rows (flag-guarded,
     // so it costs one settings read on every launch after the first).

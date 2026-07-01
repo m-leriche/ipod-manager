@@ -73,6 +73,11 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
   const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
+  /** Filter fingerprint of the last fetch. When only the sort changed, the
+      genre/artist/album aggregates are still valid and only the track page
+      needs re-fetching; when neither changed, no fetch is needed at all. */
+  const lastAggregatesKeyRef = useRef<string | null>(null);
+  const lastSortKeyRef = useRef<string | null>(null);
 
   // ── Global shortcut (default Cmd+F) to focus search ──────────
 
@@ -155,9 +160,28 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   // ── Fetch all browser data from backend ───────────────────────
 
+  const aggregatesKey = JSON.stringify([
+    [...selectedGenres],
+    [...selectedArtists],
+    [...selectedAlbums],
+    debouncedSearch,
+    flaggedOnly,
+  ]);
+  const sortFingerprint = JSON.stringify([sortBy, sortDirection]);
+
   const fetchBrowserData = useCallback(async () => {
     const id = ++fetchIdRef.current;
     pendingPageOffsetsRef.current.clear();
+    // Record fingerprints up front so a rapid follow-up change is compared
+    // against this in-flight fetch, not the previous settled one.
+    lastAggregatesKeyRef.current = JSON.stringify([
+      [...selectedGenres],
+      [...selectedArtists],
+      [...selectedAlbums],
+      debouncedSearch,
+      flaggedOnly,
+    ]);
+    lastSortKeyRef.current = JSON.stringify([sortBy, sortDirection]);
     const isUnfiltered =
       selectedGenres.size === 0 &&
       selectedArtists.size === 0 &&
@@ -222,6 +246,8 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       if (id !== fetchIdRef.current) return;
       console.error("Failed to load library data:", e);
       playAfterFetchRef.current = false;
+      lastAggregatesKeyRef.current = null;
+      lastSortKeyRef.current = null;
       setTracks([]);
       setTotalTrackCount(0);
       setGenreList([]);
@@ -229,6 +255,39 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       setAlbumList([]);
     }
   }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly, playTrack]);
+
+  /** Re-fetch only the first track page, keeping the aggregate lists and the
+      total count. Used when the sort changed but the filters didn't — the
+      genre/artist/album aggregates don't depend on sort order, so re-running
+      their GROUP BY scans would be wasted work. */
+  const fetchSortedPage = useCallback(async () => {
+    const id = ++fetchIdRef.current;
+    pendingPageOffsetsRef.current.clear();
+    lastSortKeyRef.current = JSON.stringify([sortBy, sortDirection]);
+    try {
+      const filter: LibraryFilter = {
+        sort_by: sortBy,
+        sort_direction: sortDirection,
+        offset: 0,
+        limit: PAGE_SIZE,
+        skip_count: true,
+        ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
+        ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
+        ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(flaggedOnly ? { flagged_only: true } : {}),
+      };
+      const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
+      if (id !== fetchIdRef.current) return;
+      startTransition(() => setTracks(page.tracks));
+    } catch (e) {
+      if (id !== fetchIdRef.current) return;
+      console.error("Failed to load sorted page:", e);
+      // Fall back to a full refresh on the next effect run.
+      lastAggregatesKeyRef.current = null;
+      lastSortKeyRef.current = null;
+    }
+  }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly]);
 
   // ── Background incremental rescan ──────────────────────────────
 
@@ -368,10 +427,21 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     };
   }, [onRefreshRef, fetchBrowserData]);
 
-  // Re-fetch when any filter/sort changes
+  // Re-fetch when any filter/sort changes. A sort-only change re-fetches just
+  // the track page; a filter change refreshes the aggregates too. Mutations
+  // (deletes, metadata saves) call fetchBrowserData directly and always do a
+  // full refresh.
   useEffect(() => {
-    if (dataLoaded) fetchBrowserData();
-  }, [dataLoaded, fetchBrowserData]);
+    if (!dataLoaded) return;
+    const sameFilters = lastAggregatesKeyRef.current === aggregatesKey;
+    const sameSort = lastSortKeyRef.current === sortFingerprint;
+    if (sameFilters && sameSort) return; // nothing changed (e.g. initial mount)
+    if (sameFilters) {
+      fetchSortedPage();
+    } else {
+      fetchBrowserData();
+    }
+  }, [dataLoaded, fetchBrowserData, fetchSortedPage, aggregatesKey, sortFingerprint]);
 
   // Refresh on library file reorganization
   useEffect(() => {

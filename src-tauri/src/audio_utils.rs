@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use unicode_normalization::UnicodeNormalization;
@@ -23,10 +24,15 @@ pub fn normalize_path(path: &Path) -> PathBuf {
 }
 
 pub fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    files.extend(walk_dir(dir));
+}
+
+fn walk_dir(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else {
-        return;
+        return Vec::new();
     };
 
+    let mut files = Vec::new();
     let mut dirs = Vec::new();
 
     for entry in entries.filter_map(|e| e.ok()) {
@@ -39,7 +45,14 @@ pub fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) {
         {
             continue;
         }
-        if path.is_dir() {
+        // file_type() comes free from readdir; only symlinks need a stat
+        // (path.is_dir() follows them, keeping symlinked folders walkable).
+        let is_dir = match entry.file_type() {
+            Ok(t) if t.is_symlink() => path.is_dir(),
+            Ok(t) => t.is_dir(),
+            Err(_) => false,
+        };
+        if is_dir {
             dirs.push(path);
         } else if is_audio(&path) {
             files.push(path);
@@ -47,9 +60,12 @@ pub fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 
     dirs.sort();
-    for d in dirs {
-        collect_audio_files(&d, files);
+    // par_iter preserves order, so results are identical to the sequential walk.
+    let subtrees: Vec<Vec<PathBuf>> = dirs.par_iter().map(|d| walk_dir(d)).collect();
+    for subtree in subtrees {
+        files.extend(subtree);
     }
+    files
 }
 
 #[cfg(test)]

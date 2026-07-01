@@ -142,7 +142,6 @@ pub async fn background_rescan(
     cancel: State<'_, SyncCancel>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<library::BackgroundScanResult, AppError> {
-    auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
     let result = tauri::async_runtime::spawn_blocking(move || {

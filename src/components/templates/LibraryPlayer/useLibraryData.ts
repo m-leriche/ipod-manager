@@ -23,6 +23,9 @@ const PAGE_SIZE = 500;
 /** Cap on simultaneous page fetches so a fast scrollbar drag can't queue
     dozens of stale pages ahead of the one the user lands on. */
 const MAX_INFLIGHT_PAGES = 4;
+/** Delay before the launch rescan kicks off, so its disk I/O doesn't compete
+    with first paint and provider hydration. */
+const BACKGROUND_RESCAN_DELAY_MS = 3_000;
 
 /** Window event fired by Settings when the default sort preferences change. */
 export const SORT_SETTINGS_CHANGED_EVENT = "crate:sort-settings-changed";
@@ -65,6 +68,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(() => getSetting("albumSortMode") as AlbumSortMode);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const rescanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
   const unfilteredCacheRef = useRef<{ data: BrowserData; sortBy: string; sortDirection: string } | null>(null);
@@ -322,7 +326,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
           sortDirection: getSetting("sortDirection"),
         };
         setDataLoaded(true);
-        backgroundRescan();
+        rescanTimerRef.current = setTimeout(backgroundRescan, BACKGROUND_RESCAN_DELAY_MS);
         return;
       }
     }
@@ -343,6 +347,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   useEffect(() => {
     checkLibrary();
+    return () => clearTimeout(rescanTimerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

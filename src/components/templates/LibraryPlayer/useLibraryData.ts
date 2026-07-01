@@ -65,6 +65,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
   const [libraryPath, setLibraryPath] = useState<string | null>(null);
+  const libraryPathRef = useRef<string | null>(null);
   const [albumSortMode, setAlbumSortMode] = useState<AlbumSortMode>(() => getSetting("albumSortMode") as AlbumSortMode);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -236,6 +237,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
           browserData,
           totalTrackCount: data.tracks.total_count,
           cachedAt: Date.now(),
+          libraryPath: libraryPathRef.current,
         });
       }
       if (playAfterFetchRef.current && data.tracks.tracks.length > 0) {
@@ -368,44 +370,44 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   // ── Initial load ──────────────────────────────────────────────
 
   const checkLibrary = useCallback(async () => {
-    const cached = await getCachedLibrary();
-    invoke<string | null>("get_library_location")
-      .then((loc) => setLibraryPath(loc))
-      .catch((e: unknown) => console.warn("Failed to get library location:", e));
-    if (cached) {
-      setHasLibrary(cached.hasLibrary);
-      if (cached.hasLibrary) {
-        setTracks(cached.browserData.tracks);
-        setTotalTrackCount(cached.totalTrackCount ?? cached.browserData.tracks.length);
-        setGenreList(cached.browserData.genres);
-        setArtistList(cached.browserData.artists);
-        setAlbumList(cached.browserData.albums);
-        unfilteredCacheRef.current = {
-          data: cached.browserData,
-          sortBy: getSetting("sortBy"),
-          sortDirection: getSetting("sortDirection"),
-        };
-        setDataLoaded(true);
-        // checkLibrary resumes after an await, so the unmount cleanup may have
-        // already run — don't schedule a timer nothing will ever clear.
-        if (!disposedRef.current) {
-          rescanTimerRef.current = setTimeout(backgroundRescan, BACKGROUND_RESCAN_DELAY_MS);
-        }
-        return;
+    const [cached, location] = await Promise.all([
+      getCachedLibrary(),
+      invoke<string | null>("get_library_location").catch((e: unknown) => {
+        console.warn("Failed to get library location:", e);
+        return null;
+      }),
+    ]);
+    setLibraryPath(location);
+    libraryPathRef.current = location;
+
+    // Use the cache only if it was built from this library — a cache from a
+    // previous location (or a restored DB) would show the wrong tracks.
+    if (cached?.hasLibrary && location && cached.libraryPath === location) {
+      setHasLibrary(true);
+      setTracks(cached.browserData.tracks);
+      setTotalTrackCount(cached.totalTrackCount ?? cached.browserData.tracks.length);
+      setGenreList(cached.browserData.genres);
+      setArtistList(cached.browserData.artists);
+      setAlbumList(cached.browserData.albums);
+      unfilteredCacheRef.current = {
+        data: cached.browserData,
+        sortBy: getSetting("sortBy"),
+        sortDirection: getSetting("sortDirection"),
+      };
+      setDataLoaded(true);
+      // checkLibrary resumes after an await, so the unmount cleanup may have
+      // already run — don't schedule a timer nothing will ever clear.
+      if (!disposedRef.current) {
+        rescanTimerRef.current = setTimeout(backgroundRescan, BACKGROUND_RESCAN_DELAY_MS);
       }
+      return;
     }
 
-    try {
-      const location = await invoke<string | null>("get_library_location");
-      setLibraryPath(location);
-      const hasLocation = !!location;
-      setHasLibrary(hasLocation);
-      if (hasLocation) {
-        await fetchBrowserData();
-        setDataLoaded(true);
-      }
-    } catch {
-      setHasLibrary(false);
+    const hasLocation = !!location;
+    setHasLibrary(hasLocation);
+    if (hasLocation) {
+      await fetchBrowserData();
+      setDataLoaded(true);
     }
   }, [fetchBrowserData, backgroundRescan]);
 

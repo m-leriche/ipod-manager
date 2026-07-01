@@ -224,6 +224,11 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   message: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("@tauri-apps/plugin-process", () => ({
+  relaunch: vi.fn(() => Promise.resolve()),
+  exit: vi.fn(() => Promise.resolve()),
+}));
+
 // Mock @tauri-apps/api/webview
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({

@@ -24,3 +24,9 @@ export interface SubsonicStatus {
   urls: ServerUrl[];
   localhost_only: boolean;
 }
+
+export interface BackupInfo {
+  path: string;
+  size: number;
+  created_at: number;
+}

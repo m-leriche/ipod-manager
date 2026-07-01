@@ -100,31 +100,26 @@ describe("App", () => {
     );
   });
 
-  it("switches to Tools tab and shows tool categories with the active category's sub-tabs", async () => {
+  it("switches to Tools and shows the grouped tools sidebar with all tools visible", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
-    // Category tabs
-    expect(screen.getByRole("tab", { name: "File & Sync" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Library Quality" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Audio Tools" })).toBeInTheDocument();
-    // Active category's sub-tools are visible; other categories' are not
+    // Group headings
+    expect(screen.getByText("File & Sync")).toBeInTheDocument();
+    expect(screen.getByText("Library Quality")).toBeInTheDocument();
+    expect(screen.getByText("Audio Tools")).toBeInTheDocument();
+    // All tools are visible at once in the sidebar
     expect(screen.getByRole("tab", { name: "File Manager" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "Metadata" })).not.toBeInTheDocument();
-  });
-
-  it("reveals a category's sub-tools when its category tab is clicked", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("tab", { name: "Tools" }));
-    await user.click(screen.getByRole("tab", { name: "Library Quality" }));
     expect(screen.getByRole("tab", { name: "Metadata" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Converter" })).toBeInTheDocument();
   });
 
-  it("shows File Manager tab within Tools", async () => {
+  it("selecting a tool in the sidebar updates the content header", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
-    expect(screen.getByRole("tab", { name: "File Manager" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Duplicates" }));
+    expect(screen.getByRole("tab", { name: "Duplicates" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Duplicates" })).toBeInTheDocument();
   });
 });

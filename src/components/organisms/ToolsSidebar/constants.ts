@@ -1,4 +1,4 @@
-import type { ToolTabGroup } from "./types";
+import type { ToolTab, ToolTabDef, ToolTabGroup } from "./types";
 
 export const TOOL_GROUPS: ToolTabGroup[] = [
   {
@@ -25,3 +25,7 @@ export const TOOL_GROUPS: ToolTabGroup[] = [
     ],
   },
 ];
+
+export const ALL_TOOL_TABS: ToolTabDef[] = TOOL_GROUPS.flatMap((group) => group.tabs);
+
+export const getToolTab = (id: ToolTab): ToolTabDef => ALL_TOOL_TABS.find((tab) => tab.id === id) ?? ALL_TOOL_TABS[0];

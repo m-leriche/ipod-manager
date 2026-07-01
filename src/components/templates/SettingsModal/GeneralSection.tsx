@@ -11,10 +11,12 @@ import type { LibraryScanProgress } from "../../../types/library";
 
 export const GeneralSection = ({
   onLibraryChanged,
+  onReplayTour,
   autoCheckUpdate,
   onAutoCheckStarted,
 }: {
   onLibraryChanged: () => void;
+  onReplayTour: () => void;
   autoCheckUpdate?: boolean;
   onAutoCheckStarted?: () => void;
 }) => {
@@ -116,6 +118,22 @@ export const GeneralSection = ({
             onChange={handleRememberTab}
             testId="remember-tab-toggle"
           />
+        </div>
+      </SettingGroup>
+
+      <SettingGroup title="Help" description="Get reacquainted with what Crate can do.">
+        <div className="flex items-center justify-between px-4 py-3 border border-border rounded-xl">
+          <div className="min-w-0">
+            <p className="text-xs text-text-secondary">Feature tour</p>
+            <p className="text-[11px] text-text-tertiary">Replay the quick walkthrough of Crate's main areas.</p>
+          </div>
+          <button
+            onClick={onReplayTour}
+            className="text-[11px] text-accent hover:text-accent-hover transition-colors shrink-0"
+            data-testid="replay-tour-button"
+          >
+            Replay tour
+          </button>
         </div>
       </SettingGroup>
     </>

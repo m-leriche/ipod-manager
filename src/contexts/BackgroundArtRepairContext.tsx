@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback } from "react";
+import { createContext, useContext, useCallback, useMemo } from "react";
 import { useArtCache } from "./ArtCacheContext";
 import { ConfirmDialog } from "../components/atoms/ConfirmDialog/ConfirmDialog";
 import { useBackgroundOperation } from "../hooks/useBackgroundOperation";
@@ -67,8 +67,10 @@ export const BackgroundArtRepairProvider = ({ children }: { children: React.Reac
     [start],
   );
 
+  const value = useMemo(() => ({ state, start: startRepair, cancel }), [state, startRepair, cancel]);
+
   return (
-    <BackgroundArtRepairContext.Provider value={{ state, start: startRepair, cancel }}>
+    <BackgroundArtRepairContext.Provider value={value}>
       {children}
       {result && (
         <ConfirmDialog

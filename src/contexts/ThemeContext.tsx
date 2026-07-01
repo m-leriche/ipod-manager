@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { getSetting, setSetting } from "../utils/settings";
 import { applyCustomThemeVars, clearCustomThemeVars } from "../utils/themeColors";
 import type { CustomTheme } from "../types/customTheme";
@@ -82,11 +82,12 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     setThemeState((current) => (current === `custom:${id}` ? "dark" : current));
   }, []);
 
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, customThemes, saveCustomTheme, deleteCustomTheme }}>
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo(
+    () => ({ theme, setTheme, customThemes, saveCustomTheme, deleteCustomTheme }),
+    [theme, setTheme, customThemes, saveCustomTheme, deleteCustomTheme],
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = (): ThemeContextValue => {

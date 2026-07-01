@@ -161,6 +161,9 @@ export const SETTINGS = {
   flaggedFilter: bool("crate-flagged-filter", false),
   albumSortMode: str("crate-album-sort-mode", "album", ["album", "artist", "year", "recent", "alpha"]),
 
+  // Onboarding
+  tourCompleted: bool("crate-tour-completed", false),
+
   // Startup behavior
   resumeQueueOnLaunch: bool("crate-resume-queue-on-launch", true),
   rememberLastTab: bool("crate-remember-last-tab", false),

@@ -17,7 +17,7 @@ const SECTIONS: SettingsSectionDef[] = [
   { id: "connections", label: "Connections" },
 ];
 
-export const SettingsModal = ({ onClose, onLibraryChanged, autoCheckUpdate }: SettingsModalProps) => {
+export const SettingsModal = ({ onClose, onLibraryChanged, onReplayTour, autoCheckUpdate }: SettingsModalProps) => {
   const [section, setSection] = useState<SettingsSection>("general");
   // One-shot: sections remount on nav, so the auto-check must be consumed at modal level
   const [autoCheckPending, setAutoCheckPending] = useState(autoCheckUpdate ?? false);
@@ -86,6 +86,7 @@ export const SettingsModal = ({ onClose, onLibraryChanged, autoCheckUpdate }: Se
             {section === "general" && (
               <GeneralSection
                 onLibraryChanged={onLibraryChanged}
+                onReplayTour={onReplayTour}
                 autoCheckUpdate={autoCheckPending}
                 onAutoCheckStarted={() => setAutoCheckPending(false)}
               />

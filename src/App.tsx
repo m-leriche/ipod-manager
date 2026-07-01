@@ -26,6 +26,8 @@ import { StatusBar } from "./components/molecules/StatusBar/StatusBar";
 import { MountPanel } from "./components/templates/MountPanel/MountPanel";
 import { LibraryPlayer } from "./components/templates/LibraryPlayer/LibraryPlayer";
 import { NowPlayingBar } from "./components/organisms/NowPlayingBar/NowPlayingBar";
+import { ToolTabBar } from "./components/organisms/ToolTabBar/ToolTabBar";
+import type { ToolTab } from "./components/organisms/ToolTabBar/types";
 import { QueuePanel } from "./components/organisms/QueuePanel/QueuePanel";
 import { LyricsPanel } from "./components/organisms/LyricsPanel/LyricsPanel";
 import { useResizableWidth as useLyricsPanelWidth } from "./components/organisms/LyricsPanel/useResizableWidth";
@@ -83,8 +85,10 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
+const FeatureTour = lazy(() =>
+  import("./components/templates/FeatureTour/FeatureTour").then((m) => ({ default: m.FeatureTour })),
+);
 type TopTab = "library" | "discover" | "inbox" | "tools";
-type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
 type DiscoverTab = "discover" | "releases" | "nebula";
 
 const App = () => (
@@ -133,10 +137,16 @@ const AppContent = () => {
   const { hasAnyNewReleases, checkState: releasesCheckState } = useNewReleases();
   const [discoverEnabled, setDiscoverEnabled] = useState(true);
   const [libraryReady, setLibraryReady] = useState<boolean | null>(null);
+  const [showTour, setShowTour] = useState(false);
 
   useEffect(() => {
     invoke<string | null>("get_library_location").then((loc) => setLibraryReady(!!loc));
   }, []);
+
+  // Run the one-time feature tour once a library is configured
+  useEffect(() => {
+    if (libraryReady && !getSetting("tourCompleted")) setShowTour(true);
+  }, [libraryReady]);
 
   // Persist the active tab so it can be restored on launch when enabled
   useEffect(() => {
@@ -379,32 +389,7 @@ const AppContent = () => {
                   <MountPanel compact onMountChange={setIpodMounted} onDiskInfoChange={setDiskInfo} />
                 </ErrorBoundary>
                 <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
-                  <div className="flex gap-1.5 shrink-0" role="tablist" aria-label="Tool tabs">
-                    <ToolTabButton active={toolTab === "ipod"} onClick={() => setToolTab("ipod")}>
-                      iPod
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "files"} onClick={() => setToolTab("files")}>
-                      File Manager
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "metadata"} onClick={() => setToolTab("metadata")}>
-                      Metadata
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "audio"} onClick={() => setToolTab("audio")}>
-                      Audio Extractor
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "duplicates"} onClick={() => setToolTab("duplicates")}>
-                      Duplicates
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "convert"} onClick={() => setToolTab("convert")}>
-                      Converter
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "health"} onClick={() => setToolTab("health")}>
-                      Health
-                    </ToolTabButton>
-                    <ToolTabButton active={toolTab === "export"} onClick={() => setToolTab("export")}>
-                      Export / Import
-                    </ToolTabButton>
-                  </div>
+                  <ToolTabBar active={toolTab} onSelect={setToolTab} />
                   <Suspense fallback={null}>
                     <div key={toolTab} className="flex-1 min-h-0 flex flex-col view-enter">
                       {toolTab === "ipod" && (
@@ -505,6 +490,10 @@ const AppContent = () => {
                     .catch((e) => console.warn("Failed to check discover status:", e));
                 }}
                 onLibraryChanged={() => libraryRefreshRef.current?.()}
+                onReplayTour={() => {
+                  setSettingsOpen(false);
+                  setShowTour(true);
+                }}
                 autoCheckUpdate={autoCheckUpdate}
               />
             </ErrorBoundary>
@@ -514,6 +503,13 @@ const AppContent = () => {
           <Suspense fallback={null}>
             <ErrorBoundary name="Keyboard Shortcuts">
               <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+            </ErrorBoundary>
+          </Suspense>
+        )}
+        {showTour && (
+          <Suspense fallback={null}>
+            <ErrorBoundary name="Feature Tour">
+              <FeatureTour onClose={() => setShowTour(false)} />
             </ErrorBoundary>
           </Suspense>
         )}
@@ -581,34 +577,6 @@ const DiscoverTabButton = ({
         }`}
       />
     )}
-  </button>
-);
-
-const ToolTabButton = ({
-  active,
-  disabled,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) => (
-  <button
-    role="tab"
-    aria-selected={active}
-    onClick={onClick}
-    disabled={disabled}
-    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-      disabled
-        ? "text-text-tertiary/40 border border-transparent cursor-not-allowed"
-        : active
-          ? "bg-bg-card text-text-primary border border-border-active"
-          : "text-text-tertiary border border-transparent hover:text-text-secondary"
-    }`}
-  >
-    {children}
   </button>
 );
 

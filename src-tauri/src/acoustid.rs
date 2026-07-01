@@ -1,3 +1,4 @@
+use crate::network::USER_AGENT;
 use serde::Serialize;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,7 +8,6 @@ use tauri::Emitter;
 
 const ACOUSTID_API_URL: &str = "https://api.acoustid.org/v2/lookup";
 const ACOUSTID_API_KEY: &str = "8XaBELgH"; // Free application key for Crate
-const USER_AGENT: &str = "Crate/1.0 (crate-music-app)";
 const RATE_LIMIT: Duration = Duration::from_millis(350); // AcoustID allows ~3 req/s
 
 static LAST_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);

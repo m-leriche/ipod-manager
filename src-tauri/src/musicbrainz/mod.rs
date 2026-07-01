@@ -8,7 +8,7 @@ use std::io::Read;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const USER_AGENT: &str = "iPodManager/1.0 (ipod-manager-app)";
+use crate::network::USER_AGENT;
 const RATE_LIMIT: Duration = Duration::from_millis(1100);
 const BASE_URL: &str = "https://musicbrainz.org/ws/2";
 

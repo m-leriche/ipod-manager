@@ -184,6 +184,7 @@ export const SETTINGS = {
   // Layout dimensions
   columnWidths: json<Record<string, number>>("crate-column-widths", {}, validateNumberRecord),
   columnOrder: json<string[]>("crate-column-order", [], validateStringArray),
+  columnVisibility: json<string[]>("crate-column-visibility", [], validateStringArray),
   browserColumnWidths: json<number[]>("crate-browser-column-widths", [], validateNumberArray),
   releasesColumnWidths: json<number[]>("crate-releases-column-widths", [], validateNumberArray),
   lyricsPanelWidth: num("crate-lyrics-panel-width", 280, 0, 10000),

@@ -11,6 +11,7 @@ import { useTypeToSelect } from "../../../hooks/useTypeToSelect";
 import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
 import { useColumnResize } from "./useColumnResize";
 import { useColumnOrder } from "./useColumnOrder";
+import { useColumnVisibility } from "./useColumnVisibility";
 import { useTrackContextMenu } from "./useTrackContextMenu";
 import { TrackRow } from "./TrackRow";
 import { getAlbumTracks } from "./helpers";
@@ -82,9 +83,24 @@ export const TrackTable = memo(function TrackTable({
   const [deleteConfirm, setDeleteConfirm] = useState<number[] | null>(null);
   // Playlist drag-reorder: the gap (0..rowCount) where the dragged row will land.
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(COLUMNS);
-  const orderedDefs = useMemo(() => orderedColumns.map((c) => c.def), [orderedColumns]);
-  const { widths, onResizeStart } = useColumnResize(orderedDefs);
+  const { visibleKeys, toggleColumnVisibility } = useColumnVisibility(COLUMNS);
+  const { orderedColumns, visibleColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart } = useColumnOrder(
+    COLUMNS,
+    visibleKeys,
+  );
+  const visibleDefs = useMemo(() => visibleColumns.map((c) => c.def), [visibleColumns]);
+  const { widths, onResizeStart } = useColumnResize(visibleDefs);
+  // Right-click on the header opens the column picker.
+  const [columnMenu, setColumnMenu] = useState<{ x: number; y: number } | null>(null);
+  const columnMenuItems = useMemo(
+    () =>
+      orderedColumns.map((col) => ({
+        label: `${visibleKeys.has(col.key) ? "✓ " : "  "}${col.label}`,
+        onClick: () => toggleColumnVisibility(col.key),
+        disabled: col.key === "title",
+      })),
+    [orderedColumns, visibleKeys, toggleColumnVisibility],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
   // Teardown for the active playlist-reorder drag (removes its window listeners).
@@ -397,9 +413,14 @@ export const TrackTable = memo(function TrackTable({
         ref={headerScrollRef}
         className="shrink-0 overflow-hidden bg-bg-primary"
         style={{ boxShadow: "0 1px 0 0 var(--color-border)" }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setColumnMenu({ x: e.clientX, y: e.clientY });
+        }}
+        data-testid="track-table-header"
       >
         <div className="flex" style={{ width: totalWidth }}>
-          {orderedColumns.map((col, i) => {
+          {visibleColumns.map((col, i) => {
             const isActive = col.sortKey === sortBy;
             const isDragging = dragIndex === i;
             const isDragOverCol = dragOverIndex === i && dragIndex !== i;
@@ -421,7 +442,7 @@ export const TrackTable = memo(function TrackTable({
                   {col.label}
                   {isActive && <span className="text-[8px]">{sortDirection === "asc" ? "\u25B2" : "\u25BC"}</span>}
                 </span>
-                {i < orderedColumns.length - 1 && (
+                {i < visibleColumns.length - 1 && (
                   <div
                     onMouseDown={(e) => onResizeStart(i, e)}
                     className="absolute top-0 -right-[4px] w-[9px] h-full cursor-col-resize group/handle z-20"
@@ -452,14 +473,14 @@ export const TrackTable = memo(function TrackTable({
       >
         <table className="table-fixed border-separate" style={{ width: totalWidth, borderSpacing: 0 }}>
           <colgroup>
-            {orderedColumns.map((col, i) => (
+            {visibleColumns.map((col, i) => (
               <col key={col.key} style={{ width: widths[i] }} />
             ))}
           </colgroup>
           <tbody>
             {paddingTop > 0 && (
               <tr>
-                <td style={{ height: paddingTop, padding: 0 }} colSpan={orderedColumns.length} />
+                <td style={{ height: paddingTop, padding: 0 }} colSpan={visibleColumns.length} />
               </tr>
             )}
             {virtualItems.map((virtualRow) => {
@@ -467,7 +488,7 @@ export const TrackTable = memo(function TrackTable({
               if (!track) {
                 return (
                   <tr key={`skeleton-${virtualRow.index}`} data-index={virtualRow.index} style={{ height: ROW_HEIGHT }}>
-                    <td colSpan={orderedColumns.length} className="px-3">
+                    <td colSpan={visibleColumns.length} className="px-3">
                       <div className="h-3 w-2/3 rounded bg-bg-card animate-pulse" />
                     </td>
                   </tr>
@@ -478,7 +499,7 @@ export const TrackTable = memo(function TrackTable({
                   key={track.id}
                   track={track}
                   index={virtualRow.index}
-                  columns={orderedColumns}
+                  columns={visibleColumns}
                   isCurrentTrack={currentTrackId === track.id}
                   isPlaying={currentTrackId === track.id && isActivePlaying}
                   isSelected={selected.has(track.id)}
@@ -495,7 +516,7 @@ export const TrackTable = memo(function TrackTable({
             })}
             {paddingBottom > 0 && (
               <tr>
-                <td style={{ height: paddingBottom, padding: 0 }} colSpan={orderedColumns.length} />
+                <td style={{ height: paddingBottom, padding: 0 }} colSpan={visibleColumns.length} />
               </tr>
             )}
           </tbody>
@@ -521,6 +542,12 @@ export const TrackTable = memo(function TrackTable({
           </div>
         )}
       </div>
+
+      {columnMenu &&
+        createPortal(
+          <ContextMenu x={columnMenu.x} y={columnMenu.y} items={columnMenuItems} onClose={() => setColumnMenu(null)} />,
+          document.body,
+        )}
 
       {contextMenu &&
         createPortal(

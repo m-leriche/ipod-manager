@@ -5,7 +5,7 @@ mod tags;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) const USER_AGENT: &str = "Crate/1.0 (https://github.com/m-leriche/ipod-manager)";
+pub(crate) use crate::network::USER_AGENT;
 pub(crate) const BASE_URL: &str = "https://lrclib.net/api";
 
 // ── Types ───────────────────────────────────────────────────────

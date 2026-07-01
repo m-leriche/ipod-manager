@@ -1,5 +1,10 @@
 use serde::Serialize;
 
+/// Identity sent with every outbound API request. MusicBrainz requires a
+/// stable, contactable User-Agent; keep this single definition in sync
+/// everywhere rather than re-declaring it per module.
+pub const USER_AGENT: &str = "Crate/1.0 (https://github.com/m-leriche/ipod-manager)";
+
 #[derive(Debug, Serialize)]
 pub struct ServerUrl {
     pub label: String,

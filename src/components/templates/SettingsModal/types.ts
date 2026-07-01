@@ -1,6 +1,7 @@
 export interface SettingsModalProps {
   onClose: () => void;
   onLibraryChanged: () => void;
+  onReplayTour: () => void;
   autoCheckUpdate?: boolean;
 }
 

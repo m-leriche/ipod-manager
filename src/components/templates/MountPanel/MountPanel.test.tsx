@@ -28,32 +28,70 @@ const DISK_INFO = {
 };
 
 describe("MountPanel", () => {
-  it("shows Disconnected when no iPod is detected", async () => {
-    mockInvoke.mockResolvedValue(null);
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByText("Disconnected")).toBeInTheDocument();
+  // ── Hero (non-compact, shown when no iPod is mounted) ──
+  describe("hero", () => {
+    it("shows a No iPod connected hero when none is detected", async () => {
+      mockInvoke.mockResolvedValue(null);
+      render(<MountPanel />);
+      await waitFor(() => {
+        expect(screen.getByText("No iPod connected")).toBeInTheDocument();
+      });
+      expect(screen.getByRole("button", { name: "Scan Again" })).toBeInTheDocument();
+    });
+
+    it("shows password input when an iPod is found but not mounted", async () => {
+      mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
+      render(<MountPanel />);
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("macOS password")).toBeInTheDocument();
+      });
+      expect(screen.getByText("iPod found")).toBeInTheDocument();
+    });
+
+    it("enables the Mount button only when a password is entered", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
+      render(<MountPanel />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Mount iPod" })).toBeDisabled();
+      });
+
+      await user.type(screen.getByPlaceholderText("macOS password"), "secret");
+      expect(screen.getByRole("button", { name: "Mount iPod" })).toBeEnabled();
     });
   });
 
-  it("shows Connected when iPod is detected but not mounted", async () => {
-    mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByText("Connected")).toBeInTheDocument();
+  // ── Compact card (shown alongside the summary when mounted) ──
+  describe("compact card", () => {
+    it("shows Mounted with device info when iPod is mounted", async () => {
+      mockInvoke.mockResolvedValue(DISK_INFO);
+      render(<MountPanel compact />);
+      await waitFor(() => {
+        expect(screen.getByText("Mounted")).toBeInTheDocument();
+        expect(screen.getByText("/dev/disk5s1")).toBeInTheDocument();
+        expect(screen.getByText("119.1 GB")).toBeInTheDocument();
+      });
+    });
+
+    it("shows media name as Type when available", async () => {
+      mockInvoke.mockResolvedValue(DISK_INFO);
+      render(<MountPanel compact />);
+      await waitFor(() => {
+        expect(screen.getByText("iPod Classic")).toBeInTheDocument();
+      });
+    });
+
+    it("enables the Eject button when iPod is mounted", async () => {
+      mockInvoke.mockResolvedValue(DISK_INFO);
+      render(<MountPanel compact />);
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Eject" })).toBeEnabled();
+      });
     });
   });
 
-  it("shows Mounted with device info when iPod is mounted", async () => {
-    mockInvoke.mockResolvedValue(DISK_INFO);
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByText("Mounted")).toBeInTheDocument();
-      expect(screen.getByText("/dev/disk5s1")).toBeInTheDocument();
-      expect(screen.getByText("119.1 GB")).toBeInTheDocument();
-    });
-  });
-
+  // ── Callbacks (layout-agnostic) ──
   it("calls onMountChange(true) when iPod is mounted", async () => {
     const onMountChange = vi.fn();
     mockInvoke.mockResolvedValue(DISK_INFO);
@@ -69,43 +107,6 @@ describe("MountPanel", () => {
     render(<MountPanel onMountChange={onMountChange} />);
     await waitFor(() => {
       expect(onMountChange).toHaveBeenCalledWith(false);
-    });
-  });
-
-  it("shows password input when iPod is connected but not mounted", async () => {
-    mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("macOS password")).toBeInTheDocument();
-    });
-  });
-
-  it("enables Mount button only when password is entered", async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    mockInvoke.mockResolvedValue({ ...DISK_INFO, mounted: false, mount_point: null });
-    render(<MountPanel />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mount" })).toBeDisabled();
-    });
-
-    await user.type(screen.getByPlaceholderText("macOS password"), "secret");
-    expect(screen.getByRole("button", { name: "Mount" })).toBeEnabled();
-  });
-
-  it("enables Eject button only when iPod is mounted", async () => {
-    mockInvoke.mockResolvedValue(DISK_INFO);
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Eject" })).toBeEnabled();
-    });
-  });
-
-  it("disables Eject button when iPod is not mounted", async () => {
-    mockInvoke.mockResolvedValue(null);
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Eject" })).toBeDisabled();
     });
   });
 
@@ -132,14 +133,6 @@ describe("MountPanel", () => {
     render(<MountPanel onDiskInfoChange={onDiskInfoChange} />);
     await waitFor(() => {
       expect(onDiskInfoChange).toHaveBeenCalledWith(null);
-    });
-  });
-
-  it("shows media name as Type when available", async () => {
-    mockInvoke.mockResolvedValue(DISK_INFO);
-    render(<MountPanel />);
-    await waitFor(() => {
-      expect(screen.getByText("iPod Classic")).toBeInTheDocument();
     });
   });
 });

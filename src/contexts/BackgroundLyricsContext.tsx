@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback } from "react";
+import { createContext, useContext, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ConfirmDialog } from "../components/atoms/ConfirmDialog/ConfirmDialog";
 import { useBackgroundOperation } from "../hooks/useBackgroundOperation";
@@ -78,8 +78,10 @@ export const BackgroundLyricsProvider = ({ children }: { children: React.ReactNo
     start();
   }, [start, dismissResult]);
 
+  const value = useMemo(() => ({ state, start: startFetch, cancel }), [state, startFetch, cancel]);
+
   return (
-    <BackgroundLyricsContext.Provider value={{ state, start: startFetch, cancel }}>
+    <BackgroundLyricsContext.Provider value={value}>
       {children}
       {result && (
         <ConfirmDialog

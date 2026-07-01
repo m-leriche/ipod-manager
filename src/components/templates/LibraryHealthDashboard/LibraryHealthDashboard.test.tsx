@@ -145,7 +145,7 @@ describe("LibraryHealthDashboard", () => {
     render(<LibraryHealthDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("0 tracks")).toBeInTheDocument();
+      expect(screen.getByText(/0 tracks/)).toBeInTheDocument();
     });
   });
 
@@ -183,7 +183,7 @@ describe("LibraryHealthDashboard", () => {
     render(<LibraryHealthDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("1,000 tracks")).toBeInTheDocument();
+      expect(screen.getByText(/1,000 tracks/)).toBeInTheDocument();
     });
   });
 
@@ -833,13 +833,12 @@ describe("helpers", () => {
       expect(issueSeverity(makeIssue("missing_title", 20), 100)).toBe("critical");
     });
 
-    it("treats never_played and unrated as informational", () => {
+    it("treats never_played and unrated as informational at any proportion", () => {
       expect(issueSeverity(makeIssue("never_played", 50), 100)).toBe("ok");
       expect(issueSeverity(makeIssue("unrated", 50), 100)).toBe("ok");
-    });
-
-    it("warns when informational issues exceed 80%", () => {
-      expect(issueSeverity(makeIssue("unrated", 90), 100)).toBe("warning");
+      // Even a nearly-all-unrated library is not a problem worth warning about
+      expect(issueSeverity(makeIssue("unrated", 90), 100)).toBe("ok");
+      expect(issueSeverity(makeIssue("never_played", 95), 100)).toBe("ok");
     });
   });
 

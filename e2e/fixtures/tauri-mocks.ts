@@ -216,6 +216,16 @@ export const test = base.extend<{
       // Step 2: Run the init script that sets up __TAURI_INTERNALS__
       await page.addInitScript({ path: INIT_SCRIPT_PATH });
 
+      // Step 3: Suppress the first-run feature tour so its overlay never
+      // intercepts interactions in tests that don't explicitly exercise it.
+      await page.addInitScript(() => {
+        try {
+          localStorage.setItem("crate-tour-completed", "true");
+        } catch {
+          /* localStorage unavailable — ignore */
+        }
+      });
+
       await use({
         override: async (overrides: CommandOverrides) => {
           const merged = { ...DEFAULT_RESPONSES, ...overrides };

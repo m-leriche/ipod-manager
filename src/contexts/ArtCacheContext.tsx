@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 interface ArtCacheContextValue {
@@ -28,7 +28,9 @@ export const ArtCacheProvider = ({ children }: { children: React.ReactNode }) =>
     };
   }, []);
 
-  return <ArtCacheContext.Provider value={{ artCacheBust, bumpArtCache }}>{children}</ArtCacheContext.Provider>;
+  const value = useMemo(() => ({ artCacheBust, bumpArtCache }), [artCacheBust, bumpArtCache]);
+
+  return <ArtCacheContext.Provider value={value}>{children}</ArtCacheContext.Provider>;
 };
 
 export const useArtCache = (): ArtCacheContextValue => useContext(ArtCacheContext);

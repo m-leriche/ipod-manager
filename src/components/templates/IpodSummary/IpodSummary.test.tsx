@@ -46,7 +46,7 @@ describe("IpodSummary", () => {
 
   it("shows empty state when iPod is not mounted", () => {
     render(<IpodSummary diskInfo={null} isMounted={false} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
-    expect(screen.getByText("Connect and mount your iPod to see device info")).toBeInTheDocument();
+    expect(screen.getByText("No iPod connected")).toBeInTheDocument();
   });
 
   it("shows loading state while fetching info", () => {
@@ -75,10 +75,11 @@ describe("IpodSummary", () => {
     render(<IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={null} onInfoLoaded={onInfoLoaded} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Rockbox")).toBeInTheDocument();
+      expect(screen.getByText("4.0-20240101")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("4.0-20240101")).toBeInTheDocument();
+    // "Rockbox" appears as both the hero badge and the section heading
+    expect(screen.getAllByText("Rockbox").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("3,500 tracks")).toBeInTheDocument();
   });
 

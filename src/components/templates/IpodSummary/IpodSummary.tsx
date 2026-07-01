@@ -52,11 +52,14 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
   if (status === "no_ipod") {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-text-tertiary/30 mb-4">
-            <IpodIcon size={64} />
+        <div className="text-center max-w-xs">
+          <div className="w-20 h-20 rounded-2xl bg-bg-secondary border border-border flex items-center justify-center text-text-tertiary mx-auto mb-4">
+            <IpodIcon size={44} />
           </div>
-          <p className="text-xs text-text-tertiary">Connect and mount your iPod to see device info</p>
+          <p className="text-sm font-medium text-text-secondary mb-1">No iPod connected</p>
+          <p className="text-xs text-text-tertiary leading-relaxed">
+            Connect your iPod and mount it from the Connection panel to view device details and storage.
+          </p>
         </div>
       </div>
     );
@@ -65,9 +68,14 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
   if (status === "loading") {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-text-tertiary text-xs">
-          <Spinner />
-          Reading device info...
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-2xl bg-bg-secondary border border-border flex items-center justify-center text-text-tertiary mx-auto mb-4">
+            <IpodIcon size={44} />
+          </div>
+          <div className="flex items-center justify-center gap-2 text-text-tertiary text-xs">
+            <Spinner />
+            Reading device info...
+          </div>
         </div>
       </div>
     );
@@ -88,45 +96,24 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
 
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-4 min-h-0 overflow-y-auto pr-1">
-      {/* Device Header */}
-      <div className="bg-bg-secondary border border-border rounded-2xl px-6 py-5 flex items-center gap-5">
-        <div className="text-text-tertiary/30 shrink-0">
-          <IpodIcon size={80} />
+      {/* Device Hero */}
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-bg-secondary border border-border flex items-center justify-center text-text-secondary shrink-0">
+          <IpodIcon size={36} />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-text-primary truncate">{displayName}</h2>
-          {displayModel && <p className="text-xs text-text-secondary mt-0.5">{displayModel}</p>}
-          <p className="text-[11px] text-text-tertiary mt-1">{fmtBytes(info.total_space)}</p>
-        </div>
-      </div>
-
-      {/* Device Info */}
-      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
-        <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-1">Device Info</h3>
-        <div className="bg-bg-card border border-border rounded-xl p-4">
-          {displayModel && <Row label="Model" value={displayModel} />}
-          {info.serial_number && <Row label="Serial" value={info.serial_number} />}
-          {info.firmware_version && <Row label="Firmware" value={info.firmware_version} />}
-          <Row label="Format" value={info.format} />
-          <Row label="Capacity" value={fmtBytes(info.total_space)} />
-          <Row label="Mount" value={info.mount_point} />
-        </div>
-      </div>
-
-      {/* Rockbox Info */}
-      {info.has_rockbox && (
-        <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
-          <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-1">Rockbox</h3>
-          <div className="bg-bg-card border border-border rounded-xl p-4">
-            {info.rockbox_version && <Row label="Version" value={info.rockbox_version} />}
-            {info.rockbox_track_count != null && (
-              <Row label="Database" value={`${info.rockbox_track_count.toLocaleString()} tracks`} />
+          <h2 className="text-lg font-semibold text-text-primary truncate">{displayName}</h2>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {displayModel && <span className="text-xs text-text-secondary">{displayModel}</span>}
+            <span className="text-[11px] text-text-tertiary">{fmtBytes(info.total_space)}</span>
+            {info.has_rockbox && (
+              <span className="px-1.5 py-0.5 rounded-md bg-accent/15 text-accent text-[10px] font-medium">Rockbox</span>
             )}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Storage Bar */}
+      {/* Storage — the centerpiece (StorageBar renders its own header) */}
       <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-4">
         <StorageBar
           audioSpace={info.audio_space}
@@ -136,26 +123,52 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
         />
       </div>
 
+      {/* Device Info */}
+      <Section title="Device Info">
+        {displayModel && <Row label="Model" value={displayModel} />}
+        {info.serial_number && <Row label="Serial" value={info.serial_number} />}
+        {info.firmware_version && <Row label="Firmware" value={info.firmware_version} />}
+        <Row label="Format" value={info.format} />
+        <Row label="Capacity" value={fmtBytes(info.total_space)} />
+        <Row label="Mount" value={info.mount_point} />
+      </Section>
+
+      {/* Rockbox Info */}
+      {info.has_rockbox && (info.rockbox_version || info.rockbox_track_count != null) && (
+        <Section title="Rockbox">
+          {info.rockbox_version && <Row label="Version" value={info.rockbox_version} />}
+          {info.rockbox_track_count != null && (
+            <Row label="Database" value={`${info.rockbox_track_count.toLocaleString()} tracks`} />
+          )}
+        </Section>
+      )}
+
       {/* Actions */}
-      <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-3">
-        <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-2">Actions</h3>
+      <Section title="Actions">
         <button
           onClick={() => setShowArtRepair(true)}
           className="w-full py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:bg-bg-hover hover:text-text-primary"
         >
           Repair Album Art
         </button>
-      </div>
+      </Section>
 
       {showArtRepair && <IpodArtRepairModal musicPath={info.mount_point} onClose={() => setShowArtRepair(false)} />}
     </div>
   );
 };
 
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="bg-bg-secondary border border-border rounded-2xl px-5 py-4">
+    <h3 className="text-[10px] font-medium text-text-tertiary uppercase tracking-widest mb-2.5">{title}</h3>
+    {children}
+  </div>
+);
+
 const Row = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex justify-between items-center py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">
-    <span className="text-text-tertiary text-[11px]">{label}</span>
-    <span className="text-[11px] font-medium text-text-secondary">{value}</span>
+  <div className="flex justify-between items-center gap-4 py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border-subtle">
+    <span className="text-text-tertiary text-[11px] shrink-0">{label}</span>
+    <span className="text-[11px] font-medium text-text-secondary truncate text-right">{value}</span>
   </div>
 );
 

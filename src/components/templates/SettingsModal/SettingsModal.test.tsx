@@ -7,6 +7,7 @@ import { SettingsModal } from "./SettingsModal";
 describe("SettingsModal", () => {
   const onClose = vi.fn();
   const onLibraryChanged = vi.fn();
+  const onReplayTour = vi.fn();
 
   beforeEach(() => {
     localStorage.clear();
@@ -19,25 +20,25 @@ describe("SettingsModal", () => {
   });
 
   it("renders the settings title", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
   it("renders all section navigation items", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     for (const section of ["general", "appearance", "playback", "library", "shortcuts", "connections"]) {
       expect(screen.getByTestId(`settings-nav-${section}`)).toBeInTheDocument();
     }
   });
 
   it("opens with the General section active", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     expect(screen.getByTestId("settings-nav-general")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Library Location")).toBeInTheDocument();
   });
 
   it("displays current library location", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     await waitFor(() => {
       expect(screen.getByText("/Users/test/Music")).toBeInTheDocument();
     });
@@ -49,14 +50,14 @@ describe("SettingsModal", () => {
       return undefined;
     });
 
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     await waitFor(() => {
       expect(screen.getByText("Not configured")).toBeInTheDocument();
     });
   });
 
   it("switches to the Appearance section showing themes", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-nav-appearance"));
     expect(screen.getByTestId("settings-nav-appearance")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Theme")).toBeInTheDocument();
@@ -64,28 +65,28 @@ describe("SettingsModal", () => {
   });
 
   it("switches to the Playback section showing crossfade", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-nav-playback"));
     expect(screen.getByText("Crossfade")).toBeInTheDocument();
     expect(screen.getByTestId("crossfade-slider")).toBeInTheDocument();
   });
 
   it("switches to the Library section showing default sort and tag format", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-nav-library"));
     expect(screen.getByText("Default Sort")).toBeInTheDocument();
     expect(screen.getByText("Tag Format")).toBeInTheDocument();
   });
 
   it("switches to the Shortcuts section", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-nav-shortcuts"));
     expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
     expect(screen.getByTestId("shortcut-playPause")).toBeInTheDocument();
   });
 
   it("switches to the Connections section", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-nav-connections"));
     await waitFor(() => {
       expect(screen.getByTestId("discover-toggle")).toBeInTheDocument();
@@ -93,19 +94,19 @@ describe("SettingsModal", () => {
   });
 
   it("calls onClose when close button is clicked", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByText("×"));
     expect(onClose).toHaveBeenCalled();
   });
 
   it("calls onClose when Escape is pressed", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
 
   it("calls onClose when backdrop is clicked", async () => {
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     fireEvent.click(screen.getByTestId("settings-backdrop"));
     expect(onClose).toHaveBeenCalled();
   });
@@ -113,7 +114,7 @@ describe("SettingsModal", () => {
   it("sets library location via directory picker", async () => {
     vi.mocked(open).mockResolvedValueOnce("/Users/test/NewLibrary");
 
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     await waitFor(() => {
       expect(screen.getByText("Change")).toBeInTheDocument();
     });
@@ -130,7 +131,7 @@ describe("SettingsModal", () => {
   it("does nothing when directory picker is cancelled", async () => {
     vi.mocked(open).mockResolvedValueOnce(null);
 
-    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} />);
+    render(<SettingsModal onClose={onClose} onLibraryChanged={onLibraryChanged} onReplayTour={onReplayTour} />);
     await waitFor(() => {
       expect(screen.getByText("Change")).toBeInTheDocument();
     });

@@ -345,13 +345,7 @@ pub fn delete_file_list(
             continue;
         }
 
-        let result = if path.is_dir() {
-            fs::remove_dir_all(path)
-        } else {
-            fs::remove_file(path)
-        };
-
-        match result {
+        match super::trash_delete::trash_or_delete(path) {
             Ok(_) => succeeded += 1,
             Err(e) => {
                 errors.push(format!("{}: {}", path_str, e));

@@ -7,6 +7,15 @@ use std::time::UNIX_EPOCH;
 
 use super::types::CompareEntry;
 
+/// FAT32 stores mtimes with 2-second resolution, and in local time — so a
+/// DST/timezone shift appears as a whole-hour offset. Treat mtimes as equal
+/// when the delta is within 2s of any whole-hour multiple (including zero).
+pub(crate) fn mtimes_match(a: u64, b: u64) -> bool {
+    const FAT_RESOLUTION_SECS: u64 = 2;
+    let offset = a.abs_diff(b) % 3600;
+    offset <= FAT_RESOLUTION_SECS || offset >= 3600 - FAT_RESOLUTION_SECS
+}
+
 fn collect_files(
     base: &Path,
     cancel_flag: &Arc<AtomicBool>,
@@ -93,7 +102,7 @@ pub fn compare_dirs(
 
     for (rel_path, (src_size, src_mod)) in &source_files {
         if let Some((tgt_size, tgt_mod)) = target_files.get(rel_path) {
-            let status = if src_size == tgt_size {
+            let status = if src_size == tgt_size && mtimes_match(*src_mod, *tgt_mod) {
                 "same".to_string()
             } else {
                 "modified".to_string()

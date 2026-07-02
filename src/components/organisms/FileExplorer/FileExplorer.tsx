@@ -12,7 +12,7 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useDragAndDrop } from "./useDragAndDrop";
 import { FileRow } from "./FileRow";
 import { InlineRenameInput } from "./InlineRenameInput";
-import { joinPath, buildContextMenuItems } from "./helpers";
+import { joinPath, buildContextMenuItems, deleteConfirmMessage } from "./helpers";
 import type { FileEntry, FileExplorerProps, FileExplorerHandle, ContextMenuState } from "./types";
 
 const TH = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
@@ -491,11 +491,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         {pendingDeletePaths && (
           <ConfirmDialog
             title="Delete"
-            message={
-              pendingDeletePaths.length === 1
-                ? `Are you sure you want to delete "${pendingDeletePaths[0].split("/").pop()}"?`
-                : `Are you sure you want to delete ${pendingDeletePaths.length} items?`
-            }
+            message={deleteConfirmMessage(pendingDeletePaths)}
             confirmLabel="Delete"
             danger
             onConfirm={() => {

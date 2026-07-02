@@ -12,8 +12,8 @@ export const albumLabel = (album: InboxAlbum): string =>
 
 export const deleteOriginalsMessage = (count: number): string =>
   count === 1
-    ? "Delete the original folder and its remaining content?"
-    : `Delete the ${count} original folders and their remaining content?`;
+    ? "Move the original folder and its remaining content to the Trash?"
+    : `Move the ${count} original folders and their remaining content to the Trash?`;
 
 export const formatTrackQuality = (t: InboxTrack): string => {
   const parts = [t.format.toUpperCase()];

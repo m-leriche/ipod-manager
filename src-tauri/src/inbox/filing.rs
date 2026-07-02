@@ -111,7 +111,7 @@ pub fn delete_filed_folder(folder: &str) -> Result<(), String> {
     if !direct_audio_children(folder).is_empty() {
         return Ok(());
     }
-    fs::remove_dir_all(folder).map_err(|e| format!("{}: {}", folder.display(), e))
+    crate::files::trash_or_delete(folder).map_err(|e| format!("{}: {}", folder.display(), e))
 }
 
 /// Reverse a set of moves: restore files to the inbox, remove the tracks from

@@ -284,15 +284,7 @@ fn build_filter_conditions(
         push_in_condition("album", albums, &mut conditions, &mut params);
     }
     if let Some(search) = search {
-        if !search.is_empty() {
-            conditions.push(
-                "(title LIKE ? OR artist LIKE ? OR album LIKE ? OR album_artist LIKE ? OR genre LIKE ?)".to_string(),
-            );
-            let like = format!("%{}%", search);
-            for _ in 0..5 {
-                params.push(Box::new(like.clone()));
-            }
-        }
+        super::push_search_condition(search, &mut conditions, &mut params);
     }
     if flagged_only == Some(true) {
         conditions.push("flagged = 1".to_string());

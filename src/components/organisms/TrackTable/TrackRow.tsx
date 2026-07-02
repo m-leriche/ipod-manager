@@ -3,7 +3,7 @@ import { StarRating } from "../../atoms/StarRating/StarRating";
 import { CELL_CLASSES } from "./constants";
 import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
-import { formatDuration } from "../../../utils/format";
+import { formatBytes, formatDuration, formatSampleRate } from "../../../utils/format";
 
 interface TrackRowProps {
   track: LibraryTrack;
@@ -148,6 +148,22 @@ const getCellContent = (
       return <StarRating rating={track.rating} size="sm" />;
     case "plays":
       return track.play_count || "\u2014";
+    case "album_artist":
+      // Fall back to the track artist — the same display-artist rule the
+      // sort and the artist aggregates use, so rows order by what's shown.
+      return track.album_artist || track.artist || "\u2014";
+    case "disc_number":
+      return track.disc_number || "\u2014";
+    case "format":
+      return track.format || "\u2014";
+    case "bitrate":
+      return track.bitrate_kbps ? `${track.bitrate_kbps} kbps` : "\u2014";
+    case "sample_rate":
+      return track.sample_rate ? formatSampleRate(track.sample_rate) : "\u2014";
+    case "file_size":
+      return track.file_size ? formatBytes(track.file_size) : "\u2014";
+    case "last_played":
+      return formatDateAdded(track.last_played ?? 0);
     default:
       return "\u2014";
   }

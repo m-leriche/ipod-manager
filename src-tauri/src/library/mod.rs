@@ -5,10 +5,13 @@ pub mod export;
 mod folders;
 pub mod health;
 mod import;
+mod indexing;
 pub mod playlists;
 mod queries;
+pub mod recovery;
 mod reorganize;
 mod scan;
+mod schema;
 mod settings;
 pub mod smart_playlists;
 #[cfg(test)]
@@ -143,6 +146,18 @@ pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
 
 // ── Database init ──────────────────────────────────────────────
 
+/// How often the full quick_check corruption sweep runs. It reads every page,
+/// so running it on each launch would make startup scale with library size.
+const INTEGRITY_CHECK_INTERVAL_SECS: i64 = 7 * 24 * 60 * 60;
+
+fn integrity_check_due(conn: &Connection) -> bool {
+    // A missing settings table (fresh or damaged DB) reads as None → due.
+    settings::get_setting(conn, "last_integrity_check")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|ts| now_epoch() - ts >= INTEGRITY_CHECK_INTERVAL_SECS)
+        .unwrap_or(true)
+}
+
 pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create db dir: {}", e))?;
@@ -154,240 +169,35 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         .map_err(|e| format!("Failed to set pragmas: {}", e))?;
 
+    // Catch page-level corruption before schema work touches the file —
+    // periodically, not per launch, since quick_check reads every page.
+    let integrity_ran = integrity_check_due(&conn);
+    if integrity_ran {
+        schema::verify_integrity(&conn)?;
+    }
+
     // Register sort_key() as a SQL scalar so ORDER BY can normalise strings
     // the same way the Rust browser sorting does (strip "The ", drop
     // non-alphanumeric, lowercase).
     queries::register_sort_key(&conn)?;
 
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS tracks (
-            id INTEGER PRIMARY KEY,
-            file_path TEXT NOT NULL UNIQUE,
-            file_name TEXT NOT NULL,
-            folder_path TEXT NOT NULL,
-            title TEXT,
-            artist TEXT,
-            album TEXT,
-            album_artist TEXT,
-            sort_artist TEXT,
-            sort_album_artist TEXT,
-            track_number INTEGER,
-            track_total INTEGER,
-            disc_number INTEGER,
-            disc_total INTEGER,
-            year INTEGER,
-            genre TEXT,
-            duration_secs REAL NOT NULL DEFAULT 0,
-            sample_rate INTEGER,
-            bitrate_kbps INTEGER,
-            format TEXT NOT NULL DEFAULT '',
-            file_size INTEGER NOT NULL DEFAULT 0,
-            modified_at INTEGER NOT NULL DEFAULT 0,
-            scanned_at INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL DEFAULT 0,
-            play_count INTEGER NOT NULL DEFAULT 0
-        );
+    schema::create_tables(&conn)?;
+    schema::migrate(&conn)?;
 
-        CREATE TABLE IF NOT EXISTS library_folders (
-            id INTEGER PRIMARY KEY,
-            path TEXT NOT NULL UNIQUE,
-            added_at INTEGER NOT NULL DEFAULT 0
-        );
+    // Derived sort-key columns + FTS index (trigger-maintained, one-time backfill).
+    indexing::install(&conn)?;
 
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
+    // One-time cleanup of pre-normalization NFD duplicate rows (flag-guarded,
+    // so it costs one settings read on every launch after the first).
+    if let Err(e) = scan::run_nfc_dedup_once(&conn) {
+        log::warn!("NFC dedup migration failed (non-fatal): {}", e);
+    }
 
-        CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
+    schema::seed_builtin_smart_playlists(&conn);
 
-        CREATE TABLE IF NOT EXISTS playlists (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            created_at INTEGER NOT NULL DEFAULT 0,
-            updated_at INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS playlist_tracks (
-            id INTEGER PRIMARY KEY,
-            playlist_id INTEGER NOT NULL,
-            track_id INTEGER NOT NULL,
-            position INTEGER NOT NULL,
-            FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE,
-            UNIQUE(playlist_id, track_id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id, position);",
-    )
-    .map_err(|e| format!("Failed to create tables: {}", e))?;
-
-    // Migrations for existing databases
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN disc_total INTEGER");
-    let _ =
-        conn.execute_batch("ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN rating INTEGER NOT NULL DEFAULT 0");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_rating ON tracks(rating)");
-    let _ = conn
-        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_modified_at ON tracks(modified_at)");
-    let _ = conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_tracks_album_artist_album \
-         ON tracks(album_artist COLLATE NOCASE, album COLLATE NOCASE)",
-    );
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN last_played INTEGER");
-    let _ = conn
-        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tracks_last_played ON tracks(last_played)");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN replay_gain_track_db REAL");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN replay_gain_album_db REAL");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN lyrics TEXT");
-    let _ = conn.execute_batch("ALTER TABLE tracks ADD COLUMN synced_lyrics TEXT");
-    let _ = conn
-        .execute_batch("ALTER TABLE tracks ADD COLUMN lyrics_not_found INTEGER NOT NULL DEFAULT 0");
-    let _ =
-        conn.execute_batch("ALTER TABLE tracks ADD COLUMN compilation INTEGER NOT NULL DEFAULT 0");
-
-    // Smart playlists table
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS smart_playlists (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            icon TEXT,
-            rules_json TEXT NOT NULL,
-            sort_by TEXT,
-            sort_direction TEXT,
-            track_limit INTEGER,
-            is_builtin INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL DEFAULT 0,
-            updated_at INTEGER NOT NULL DEFAULT 0
-        );",
-    )
-    .map_err(|e| format!("Failed to create smart_playlists table: {}", e))?;
-
-    // Last.fm scrobble queue (offline retry)
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS scrobble_queue (
-            id INTEGER PRIMARY KEY,
-            artist TEXT NOT NULL,
-            track TEXT NOT NULL,
-            album TEXT,
-            album_artist TEXT,
-            duration_secs INTEGER NOT NULL,
-            timestamp INTEGER NOT NULL,
-            created_at INTEGER NOT NULL DEFAULT 0
-        );",
-    )
-    .map_err(|e| format!("Failed to create scrobble_queue table: {}", e))?;
-
-    // Artist release watchlist tables
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS watched_artists (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            mb_artist_id TEXT,
-            mb_artist_name TEXT,
-            match_status TEXT NOT NULL DEFAULT 'pending',
-            created_at INTEGER NOT NULL DEFAULT 0,
-            last_checked_at INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS discovered_releases (
-            id INTEGER PRIMARY KEY,
-            watched_artist_id INTEGER NOT NULL,
-            mb_release_group_id TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,
-            artist_name TEXT NOT NULL,
-            release_type TEXT,
-            first_release_date TEXT,
-            discovered_at INTEGER NOT NULL DEFAULT 0,
-            dismissed INTEGER NOT NULL DEFAULT 0,
-            in_library INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY(watched_artist_id) REFERENCES watched_artists(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_discovered_releases_artist ON discovered_releases(watched_artist_id);",
-    )
-    .map_err(|e| format!("Failed to create artist releases tables: {}", e))?;
-
-    // Discover recommendation cache
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS discover_cache (
-            cache_key TEXT PRIMARY KEY,
-            data_json TEXT NOT NULL,
-            cached_at INTEGER NOT NULL DEFAULT 0
-        );",
-    )
-    .map_err(|e| format!("Failed to create discover_cache table: {}", e))?;
-
-    // Playback queue persistence table
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS playback_queue (
-            position INTEGER PRIMARY KEY,
-            track_id INTEGER NOT NULL,
-            FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE
-        );",
-    )
-    .map_err(|e| format!("Failed to create playback_queue table: {}", e))?;
-
-    // Seed built-in smart playlists
-    let now = now_epoch();
-    let seed_sql = "INSERT OR IGNORE INTO smart_playlists (name, icon, rules_json, sort_by, sort_direction, track_limit, is_builtin, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)";
-    let _ = conn.execute(
-        seed_sql,
-        rusqlite::params![
-            "Recently Added",
-            "clock",
-            r#"{"match":"all","rules":[{"field":"created_at","operator":"in_last_days","value":"30"}]}"#,
-            "created_at",
-            "desc",
-            100_i64,
-            now,
-            now
-        ],
-    );
-    let _ = conn.execute(
-        seed_sql,
-        rusqlite::params![
-            "Most Played",
-            "fire",
-            r#"{"match":"all","rules":[{"field":"play_count","operator":"greater_than","value":"0"}]}"#,
-            "play_count",
-            "desc",
-            100_i64,
-            now,
-            now
-        ],
-    );
-    let _ = conn.execute(
-        seed_sql,
-        rusqlite::params![
-            "Recently Played",
-            "headphones",
-            r#"{"match":"all","rules":[{"field":"last_played","operator":"greater_than","value":"0"}]}"#,
-            "last_played",
-            "desc",
-            100_i64,
-            now,
-            now
-        ],
-    );
-    let _ = conn.execute(
-        seed_sql,
-        rusqlite::params![
-            "Unplayed",
-            "circle",
-            r#"{"match":"all","rules":[{"field":"play_count","operator":"equals","value":"0"}]}"#,
-            None::<&str>,
-            None::<&str>,
-            None::<i64>,
-            now,
-            now
-        ],
-    );
+    if integrity_ran {
+        let _ = settings::set_setting(&conn, "last_integrity_check", &now_epoch().to_string());
+    }
 
     Ok(conn)
 }
@@ -404,8 +214,12 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
 /// NFD on HFS+), symlink resolution, or other path transformations.
 pub(crate) fn is_ghost_path(db_path: &str, conn: &Connection) -> bool {
     let p = Path::new(db_path);
-    if !p.exists() {
-        return true;
+    match p.try_exists() {
+        Ok(false) => return true,
+        // Transient stat failure (permissions, a volume mid-disconnect) —
+        // treat the file as present rather than risk deleting a live row.
+        Err(_) => return false,
+        Ok(true) => {}
     }
     let canon = match p.canonicalize() {
         Ok(c) => c,

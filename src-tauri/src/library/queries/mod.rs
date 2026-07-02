@@ -91,15 +91,7 @@ pub(super) fn build_track_conditions(
         }
     }
     if let Some(ref search) = filter.search {
-        if !search.is_empty() {
-            conditions.push(
-                "(title LIKE ? OR artist LIKE ? OR album LIKE ? OR album_artist LIKE ? OR genre LIKE ?)".to_string(),
-            );
-            let like = format!("%{}%", search);
-            for _ in 0..5 {
-                params.push(Box::new(like.clone()));
-            }
-        }
+        push_search_condition(search, &mut conditions, &mut params);
     }
     if filter.flagged_only == Some(true) {
         conditions.push("flagged = 1".to_string());
@@ -122,29 +114,54 @@ pub(super) fn build_track_conditions(
     (wc, params)
 }
 
-/// Build the ORDER BY clause from a LibraryFilter.
+/// Push the free-text search condition, backed by the FTS5 index (prefix
+/// match per token) instead of an unindexable `LIKE %term%` scan.
+pub(super) fn push_search_condition(
+    search: &str,
+    conditions: &mut Vec<String>,
+    params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+) {
+    let match_expr = super::indexing::fts_match_query(search);
+    if match_expr.is_empty() {
+        return;
+    }
+    conditions.push("id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?)".to_string());
+    params.push(Box::new(match_expr));
+}
+
+/// Build the ORDER BY clause from a LibraryFilter. Text sorts use the
+/// materialized `sort_*_key` columns (trigger-maintained, indexed) so SQLite
+/// can serve the sort from an index instead of computing `sort_key()` per row
+/// and sorting the whole table before LIMIT.
 pub(super) fn build_order_by(filter: &LibraryFilter) -> String {
     let dir = match filter.sort_direction.as_deref() {
         Some("desc") => "DESC",
         _ => "ASC",
     };
 
-    let sk_title = "sort_key(COALESCE(title, file_name))";
-    let sk_artist = "sort_key(COALESCE(NULLIF(sort_album_artist,''), NULLIF(album_artist,''), NULLIF(sort_artist,''), NULLIF(artist,''), ''))";
-    let sk_album = "sort_key(COALESCE(album, ''))";
-    let sk_genre = "sort_key(COALESCE(genre, ''))";
+    let sk_title = "sort_title_key";
+    let sk_artist = "sort_artist_key";
+    let sk_album = "sort_album_key";
+    let sk_genre = "sort_genre_key";
     let disc_track = "COALESCE(disc_number, 0), COALESCE(track_number, 0)";
 
     match filter.sort_by.as_deref() {
         Some("title") => format!("{sk_title} {dir}, {sk_artist}, {sk_album}, {disc_track}"),
-        Some("artist") => format!("{sk_artist} {dir}, {sk_album}, {disc_track}"),
+        // "album_artist" is an alias: the artist sort key already prefers the
+        // album artist, so the dedicated column sorts identically.
+        Some("artist") | Some("album_artist") => {
+            format!("{sk_artist} {dir}, {sk_album}, {disc_track}")
+        }
         Some("album") => format!("{sk_album} {dir}, {disc_track}"),
-        Some("track_number") => {
+        Some("track_number") | Some("disc_number") => {
             format!("COALESCE(disc_number, 0) {dir}, COALESCE(track_number, 0) {dir}")
         }
         Some("year") => format!("COALESCE(year, 0) {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("duration") => format!("duration_secs {dir}"),
         Some("bitrate") => format!("COALESCE(bitrate_kbps, 0) {dir}"),
+        Some("sample_rate") => format!("COALESCE(sample_rate, 0) {dir}"),
+        Some("file_size") => format!("file_size {dir}"),
+        Some("format") => format!("format {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("genre") => format!("{sk_genre} {dir}, {sk_artist}, {sk_album}, {disc_track}"),
         Some("date_added") => format!("created_at {dir}"),
         Some("play_count") => {

@@ -1,9 +1,6 @@
 use crate::audio_utils::collect_audio_files;
-use lofty::prelude::{Accessor, AudioFile, TaggedFileExt};
-use lofty::probe::Probe;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -142,81 +139,59 @@ pub fn scan_library_stats(
             },
         );
 
-        // File size
-        let file_size = fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
-        total_size += file_size;
+        // Shared tag reader — same lofty parsing and ffprobe fallback as the
+        // library scan, so stats can't disagree with the library view.
+        let td = crate::library::read_track_for_library(file_path);
+
+        total_size += td.file_size;
 
         // Format breakdown
         let ext = format_ext(file_path);
         let entry = formats.entry(ext.clone()).or_insert((0, 0));
         entry.0 += 1;
-        entry.1 += file_size;
+        entry.1 += td.file_size;
 
-        // Read audio metadata with lofty
-        let probe = match Probe::open(file_path) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        let tagged = match probe.read() {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
+        // Unreadable files (both lofty and ffprobe failed) count toward the
+        // totals and format breakdown, but contribute no tags/duration and
+        // get no detail row — a 0:00 row with empty fields would just be a
+        // ghost entry.
+        if !td.parsed {
+            continue;
+        }
 
-        // Properties (duration, bitrate, sample rate)
-        let props = tagged.properties();
-        let file_duration = props.duration().as_secs_f64();
-        total_duration_secs += file_duration;
+        total_duration_secs += td.duration_secs;
 
-        let file_bitrate = props.audio_bitrate();
-        if let Some(br) = file_bitrate {
+        if let Some(br) = td.bitrate_kbps {
             total_bitrate_kbps += br as u64;
             bitrate_count += 1;
         }
 
-        let file_sample_rate = props.sample_rate();
-        if let Some(sr) = file_sample_rate {
+        if let Some(sr) = td.sample_rate {
             *sample_rates.entry(sr).or_insert(0) += 1;
         }
 
-        // Tags
-        let mut file_artist = String::new();
-        let mut file_album = String::new();
-        let mut file_title = String::new();
-        let mut file_genre = String::new();
+        let file_title = td.title.unwrap_or_default();
+        let file_artist = td.artist.unwrap_or_default();
+        if !file_artist.is_empty() {
+            artists.insert(file_artist.clone());
+        }
+        let file_album = td.album.unwrap_or_default();
+        if !file_album.is_empty() {
+            albums.insert(file_album.clone());
+        }
+        let file_genre = td.genre.unwrap_or_default();
+        if !file_genre.is_empty() {
+            for part in crate::library::split_genres(&file_genre) {
+                *genres.entry(part.to_string()).or_insert(0) += 1;
+            }
+        }
         let mut file_year: Option<u32> = None;
-
-        let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
-        if let Some(tag) = tag {
-            if let Some(title) = tag.title() {
-                file_title = title.to_string();
-            }
-            if let Some(artist) = tag.artist() {
-                let a = artist.to_string();
-                if !a.is_empty() {
-                    artists.insert(a.clone());
-                    file_artist = a;
-                }
-            }
-            if let Some(album) = tag.album() {
-                let a = album.to_string();
-                if !a.is_empty() {
-                    albums.insert(a.clone());
-                    file_album = a;
-                }
-            }
-            if let Some(g) = crate::metadata::read_genre(tag) {
-                for part in crate::library::split_genres(&g) {
-                    *genres.entry(part.to_string()).or_insert(0) += 1;
-                }
-                file_genre = g;
-            }
-            if let Some(year) = tag.year() {
-                if year > 0 {
-                    *years.entry(year).or_insert(0) += 1;
-                    oldest_year = Some(oldest_year.map_or(year, |o: u32| o.min(year)));
-                    newest_year = Some(newest_year.map_or(year, |n: u32| n.max(year)));
-                    file_year = Some(year);
-                }
+        if let Some(year) = td.year {
+            if year > 0 {
+                *years.entry(year).or_insert(0) += 1;
+                oldest_year = Some(oldest_year.map_or(year, |o: u32| o.min(year)));
+                newest_year = Some(newest_year.map_or(year, |n: u32| n.max(year)));
+                file_year = Some(year);
             }
         }
 
@@ -226,7 +201,7 @@ pub fn scan_library_stats(
             .to_string_lossy()
             .to_string();
 
-        let sample_rate_display = file_sample_rate.map(format_sample_rate).unwrap_or_default();
+        let sample_rate_display = td.sample_rate.map(format_sample_rate).unwrap_or_default();
 
         file_details.push(FileDetail {
             relative_path,
@@ -235,11 +210,11 @@ pub fn scan_library_stats(
             title: file_title,
             genre: file_genre,
             year: file_year,
-            sample_rate: file_sample_rate,
+            sample_rate: td.sample_rate,
             sample_rate_display,
-            bitrate_kbps: file_bitrate,
-            duration_secs: file_duration,
-            size: file_size,
+            bitrate_kbps: td.bitrate_kbps,
+            duration_secs: td.duration_secs,
+            size: td.file_size,
             format: ext,
         });
     }

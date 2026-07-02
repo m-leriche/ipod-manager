@@ -24,10 +24,15 @@ static LAST_AUTO_BACKUP: Mutex<Option<Instant>> = Mutex::new(None);
 /// concurrent callers from both passing the check and creating two backups.
 pub fn auto_backup_if_due(conn: &Connection, db_path: &Path) {
     let mut guard = LAST_AUTO_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(last) = *guard {
-        if last.elapsed() < AUTO_BACKUP_INTERVAL {
-            return;
-        }
+    // Before the first in-process backup, fall back to the newest backup file
+    // on disk so the rate limit survives restarts — otherwise the first
+    // destructive op of every launch re-copies the DB.
+    let recently_backed_up = match *guard {
+        Some(last) => last.elapsed() < AUTO_BACKUP_INTERVAL,
+        None => newest_backup_age(db_path).is_some_and(|age| age < AUTO_BACKUP_INTERVAL),
+    };
+    if recently_backed_up {
+        return;
     }
 
     match create_backup(conn, db_path) {
@@ -37,6 +42,16 @@ pub fn auto_backup_if_due(conn: &Connection, db_path: &Path) {
         }
         Err(e) => log::warn!("Auto-backup failed (non-fatal): {}", e),
     }
+}
+
+/// Age of the most recent backup on disk, if any.
+fn newest_backup_age(db_path: &Path) -> Option<Duration> {
+    let newest_ms = list_backups(db_path).ok()?.first()?.created_at;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+    Some(Duration::from_millis((now_ms - newest_ms).max(0) as u64))
 }
 
 #[derive(Debug, Clone, Serialize)]

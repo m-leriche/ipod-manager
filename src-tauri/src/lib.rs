@@ -31,6 +31,7 @@ mod profiles;
 mod recommend;
 mod rockbox;
 mod sanitize;
+mod startup;
 mod streaming;
 mod subsonic;
 mod thumbnail;
@@ -44,25 +45,9 @@ use library::LibraryDb;
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 
-/// Ensure Homebrew binary paths are on PATH so bundled .app can find
-/// tools like ffmpeg, ffprobe, and yt-dlp.
-fn ensure_homebrew_path() {
-    let path = std::env::var("PATH").unwrap_or_default();
-    let extras = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"];
-    let missing: Vec<&str> = extras
-        .iter()
-        .copied()
-        .filter(|p| !path.contains(p))
-        .collect();
-    if !missing.is_empty() {
-        let new_path = format!("{}:{}", missing.join(":"), path);
-        std::env::set_var("PATH", new_path);
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    ensure_homebrew_path();
+    startup::ensure_homebrew_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -85,8 +70,10 @@ pub fn run() {
                 .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
                 .join("library.db");
 
-            let conn = library::init_db(&db_path)
-                .map_err(|e| format!("Failed to initialize library database: {}", e))?;
+            let Some(conn) = startup::open_library_db_with_recovery(app, &db_path) else {
+                // The user declined recovery — exit cleanly, not via panic.
+                std::process::exit(1);
+            };
 
             app.manage(LibraryDb::new(conn, db_path.clone()));
 
@@ -426,6 +413,17 @@ pub fn run() {
             commands::delete_inbox_folders,
             commands::undo_inbox_filing,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Fold the WAL back into the main file on clean exit so the
+                // sidecar doesn't grow unbounded across long sessions.
+                if let Some(db) = app.try_state::<LibraryDb>() {
+                    if let Ok(conn) = db.lock_conn() {
+                        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+                    }
+                }
+            }
+        });
 }

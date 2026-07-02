@@ -177,6 +177,9 @@ pub(crate) struct TrackData {
     pub lyrics: Option<String>,
     pub replay_gain_track_db: Option<f32>,
     pub replay_gain_album_db: Option<f32>,
+    /// False when neither lofty nor the ffprobe fallback could read the file
+    /// — the tags and properties above are all defaults, not real values.
+    pub parsed: bool,
 }
 
 // ── Smart playlist types ──────────────────────────────────────

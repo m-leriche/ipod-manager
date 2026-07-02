@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { pickFolder } from "../../../utils/pickPath";
 import { getSetting, setSetting } from "../../../utils/settings";
 import { SORT_SETTINGS_CHANGED_EVENT } from "../LibraryPlayer/useLibraryData";
+import { BackupSection } from "./BackupSection";
 import { SettingGroup, SettingToggle } from "./SettingGroup";
 
 const SORT_FIELDS: { value: string; label: string }[] = [
@@ -228,6 +229,8 @@ export const LibrarySection = () => {
           </div>
         )}
       </SettingGroup>
+
+      <BackupSection />
     </>
   );
 };

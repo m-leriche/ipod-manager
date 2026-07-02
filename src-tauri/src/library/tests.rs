@@ -54,6 +54,7 @@ fn test_db() -> Connection {
         );",
     )
     .unwrap();
+    crate::library::indexing::install(&conn).unwrap();
     conn
 }
 
@@ -88,6 +89,7 @@ fn make_track_data(overrides: TrackDataOverrides) -> TrackData {
         lyrics: None,
         replay_gain_track_db: None,
         replay_gain_album_db: None,
+        parsed: true,
     }
 }
 
@@ -863,12 +865,15 @@ fn search_with_percent_wildcard() {
     );
     insert_test_track(&conn, "/m/b.mp3", "Other", "Other", "Other", "Pop", 2021);
 
-    // "%" in LIKE should be treated as literal, not wildcard
-    // But since the search wraps with %query%, "%%" would match all
-    // This is acceptable behavior — it's safe, just permissive
+    // "%" is not a wildcard under FTS — a punctuation-only query matches
+    // nothing (the tokenizer strips it) rather than everything, and must
+    // not error.
     let results = search_tracks(&conn, "%").unwrap();
-    // Both match because the search pattern becomes %%% which matches everything
-    assert!(results.len() >= 1);
+    assert_eq!(results.len(), 0);
+
+    // Token-prefix search still finds the track.
+    let results = search_tracks(&conn, "tes").unwrap();
+    assert_eq!(results.len(), 1);
 }
 
 #[test]

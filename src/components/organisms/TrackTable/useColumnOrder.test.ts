@@ -69,6 +69,19 @@ describe("useColumnOrder", () => {
     expect(result.current.orderedColumns.map((c) => c.key)).toEqual(["title", "artist", "album"]);
   });
 
+  it("keeps saved order and appends columns added since it was saved", () => {
+    // Saved before "album" existed — user's order is preserved, not reset.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(["artist", "title"]));
+    const { result } = renderHook(() => useColumnOrder(columns));
+    expect(result.current.orderedColumns.map((c) => c.key)).toEqual(["artist", "title", "album"]);
+  });
+
+  it("filters visibleColumns by the provided key set", () => {
+    const { result } = renderHook(() => useColumnOrder(columns, new Set(["title", "album"])));
+    expect(result.current.orderedColumns.map((c) => c.key)).toEqual(["title", "artist", "album"]);
+    expect(result.current.visibleColumns.map((c) => c.key)).toEqual(["title", "album"]);
+  });
+
   it("starts with no drag state", () => {
     const { result } = renderHook(() => useColumnOrder(columns));
     expect(result.current.dragIndex).toBeNull();

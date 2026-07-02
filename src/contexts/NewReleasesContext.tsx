@@ -56,6 +56,10 @@ export const useNewReleases = (): NewReleasesContextValue => {
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60;
 
+/** Delay before the startup staleness check, keeping MusicBrainz/Last.fm
+    network traffic out of the launch window. */
+const AUTO_CHECK_DELAY_MS = 10_000;
+
 export const NewReleasesProvider = ({ children }: { children: React.ReactNode }) => {
   const [checkState, setCheckState] = useState<CheckState>(INITIAL_CHECK);
   const [releases, setReleases] = useState<DiscoveredRelease[]>([]);
@@ -148,22 +152,28 @@ export const NewReleasesProvider = ({ children }: { children: React.ReactNode })
     }
   }, [refreshReleases, refreshWatchedArtists, refreshArtistsWithNewReleases]);
 
-  // ── Auto-check on startup ───────────────────────────────────
+  // ── Auto-check on startup (deferred off the launch window) ──
 
   useEffect(() => {
     const autoCheck = async () => {
-      const artists = await invoke<WatchedArtist[]>("get_watched_artists");
-      if (artists.length === 0) return;
-
       const lastCheck = await invoke<string | null>("get_last_releases_check");
       const lastCheckTime = lastCheck ? parseInt(lastCheck, 10) : 0;
       const now = Math.floor(Date.now() / 1000);
+      if (now - lastCheckTime <= TWENTY_FOUR_HOURS) return;
 
-      if (now - lastCheckTime > TWENTY_FOUR_HOURS) {
-        startCheck();
+      // The initial load has normally populated the ref by now; re-fetch as a
+      // fallback so a transient launch-time failure doesn't skip the session.
+      let artists = watchedArtistsRef.current;
+      if (artists.length === 0) {
+        artists = await invoke<WatchedArtist[]>("get_watched_artists");
       }
+      if (artists.length === 0) return;
+      startCheck();
     };
-    autoCheck().catch((e) => console.warn("Failed to auto-check new releases:", e));
+    const timer = setTimeout(() => {
+      autoCheck().catch((e) => console.warn("Failed to auto-check new releases:", e));
+    }, AUTO_CHECK_DELAY_MS);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

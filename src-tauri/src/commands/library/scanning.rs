@@ -142,11 +142,12 @@ pub async fn background_rescan(
     cancel: State<'_, SyncCancel>,
     cache: State<'_, SubsonicCacheHandle>,
 ) -> Result<library::BackgroundScanResult, AppError> {
-    auto_backup(&app, &db).await;
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
+    // Passed through so the (rare) orphan deletion can snapshot the DB first.
+    let db_path = app.path().app_data_dir().ok().map(|d| d.join("library.db"));
     let result = tauri::async_runtime::spawn_blocking(move || {
-        library::background_rescan_all_folders(&conn_arc, &flag)
+        library::background_rescan_all_folders(&conn_arc, &flag, db_path.as_deref())
     })
     .await
     .map_err(|e| format!("Background rescan failed: {}", e))??;

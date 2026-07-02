@@ -92,6 +92,9 @@ const FeatureTour = lazy(() =>
 type TopTab = "library" | "discover" | "inbox" | "tools";
 type DiscoverTab = "discover" | "releases" | "nebula";
 
+/** Delay before the external-tool subprocess probes run at startup. */
+const TOOL_CHECK_DELAY_MS = 5_000;
+
 const App = () => (
   <ThemeProvider>
     <ToastProvider>
@@ -168,17 +171,21 @@ const AppContent = () => {
   const { showLyricsPanel, showArtworkCarousel, lyricsOverlay } = viewLayout;
   const toast = useToast();
 
-  // Check for missing external tools at startup
+  // Check for missing external tools, deferred off the launch window —
+  // each check spawns a subprocess and the result is only a warning toast.
   useEffect(() => {
-    Promise.allSettled([invoke("check_ffmpeg"), invoke("check_yt_dependencies")]).then(([ffmpeg, ytdlp]) => {
-      const missing = [
-        ...(ffmpeg.status === "rejected" ? ["ffmpeg"] : []),
-        ...(ytdlp.status === "rejected" ? ["yt-dlp"] : []),
-      ];
-      if (missing.length > 0) {
-        toast.warning(`Missing tools: ${missing.join(", ")}. Install with: brew install ${missing.join(" ")}`);
-      }
-    });
+    const timer = setTimeout(() => {
+      Promise.allSettled([invoke("check_ffmpeg"), invoke("check_yt_dependencies")]).then(([ffmpeg, ytdlp]) => {
+        const missing = [
+          ...(ffmpeg.status === "rejected" ? ["ffmpeg"] : []),
+          ...(ytdlp.status === "rejected" ? ["yt-dlp"] : []),
+        ];
+        if (missing.length > 0) {
+          toast.warning(`Missing tools: ${missing.join(", ")}. Install with: brew install ${missing.join(" ")}`);
+        }
+      });
+    }, TOOL_CHECK_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [toast]);
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);

@@ -3,13 +3,18 @@ import type { TrackTableColumn } from "./constants";
 import { getSetting, setSetting } from "../../../utils/settings";
 
 const loadOrder = (columns: TrackTableColumn[]): string[] => {
+  const defaults = columns.map((c) => c.key);
   const saved = getSetting("columnOrder");
-  if (!Array.isArray(saved) || saved.length === 0) return columns.map((c) => c.key);
-  const defaultKeys = new Set(columns.map((c) => c.key));
-  if (saved.length !== defaultKeys.size || !saved.every((k) => defaultKeys.has(k))) {
-    return columns.map((c) => c.key);
-  }
-  return saved;
+  if (!Array.isArray(saved) || saved.length === 0) return defaults;
+  // Merge: keep the user's order for keys that still exist, and append any
+  // columns added since the order was saved (instead of resetting it).
+  const known = new Set(defaults);
+  // De-dupe defensively — a corrupted saved order would otherwise render a
+  // column twice (duplicate React keys, shifted widths) forever, since the
+  // merge result is re-persisted.
+  const kept = [...new Set(saved)].filter((k) => known.has(k));
+  const keptSet = new Set(kept);
+  return [...kept, ...defaults.filter((k) => !keptSet.has(k))];
 };
 
 interface DragState {
@@ -19,7 +24,9 @@ interface DragState {
 
 const DRAG_THRESHOLD = 5;
 
-export const useColumnOrder = (columns: TrackTableColumn[]) => {
+/** Column order (all columns, persisted) plus drag-to-reorder over the
+    currently *visible* columns — drag indices refer to rendered headers. */
+export const useColumnOrder = (columns: TrackTableColumn[], visibleKeys?: Set<string>) => {
   const [order, setOrder] = useState<string[]>(() => loadOrder(columns));
   const [dragState, setDragState] = useState<DragState | null>(null);
   const headerEls = useRef<(HTMLElement | null)[]>([]);
@@ -32,6 +39,16 @@ export const useColumnOrder = (columns: TrackTableColumn[]) => {
     const map = new Map(columns.map((c) => [c.key, c]));
     return order.map((key) => map.get(key)!).filter(Boolean);
   }, [columns, order]);
+
+  const visibleColumns = useMemo(
+    () => (visibleKeys ? orderedColumns.filter((c) => visibleKeys.has(c.key)) : orderedColumns),
+    [orderedColumns, visibleKeys],
+  );
+
+  // Rendered header keys, for translating drag indices to order positions at
+  // drop time (the drag handlers are attached once and must not go stale).
+  const renderedKeysRef = useRef<string[]>([]);
+  renderedKeysRef.current = visibleColumns.map((c) => c.key);
 
   const setHeaderRef = useCallback((index: number, el: HTMLElement | null) => {
     headerEls.current[index] = el;
@@ -78,12 +95,19 @@ export const useColumnOrder = (columns: TrackTableColumn[]) => {
         window.addEventListener("click", suppress, { capture: true, once: true });
 
         if (colIndex !== currentOverIndex) {
-          setOrder((prev) => {
-            const next = [...prev];
-            const [item] = next.splice(colIndex, 1);
-            next.splice(currentOverIndex, 0, item);
-            return next;
-          });
+          // Indices are into the visible headers; hidden columns keep their
+          // slot in the full order.
+          const fromKey = renderedKeysRef.current[colIndex];
+          const toKey = renderedKeysRef.current[currentOverIndex];
+          if (fromKey !== undefined && toKey !== undefined && fromKey !== toKey) {
+            setOrder((prev) => {
+              const next = prev.filter((k) => k !== fromKey);
+              const toPos = next.indexOf(toKey);
+              if (toPos < 0) return prev;
+              next.splice(colIndex < currentOverIndex ? toPos + 1 : toPos, 0, fromKey);
+              return next;
+            });
+          }
         }
       }
     };
@@ -95,5 +119,5 @@ export const useColumnOrder = (columns: TrackTableColumn[]) => {
   const dragIndex = dragState?.fromIndex ?? null;
   const dragOverIndex = dragState?.overIndex ?? null;
 
-  return { orderedColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart };
+  return { orderedColumns, visibleColumns, dragIndex, dragOverIndex, setHeaderRef, onReorderStart };
 };

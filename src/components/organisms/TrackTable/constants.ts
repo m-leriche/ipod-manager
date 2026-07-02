@@ -7,6 +7,8 @@ export interface TrackTableColumn {
   sortKey: string;
   align: "left" | "right";
   def: ColumnDef;
+  /** Hidden until the user enables it in the column picker. */
+  defaultHidden?: boolean;
 }
 
 export const COLUMNS: TrackTableColumn[] = [
@@ -88,6 +90,62 @@ export const COLUMNS: TrackTableColumn[] = [
     align: "right",
     def: { key: "plays", minWidth: 40, initialWidth: 50 },
   },
+  {
+    key: "album_artist",
+    label: "Album Artist",
+    sortKey: "album_artist",
+    align: "left",
+    def: { key: "album_artist", minWidth: 80, initialWidth: 160 },
+    defaultHidden: true,
+  },
+  {
+    key: "disc_number",
+    label: "Disc",
+    sortKey: "disc_number",
+    align: "right",
+    def: { key: "disc_number", minWidth: 40, initialWidth: 50 },
+    defaultHidden: true,
+  },
+  {
+    key: "format",
+    label: "Kind",
+    sortKey: "format",
+    align: "left",
+    def: { key: "format", minWidth: 45, initialWidth: 60 },
+    defaultHidden: true,
+  },
+  {
+    key: "bitrate",
+    label: "Bitrate",
+    sortKey: "bitrate",
+    align: "right",
+    def: { key: "bitrate", minWidth: 55, initialWidth: 75 },
+    defaultHidden: true,
+  },
+  {
+    key: "sample_rate",
+    label: "Sample Rate",
+    sortKey: "sample_rate",
+    align: "right",
+    def: { key: "sample_rate", minWidth: 65, initialWidth: 90 },
+    defaultHidden: true,
+  },
+  {
+    key: "file_size",
+    label: "Size",
+    sortKey: "file_size",
+    align: "right",
+    def: { key: "file_size", minWidth: 55, initialWidth: 70 },
+    defaultHidden: true,
+  },
+  {
+    key: "last_played",
+    label: "Last Played",
+    sortKey: "last_played",
+    align: "left",
+    def: { key: "last_played", minWidth: 70, initialWidth: 95 },
+    defaultHidden: true,
+  },
 ];
 
 export const COLUMN_DEFS = COLUMNS.map((c) => c.def);
@@ -102,6 +160,7 @@ export const SORT_KEY_TO_TRACK_FIELD: Record<string, keyof LibraryTrack> = {
   artist: "artist",
   album: "album",
   genre: "genre",
+  album_artist: "album_artist",
 };
 
 export const CELL_CLASSES: Record<string, string> = {
@@ -117,4 +176,11 @@ export const CELL_CLASSES: Record<string, string> = {
   date_added: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
   rating: "px-1 py-[7px] overflow-hidden",
   plays: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  album_artist: "px-3 py-[7px] text-[11px] text-text-secondary overflow-hidden truncate",
+  disc_number: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  format: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
+  bitrate: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  sample_rate: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  file_size: "px-3 py-[7px] text-[11px] text-text-tertiary tabular-nums text-right overflow-hidden",
+  last_played: "px-3 py-[7px] text-[11px] text-text-tertiary overflow-hidden truncate",
 };

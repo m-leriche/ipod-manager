@@ -12,6 +12,9 @@ export interface CachedLibraryData {
   browserData: BrowserData;
   totalTrackCount?: number;
   cachedAt: number;
+  /** Library location the cache was built from. A cache written for a
+      different library (location switched, DB restored) must not be shown. */
+  libraryPath?: string | null;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;

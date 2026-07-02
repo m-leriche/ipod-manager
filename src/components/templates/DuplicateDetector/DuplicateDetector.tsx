@@ -216,7 +216,7 @@ export const DuplicateDetector = () => {
       {confirmDelete && (
         <ConfirmDialog
           title="Delete Duplicate Tracks"
-          message={`This will permanently delete ${selectedForDeletion.size} track${selectedForDeletion.size !== 1 ? "s" : ""} (${formatBytes(selectedSize)}) from your library. This cannot be undone.`}
+          message={`This will move ${selectedForDeletion.size} track${selectedForDeletion.size !== 1 ? "s" : ""} (${formatBytes(selectedSize)}) from your library to the Trash.`}
           confirmLabel="Delete"
           danger
           onConfirm={handleDelete}

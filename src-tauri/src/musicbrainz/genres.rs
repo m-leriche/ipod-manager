@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use super::{rate_limit, BASE_URL, USER_AGENT};
+use super::{call_with_retry, BASE_URL, USER_AGENT};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MbGenre {
@@ -13,14 +13,11 @@ pub struct MbGenre {
 
 /// Fetch the voted genres for a release group by MBID.
 pub fn fetch_release_group_genres(mbid: &str) -> Result<Vec<MbGenre>, String> {
-    rate_limit();
-
-    let resp = ureq::get(&format!("{}/release-group/{}", BASE_URL, mbid))
+    let req = ureq::get(&format!("{}/release-group/{}", BASE_URL, mbid))
         .query("inc", "genres")
         .query("fmt", "json")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Genre lookup failed: {}", e))?;
+        .set("User-Agent", USER_AGENT);
+    let resp = call_with_retry(req).map_err(|e| format!("Genre lookup failed: {}", e))?;
 
     let text = resp
         .into_string()

@@ -2,6 +2,9 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use trash::macos::{DeleteMethod, TrashContextExtMacos};
+use trash::TrashContext;
+
 /// Whether a path should go to the macOS Trash instead of being deleted
 /// permanently. Only root-volume paths qualify: on external/removable
 /// volumes (mounted under /Volumes/ — e.g. a FAT32 iPod), trashing creates
@@ -17,9 +20,20 @@ fn should_use_trash(path: &Path) -> bool {
 /// and doesn't fill the developer's Trash with tempdir fixtures.
 pub fn trash_or_delete(path: &Path) -> Result<(), String> {
     if !cfg!(test) && should_use_trash(path) {
-        return trash::delete(path).map_err(|e| format!("Move to Trash failed: {}", e));
+        return move_to_trash(path).map_err(|e| format!("Move to Trash failed: {}", e));
     }
     remove_permanently(path).map_err(|e| e.to_string())
+}
+
+/// Move to the Trash via `NSFileManager` (`trashItemAtURL`) rather than the
+/// crate's default Finder/AppleScript method. The Finder method spawns an
+/// `osascript` process per call and needs Apple Events automation consent —
+/// a denied TCC prompt would make every delete fail. `NSFileManager` is
+/// silent, requires no automation permission, and avoids the process spawn.
+fn move_to_trash(path: &Path) -> Result<(), trash::Error> {
+    let mut ctx = TrashContext::default();
+    ctx.set_delete_method(DeleteMethod::NsFileManager);
+    ctx.delete(path)
 }
 
 fn remove_permanently(path: &Path) -> io::Result<()> {

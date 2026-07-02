@@ -1,6 +1,6 @@
 use crate::files::compare::mtimes_match;
 use crate::files::compare_dirs;
-use crate::files::copy::{fmt_bytes, is_no_space};
+use crate::files::copy::{fmt_bytes, is_no_space, verify_copy_size};
 use crate::files::{create_folder, list_dir, rename_entry};
 use std::io;
 use std::sync::atomic::AtomicBool;
@@ -58,6 +58,41 @@ fn is_no_space_disk_full_message() {
 fn is_no_space_unrelated_error() {
     let err = io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied");
     assert!(!is_no_space(&err));
+}
+
+// ── verify_copy_size ─────────────────────────────────────────────
+
+#[test]
+fn verify_copy_size_accepts_equal_sizes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    let dest = tmp.path().join("dest.mp3");
+    std::fs::write(&src, "audio").unwrap();
+    std::fs::write(&dest, "audio").unwrap();
+
+    assert!(verify_copy_size(&src, &dest).is_ok());
+}
+
+#[test]
+fn verify_copy_size_rejects_truncated_destination() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    let dest = tmp.path().join("dest.mp3");
+    std::fs::write(&src, "full audio data").unwrap();
+    std::fs::write(&dest, "full").unwrap();
+
+    let err = verify_copy_size(&src, &dest).unwrap_err();
+    assert!(err.contains("size mismatch"));
+}
+
+#[test]
+fn verify_copy_size_rejects_missing_destination() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    std::fs::write(&src, "audio").unwrap();
+
+    let err = verify_copy_size(&src, &tmp.path().join("missing.mp3")).unwrap_err();
+    assert!(err.contains("stat destination failed"));
 }
 
 // ── Security: Path traversal & listing ───────────────────────────

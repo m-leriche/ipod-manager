@@ -1,4 +1,13 @@
-export type ToolTab = "ipod" | "files" | "metadata" | "audio" | "duplicates" | "convert" | "health" | "export";
+export type ToolTab =
+  | "ipod"
+  | "files"
+  | "metadata"
+  | "audio"
+  | "duplicates"
+  | "convert"
+  | "health"
+  | "export"
+  | "quality";
 
 export interface ToolTabDef {
   id: ToolTab;

@@ -51,12 +51,13 @@ impl FetchError {
         }
     }
 
-    /// Delay before the next attempt: honor a numeric Retry-After on 429
-    /// (capped), otherwise exponential backoff with jitter.
+    /// Delay before the next attempt: honor a numeric Retry-After (capped)
+    /// on any retryable status — 429 or 5xx both send it — otherwise
+    /// exponential backoff with jitter.
     fn retry_delay(&self, attempt: u32) -> Duration {
         if let FetchError::Status {
-            code: 429,
             retry_after_secs: Some(secs),
+            ..
         } = self
         {
             return Duration::from_secs((*secs).min(RETRY_AFTER_CAP_SECS));
@@ -278,6 +279,15 @@ mod tests {
             capped.retry_delay(1),
             Duration::from_secs(RETRY_AFTER_CAP_SECS)
         );
+    }
+
+    #[test]
+    fn honors_retry_after_on_503() {
+        let err = FetchError::Status {
+            code: 503,
+            retry_after_secs: Some(2),
+        };
+        assert_eq!(err.retry_delay(1), Duration::from_secs(2));
     }
 
     #[test]

@@ -11,10 +11,13 @@ describe("useAppEventListeners", () => {
     onLibraryChanged: vi.fn(),
     onToggleShortcuts: vi.fn(),
     onCheckForUpdates: vi.fn(),
+    onSwitchTab: vi.fn(),
+    onToggleQueue: vi.fn(),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockListen.mockImplementation(() => Promise.resolve(() => {}));
   });
 
@@ -88,6 +91,49 @@ describe("useAppEventListeners", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyH", metaKey: true }));
     expect(callbacks.onToggleShortcuts).toHaveBeenCalledTimes(1);
     localStorage.removeItem("crate-shortcut-overrides");
+  });
+
+  it("switches tabs on mod+1..4", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", metaKey: true }));
+    expect(callbacks.onSwitchTab).toHaveBeenLastCalledWith("library");
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit2", metaKey: true }));
+    expect(callbacks.onSwitchTab).toHaveBeenLastCalledWith("tools");
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit3", metaKey: true }));
+    expect(callbacks.onSwitchTab).toHaveBeenLastCalledWith("discover");
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit4", metaKey: true }));
+    expect(callbacks.onSwitchTab).toHaveBeenLastCalledWith("inbox");
+    expect(callbacks.onSwitchTab).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not switch tabs on bare digits", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1" }));
+    expect(callbacks.onSwitchTab).not.toHaveBeenCalled();
+  });
+
+  it("toggles the queue panel on alt+Q", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyQ", altKey: true }));
+    expect(callbacks.onToggleQueue).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyQ" }));
+    expect(callbacks.onToggleQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores shortcuts while typing in an input", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", metaKey: true, bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyQ", altKey: true, bubbles: true }));
+    expect(callbacks.onSwitchTab).not.toHaveBeenCalled();
+    expect(callbacks.onToggleQueue).not.toHaveBeenCalled();
+    input.remove();
   });
 
   it("cleans up event listeners on unmount", async () => {

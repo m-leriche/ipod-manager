@@ -13,6 +13,12 @@ describe("ShortcutsSection", () => {
     expect(screen.getByTestId("shortcut-playPause")).toBeInTheDocument();
     expect(screen.getByTestId("shortcut-focusSearch")).toBeInTheDocument();
     expect(screen.getByTestId("shortcut-toggleShortcutsDialog")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-switchTabTools")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-viewAlbumGrid")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-rateTracks5")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-clearRating")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-toggleFlagTracks")).toBeInTheDocument();
+    expect(screen.getByTestId("shortcut-toggleQueuePanel")).toBeInTheDocument();
   });
 
   it("enters recording mode when a shortcut is clicked", () => {

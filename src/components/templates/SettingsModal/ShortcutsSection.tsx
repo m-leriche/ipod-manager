@@ -69,7 +69,7 @@ export const ShortcutsSection = () => {
     refresh();
   }, [refresh]);
 
-  const categories = ["Playback", "Library", "General"] as const;
+  const categories = ["Playback", "Navigation", "Library", "General"] as const;
 
   return (
     <SettingGroup

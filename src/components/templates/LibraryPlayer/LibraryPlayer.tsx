@@ -22,6 +22,7 @@ import { useViewLayout } from "../../../contexts/ViewLayoutContext";
 import { useLibraryImport } from "./useLibraryImport";
 import { useLibraryData } from "./useLibraryData";
 import { useLibraryActions } from "./useLibraryActions";
+import { useSelectionShortcuts } from "./useSelectionShortcuts";
 import { useGenreFetch } from "./useGenreFetch";
 import { GenreLookupModal } from "./GenreLookupModal";
 import type { LibraryTrack, SmartPlaylist } from "../../../types/library";
@@ -126,6 +127,14 @@ export const LibraryPlayer = ({
 
   const actions = useLibraryActions(data.fetchBrowserData, data.tracks);
   const genreFetch = useGenreFetch(data.fetchBrowserData);
+
+  // Global shortcuts to rate / flag the current selection (default 1–5, 0, L)
+  useSelectionShortcuts({
+    enabled: isActive,
+    selectedTracks: data.selectedTracks,
+    onRateTracks: actions.handleRateTracks,
+    onFlagTracks: actions.handleFlagTracks,
+  });
 
   // ── Import / drag-and-drop ─────────────────────────────────────
 

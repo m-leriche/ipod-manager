@@ -118,6 +118,67 @@ describe("usePanelVisibility", () => {
     expect(result.current.showColumnBrowser).toBe(true);
   });
 
+  // ── View-mode keyboard shortcuts (default ⌥1 / ⌥2 / ⌥3) ──
+
+  it("toggles album grid on alt+2 keydown", () => {
+    const { result } = renderHook(() => usePanelVisibility());
+    expect(result.current.showAlbumGrid).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit2", altKey: true }));
+    });
+
+    expect(result.current.showAlbumGrid).toBe(true);
+    expect(result.current.showColumnBrowser).toBe(false);
+  });
+
+  it("toggles artwork carousel on alt+3 keydown", () => {
+    const { result } = renderHook(() => usePanelVisibility());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit3", altKey: true }));
+    });
+
+    expect(result.current.showArtworkCarousel).toBe(true);
+    expect(result.current.showAlbumGrid).toBe(false);
+  });
+
+  it("switches back to column browser on alt+1 keydown while album grid is active", () => {
+    localStorage.setItem("crate-show-album-grid", "true");
+    localStorage.setItem("crate-show-column-browser", "false");
+    const { result } = renderHook(() => usePanelVisibility());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", altKey: true }));
+    });
+
+    expect(result.current.showColumnBrowser).toBe(true);
+    expect(result.current.showAlbumGrid).toBe(false);
+  });
+
+  it("ignores view-mode shortcuts without the alt modifier", () => {
+    const { result } = renderHook(() => usePanelVisibility());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit2" }));
+    });
+
+    expect(result.current.showAlbumGrid).toBe(false);
+  });
+
+  it("ignores view-mode shortcuts while typing in an input", () => {
+    const { result } = renderHook(() => usePanelVisibility());
+    const input = document.createElement("input");
+    document.body.append(input);
+
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit2", altKey: true, bubbles: true }));
+    });
+
+    expect(result.current.showAlbumGrid).toBe(false);
+    input.remove();
+  });
+
   // ── Lyrics ──
 
   it("dismissLyricsOverlay turns off both overlay and panel", () => {

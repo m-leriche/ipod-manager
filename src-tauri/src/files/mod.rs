@@ -5,10 +5,12 @@ mod listing;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+mod trash_delete;
 pub mod types;
 
 pub use compare::compare_dirs;
 pub use copy::{copy_file_list, delete_file_list};
 pub use fileops::{create_folder, move_file_list, rename_entry};
 pub use listing::list_dir;
+pub use trash_delete::trash_or_delete;
 pub use types::*;

@@ -8,7 +8,7 @@ use std::io::Read;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::network::USER_AGENT;
+use crate::network::{fetch_with_retry, FetchError, USER_AGENT};
 const RATE_LIMIT: Duration = Duration::from_millis(1100);
 const BASE_URL: &str = "https://musicbrainz.org/ws/2";
 
@@ -63,26 +63,32 @@ fn rate_limit() {
     }
 }
 
+/// Execute a MusicBrainz request with transient-failure retry.
+/// Every attempt passes through the global rate-limit gate.
+fn call_with_retry(req: ureq::Request) -> Result<ureq::Response, FetchError> {
+    fetch_with_retry(|| {
+        rate_limit();
+        req.clone().call().map_err(FetchError::from)
+    })
+}
+
 // ── API functions ───────────────────────────────────────────────
 
 /// Search MusicBrainz for releases matching artist + album name.
 /// Returns up to 5 candidates sorted by relevance score.
 pub fn search_releases(artist: &str, album: &str) -> Result<Vec<MbRelease>, String> {
-    rate_limit();
-
     let query = format!(
         "artist:\"{}\" AND release:\"{}\"",
         artist.replace('"', "\\\""),
         album.replace('"', "\\\""),
     );
 
-    let resp = ureq::get(&format!("{}/release/", BASE_URL))
+    let req = ureq::get(&format!("{}/release/", BASE_URL))
         .query("query", &query)
         .query("fmt", "json")
         .query("limit", "5")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Search failed: {}", e))?;
+        .set("User-Agent", USER_AGENT);
+    let resp = call_with_retry(req).map_err(|e| format!("Search failed: {}", e))?;
 
     let body: serde_json::Value = {
         let text = resp
@@ -123,21 +129,18 @@ pub fn search_releases(artist: &str, album: &str) -> Result<Vec<MbRelease>, Stri
 /// More reliable than release search for year lookups since there's one
 /// release-group per album and it carries `first-release-date`.
 pub fn search_release_groups(artist: &str, album: &str) -> Result<Vec<MbReleaseGroup>, String> {
-    rate_limit();
-
     let query = format!(
         "artist:\"{}\" AND releasegroup:\"{}\"",
         artist.replace('"', "\\\""),
         album.replace('"', "\\\""),
     );
 
-    let resp = ureq::get(&format!("{}/release-group/", BASE_URL))
+    let req = ureq::get(&format!("{}/release-group/", BASE_URL))
         .query("query", &query)
         .query("fmt", "json")
         .query("limit", "5")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Search failed: {}", e))?;
+        .set("User-Agent", USER_AGENT);
+    let resp = call_with_retry(req).map_err(|e| format!("Search failed: {}", e))?;
 
     let body: serde_json::Value = {
         let text = resp
@@ -174,16 +177,12 @@ pub fn search_release_groups(artist: &str, album: &str) -> Result<Vec<MbReleaseG
 
 /// Fetch full release details including track listings from MusicBrainz.
 pub fn fetch_release_detail(mbid: &str) -> Result<MbReleaseDetail, String> {
-    rate_limit();
-
     let url = format!(
         "{}/release/{}?inc=recordings+artist-credits&fmt=json",
         BASE_URL, mbid
     );
-    let resp = ureq::get(&url)
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Fetch failed: {}", e))?;
+    let req = ureq::get(&url).set("User-Agent", USER_AGENT);
+    let resp = call_with_retry(req).map_err(|e| format!("Fetch failed: {}", e))?;
 
     let body: serde_json::Value = {
         let text = resp
@@ -239,9 +238,8 @@ pub fn fetch_release_detail(mbid: &str) -> Result<MbReleaseDetail, String> {
 /// Returns the image bytes on success, or an error string.
 pub fn fetch_cover_art(mbid: &str) -> Result<Vec<u8>, String> {
     let url = format!("https://coverartarchive.org/release/{}/front-500", mbid);
-    let resp = ureq::get(&url)
-        .set("User-Agent", USER_AGENT)
-        .call()
+    let req = ureq::get(&url).set("User-Agent", USER_AGENT);
+    let resp = fetch_with_retry(|| req.clone().call().map_err(FetchError::from))
         .map_err(|e| format!("Cover art fetch failed: {}", e))?;
 
     let mut bytes = Vec::new();
@@ -265,17 +263,14 @@ pub struct MbArtistSearchResult {
 /// Search MusicBrainz for an artist by name.
 /// Returns up to 5 candidates sorted by relevance score.
 pub fn search_artists(name: &str) -> Result<Vec<MbArtistSearchResult>, String> {
-    rate_limit();
-
     let query = format!("artist:\"{}\"", name.replace('"', "\\\""));
 
-    let resp = ureq::get(&format!("{}/artist/", BASE_URL))
+    let req = ureq::get(&format!("{}/artist/", BASE_URL))
         .query("query", &query)
         .query("fmt", "json")
         .query("limit", "5")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Artist search failed: {}", e))?;
+        .set("User-Agent", USER_AGENT);
+    let resp = call_with_retry(req).map_err(|e| format!("Artist search failed: {}", e))?;
 
     let body: serde_json::Value = {
         let text = resp
@@ -332,17 +327,15 @@ pub fn fetch_artist_release_groups(
     let limit: usize = 100;
 
     loop {
-        rate_limit();
-
-        let resp = ureq::get(&format!("{}/release-group", BASE_URL))
+        let req = ureq::get(&format!("{}/release-group", BASE_URL))
             .query("artist", artist_mbid)
             .query("type", "album|ep")
             .query("fmt", "json")
             .query("limit", &limit.to_string())
             .query("offset", &offset.to_string())
-            .set("User-Agent", USER_AGENT)
-            .call()
-            .map_err(|e| format!("Release-group fetch failed: {}", e))?;
+            .set("User-Agent", USER_AGENT);
+        let resp =
+            call_with_retry(req).map_err(|e| format!("Release-group fetch failed: {}", e))?;
 
         let body: serde_json::Value = {
             let text = resp

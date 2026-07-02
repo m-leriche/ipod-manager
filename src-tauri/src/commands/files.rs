@@ -79,12 +79,7 @@ pub async fn delete_entry(path: String) -> Result<(), AppError> {
         if !p.exists() {
             return Err(format!("Path does not exist: {}", path));
         }
-        if p.is_dir() {
-            std::fs::remove_dir_all(p)
-        } else {
-            std::fs::remove_file(p)
-        }
-        .map_err(|e| format!("Delete failed: {}", e))
+        files::trash_or_delete(p).map_err(|e| format!("Delete failed: {}", e))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

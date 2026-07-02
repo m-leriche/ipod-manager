@@ -7,13 +7,18 @@ use std::time::UNIX_EPOCH;
 
 use super::types::CompareEntry;
 
-/// FAT32 stores mtimes with 2-second resolution, and in local time — so a
-/// DST/timezone shift appears as a whole-hour offset. Treat mtimes as equal
-/// when the delta is within 2s of any whole-hour multiple (including zero).
+/// FAT32 stores mtimes with 2-second resolution, and in local time — so when
+/// a comparison straddles a daylight-saving change the same file's mtime reads
+/// back exactly one hour off. Treat mtimes as equal when they are within 2s of
+/// each other, or within 2s of a one-hour DST shift in either direction.
+///
+/// The tolerance is capped at a single hour on purpose: DST is always a 1-hour
+/// rule, so anything further apart is a genuine change, not a clock artifact.
 pub(crate) fn mtimes_match(a: u64, b: u64) -> bool {
     const FAT_RESOLUTION_SECS: u64 = 2;
-    let offset = a.abs_diff(b) % 3600;
-    offset <= FAT_RESOLUTION_SECS || offset >= 3600 - FAT_RESOLUTION_SECS
+    const DST_SHIFT_SECS: u64 = 3600;
+    let delta = a.abs_diff(b);
+    delta <= FAT_RESOLUTION_SECS || delta.abs_diff(DST_SHIFT_SECS) <= FAT_RESOLUTION_SECS
 }
 
 fn collect_files(

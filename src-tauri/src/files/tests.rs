@@ -435,10 +435,12 @@ fn mtimes_match_near_hour_but_outside_tolerance_differs() {
 }
 
 #[test]
-fn mtimes_match_multi_hour_offsets() {
-    assert!(mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600)); // exactly 5h
-    assert!(mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600 + 2)); // 5h + 2s
-    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600 + 3)); // 5h + 3s
+fn mtimes_match_beyond_one_hour_differs() {
+    // Only a single DST hour is tolerated; anything further apart is a real
+    // change, not a clock artifact.
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 2 * 3600)); // exactly 2h
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600)); // exactly 5h
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600 + 2)); // 5h + 2s
     assert!(!mtimes_match(
         1_700_000_000,
         1_700_000_000 + 4 * 3600 + 1800

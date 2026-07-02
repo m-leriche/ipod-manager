@@ -1,11 +1,13 @@
 use crate::audio_utils::is_audio;
 use crate::library;
 use notify_debouncer_full::notify::RecursiveMode;
-use notify_debouncer_full::{new_debouncer, notify, DebounceEventResult, Debouncer, FileIdMap};
+use notify_debouncer_full::{
+    new_debouncer, notify, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
+};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -148,15 +150,42 @@ fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex
         }
     };
 
-    let conn = match db.lock() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
+    let (added_or_modified, removed) = classify_events(&events);
+    if added_or_modified.is_empty() && removed.is_empty() {
+        return;
+    }
 
+    let remove_count = delete_removed(db, &removed);
+
+    // Tag reads run in parallel on the scan pool with no DB lock held;
+    // `sync_files` takes the writer lock only for its short bulk-upsert
+    // transaction, so a large batch can't stall other DB writers.
+    let cancel = Arc::new(AtomicBool::new(false));
+    let add_count = library::sync_files(db, &added_or_modified, None, None, &cancel).unwrap_or(0);
+
+    if add_count > 0 || remove_count > 0 {
+        log::info!(
+            "Library auto-updated: {} added/modified, {} removed",
+            add_count,
+            remove_count
+        );
+        let _ = app.emit(
+            "library-changed",
+            LibraryChangeEvent {
+                added: add_count,
+                removed: remove_count,
+            },
+        );
+    }
+}
+
+/// Split debounced events into deduped (added-or-modified, removed) audio
+/// paths. Runs without the DB lock.
+fn classify_events(events: &[DebouncedEvent]) -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut added_or_modified: Vec<PathBuf> = Vec::new();
     let mut removed: Vec<PathBuf> = Vec::new();
 
-    for event in &events {
+    for event in events {
         match event.kind {
             notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
                 for path in &event.paths {
@@ -176,63 +205,43 @@ fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex
         }
     }
 
-    // Dedup
     added_or_modified.sort();
     added_or_modified.dedup();
     removed.sort();
     removed.dedup();
+    (added_or_modified, removed)
+}
 
-    let mut add_count = 0usize;
-    let mut remove_count = 0usize;
+/// Delete the removed paths' rows in one short transaction under the writer
+/// lock. Returns the number of successful deletes.
+fn delete_removed(db: &Arc<Mutex<Connection>>, removed: &[PathBuf]) -> usize {
+    if removed.is_empty() {
+        return 0;
+    }
+    let Ok(conn) = db.lock() else {
+        return 0;
+    };
+    let Ok(tx) = conn.unchecked_transaction() else {
+        return 0;
+    };
 
-    // Handle removed files
-    for path in &removed {
+    let mut count = 0;
+    for path in removed {
         let path_str = path.to_string_lossy();
-        if conn
+        if tx
             .execute(
                 "DELETE FROM tracks WHERE file_path = ?1",
                 rusqlite::params![path_str.as_ref()],
             )
             .is_ok()
         {
-            remove_count += 1;
+            count += 1;
         }
     }
-
-    // Handle added/modified files
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    for path in &added_or_modified {
-        let mtime = std::fs::metadata(path)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-
-        let track_data = library::read_track_for_library(path);
-        if library::upsert_track(&conn, &track_data, mtime, now).is_ok() {
-            add_count += 1;
-        }
+    if tx.commit().is_err() {
+        return 0;
     }
-
-    if add_count > 0 || remove_count > 0 {
-        log::info!(
-            "Library auto-updated: {} added/modified, {} removed",
-            add_count,
-            remove_count
-        );
-        let _ = app.emit(
-            "library-changed",
-            LibraryChangeEvent {
-                added: add_count,
-                removed: remove_count,
-            },
-        );
-    }
+    count
 }
 
 fn is_audio_file(path: &Path) -> bool {
@@ -266,5 +275,39 @@ mod tests {
     fn rejects_non_audio_files() {
         assert!(!is_audio_file(Path::new("/music/cover.jpg")));
         assert!(!is_audio_file(Path::new("/music/notes.txt")));
+    }
+
+    #[test]
+    fn classifies_events_into_deduped_added_and_removed() {
+        use notify::event::{CreateKind, ModifyKind, RemoveKind};
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("song.mp3");
+        std::fs::write(&existing, b"x").unwrap();
+        let gone = dir.path().join("gone.flac");
+        let cover = dir.path().join("cover.jpg");
+
+        let ev = |kind: notify::EventKind, path: &Path| {
+            DebouncedEvent::new(
+                notify::Event::new(kind).add_path(path.to_path_buf()),
+                Instant::now(),
+            )
+        };
+
+        let events = vec![
+            ev(notify::EventKind::Create(CreateKind::File), &existing),
+            // Duplicate path across create + modify — must dedup to one entry.
+            ev(notify::EventKind::Modify(ModifyKind::Any), &existing),
+            // Created but already vanished from disk — skipped.
+            ev(notify::EventKind::Create(CreateKind::File), &gone),
+            ev(notify::EventKind::Remove(RemoveKind::File), &gone),
+            // Non-audio — ignored entirely.
+            ev(notify::EventKind::Create(CreateKind::File), &cover),
+        ];
+
+        let (added, removed) = classify_events(&events);
+        assert_eq!(added, vec![existing]);
+        assert_eq!(removed, vec![gone]);
     }
 }

@@ -5,10 +5,12 @@ mod listing;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+mod transcode;
 pub mod types;
 
 pub use compare::compare_dirs;
 pub use copy::{copy_file_list, delete_file_list};
 pub use fileops::{create_folder, move_file_list, rename_entry};
 pub use listing::list_dir;
+pub use transcode::TranscodeBitrate;
 pub use types::*;

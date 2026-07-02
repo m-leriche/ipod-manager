@@ -1,10 +1,12 @@
 import { memo } from "react";
-import { fmtSize, lastSegment } from "../ComparisonView/helpers";
+import { fmtSize, lastSegment, mp3Name } from "../ComparisonView/helpers";
 import { LEFT_CELL_BG, RIGHT_CELL_BG, GHOST_BORDER, GUTTER_ICON } from "./constants";
 import type { SplitFileRowProps } from "./types";
 
 const SplitFileRowImpl = ({ entry, depth, isSelected, onToggleFile }: SplitFileRowProps) => {
   const name = lastSegment(entry.relative_path);
+  // Transcoded pairs live on the target as .mp3, not under the source name.
+  const targetName = entry.transcoded ? mp3Name(name) : name;
   const { status } = entry;
   const isActionable = status !== "same";
   const gutter = GUTTER_ICON[status];
@@ -62,7 +64,7 @@ const SplitFileRowImpl = ({ entry, depth, isSelected, onToggleFile }: SplitFileR
         </div>
 
         <span className="text-[11px] text-text-secondary truncate flex-1 min-w-0" title={entry.relative_path}>
-          {name}
+          {targetName}
         </span>
         <span className="text-[10px] text-text-tertiary w-14 text-right shrink-0">{fmtSize(entry.target_size)}</span>
       </div>

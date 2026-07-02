@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildTree, collectDiffPaths } from "./helpers";
 import { cancelSync } from "../../../utils/cancelSync";
+import type { TranscodeBitrate } from "../../../types/profiles";
 import type { CompareEntry, Filter } from "./types";
 
 export const useComparison = (
@@ -9,6 +10,7 @@ export const useComparison = (
   targetPath: string,
   exclusions: string[],
   onCompared: (expanded: Set<string>) => void,
+  transcode: TranscodeBitrate | null = null,
 ) => {
   const [entries, setEntries] = useState<CompareEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,11 @@ export const useComparison = (
     setLoading(true);
     setError(null);
     try {
-      const data = await invoke<CompareEntry[]>("compare_directories", { source: sourcePath, target: targetPath });
+      const data = await invoke<CompareEntry[]>("compare_directories", {
+        source: sourcePath,
+        target: targetPath,
+        transcodeLossless: transcode !== null,
+      });
       setEntries(data);
       const tree = buildTree(data.filter((e) => e.status !== "same"));
       onCompared(new Set(collectDiffPaths(tree)));
@@ -33,7 +39,7 @@ export const useComparison = (
     } finally {
       setLoading(false);
     }
-  }, [sourcePath, targetPath, onCompared]);
+  }, [sourcePath, targetPath, onCompared, transcode]);
 
   useEffect(() => {
     compare();

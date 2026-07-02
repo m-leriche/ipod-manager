@@ -9,12 +9,18 @@ export const SyncManager = ({
   sourcePath,
   targetPath,
   exclusions,
+  transcodeLossless,
+  transcodeBitrate,
   onSourcePathChange,
   onTargetPathChange,
   onExclusionsChange,
+  onTranscodeLosslessChange,
+  onTranscodeBitrateChange,
 }: SyncManagerProps) => {
   const [comparing, setComparing] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "split">("split");
+
+  const transcode = transcodeLossless ? transcodeBitrate : null;
 
   const addExclusion = (path: string) => {
     if (exclusions.includes(path)) return;
@@ -58,6 +64,7 @@ export const SyncManager = ({
             sourcePath={sourcePath}
             targetPath={targetPath}
             exclusions={exclusions}
+            transcode={transcode}
             onAddExclusion={addExclusion}
             onBack={() => setComparing(false)}
           />
@@ -66,6 +73,7 @@ export const SyncManager = ({
             sourcePath={sourcePath}
             targetPath={targetPath}
             exclusions={exclusions}
+            transcode={transcode}
             onAddExclusion={addExclusion}
             onBack={() => setComparing(false)}
           />
@@ -86,6 +94,33 @@ export const SyncManager = ({
         path={targetPath}
         onBrowse={() => browse(onTargetPathChange, "Select target folder")}
       />
+
+      {/* Transcode options */}
+      <div className="flex items-center gap-3 bg-bg-secondary border border-border rounded-xl px-4 py-2.5">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={transcodeLossless}
+            onChange={(e) => onTranscodeLosslessChange(e.target.checked)}
+            className="w-3 h-3 cursor-pointer accent-accent rounded"
+          />
+          <span className="text-xs font-medium text-text-secondary">Convert lossless to MP3</span>
+        </label>
+        <span className="flex-1 min-w-0 text-[11px] text-text-tertiary truncate">
+          FLAC, WAV and AIFF files are transcoded during sync so the target holds more music
+        </span>
+        {transcodeLossless && (
+          <select
+            aria-label="MP3 quality"
+            value={transcodeBitrate}
+            onChange={(e) => onTranscodeBitrateChange(e.target.value as typeof transcodeBitrate)}
+            className="bg-bg-card border border-border text-text-secondary rounded-lg px-2 py-1.5 text-[11px] font-medium shrink-0 cursor-pointer"
+          >
+            <option value="320">320 kbps CBR</option>
+            <option value="v0">V0 VBR</option>
+          </select>
+        )}
+      </div>
 
       <div className="flex justify-end shrink-0">
         <button

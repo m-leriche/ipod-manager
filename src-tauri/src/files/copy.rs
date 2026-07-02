@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
+use super::transcode::{is_lossless, mp3_codec_args, mp3_dest_path, TranscodeBitrate};
 use super::types::{CopyResult, SyncProgress};
+use crate::convert::transcode_file;
 
 fn copy_pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
@@ -189,6 +191,7 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
 
 pub fn copy_file_list(
     operations: Vec<super::types::CopyOperation>,
+    transcode: Option<TranscodeBitrate>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> CopyResult {
@@ -263,6 +266,32 @@ pub fn copy_file_list(
             } else {
                 errors.extend(dir_errors);
                 failed += 1;
+            }
+        } else if let Some(bitrate) = transcode.filter(|_| is_lossless(&op.source_path)) {
+            let file_name = src
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let mp3_dest = mp3_dest_path(&op.dest_path);
+
+            match transcode_file(
+                &op.source_path,
+                &mp3_dest,
+                &mp3_codec_args(bitrate),
+                &progress.cancel_flag,
+            ) {
+                Ok(()) => {
+                    succeeded += 1;
+                    progress.inc_completed(&file_name);
+                }
+                Err(e) => {
+                    if progress.is_cancelled() {
+                        cancelled = true;
+                        break;
+                    }
+                    errors.push(format!("{}: {}", op.source_path, e));
+                    failed += 1;
+                }
             }
         } else {
             let file_name = src

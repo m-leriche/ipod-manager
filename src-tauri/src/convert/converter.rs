@@ -127,10 +127,53 @@ fn convert_single(
     let duration = probe_audio(input_path).map(|p| p.duration).unwrap_or(0.0);
 
     let output_path = build_output_path(input_path, &req.output_dir, &req.target_format);
-
     let codec_args = build_codec_args(req);
+
+    run_ffmpeg(input_path, &output_path, &codec_args, cancel_flag, |secs| {
+        let percent = if duration > 0.0 {
+            (secs / duration * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+        let _ = app.emit(
+            "convert-progress",
+            ConvertProgress {
+                file_index,
+                total_files,
+                current_file: file_name.clone(),
+                percent,
+                phase: "converting".to_string(),
+            },
+        );
+    })?;
+
+    Ok(output_path)
+}
+
+/// Transcode a single file to an exact output path (used by sync copy).
+/// No progress events — the caller tracks per-file progress itself.
+pub fn transcode_file(
+    input_path: &str,
+    output_path: &str,
+    codec_args: &[String],
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    run_ffmpeg(input_path, output_path, codec_args, cancel_flag, |_| {})
+}
+
+/// Run one ffmpeg conversion: spawn, stream `-progress` output through
+/// `on_progress` (converted seconds), honour cancellation (kills the child and
+/// removes the partial output), and surface ffmpeg errors. Tags carry over via
+/// ffmpeg's default `-map_metadata 0` behaviour.
+fn run_ffmpeg(
+    input_path: &str,
+    output_path: &str,
+    codec_args: &[String],
+    cancel_flag: &Arc<AtomicBool>,
+    mut on_progress: impl FnMut(f64),
+) -> Result<(), String> {
     let mut args = vec!["-i".to_string(), input_path.to_string(), "-vn".to_string()];
-    args.extend(codec_args);
+    args.extend(codec_args.iter().cloned());
     args.extend([
         "-progress".to_string(),
         "pipe:1".to_string(),
@@ -139,7 +182,7 @@ fn convert_single(
         // `--` ends option parsing so an output path beginning with `-` is
         // treated as a filename, not an ffmpeg flag.
         "--".to_string(),
-        output_path.clone(),
+        output_path.to_string(),
     ]);
 
     let mut child = Command::new("ffmpeg")
@@ -159,7 +202,7 @@ fn convert_single(
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
             process::kill_and_wait(&mut child);
-            let _ = std::fs::remove_file(&output_path);
+            let _ = std::fs::remove_file(output_path);
             return Err("Cancelled".to_string());
         }
 
@@ -167,21 +210,7 @@ fn convert_single(
 
         if let Some(time_str) = line.strip_prefix("out_time=") {
             if let Some(secs) = parse_ffmpeg_time(time_str) {
-                let percent = if duration > 0.0 {
-                    (secs / duration * 100.0).min(100.0)
-                } else {
-                    0.0
-                };
-                let _ = app.emit(
-                    "convert-progress",
-                    ConvertProgress {
-                        file_index,
-                        total_files,
-                        current_file: file_name.clone(),
-                        percent,
-                        phase: "converting".to_string(),
-                    },
-                );
+                on_progress(secs);
             }
         }
     }
@@ -195,19 +224,19 @@ fn convert_single(
                 e,
                 stderr.trim()
             );
-            let _ = std::fs::remove_file(&output_path);
+            let _ = std::fs::remove_file(output_path);
             return Err(format!("Process error: {}", e));
         }
     };
 
     if !status.success() {
         let stderr = process::collect_stderr(stderr_handle);
-        let _ = std::fs::remove_file(&output_path);
+        let _ = std::fs::remove_file(output_path);
         return Err(format!(
             "ffmpeg error: {}",
             stderr.lines().last().unwrap_or("unknown error").trim()
         ));
     }
 
-    Ok(output_path)
+    Ok(())
 }

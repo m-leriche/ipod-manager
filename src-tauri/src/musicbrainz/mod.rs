@@ -1,5 +1,7 @@
+pub mod cache;
 mod genres;
 pub mod normalization;
+pub use cache::MbCache;
 pub use genres::fetch_release_group_genres;
 pub use normalization::normalize_for_search;
 
@@ -63,33 +65,60 @@ fn rate_limit() {
     }
 }
 
+// ── Cached fetch ────────────────────────────────────────────────
+
+/// Fetch a JSON body through the cache. Hits skip the rate limiter entirely;
+/// misses are rate-limited, fetched, and stored on success only.
+fn cached_get_json(
+    cache: Option<&MbCache>,
+    key: &str,
+    fetch: impl FnOnce() -> Result<String, String>,
+) -> Result<serde_json::Value, String> {
+    if let Some(cache) = cache {
+        if let Some(text) = cache.get(key) {
+            if let Ok(body) = serde_json::from_str(&text) {
+                return Ok(body);
+            }
+        }
+    }
+
+    rate_limit();
+    let text = fetch()?;
+    let body: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?;
+    if let Some(cache) = cache {
+        cache.put(key, &text);
+    }
+    Ok(body)
+}
+
 // ── API functions ───────────────────────────────────────────────
 
 /// Search MusicBrainz for releases matching artist + album name.
 /// Returns up to 5 candidates sorted by relevance score.
-pub fn search_releases(artist: &str, album: &str) -> Result<Vec<MbRelease>, String> {
-    rate_limit();
+pub fn search_releases(
+    artist: &str,
+    album: &str,
+    cache: Option<&MbCache>,
+) -> Result<Vec<MbRelease>, String> {
+    let key = format!("release-search:{}|{}", artist, album);
+    let body = cached_get_json(cache, &key, || {
+        let query = format!(
+            "artist:\"{}\" AND release:\"{}\"",
+            artist.replace('"', "\\\""),
+            album.replace('"', "\\\""),
+        );
 
-    let query = format!(
-        "artist:\"{}\" AND release:\"{}\"",
-        artist.replace('"', "\\\""),
-        album.replace('"', "\\\""),
-    );
-
-    let resp = ureq::get(&format!("{}/release/", BASE_URL))
-        .query("query", &query)
-        .query("fmt", "json")
-        .query("limit", "5")
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Search failed: {}", e))?;
-
-    let body: serde_json::Value = {
-        let text = resp
+        ureq::get(&format!("{}/release/", BASE_URL))
+            .query("query", &query)
+            .query("fmt", "json")
+            .query("limit", "5")
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|e| format!("Search failed: {}", e))?
             .into_string()
-            .map_err(|e| format!("Read failed: {}", e))?;
-        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
-    };
+            .map_err(|e| format!("Read failed: {}", e))
+    })?;
 
     let releases = body["releases"]
         .as_array()
@@ -173,24 +202,23 @@ pub fn search_release_groups(artist: &str, album: &str) -> Result<Vec<MbReleaseG
 }
 
 /// Fetch full release details including track listings from MusicBrainz.
-pub fn fetch_release_detail(mbid: &str) -> Result<MbReleaseDetail, String> {
-    rate_limit();
-
-    let url = format!(
-        "{}/release/{}?inc=recordings+artist-credits&fmt=json",
-        BASE_URL, mbid
-    );
-    let resp = ureq::get(&url)
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Fetch failed: {}", e))?;
-
-    let body: serde_json::Value = {
-        let text = resp
+pub fn fetch_release_detail(
+    mbid: &str,
+    cache: Option<&MbCache>,
+) -> Result<MbReleaseDetail, String> {
+    let key = format!("release-detail:{}", mbid);
+    let body = cached_get_json(cache, &key, || {
+        let url = format!(
+            "{}/release/{}?inc=recordings+artist-credits&fmt=json",
+            BASE_URL, mbid
+        );
+        ureq::get(&url)
+            .set("User-Agent", USER_AGENT)
+            .call()
+            .map_err(|e| format!("Fetch failed: {}", e))?
             .into_string()
-            .map_err(|e| format!("Read failed: {}", e))?;
-        serde_json::from_str(&text).map_err(|e| format!("Parse failed: {}", e))?
-    };
+            .map_err(|e| format!("Read failed: {}", e))
+    })?;
 
     let release = MbRelease {
         id: body["id"].as_str().unwrap_or("").to_string(),
@@ -235,14 +263,34 @@ pub fn fetch_release_detail(mbid: &str) -> Result<MbReleaseDetail, String> {
     Ok(MbReleaseDetail { release, tracks })
 }
 
+const COVER_ART_NOT_FOUND: &str = "not-found";
+
 /// Fetch cover art for a release from the Cover Art Archive.
 /// Returns the image bytes on success, or an error string.
-pub fn fetch_cover_art(mbid: &str) -> Result<Vec<u8>, String> {
+///
+/// A 404 ("no art exists for this release") is a definitive answer, so it is
+/// cached to skip the request on re-runs. Successful image bytes are not
+/// cached — callers persist them as cover.jpg, which makes re-runs skip the
+/// folder entirely.
+pub fn fetch_cover_art(mbid: &str, cache: Option<&MbCache>) -> Result<Vec<u8>, String> {
+    let key = format!("coverart:{}", mbid);
+    if let Some(cache) = cache {
+        if cache.get(&key).as_deref() == Some(COVER_ART_NOT_FOUND) {
+            return Err("No cover art on Cover Art Archive (cached)".into());
+        }
+    }
+
     let url = format!("https://coverartarchive.org/release/{}/front-500", mbid);
-    let resp = ureq::get(&url)
-        .set("User-Agent", USER_AGENT)
-        .call()
-        .map_err(|e| format!("Cover art fetch failed: {}", e))?;
+    let resp = match ureq::get(&url).set("User-Agent", USER_AGENT).call() {
+        Ok(resp) => resp,
+        Err(ureq::Error::Status(404, _)) => {
+            if let Some(cache) = cache {
+                cache.put(&key, COVER_ART_NOT_FOUND);
+            }
+            return Err("No cover art on Cover Art Archive".into());
+        }
+        Err(e) => return Err(format!("Cover art fetch failed: {}", e)),
+    };
 
     let mut bytes = Vec::new();
     resp.into_reader()

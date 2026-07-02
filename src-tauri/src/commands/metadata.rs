@@ -4,6 +4,7 @@ use crate::files::{ArtRepairCancel, SyncCancel};
 use crate::library::{self, LibraryDb};
 use crate::metadata;
 use crate::metarepair;
+use crate::musicbrainz::MbCache;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
@@ -28,12 +29,14 @@ pub async fn scan_album_art(
 pub async fn fix_album_art(
     folders: Vec<String>,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<albumart::AlbumArtResult, AppError> {
     let flag = cancel.new_flag();
+    let cache = MbCache::new(db.conn_arc());
 
     let result = tauri::async_runtime::spawn_blocking(move || {
-        albumart::fix_album_art(folders, app, flag, "albumart-progress")
+        albumart::fix_album_art(folders, app, flag, "albumart-progress", &cache)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?;
@@ -298,14 +301,18 @@ pub async fn set_id3_version(version: String, db: State<'_, LibraryDb>) -> Resul
 pub async fn repair_analyze(
     tracks: Vec<metadata::TrackMetadata>,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<metarepair::RepairReport, AppError> {
     let flag = cancel.new_flag();
+    let cache = MbCache::new(db.conn_arc());
 
-    tauri::async_runtime::spawn_blocking(move || metarepair::lookup_and_compare(tracks, app, flag))
-        .await
-        .map_err(|e| format!("Task failed: {}", e))?
-        .map_err(Into::into)
+    tauri::async_runtime::spawn_blocking(move || {
+        metarepair::lookup_and_compare(tracks, app, flag, &cache)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -313,10 +320,13 @@ pub async fn repair_compare_release(
     tracks: Vec<metadata::TrackMetadata>,
     mbid: String,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
 ) -> Result<metarepair::AlbumRepairReport, AppError> {
+    let cache = MbCache::new(db.conn_arc());
+
     tauri::async_runtime::spawn_blocking(move || {
         let _ = &app;
-        metarepair::compare_against_release(tracks, &mbid)
+        metarepair::compare_against_release(tracks, &mbid, &cache)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
@@ -348,6 +358,7 @@ pub async fn fix_library_album_art(
 ) -> Result<albumart::AlbumArtResult, AppError> {
     let flag = cancel.new_flag();
     let conn_arc = db.conn_arc();
+    let cache = MbCache::new(db.conn_arc());
 
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<_, AppError> {
         // Scoped run (e.g. post-import): only the folders containing the given
@@ -399,6 +410,7 @@ pub async fn fix_library_album_art(
             app,
             flag,
             "library-art-repair-progress",
+            &cache,
         ))
     })
     .await

@@ -135,6 +135,12 @@ pub(super) fn create_tables(conn: &Connection) -> Result<(), String> {
             cached_at INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS mb_cache (
+            key TEXT PRIMARY KEY,
+            response TEXT NOT NULL,
+            fetched_at INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS playback_queue (
             position INTEGER PRIMARY KEY,
             track_id INTEGER NOT NULL,

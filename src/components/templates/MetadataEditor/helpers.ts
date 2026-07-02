@@ -27,6 +27,17 @@ export const trackToEditable = (t: TrackMetadata): EditableFields => ({
   genre: t.genre ?? "",
 });
 
+/** Snapshot every present tag as an update, for restoring a track after a destructive edit. */
+export const trackToUpdate = (t: TrackMetadata): MetadataUpdate => {
+  const update: MetadataUpdate = { file_path: t.file_path };
+  const fields = [...METADATA_FIELDS, ...NUMERIC_FIELDS, "disc_number", "disc_total"] as const;
+  for (const field of fields) {
+    const value = t[field];
+    if (value !== null) (update as unknown as Record<string, unknown>)[field] = value;
+  }
+  return update;
+};
+
 // ── Diffing ──────────────────────────────────────────────────────
 
 export const buildUpdate = (original: TrackMetadata, edited: EditableFields): MetadataUpdate | null => {

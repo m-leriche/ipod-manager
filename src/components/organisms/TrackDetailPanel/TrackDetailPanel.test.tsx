@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import type { ReactElement } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TrackDetailPanel } from "./TrackDetailPanel";
+import { UndoProvider } from "../../../contexts/UndoContext";
 import type { LibraryTrack } from "../../../types/library";
+
+const renderPanel = (ui: ReactElement) => render(<UndoProvider>{ui}</UndoProvider>);
 
 const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
   id: 1,
@@ -38,7 +42,7 @@ const makeTrack = (overrides: Partial<LibraryTrack> = {}): LibraryTrack => ({
 
 describe("TrackDetailPanel", () => {
   it("renders single track details", () => {
-    render(<TrackDetailPanel tracks={[makeTrack()]} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} />);
     // Title appears in header and editable field
     expect(screen.getAllByText("Test Song")).toHaveLength(2);
     // Artist appears in header and editable field
@@ -49,19 +53,19 @@ describe("TrackDetailPanel", () => {
 
   it("renders multi-track header", () => {
     const tracks = [makeTrack(), makeTrack({ id: 2, title: "Other Song" })];
-    render(<TrackDetailPanel tracks={tracks} />);
+    renderPanel(<TrackDetailPanel tracks={tracks} />);
     expect(screen.getByText("Editing 2 tracks")).toBeInTheDocument();
     expect(screen.queryByText("4:00")).not.toBeInTheDocument(); // no audio info for multi
   });
 
   it("shows editable field values", () => {
-    render(<TrackDetailPanel tracks={[makeTrack()]} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} />);
     expect(screen.getByText("Rock")).toBeInTheDocument();
     expect(screen.getByText("2023")).toBeInTheDocument();
   });
 
   it("enters edit mode on click", () => {
-    render(<TrackDetailPanel tracks={[makeTrack()]} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} />);
     const rockField = screen.getByText("Rock");
     fireEvent.click(rockField);
     const input = screen.getByDisplayValue("Rock");
@@ -70,7 +74,7 @@ describe("TrackDetailPanel", () => {
   });
 
   it("shows save/revert when dirty", () => {
-    render(<TrackDetailPanel tracks={[makeTrack()]} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} />);
     // No save button initially
     expect(screen.queryByText("Save")).not.toBeInTheDocument();
 
@@ -85,7 +89,7 @@ describe("TrackDetailPanel", () => {
   });
 
   it("reverts changes on revert click", () => {
-    render(<TrackDetailPanel tracks={[makeTrack()]} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} />);
     fireEvent.click(screen.getByText("Rock"));
     const input = screen.getByDisplayValue("Rock");
     fireEvent.change(input, { target: { value: "Pop" } });
@@ -98,7 +102,7 @@ describe("TrackDetailPanel", () => {
 
   it("shows mixed values for multi-track with different fields", () => {
     const tracks = [makeTrack({ artist: "Artist A" }), makeTrack({ id: 2, artist: "Artist B" })];
-    render(<TrackDetailPanel tracks={tracks} />);
+    renderPanel(<TrackDetailPanel tracks={tracks} />);
     expect(screen.getAllByText("(mixed)").length).toBeGreaterThan(0);
   });
 
@@ -107,7 +111,7 @@ describe("TrackDetailPanel", () => {
     vi.mocked(invoke).mockResolvedValue({ total: 1, succeeded: 1, failed: 0, cancelled: false, errors: [] });
 
     const onSave = vi.fn();
-    render(<TrackDetailPanel tracks={[makeTrack()]} onSave={onSave} />);
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} onSave={onSave} />);
 
     // Edit a field
     fireEvent.click(screen.getByText("Rock"));

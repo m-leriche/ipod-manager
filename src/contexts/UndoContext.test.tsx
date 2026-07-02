@@ -71,6 +71,27 @@ describe("UndoContext", () => {
     expect(undo).not.toHaveBeenCalled();
   });
 
+  it("drops the oldest entry once the stack exceeds 50", async () => {
+    const order: string[] = [];
+    const entry = (label: string): UndoEntry => ({
+      label,
+      undo: () => {
+        order.push(label);
+        return Promise.resolve();
+      },
+    });
+    setup(Array.from({ length: 51 }, (_, i) => entry(`${i}`)));
+
+    for (let i = 0; i < 51; i++) {
+      cmdZ();
+      await waitFor(() => expect(order.length).toBe(Math.min(i + 1, 50)));
+    }
+
+    expect(order).toHaveLength(50);
+    expect(order[0]).toBe("50");
+    expect(order).not.toContain("0");
+  });
+
   it("keeps the entry for retry when undo fails", async () => {
     const undo = vi.fn().mockRejectedValueOnce(new Error("volume offline")).mockResolvedValueOnce(undefined);
     setup([{ label: "File away", undo }]);

@@ -244,32 +244,6 @@ export const MetadataEditor = ({
     onSaveToast: toast.success,
   });
 
-  // ── Cmd+Z undo shortcut ──
-  const handleUndoRef = useRef(handleUndo);
-  handleUndoRef.current = handleUndo;
-  const undoAvailableRef = useRef(false);
-  undoAvailableRef.current = undoOperations !== null && undoOperations.length > 0;
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey && undoAvailableRef.current) {
-        // Don't intercept native undo in text inputs
-        const el = document.activeElement;
-        if (
-          el instanceof HTMLInputElement ||
-          el instanceof HTMLTextAreaElement ||
-          (el as HTMLElement)?.isContentEditable
-        ) {
-          return;
-        }
-        e.preventDefault();
-        handleUndoRef.current();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
   // ── Auto-scan from external navigation ──
   useEffect(() => {
     if (initialPaths && initialPaths.length > 0) {

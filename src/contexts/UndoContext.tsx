@@ -17,7 +17,10 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 };
 
-/** Global undo stack for file operations, wired to Cmd+Z. */
+/** Oldest entries are dropped once the stack grows past this. */
+const MAX_ENTRIES = 50;
+
+/** Global undo stack for file, metadata, rating/flag, and playlist operations, wired to Cmd+Z. */
 export const UndoProvider = ({ children }: { children: React.ReactNode }) => {
   const stackRef = useRef<UndoEntry[]>([]);
   const busyRef = useRef(false);
@@ -25,6 +28,7 @@ export const UndoProvider = ({ children }: { children: React.ReactNode }) => {
 
   const push = useCallback((entry: UndoEntry) => {
     stackRef.current.push(entry);
+    if (stackRef.current.length > MAX_ENTRIES) stackRef.current.shift();
   }, []);
 
   useEffect(() => {

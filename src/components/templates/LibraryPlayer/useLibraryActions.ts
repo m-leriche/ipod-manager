@@ -6,38 +6,79 @@ import { usePlaylist } from "../../../contexts/PlaylistContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { useArtCache } from "../../../contexts/ArtCacheContext";
+import { useUndo } from "../../../contexts/UndoContext";
 import { pickFile } from "../../../utils/pickPath";
+import { groupByPreviousValue } from "../../../utils/undoHelpers";
 import type { LibraryTrack, LibraryFilter, AlbumSummary } from "../../../types/library";
 
 export const useLibraryActions = (fetchBrowserData: () => Promise<void>, tracks: (LibraryTrack | undefined)[]) => {
   const { playTrack, addToQueue } = usePlayback();
   const { addTracks: addToPlaylistCtx } = usePlaylist();
   const toast = useToast();
+  const { push: pushUndo } = useUndo();
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const { bumpArtCache } = useArtCache();
 
+  const resolveTracks = useCallback(
+    (trackIds: number[]): LibraryTrack[] => {
+      const idSet = new Set(trackIds);
+      return tracks.filter((t): t is LibraryTrack => !!t && idSet.has(t.id));
+    },
+    [tracks],
+  );
+
   const handleFlagTracks = useCallback(
     async (trackIds: number[], flagged: boolean) => {
+      const previous = groupByPreviousValue(resolveTracks(trackIds), (t) => t.flagged, flagged);
       try {
         await invoke("flag_tracks", { trackIds, flagged });
         await fetchBrowserData();
+        if (previous.size > 0) {
+          const changed = [...previous.values()].reduce((n, ids) => n + ids.length, 0);
+          const label = `sync flag change (${changed} track${changed !== 1 ? "s" : ""})`;
+          pushUndo({
+            label,
+            undo: async () => {
+              for (const [prevFlagged, ids] of previous) {
+                await invoke("flag_tracks", { trackIds: ids, flagged: prevFlagged });
+              }
+              await fetchBrowserData();
+            },
+          });
+          toast.success(`${label} — ⌘Z to undo`);
+        }
       } catch (e) {
         toast.error(`Failed to update sync flags: ${e}`);
       }
     },
-    [fetchBrowserData, toast],
+    [fetchBrowserData, toast, pushUndo, resolveTracks],
   );
 
   const handleRateTracks = useCallback(
     async (trackIds: number[], rating: number) => {
+      const previous = groupByPreviousValue(resolveTracks(trackIds), (t) => t.rating, rating);
       try {
         await invoke("rate_tracks", { trackIds, rating });
         await fetchBrowserData();
+        if (previous.size > 0) {
+          const changed = [...previous.values()].reduce((n, ids) => n + ids.length, 0);
+          const label = `rating change (${changed} track${changed !== 1 ? "s" : ""})`;
+          pushUndo({
+            label,
+            undo: async () => {
+              for (const [prevRating, ids] of previous) {
+                await invoke("rate_tracks", { trackIds: ids, rating: prevRating });
+              }
+              await fetchBrowserData();
+            },
+          });
+          toast.success(`${label} — ⌘Z to undo`);
+        }
       } catch (e) {
         toast.error(`Failed to update ratings: ${e}`);
       }
     },
-    [fetchBrowserData, toast],
+    [fetchBrowserData, toast, pushUndo, resolveTracks],
   );
 
   const handleRepairAlbumArt = useCallback(

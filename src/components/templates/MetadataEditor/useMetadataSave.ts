@@ -1,7 +1,8 @@
 import { useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { buildUpdate } from "./helpers";
+import { buildUpdate, trackToUpdate } from "./helpers";
+import { useUndo } from "../../../contexts/UndoContext";
 import type {
   TrackMetadata,
   MetadataUpdate,
@@ -59,8 +60,10 @@ export const useMetadataSave = ({
   refreshTracks,
   onSaveToast,
 }: UseMetadataSaveParams) => {
-  // Ref so the toast action always calls the latest handleUndo
+  const { push: pushUndo } = useUndo();
+  // Refs so toast actions and pushed undo entries always call the latest handlers
   const undoRef = useRef<(() => void) | null>(null);
+  const restoreRef = useRef<(ops: MetadataUpdate[]) => Promise<void>>(() => Promise.resolve());
   const handleSave = useCallback(async () => {
     const updates = [];
     for (const [filePath, edited] of Object.entries(editedTracks)) {
@@ -107,8 +110,13 @@ export const useMetadataSave = ({
       }
       setPhase("scanned");
       finishProgress(`Saved ${result.succeeded} of ${result.total} files`);
-      if (result.succeeded > 0 && onSaveToast) {
-        onSaveToast(`Saved ${result.succeeded} file${result.succeeded !== 1 ? "s" : ""}`, {
+      if (result.succeeded > 0) {
+        const ops = result.undo_operations;
+        pushUndo({
+          label: `metadata edit (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
+          undo: () => restoreRef.current(ops),
+        });
+        onSaveToast?.(`Saved ${result.succeeded} file${result.succeeded !== 1 ? "s" : ""} — ⌘Z to undo`, {
           label: "Undo",
           onClick: () => undoRef.current?.(),
         });
@@ -133,49 +141,59 @@ export const useMetadataSave = ({
     finishProgress,
     failProgress,
     onSaveToast,
+    pushUndo,
   ]);
+
+  const restoreOperations = useCallback(
+    async (ops: MetadataUpdate[]) => {
+      setUndoOperations(null);
+      setSaveResult(null);
+      setPhase("saving");
+      setSaveProgress(null);
+      startProgress("Undoing changes...", cancel);
+      try {
+        // Intentionally not storing undo from undo result (no redo support)
+        const result = await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
+        setSaveProgress(null);
+        setSaveResult(result);
+        setPhase("scanned");
+        finishProgress(`Undid ${result.succeeded} of ${result.total} files`);
+        if (result.succeeded > 0) {
+          await refreshTracks();
+        }
+      } catch (e) {
+        setError(`${e}`);
+        setPhase("scanned");
+        failProgress(`${e}`);
+        throw e;
+      }
+    },
+    [
+      setUndoOperations,
+      setSaveResult,
+      setPhase,
+      setSaveProgress,
+      startProgress,
+      cancel,
+      finishProgress,
+      refreshTracks,
+      setError,
+      failProgress,
+    ],
+  );
 
   const handleUndo = useCallback(async () => {
     if (!undoOperations || undoOperations.length === 0) return;
-
-    const ops = undoOperations;
-    setUndoOperations(null);
-    setSaveResult(null);
-    setPhase("saving");
-    setSaveProgress(null);
-    startProgress("Undoing changes...", cancel);
-    try {
-      // Intentionally not storing undo from undo result (no redo support)
-      const result = await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
-      setSaveProgress(null);
-      setSaveResult(result);
-      setPhase("scanned");
-      finishProgress(`Undid ${result.succeeded} of ${result.total} files`);
-      if (result.succeeded > 0) {
-        refreshTracks();
-      }
-    } catch (e) {
-      setError(`${e}`);
-      setPhase("scanned");
-      failProgress(`${e}`);
-    }
-  }, [
-    undoOperations,
-    setUndoOperations,
-    setSaveResult,
-    setPhase,
-    setSaveProgress,
-    startProgress,
-    cancel,
-    finishProgress,
-    refreshTracks,
-    setError,
-    failProgress,
-  ]);
+    // Failure is already surfaced via error state and progress
+    await restoreOperations(undoOperations).catch(() => {});
+  }, [undoOperations, restoreOperations]);
 
   const handleSanitize = useCallback(
     async (options: SanitizeModalOptions) => {
       const filePaths = [...selected];
+      // Snapshot the current tags so the sanitize can be undone (embedded
+      // pictures and non-standard frames are not restorable)
+      const previousTags = selectedTracks.map(trackToUpdate);
       setPhase("saving");
       startProgress("Sanitizing tags...", cancel);
       try {
@@ -195,15 +213,33 @@ export const useMetadataSave = ({
           },
         });
         finishProgress(`Sanitized ${result.succeeded} of ${result.total} files`);
-        if (result.succeeded > 0) refreshTracks();
-        else setPhase("scanned");
+        if (result.succeeded > 0) {
+          pushUndo({
+            label: `tag sanitize (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
+            undo: () => restoreRef.current(previousTags),
+          });
+          refreshTracks();
+        } else {
+          setPhase("scanned");
+        }
       } catch (e) {
         setError(`${e}`);
         setPhase("scanned");
         failProgress(`${e}`);
       }
     },
-    [selected, setPhase, startProgress, cancel, finishProgress, refreshTracks, setError, failProgress],
+    [
+      selected,
+      selectedTracks,
+      setPhase,
+      startProgress,
+      cancel,
+      finishProgress,
+      refreshTracks,
+      setError,
+      failProgress,
+      pushUndo,
+    ],
   );
 
   const handleRepairArt = useCallback(async () => {
@@ -224,6 +260,7 @@ export const useMetadataSave = ({
   }, [selectedTracks, setRepairingArt, setArtCacheBust, bumpArtCache]);
 
   undoRef.current = handleUndo;
+  restoreRef.current = restoreOperations;
 
   return { handleSave, handleUndo, handleSanitize, handleRepairArt };
 };

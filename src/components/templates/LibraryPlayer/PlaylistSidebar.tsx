@@ -371,7 +371,9 @@ export const PlaylistSidebar = ({
       {pendingDelete && (
         <ConfirmDialog
           title={`Delete ${pendingDelete.type === "smart" ? "Smart Playlist" : "Playlist"}`}
-          message={`Are you sure you want to delete "${pendingDelete.name}"? This cannot be undone.`}
+          message={`Are you sure you want to delete "${pendingDelete.name}"?${
+            pendingDelete.type === "smart" ? " This cannot be undone." : " You can undo this with ⌘Z."
+          }`}
           confirmLabel="Delete"
           danger
           onConfirm={() => confirmDelete(pendingDelete.id, pendingDelete.type)}

@@ -74,6 +74,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
                 lyrics: None,
                 replay_gain_track_db: None,
                 replay_gain_album_db: None,
+                parsed: true,
             };
         }
     }
@@ -194,6 +195,7 @@ pub(crate) fn read_track_for_library(path: &Path) -> TrackData {
         lyrics,
         replay_gain_track_db,
         replay_gain_album_db,
+        parsed: tagged.is_some(),
     }
 }
 

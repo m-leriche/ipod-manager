@@ -151,6 +151,14 @@ pub fn scan_library_stats(
         entry.0 += 1;
         entry.1 += td.file_size;
 
+        // Unreadable files (both lofty and ffprobe failed) count toward the
+        // totals and format breakdown, but contribute no tags/duration and
+        // get no detail row — a 0:00 row with empty fields would just be a
+        // ghost entry.
+        if !td.parsed {
+            continue;
+        }
+
         total_duration_secs += td.duration_secs;
 
         if let Some(br) = td.bitrate_kbps {
@@ -162,16 +170,16 @@ pub fn scan_library_stats(
             *sample_rates.entry(sr).or_insert(0) += 1;
         }
 
-        let file_title = td.title.clone().unwrap_or_default();
-        let file_artist = td.artist.clone().unwrap_or_default();
+        let file_title = td.title.unwrap_or_default();
+        let file_artist = td.artist.unwrap_or_default();
         if !file_artist.is_empty() {
             artists.insert(file_artist.clone());
         }
-        let file_album = td.album.clone().unwrap_or_default();
+        let file_album = td.album.unwrap_or_default();
         if !file_album.is_empty() {
             albums.insert(file_album.clone());
         }
-        let file_genre = td.genre.clone().unwrap_or_default();
+        let file_genre = td.genre.unwrap_or_default();
         if !file_genre.is_empty() {
             for part in crate::library::split_genres(&file_genre) {
                 *genres.entry(part.to_string()).or_insert(0) += 1;

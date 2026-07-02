@@ -2,12 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { SettingGroup } from "./SettingGroup";
+import { formatBytes } from "../../../utils/format";
 import type { BackupInfo } from "./types";
-
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-};
 
 const formatDate = (epochMs: number): string =>
   new Date(epochMs).toLocaleString(undefined, {
@@ -93,7 +89,7 @@ export const BackupSection = () => {
               <li key={b.path} className="flex items-center justify-between gap-3 text-[11px]">
                 <span className="text-text-secondary truncate">
                   {formatDate(b.created_at)}
-                  <span className="text-text-tertiary"> · {formatSize(b.size)}</span>
+                  <span className="text-text-tertiary"> · {formatBytes(b.size)}</span>
                 </span>
                 {confirmingPath === b.path ? (
                   <span className="flex items-center gap-2 shrink-0">

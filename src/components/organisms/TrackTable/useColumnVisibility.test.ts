@@ -40,11 +40,11 @@ describe("useColumnVisibility", () => {
     expect([...result.current.visibleKeys].sort()).toEqual(["artist", "title"]);
   });
 
-  it("toggles a column on and persists it", () => {
+  it("toggles a column on and persists the override", () => {
     const { result } = renderHook(() => useColumnVisibility(columns));
     act(() => result.current.toggleColumnVisibility("bitrate"));
     expect(result.current.visibleKeys.has("bitrate")).toBe(true);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toContain("bitrate");
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual({ bitrate: true });
   });
 
   it("toggles a column off", () => {
@@ -53,15 +53,20 @@ describe("useColumnVisibility", () => {
     expect(result.current.visibleKeys.has("artist")).toBe(false);
   });
 
-  it("never hides the title column", () => {
+  it("never hides the title column, even via corrupted settings", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ title: false }));
     const { result } = renderHook(() => useColumnVisibility(columns));
+    expect(result.current.visibleKeys.has("title")).toBe(true);
     act(() => result.current.toggleColumnVisibility("title"));
     expect(result.current.visibleKeys.has("title")).toBe(true);
   });
 
-  it("restores saved visibility, dropping unknown keys", () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(["title", "bitrate", "removed_column"]));
+  it("leaves columns without an override at their default", () => {
+    // A user who saved overrides before a new default-visible column shipped
+    // must still see it (the old array-based storage hid it).
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bitrate: true }));
     const { result } = renderHook(() => useColumnVisibility(columns));
-    expect([...result.current.visibleKeys].sort()).toEqual(["bitrate", "title"]);
+    expect(result.current.visibleKeys.has("artist")).toBe(true);
+    expect(result.current.visibleKeys.has("bitrate")).toBe(true);
   });
 });

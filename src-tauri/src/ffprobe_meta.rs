@@ -1,8 +1,14 @@
 //! FFprobe/FFmpeg fallback for reading and writing metadata on files that lofty
 //! cannot parse (e.g. certain m4a containers with non-standard timescale).
 
+use std::io::Read as _;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+
+/// Kill ffprobe if it hangs (e.g. a file on a stale network mount) — callers
+/// treat a timeout the same as any other probe failure.
+const FFPROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Metadata fields read via ffprobe.
 pub struct FfprobeMetadata {
@@ -43,7 +49,7 @@ fn parse_slash_pair(s: &str) -> (Option<u32>, Option<u32>) {
 
 /// Read metadata from a file using ffprobe. Returns None if ffprobe fails.
 pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
-    let output = Command::new("ffprobe")
+    let mut child = Command::new("ffprobe")
         .args([
             "-v",
             "quiet",
@@ -56,14 +62,28 @@ pub fn read_metadata(path: &Path) -> Option<FfprobeMetadata> {
             "--",
         ])
         .arg(path)
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
 
-    if !output.status.success() {
+    // Drain stdout on a thread so a large JSON payload can't fill the pipe
+    // and deadlock against the timeout wait below.
+    let mut stdout_pipe = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+
+    let status = crate::process::wait_with_timeout(&mut child, FFPROBE_TIMEOUT).ok()?;
+    let stdout = reader.join().ok()?;
+    if !status.success() {
         return None;
     }
 
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
 
     let format = &json["format"];
     let tags = &format["tags"];

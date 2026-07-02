@@ -1,35 +1,36 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { TrackTableColumn } from "./constants";
 import { getSetting, setSetting } from "../../../utils/settings";
 
-const loadVisibility = (columns: TrackTableColumn[]): Set<string> => {
+const loadOverrides = (): Record<string, boolean> => {
   const saved = getSetting("columnVisibility");
-  const known = new Set(columns.map((c) => c.key));
-  if (Array.isArray(saved) && saved.length > 0) {
-    const keys = saved.filter((k) => known.has(k));
-    if (keys.length > 0) return new Set(keys);
-  }
-  return new Set(columns.filter((c) => !c.defaultHidden).map((c) => c.key));
+  return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
 };
 
-/** Which track-table columns are shown. Persisted; "title" can't be hidden
-    so the table always has an anchor column. */
+/** Which track-table columns are shown. Persisted as per-column overrides so
+    columns added in future releases keep their default visibility instead of
+    being hidden by a stale saved list. "title" can never be hidden — the
+    table always needs an anchor column. */
 export const useColumnVisibility = (columns: TrackTableColumn[]) => {
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(() => loadVisibility(columns));
+  const [overrides, setOverrides] = useState<Record<string, boolean>>(loadOverrides);
 
   useEffect(() => {
-    setSetting("columnVisibility", [...visibleKeys]);
-  }, [visibleKeys]);
+    setSetting("columnVisibility", overrides);
+  }, [overrides]);
 
-  const toggleColumnVisibility = useCallback((key: string) => {
-    if (key === "title") return;
-    setVisibleKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
+  const visibleKeys = useMemo(() => {
+    const keys = new Set(columns.filter((c) => overrides[c.key] ?? !c.defaultHidden).map((c) => c.key));
+    keys.add("title");
+    return keys;
+  }, [columns, overrides]);
+
+  const toggleColumnVisibility = useCallback(
+    (key: string) => {
+      if (key === "title") return;
+      setOverrides((prev) => ({ ...prev, [key]: !visibleKeys.has(key) }));
+    },
+    [visibleKeys],
+  );
 
   return { visibleKeys, toggleColumnVisibility };
 };

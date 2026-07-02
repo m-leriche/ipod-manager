@@ -66,7 +66,14 @@ export const ContextMenu = ({ x, y, items, onClose }: ContextMenuProps) => {
                 : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
             }`}
           >
-            <span>{item.label}</span>
+            <span className="flex items-center">
+              {item.checked !== undefined && (
+                <span className="w-4 shrink-0" aria-hidden>
+                  {item.checked ? "✓" : ""}
+                </span>
+              )}
+              {item.label}
+            </span>
             {item.shortcut && <span className="text-text-tertiary text-[10px] ml-4">{item.shortcut}</span>}
           </button>
         ),

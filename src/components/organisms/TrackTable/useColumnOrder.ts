@@ -9,7 +9,10 @@ const loadOrder = (columns: TrackTableColumn[]): string[] => {
   // Merge: keep the user's order for keys that still exist, and append any
   // columns added since the order was saved (instead of resetting it).
   const known = new Set(defaults);
-  const kept = saved.filter((k) => known.has(k));
+  // De-dupe defensively — a corrupted saved order would otherwise render a
+  // column twice (duplicate React keys, shifted widths) forever, since the
+  // merge result is re-persisted.
+  const kept = [...new Set(saved)].filter((k) => known.has(k));
   const keptSet = new Set(kept);
   return [...kept, ...defaults.filter((k) => !keptSet.has(k))];
 };

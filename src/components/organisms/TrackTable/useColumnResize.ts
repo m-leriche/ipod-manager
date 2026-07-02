@@ -23,7 +23,12 @@ export const useColumnResize = (columns: ColumnDef[]) => {
   const didDragRef = useRef(false);
 
   useEffect(() => {
-    setSetting("columnWidths", widthMap);
+    // Merge into the stored map instead of replacing it: `columns` holds only
+    // the *visible* columns, and a plain overwrite would delete every hidden
+    // column's saved width on mount.
+    const saved = getSetting("columnWidths");
+    const base = saved && typeof saved === "object" ? (saved as Record<string, number>) : {};
+    setSetting("columnWidths", { ...base, ...widthMap });
   }, [widthMap]);
 
   const widths = useMemo(() => columns.map((c) => widthMap[c.key] ?? c.initialWidth), [columns, widthMap]);

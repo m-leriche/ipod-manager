@@ -8,6 +8,7 @@ mod import;
 mod indexing;
 pub mod playlists;
 mod queries;
+pub mod recovery;
 mod reorganize;
 mod scan;
 mod schema;
@@ -145,6 +146,18 @@ pub fn open_read_conn(db_path: &Path) -> Result<Connection, String> {
 
 // ── Database init ──────────────────────────────────────────────
 
+/// How often the full quick_check corruption sweep runs. It reads every page,
+/// so running it on each launch would make startup scale with library size.
+const INTEGRITY_CHECK_INTERVAL_SECS: i64 = 7 * 24 * 60 * 60;
+
+fn integrity_check_due(conn: &Connection) -> bool {
+    // A missing settings table (fresh or damaged DB) reads as None → due.
+    settings::get_setting(conn, "last_integrity_check")
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|ts| now_epoch() - ts >= INTEGRITY_CHECK_INTERVAL_SECS)
+        .unwrap_or(true)
+}
+
 pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create db dir: {}", e))?;
@@ -156,8 +169,12 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         .map_err(|e| format!("Failed to set pragmas: {}", e))?;
 
-    // Catch page-level corruption before any schema work touches the file.
-    schema::verify_integrity(&conn)?;
+    // Catch page-level corruption before schema work touches the file —
+    // periodically, not per launch, since quick_check reads every page.
+    let integrity_ran = integrity_check_due(&conn);
+    if integrity_ran {
+        schema::verify_integrity(&conn)?;
+    }
 
     // Register sort_key() as a SQL scalar so ORDER BY can normalise strings
     // the same way the Rust browser sorting does (strip "The ", drop
@@ -177,6 +194,10 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     }
 
     schema::seed_builtin_smart_playlists(&conn);
+
+    if integrity_ran {
+        let _ = settings::set_setting(&conn, "last_integrity_check", &now_epoch().to_string());
+    }
 
     Ok(conn)
 }

@@ -31,6 +31,7 @@ mod profiles;
 mod recommend;
 mod rockbox;
 mod sanitize;
+mod startup;
 mod streaming;
 mod subsonic;
 mod thumbnail;
@@ -44,113 +45,9 @@ use library::LibraryDb;
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
 
-/// Ensure Homebrew binary paths are on PATH so bundled .app can find
-/// tools like ffmpeg, ffprobe, and yt-dlp.
-fn ensure_homebrew_path() {
-    let path = std::env::var("PATH").unwrap_or_default();
-    let extras = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"];
-    let missing: Vec<&str> = extras
-        .iter()
-        .copied()
-        .filter(|p| !path.contains(p))
-        .collect();
-    if !missing.is_empty() {
-        let new_path = format!("{}:{}", missing.join(":"), path);
-        std::env::set_var("PATH", new_path);
-    }
-}
-
-/// Open the library database, walking the user through recovery instead of
-/// crashing with a blank window when the file is damaged or unreadable.
-/// Returns `None` when the user chooses to quit.
-fn open_library_db_with_recovery(
-    app: &tauri::App,
-    db_path: &std::path::Path,
-) -> Option<rusqlite::Connection> {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-
-    let first_err = match library::init_db(db_path) {
-        Ok(conn) => return Some(conn),
-        Err(e) => e,
-    };
-    log::error!("Library database failed to open: {first_err}");
-
-    let latest_backup = library::backup::list_backups(db_path)
-        .ok()
-        .and_then(|b| b.into_iter().next());
-
-    if let Some(backup) = latest_backup {
-        let restore = app
-            .dialog()
-            .message(format!(
-                "The library database could not be opened:\n\n{first_err}\n\nRestore the most recent backup?"
-            ))
-            .title("Library Database Damaged")
-            .kind(MessageDialogKind::Error)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Restore Latest Backup".into(),
-                "Quit".into(),
-            ))
-            .blocking_show();
-        if !restore {
-            return None;
-        }
-        if let Err(e) = library::backup::restore_backup(db_path, &backup.path) {
-            log::error!("Backup restore failed: {e}");
-        }
-    } else {
-        let reset = app
-            .dialog()
-            .message(format!(
-                "The library database could not be opened and no backups exist:\n\n{first_err}\n\nStart with an empty library? The damaged file is kept alongside it."
-            ))
-            .title("Library Database Damaged")
-            .kind(MessageDialogKind::Error)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Start With Empty Library".into(),
-                "Quit".into(),
-            ))
-            .blocking_show();
-        if !reset {
-            return None;
-        }
-        set_aside_damaged_db(db_path);
-    }
-
-    match library::init_db(db_path) {
-        Ok(conn) => Some(conn),
-        Err(e) => {
-            log::error!("Library database still unusable after recovery: {e}");
-            app.dialog()
-                .message(format!("Recovery failed:\n\n{e}"))
-                .title("Library Database Damaged")
-                .kind(MessageDialogKind::Error)
-                .blocking_show();
-            None
-        }
-    }
-}
-
-/// Move a damaged database (and its WAL/SHM sidecars) out of the way so a
-/// fresh one can be created, preserving the bytes for manual salvage.
-fn set_aside_damaged_db(db_path: &std::path::Path) {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    for suffix in ["", "-wal", "-shm"] {
-        let src = std::path::PathBuf::from(format!("{}{suffix}", db_path.display()));
-        if src.exists() {
-            let dest =
-                std::path::PathBuf::from(format!("{}.damaged-{ts}{suffix}", db_path.display()));
-            let _ = std::fs::rename(&src, &dest);
-        }
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    ensure_homebrew_path();
+    startup::ensure_homebrew_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -173,7 +70,7 @@ pub fn run() {
                 .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
                 .join("library.db");
 
-            let Some(conn) = open_library_db_with_recovery(app, &db_path) else {
+            let Some(conn) = startup::open_library_db_with_recovery(app, &db_path) else {
                 // The user declined recovery — exit cleanly, not via panic.
                 std::process::exit(1);
             };

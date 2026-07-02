@@ -3,7 +3,7 @@ import { StarRating } from "../../atoms/StarRating/StarRating";
 import { CELL_CLASSES } from "./constants";
 import type { TrackTableColumn } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
-import { formatBytes, formatDuration } from "../../../utils/format";
+import { formatBytes, formatDuration, formatSampleRate } from "../../../utils/format";
 
 interface TrackRowProps {
   track: LibraryTrack;
@@ -149,7 +149,9 @@ const getCellContent = (
     case "plays":
       return track.play_count || "\u2014";
     case "album_artist":
-      return track.album_artist || "\u2014";
+      // Fall back to the track artist — the same display-artist rule the
+      // sort and the artist aggregates use, so rows order by what's shown.
+      return track.album_artist || track.artist || "\u2014";
     case "disc_number":
       return track.disc_number || "\u2014";
     case "format":
@@ -166,6 +168,3 @@ const getCellContent = (
       return "\u2014";
   }
 };
-
-const formatSampleRate = (rate: number): string =>
-  rate % 1000 === 0 ? `${rate / 1000} kHz` : `${(rate / 1000).toFixed(1)} kHz`;

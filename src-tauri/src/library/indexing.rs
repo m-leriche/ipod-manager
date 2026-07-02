@@ -3,6 +3,13 @@
 //! `sort_key()` UDF per row) and an FTS5 index for text search. Both are
 //! maintained by triggers so every writer — scans, metadata saves, imports —
 //! stays consistent without touching each call site.
+//!
+//! Caveat for external tools: the triggers reference the app-defined
+//! `sort_key()` function, so writes to `tracks` from the bare sqlite3 CLI
+//! fail with "no such function". Salvage scripts should `DROP TRIGGER` the
+//! `trg_tracks_*` triggers first — the app recreates them on next launch,
+//! and the NULL-key backfill (plus FTS rebuild) self-heals any rows written
+//! while they were gone.
 
 use rusqlite::Connection;
 
@@ -98,8 +105,14 @@ fn backfill_if_needed(conn: &Connection) -> Result<(), String> {
         return Ok(());
     }
 
+    // One transaction: if the FTS rebuild is interrupted, the key UPDATE
+    // rolls back with it, so the NULL probe re-arms the whole backfill next
+    // launch instead of leaving search permanently empty.
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("Backfill transaction failed: {e}"))?;
     let [title_key, artist_key, album_key, genre_key] = key_exprs("tracks");
-    conn.execute_batch(&format!(
+    tx.execute_batch(&format!(
         "UPDATE tracks SET
             sort_title_key = {title_key},
             sort_artist_key = {artist_key},
@@ -108,7 +121,9 @@ fn backfill_if_needed(conn: &Connection) -> Result<(), String> {
          WHERE sort_title_key IS NULL;
          INSERT INTO tracks_fts(tracks_fts) VALUES ('rebuild');"
     ))
-    .map_err(|e| format!("Sort-key backfill failed: {e}"))
+    .map_err(|e| format!("Sort-key backfill failed: {e}"))?;
+    tx.commit()
+        .map_err(|e| format!("Backfill commit failed: {e}"))
 }
 
 /// Build an FTS5 MATCH expression for library search: every whitespace token

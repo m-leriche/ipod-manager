@@ -95,7 +95,8 @@ export const TrackTable = memo(function TrackTable({
   const columnMenuItems = useMemo(
     () =>
       orderedColumns.map((col) => ({
-        label: `${visibleKeys.has(col.key) ? "✓ " : "  "}${col.label}`,
+        label: col.label,
+        checked: visibleKeys.has(col.key),
         onClick: () => toggleColumnVisibility(col.key),
         disabled: col.key === "title",
       })),

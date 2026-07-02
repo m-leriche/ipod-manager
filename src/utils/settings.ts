@@ -70,6 +70,16 @@ const validateNumberRecord = (parsed: unknown): Record<string, number> | undefin
   return obj as Record<string, number>;
 };
 
+/** Validate that parsed JSON is a Record<string, boolean>. */
+const validateBooleanRecord = (parsed: unknown): Record<string, boolean> | undefined => {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+  const obj = parsed as Record<string, unknown>;
+  for (const v of Object.values(obj)) {
+    if (typeof v !== "boolean") return undefined;
+  }
+  return obj as Record<string, boolean>;
+};
+
 /** Validate that parsed JSON is a string[]. */
 const validateStringArray = (parsed: unknown): string[] | undefined => {
   if (!Array.isArray(parsed) || !parsed.every((v) => typeof v === "string")) return undefined;
@@ -184,7 +194,9 @@ export const SETTINGS = {
   // Layout dimensions
   columnWidths: json<Record<string, number>>("crate-column-widths", {}, validateNumberRecord),
   columnOrder: json<string[]>("crate-column-order", [], validateStringArray),
-  columnVisibility: json<string[]>("crate-column-visibility", [], validateStringArray),
+  // Per-column show/hide overrides; columns absent from the map use their
+  // default, so newly added default-visible columns appear for everyone.
+  columnVisibility: json<Record<string, boolean>>("crate-column-visibility", {}, validateBooleanRecord),
   browserColumnWidths: json<number[]>("crate-browser-column-widths", [], validateNumberArray),
   releasesColumnWidths: json<number[]>("crate-releases-column-widths", [], validateNumberArray),
   lyricsPanelWidth: num("crate-lyrics-panel-width", 280, 0, 10000),

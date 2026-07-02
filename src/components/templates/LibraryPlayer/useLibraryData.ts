@@ -79,6 +79,16 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       needs re-fetching; when neither changed, no fetch is needed at all. */
   const lastAggregatesKeyRef = useRef<string | null>(null);
   const lastSortKeyRef = useRef<string | null>(null);
+  /** Latest aggregate lists, mirrored so sort-only cache writes don't need
+      the list states in fetchSortedPage's deps (which would re-run the
+      refetch effect whenever a list changes). */
+  const aggregatesRef = useRef<{
+    genres: GenreSummary[];
+    artists: ArtistSummary[];
+    albums: AlbumSummary[];
+    total: number;
+  }>({ genres: [], artists: [], albums: [], total: 0 });
+  aggregatesRef.current = { genres: genreList, artists: artistList, albums: albumList, total: totalTrackCount };
 
   // ── Global shortcut (default Cmd+F) to focus search ──────────
 
@@ -169,26 +179,54 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     flaggedOnly,
   ]);
   const sortFingerprint = JSON.stringify([sortBy, sortDirection]);
+  const isUnfiltered =
+    selectedGenres.size === 0 &&
+    selectedArtists.size === 0 &&
+    selectedAlbums.size === 0 &&
+    !debouncedSearch &&
+    !flaggedOnly;
+
+  const buildFilter = useCallback(
+    (offset: number, skipCount?: boolean): LibraryFilter => ({
+      sort_by: sortBy,
+      sort_direction: sortDirection,
+      offset,
+      limit: PAGE_SIZE,
+      ...(skipCount ? { skip_count: true } : {}),
+      ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
+      ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
+      ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(flaggedOnly ? { flagged_only: true } : {}),
+    }),
+    [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly],
+  );
+
+  /** Persist the unfiltered view for instant paint on next launch. The
+      library location is resolved at write time so the cache is stamped with
+      the library the data actually came from — it can change at runtime via
+      onboarding or Settings, and a wrong stamp would either kill the instant
+      paint or show another library's tracks. */
+  const persistUnfilteredCache = useCallback((browserData: BrowserData, totalCount: number) => {
+    invoke<string | null>("get_library_location")
+      .then((loc) => {
+        libraryPathRef.current = loc;
+        setCachedLibrary({
+          hasLibrary: true,
+          browserData,
+          totalTrackCount: totalCount,
+          cachedAt: Date.now(),
+          libraryPath: loc,
+        });
+      })
+      .catch(() => {
+        // Unknown location — skip the write rather than mislabel the cache.
+      });
+  }, []);
 
   const fetchBrowserData = useCallback(async () => {
     const id = ++fetchIdRef.current;
     pendingPageOffsetsRef.current.clear();
-    // Record fingerprints up front so a rapid follow-up change is compared
-    // against this in-flight fetch, not the previous settled one.
-    lastAggregatesKeyRef.current = JSON.stringify([
-      [...selectedGenres],
-      [...selectedArtists],
-      [...selectedAlbums],
-      debouncedSearch,
-      flaggedOnly,
-    ]);
-    lastSortKeyRef.current = JSON.stringify([sortBy, sortDirection]);
-    const isUnfiltered =
-      selectedGenres.size === 0 &&
-      selectedArtists.size === 0 &&
-      selectedAlbums.size === 0 &&
-      !debouncedSearch &&
-      !flaggedOnly;
 
     if (
       isUnfiltered &&
@@ -204,19 +242,15 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     }
 
     try {
-      const filter: LibraryFilter = {
-        sort_by: sortBy,
-        sort_direction: sortDirection,
-        offset: 0,
-        limit: PAGE_SIZE,
-        ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
-        ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
-        ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(flaggedOnly ? { flagged_only: true } : {}),
-      };
-      const data = await invoke<PaginatedBrowserData>("get_library_browser_data_paginated", { filter });
+      const data = await invoke<PaginatedBrowserData>("get_library_browser_data_paginated", {
+        filter: buildFilter(0),
+      });
       if (id !== fetchIdRef.current) return;
+      // Stamp only after the results actually land — stamping before the
+      // await would let a concurrent sort click take the fast path while this
+      // fetch's aggregates get discarded, leaving the sidebar lists stale.
+      lastAggregatesKeyRef.current = aggregatesKey;
+      lastSortKeyRef.current = sortFingerprint;
       startTransition(() => {
         setTracks(data.tracks.tracks);
         setTotalTrackCount(data.tracks.total_count);
@@ -232,13 +266,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
           albums: data.albums,
         };
         unfilteredCacheRef.current = { data: browserData, sortBy, sortDirection };
-        setCachedLibrary({
-          hasLibrary: true,
-          browserData,
-          totalTrackCount: data.tracks.total_count,
-          cachedAt: Date.now(),
-          libraryPath: libraryPathRef.current,
-        });
+        persistUnfilteredCache(browserData, data.tracks.total_count);
       }
       if (playAfterFetchRef.current && data.tracks.tracks.length > 0) {
         playAfterFetchRef.current = false;
@@ -256,7 +284,16 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       setArtistList([]);
       setAlbumList([]);
     }
-  }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly, playTrack]);
+  }, [
+    buildFilter,
+    aggregatesKey,
+    sortFingerprint,
+    isUnfiltered,
+    sortBy,
+    sortDirection,
+    playTrack,
+    persistUnfilteredCache,
+  ]);
 
   /** Re-fetch only the first track page, keeping the aggregate lists and the
       total count. Used when the sort changed but the filters didn't — the
@@ -265,31 +302,25 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const fetchSortedPage = useCallback(async () => {
     const id = ++fetchIdRef.current;
     pendingPageOffsetsRef.current.clear();
-    lastSortKeyRef.current = JSON.stringify([sortBy, sortDirection]);
     try {
-      const filter: LibraryFilter = {
-        sort_by: sortBy,
-        sort_direction: sortDirection,
-        offset: 0,
-        limit: PAGE_SIZE,
-        skip_count: true,
-        ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
-        ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
-        ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(flaggedOnly ? { flagged_only: true } : {}),
-      };
-      const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
+      const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter: buildFilter(0, true) });
       if (id !== fetchIdRef.current) return;
+      lastSortKeyRef.current = sortFingerprint;
       startTransition(() => setTracks(page.tracks));
+      if (isUnfiltered) {
+        // Keep the launch cache in step with the persisted sort setting, so
+        // the next launch doesn't paint old-order rows under a new header.
+        const { genres, artists, albums, total } = aggregatesRef.current;
+        const browserData: BrowserData = { tracks: page.tracks, genres, artists, albums };
+        unfilteredCacheRef.current = { data: browserData, sortBy, sortDirection };
+        persistUnfilteredCache(browserData, total);
+      }
     } catch (e) {
       if (id !== fetchIdRef.current) return;
-      console.error("Failed to load sorted page:", e);
-      // Fall back to a full refresh on the next effect run.
-      lastAggregatesKeyRef.current = null;
-      lastSortKeyRef.current = null;
+      console.error("Failed to load sorted page, falling back to full refresh:", e);
+      fetchBrowserData();
     }
-  }, [sortBy, sortDirection, selectedGenres, selectedArtists, selectedAlbums, debouncedSearch, flaggedOnly]);
+  }, [buildFilter, sortFingerprint, isUnfiltered, sortBy, sortDirection, persistUnfilteredCache, fetchBrowserData]);
 
   // ── Background incremental rescan ──────────────────────────────
 
@@ -324,19 +355,9 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       const generation = fetchIdRef.current;
       pending.add(offset);
       try {
-        const filter: LibraryFilter = {
-          sort_by: sortBy,
-          sort_direction: sortDirection,
-          offset,
-          limit: PAGE_SIZE,
-          skip_count: true,
-          ...(selectedGenres.size > 0 ? { genre: [...selectedGenres] } : {}),
-          ...(selectedArtists.size > 0 ? { artist: [...selectedArtists] } : {}),
-          ...(selectedAlbums.size > 0 ? { album: [...selectedAlbums] } : {}),
-          ...(debouncedSearch ? { search: debouncedSearch } : {}),
-          ...(flaggedOnly ? { flagged_only: true } : {}),
-        };
-        const page = await invoke<PaginatedTracks>("get_library_tracks_page", { filter });
+        const page = await invoke<PaginatedTracks>("get_library_tracks_page", {
+          filter: buildFilter(offset, true),
+        });
         if (generation !== fetchIdRef.current) return;
         setTracks((prev) => {
           const next = prev.slice();
@@ -353,36 +374,36 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
         if (generation === fetchIdRef.current) pending.delete(offset);
       }
     },
-    [
-      totalTrackCount,
-      activePlaylistId,
-      activeSmartPlaylistId,
-      sortBy,
-      sortDirection,
-      selectedGenres,
-      selectedArtists,
-      selectedAlbums,
-      debouncedSearch,
-      flaggedOnly,
-    ],
+    [totalTrackCount, activePlaylistId, activeSmartPlaylistId, buildFilter],
   );
 
   // ── Initial load ──────────────────────────────────────────────
 
   const checkLibrary = useCallback(async () => {
-    const [cached, location] = await Promise.all([
+    const [cached, locationResult] = await Promise.all([
       getCachedLibrary(),
-      invoke<string | null>("get_library_location").catch((e: unknown) => {
-        console.warn("Failed to get library location:", e);
-        return null;
-      }),
+      invoke<string | null>("get_library_location").then(
+        (loc) => ({ ok: true, loc }) as const,
+        (e: unknown) => {
+          console.warn("Failed to get library location:", e);
+          return { ok: false, loc: null } as const;
+        },
+      ),
     ]);
-    setLibraryPath(location);
-    libraryPathRef.current = location;
+    if (locationResult.ok) {
+      setLibraryPath(locationResult.loc);
+      libraryPathRef.current = locationResult.loc;
+    }
 
     // Use the cache only if it was built from this library — a cache from a
-    // previous location (or a restored DB) would show the wrong tracks.
-    if (cached?.hasLibrary && location && cached.libraryPath === location) {
+    // previous location (or a restored DB) would show the wrong tracks. If
+    // the location lookup failed transiently, still trust the cache: showing
+    // the last known library beats flashing first-run onboarding at a user
+    // with a full library.
+    const cacheMatchesLibrary = locationResult.ok
+      ? !!locationResult.loc && cached?.libraryPath === locationResult.loc
+      : true;
+    if (cached?.hasLibrary && cacheMatchesLibrary) {
       setHasLibrary(true);
       setTracks(cached.browserData.tracks);
       setTotalTrackCount(cached.totalTrackCount ?? cached.browserData.tracks.length);
@@ -403,7 +424,12 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
       return;
     }
 
-    const hasLocation = !!location;
+    if (!locationResult.ok) {
+      // No cache and no location answer — leave hasLibrary undecided rather
+      // than misdiagnosing a transient failure as "no library configured".
+      return;
+    }
+    const hasLocation = !!locationResult.loc;
     setHasLibrary(hasLocation);
     if (hasLocation) {
       await fetchBrowserData();
@@ -437,7 +463,14 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     if (!dataLoaded) return;
     const sameFilters = lastAggregatesKeyRef.current === aggregatesKey;
     const sameSort = lastSortKeyRef.current === sortFingerprint;
-    if (sameFilters && sameSort) return; // nothing changed (e.g. initial mount)
+    if (sameFilters && sameSort) {
+      // Nothing to fetch — but invalidate any in-flight fetch for a different
+      // state so its late-arriving results can't be mislabeled as current
+      // (e.g. sort A→B→A while B's page fetch is still in the air).
+      fetchIdRef.current++;
+      pendingPageOffsetsRef.current.clear();
+      return;
+    }
     if (sameFilters) {
       fetchSortedPage();
     } else {

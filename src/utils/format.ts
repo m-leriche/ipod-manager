@@ -42,3 +42,7 @@ export const formatBytes = (bytes: number): string => {
   if (bytes < 1024 ** 4) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
   return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
 };
+
+/** "44100" → "44.1 kHz", "48000" → "48 kHz". */
+export const formatSampleRate = (rate: number): string =>
+  rate % 1000 === 0 ? `${rate / 1000} kHz` : `${(rate / 1000).toFixed(1)} kHz`;

@@ -1,7 +1,9 @@
 use crate::error::AppError;
+use crate::files::SyncCancel;
 use crate::library::{self, LibraryDb};
 use crate::playlist_export;
-use tauri::State;
+use crate::playlist_sync;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_playlists(db: State<'_, LibraryDb>) -> Result<Vec<library::Playlist>, AppError> {
@@ -119,6 +121,60 @@ pub async fn export_playlists_to_ipod(
         ))
     })
     .await
+}
+
+#[tauri::command]
+pub async fn plan_playlist_sync(
+    playlist_ids: Vec<i64>,
+    smart_playlist_ids: Vec<i64>,
+    mount_point: String,
+    db: State<'_, LibraryDb>,
+) -> Result<playlist_sync::PlaylistSyncPlan, AppError> {
+    crate::validation::validate_output_dir(&mount_point)?;
+    db.with_read_db(move |conn| {
+        let library_root = require_library_root(conn)?;
+        let resolved = playlist_sync::resolve_playlists(conn, &playlist_ids, &smart_playlist_ids)?;
+        Ok::<_, String>(playlist_sync::build_plan(
+            &resolved,
+            &library_root,
+            &mount_point,
+        ))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn sync_playlists_to_ipod(
+    playlist_ids: Vec<i64>,
+    smart_playlist_ids: Vec<i64>,
+    mount_point: String,
+    app: AppHandle,
+    cancel: State<'_, SyncCancel>,
+    db: State<'_, LibraryDb>,
+) -> Result<playlist_sync::PlaylistSyncResult, AppError> {
+    crate::validation::validate_output_dir(&mount_point)?;
+    let flag = cancel.new_flag();
+
+    let (resolved, library_root) = db
+        .with_read_db(move |conn| {
+            let library_root = require_library_root(conn)?;
+            let resolved =
+                playlist_sync::resolve_playlists(conn, &playlist_ids, &smart_playlist_ids)?;
+            Ok::<_, String>((resolved, library_root))
+        })
+        .await?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        playlist_sync::run_sync(resolved, library_root, mount_point, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(Into::into)
+}
+
+fn require_library_root(conn: &rusqlite::Connection) -> Result<String, String> {
+    library::get_library_location(conn)
+        .ok_or_else(|| "No library location configured. Set one in Settings first.".to_string())
 }
 
 // ── Smart playlists ──────────────────────────────────────────────

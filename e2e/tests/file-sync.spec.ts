@@ -34,8 +34,8 @@ test.describe("File Sync (Sync mode)", () => {
     await page.getByRole("tab", { name: "Tools" }).click();
     await page.getByRole("tab", { name: "File Manager" }).click();
 
-    await expect(page.getByText("Source")).toBeVisible();
-    await expect(page.getByText("Target")).toBeVisible();
+    await expect(page.getByText("Source", { exact: true })).toBeVisible();
+    await expect(page.getByText("Target", { exact: true })).toBeVisible();
   });
 
   test("Compare button is enabled when both paths are set", async ({ page, tauriMocks }) => {

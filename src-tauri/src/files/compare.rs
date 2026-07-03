@@ -1,11 +1,26 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
+use super::transcode::{is_lossless, mp3_dest_path};
 use super::types::CompareEntry;
+
+/// FAT32 stores mtimes with 2-second resolution, and in local time — so when
+/// a comparison straddles a daylight-saving change the same file's mtime reads
+/// back exactly one hour off. Treat mtimes as equal when they are within 2s of
+/// each other, or within 2s of a one-hour DST shift in either direction.
+///
+/// The tolerance is capped at a single hour on purpose: DST is always a 1-hour
+/// rule, so anything further apart is a genuine change, not a clock artifact.
+pub(crate) fn mtimes_match(a: u64, b: u64) -> bool {
+    const FAT_RESOLUTION_SECS: u64 = 2;
+    const DST_SHIFT_SECS: u64 = 3600;
+    let delta = a.abs_diff(b);
+    delta <= FAT_RESOLUTION_SECS || delta.abs_diff(DST_SHIFT_SECS) <= FAT_RESOLUTION_SECS
+}
 
 fn collect_files(
     base: &Path,
@@ -77,6 +92,7 @@ fn collect_files_recursive(
 pub fn compare_dirs(
     source: &str,
     target: &str,
+    transcode_lossless: bool,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<Vec<CompareEntry>, String> {
     let source_path = Path::new(source)
@@ -89,50 +105,7 @@ pub fn compare_dirs(
     let source_files = collect_files(&source_path, &cancel_flag)?;
     let target_files = collect_files(&target_path, &cancel_flag)?;
 
-    let mut results: Vec<CompareEntry> = Vec::new();
-
-    for (rel_path, (src_size, src_mod)) in &source_files {
-        if let Some((tgt_size, tgt_mod)) = target_files.get(rel_path) {
-            let status = if src_size == tgt_size {
-                "same".to_string()
-            } else {
-                "modified".to_string()
-            };
-            results.push(CompareEntry {
-                relative_path: rel_path.clone(),
-                is_dir: false,
-                source_size: Some(*src_size),
-                target_size: Some(*tgt_size),
-                source_modified: Some(*src_mod),
-                target_modified: Some(*tgt_mod),
-                status,
-            });
-        } else {
-            results.push(CompareEntry {
-                relative_path: rel_path.clone(),
-                is_dir: false,
-                source_size: Some(*src_size),
-                target_size: None,
-                source_modified: Some(*src_mod),
-                target_modified: None,
-                status: "source_only".to_string(),
-            });
-        }
-    }
-
-    for (rel_path, (tgt_size, tgt_mod)) in &target_files {
-        if !source_files.contains_key(rel_path) {
-            results.push(CompareEntry {
-                relative_path: rel_path.clone(),
-                is_dir: false,
-                source_size: None,
-                target_size: Some(*tgt_size),
-                source_modified: None,
-                target_modified: Some(*tgt_mod),
-                status: "target_only".to_string(),
-            });
-        }
-    }
+    let mut results = pair_entries(&source_files, &target_files, transcode_lossless);
 
     results.sort_by(|a, b| {
         let priority = |s: &str| match s {
@@ -150,4 +123,83 @@ pub fn compare_dirs(
     });
 
     Ok(results)
+}
+
+/// Pair source files against target files by relative path.
+///
+/// With `transcode_lossless` on, a lossless source pairs with the target path
+/// whose extension is replaced by `.mp3`. Transcoded pairs never size-compare
+/// (sizes differ by design): the pair is "same" when the mp3 exists and is not
+/// older than the source, "modified" when it is older, "source_only" when the
+/// mp3 is missing. Non-lossless files keep the existing size-based semantics.
+pub(super) fn pair_entries(
+    source_files: &HashMap<String, (u64, u64)>,
+    target_files: &HashMap<String, (u64, u64)>,
+    transcode_lossless: bool,
+) -> Vec<CompareEntry> {
+    let mut results: Vec<CompareEntry> = Vec::new();
+    let mut consumed_targets: HashSet<String> = HashSet::new();
+
+    for (rel_path, (src_size, src_mod)) in source_files {
+        let transcoded = transcode_lossless && is_lossless(rel_path);
+        let target_key = if transcoded {
+            mp3_dest_path(rel_path)
+        } else {
+            rel_path.clone()
+        };
+
+        if let Some((tgt_size, tgt_mod)) = target_files.get(&target_key) {
+            let is_same = if transcoded {
+                tgt_mod >= src_mod
+            } else {
+                src_size == tgt_size && mtimes_match(*src_mod, *tgt_mod)
+            };
+            results.push(CompareEntry {
+                relative_path: rel_path.clone(),
+                is_dir: false,
+                source_size: Some(*src_size),
+                target_size: Some(*tgt_size),
+                source_modified: Some(*src_mod),
+                target_modified: Some(*tgt_mod),
+                status: if is_same { "same" } else { "modified" }.to_string(),
+                transcoded,
+            });
+            if transcoded {
+                consumed_targets.insert(target_key);
+            }
+        } else {
+            results.push(CompareEntry {
+                relative_path: rel_path.clone(),
+                is_dir: false,
+                source_size: Some(*src_size),
+                target_size: None,
+                source_modified: Some(*src_mod),
+                target_modified: None,
+                status: "source_only".to_string(),
+                transcoded,
+            });
+        }
+    }
+
+    for (rel_path, (tgt_size, tgt_mod)) in target_files {
+        // A lossless source no longer claims its same-extension target when
+        // transcoding — it pairs with the .mp3 instead.
+        let matched_by_source =
+            source_files.contains_key(rel_path) && !(transcode_lossless && is_lossless(rel_path));
+        if matched_by_source || consumed_targets.contains(rel_path) {
+            continue;
+        }
+        results.push(CompareEntry {
+            relative_path: rel_path.clone(),
+            is_dir: false,
+            source_size: None,
+            target_size: Some(*tgt_size),
+            source_modified: None,
+            target_modified: Some(*tgt_mod),
+            status: "target_only".to_string(),
+            transcoded: false,
+        });
+    }
+
+    results
 }

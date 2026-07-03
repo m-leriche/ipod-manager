@@ -33,4 +33,16 @@ describe("FileRow", () => {
     render(<FileRow entry={entry("same")} depth={0} isSelected={false} onToggleFile={vi.fn()} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
+
+  it("shows an MP3 marker for transcoded pairs", () => {
+    const transcodedEntry = { ...entry("same"), relative_path: "Artist/song.flac", transcoded: true };
+    render(<FileRow entry={transcodedEntry} depth={0} isSelected={false} onToggleFile={vi.fn()} />);
+    expect(screen.getByText("song.flac")).toBeInTheDocument();
+    expect(screen.getByTitle("Synced as song.mp3")).toHaveTextContent("MP3");
+  });
+
+  it("shows no MP3 marker for plain pairs", () => {
+    render(<FileRow entry={entry("same")} depth={0} isSelected={false} onToggleFile={vi.fn()} />);
+    expect(screen.queryByText("MP3")).not.toBeInTheDocument();
+  });
 });

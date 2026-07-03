@@ -51,6 +51,16 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   remove_tracks_from_playlist: null,
   move_playlist_track: null,
   export_playlists_to_ipod: { exported: 0, errors: [] },
+  plan_playlist_sync: {
+    playlists: [],
+    total_tracks: 0,
+    files_to_copy: 0,
+    bytes_to_copy: 0,
+    bytes_already_present: 0,
+    free_space: 0,
+    errors: [],
+  },
+  sync_playlists_to_ipod: { copied: 0, already_present: 0, playlists_written: 0, cancelled: false, errors: [] },
 
   // Smart playlists
   get_smart_playlists: [],
@@ -148,7 +158,15 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   get_last_releases_check: null,
   check_new_releases: { artists_checked: 0, new_releases_found: 0, failed_lookups: 0, cancelled: false },
   cancel_new_releases_check: null,
-  watch_artist: { id: 0, name: "", mb_artist_id: null, mb_artist_name: null, match_status: "pending", created_at: 0, last_checked_at: 0 },
+  watch_artist: {
+    id: 0,
+    name: "",
+    mb_artist_id: null,
+    mb_artist_name: null,
+    match_status: "pending",
+    created_at: 0,
+    last_checked_at: 0,
+  },
   unwatch_artist: null,
   dismiss_release: null,
   is_artist_watched: false,

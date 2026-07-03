@@ -23,6 +23,8 @@ export interface BrowseProfileStore {
   active_profile?: string | null;
 }
 
+export type TranscodeBitrate = "320" | "v0";
+
 export interface FileManagerProfile {
   name: string;
   mode: "browse" | "sync";
@@ -31,6 +33,8 @@ export interface FileManagerProfile {
   dual_pane: boolean;
   layout: "horizontal" | "vertical";
   exclusions: string[];
+  transcode_lossless: boolean;
+  transcode_bitrate: TranscodeBitrate;
 }
 
 export interface FileManagerProfileStore {

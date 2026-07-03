@@ -88,7 +88,7 @@ impl CopyProgress {
     }
 }
 
-fn available_space(path: &Path) -> Option<u64> {
+pub(crate) fn available_space(path: &Path) -> Option<u64> {
     let mount = path.ancestors().find(|p| p.exists())?;
     let output = Command::new("df").arg("-k").arg(mount).output().ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -124,7 +124,7 @@ pub(crate) fn verify_copy_size(src: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn fmt_bytes(b: u64) -> String {
+pub(crate) fn fmt_bytes(b: u64) -> String {
     if b < 1024 {
         return format!("{} B", b);
     }

@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { getSetting, setSetting } from "../utils/settings";
+import { isTextEntryTarget, matchesShortcut } from "../utils/shortcuts";
 
 export const usePanelVisibility = () => {
   const [showColumnBrowser, setShowColumnBrowser] = useState(() => getSetting("showColumnBrowser"));
@@ -104,6 +105,25 @@ export const usePanelVisibility = () => {
       return !prev;
     });
   }, []);
+
+  // Global shortcuts (default ⌥1 / ⌥2 / ⌥3) to switch library view modes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTextEntryTarget(e)) return;
+      if (matchesShortcut(e, "viewColumnBrowser")) {
+        e.preventDefault();
+        toggleColumnBrowser();
+      } else if (matchesShortcut(e, "viewAlbumGrid")) {
+        e.preventDefault();
+        toggleAlbumGrid();
+      } else if (matchesShortcut(e, "viewArtworkCarousel")) {
+        e.preventDefault();
+        toggleArtworkCarousel();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleColumnBrowser, toggleAlbumGrid, toggleArtworkCarousel]);
 
   const dismissLyricsOverlay = useCallback(() => {
     setLyricsOverlay(false);

@@ -12,7 +12,7 @@ import type { ShortcutAction, ShortcutBinding } from "../types/shortcuts";
 export interface ShortcutDef {
   action: ShortcutAction;
   label: string;
-  category: "Playback" | "Library" | "General";
+  category: "Playback" | "Navigation" | "Library" | "General";
 }
 
 export const SHORTCUT_DEFS: ShortcutDef[] = [
@@ -21,10 +21,31 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { action: "seekForward", label: "Seek forward 10s", category: "Playback" },
   { action: "previousTrack", label: "Previous track", category: "Playback" },
   { action: "nextTrack", label: "Next track", category: "Playback" },
+  { action: "switchTabLibrary", label: "Go to Library", category: "Navigation" },
+  { action: "switchTabTools", label: "Go to Tools", category: "Navigation" },
+  { action: "switchTabDiscover", label: "Go to Discover", category: "Navigation" },
+  { action: "switchTabInbox", label: "Go to Inbox", category: "Navigation" },
   { action: "focusSearch", label: "Search library", category: "Library" },
+  { action: "viewColumnBrowser", label: "Column browser view", category: "Library" },
+  { action: "viewAlbumGrid", label: "Album grid view", category: "Library" },
+  { action: "viewArtworkCarousel", label: "Artwork carousel view", category: "Library" },
+  { action: "rateTracks1", label: "Rate selection 1 star", category: "Library" },
+  { action: "rateTracks2", label: "Rate selection 2 stars", category: "Library" },
+  { action: "rateTracks3", label: "Rate selection 3 stars", category: "Library" },
+  { action: "rateTracks4", label: "Rate selection 4 stars", category: "Library" },
+  { action: "rateTracks5", label: "Rate selection 5 stars", category: "Library" },
+  { action: "clearRating", label: "Clear rating on selection", category: "Library" },
+  { action: "toggleFlagTracks", label: "Toggle sync flag on selection", category: "Library" },
   { action: "toggleShortcutsDialog", label: "Show shortcuts dialog", category: "General" },
+  { action: "toggleQueuePanel", label: "Toggle queue panel", category: "General" },
   { action: "toggleCommandPalette", label: "Open command palette", category: "General" },
 ];
+
+/** Rating actions in star order — index + 1 is the star value. */
+export const RATING_ACTIONS = ["rateTracks1", "rateTracks2", "rateTracks3", "rateTracks4", "rateTracks5"] as const;
+
+/** Actions that operate on the current track selection (bare keys by default). */
+export const SELECTION_SHORTCUT_ACTIONS: ShortcutAction[] = [...RATING_ACTIONS, "clearRating", "toggleFlagTracks"];
 
 const binding = (code: string, opts: Partial<Omit<ShortcutBinding, "code">> = {}): ShortcutBinding => ({
   code,
@@ -41,6 +62,21 @@ export const DEFAULT_BINDINGS: Record<ShortcutAction, ShortcutBinding> = {
   nextTrack: binding("ArrowRight", { mod: true }),
   focusSearch: binding("KeyF", { mod: true }),
   toggleShortcutsDialog: binding("Slash", { mod: true }),
+  switchTabLibrary: binding("Digit1", { mod: true }),
+  switchTabTools: binding("Digit2", { mod: true }),
+  switchTabDiscover: binding("Digit3", { mod: true }),
+  switchTabInbox: binding("Digit4", { mod: true }),
+  viewColumnBrowser: binding("Digit1", { alt: true }),
+  viewAlbumGrid: binding("Digit2", { alt: true }),
+  viewArtworkCarousel: binding("Digit3", { alt: true }),
+  rateTracks1: binding("Digit1"),
+  rateTracks2: binding("Digit2"),
+  rateTracks3: binding("Digit3"),
+  rateTracks4: binding("Digit4"),
+  rateTracks5: binding("Digit5"),
+  clearRating: binding("Digit0"),
+  toggleFlagTracks: binding("KeyL"),
+  toggleQueuePanel: binding("KeyQ", { alt: true }),
   toggleCommandPalette: binding("KeyK", { mod: true }),
 };
 
@@ -66,6 +102,14 @@ export const bindingsEqual = (a: ShortcutBinding, b: ShortcutBinding): boolean =
 export const matchesShortcut = (e: KeyboardEvent, action: ShortcutAction): boolean => {
   const b = getBinding(action);
   return e.code === b.code && (e.metaKey || e.ctrlKey) === b.mod && e.shiftKey === b.shift && e.altKey === b.alt;
+};
+
+/** True when the event originates from a text-entry element (input, textarea,
+    contenteditable) — shortcuts must not steal keystrokes from typing. */
+export const isTextEntryTarget = (e: KeyboardEvent): boolean => {
+  const target = e.target as HTMLElement | null;
+  if (!target) return false;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable === true;
 };
 
 // Fixed combos handled outside the registry (in-app handlers and macOS conventions)

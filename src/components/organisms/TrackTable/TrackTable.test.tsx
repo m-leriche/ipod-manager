@@ -171,6 +171,38 @@ describe("TrackTable", () => {
     expect(onLoadMore).not.toHaveBeenCalled();
   });
 
+  // Type-to-select matches on the sorted field — "artist" in defaultProps.
+  const typeToSelectTracks = () => [
+    makeTrack({ id: 1, artist: "Apple" }),
+    makeTrack({ id: 2, artist: "3 Doors Down" }),
+  ];
+
+  it("gives rating shortcuts precedence over type-to-select when tracks are selected", () => {
+    const onTrackSelect = vi.fn();
+    const { container } = render(
+      <TrackTable {...defaultProps} tracks={typeToSelectTracks()} onTrackSelect={onTrackSelect} />,
+    );
+    const rows = container.querySelectorAll("tbody tr");
+    const body = container.querySelector('[tabindex="0"]')!;
+
+    // Typing "3" with a selection is the rate-3-stars shortcut — no jump.
+    fireEvent.click(rows[0]);
+    onTrackSelect.mockClear();
+    fireEvent.keyDown(body, { key: "3", code: "Digit3" });
+    expect(onTrackSelect).not.toHaveBeenCalled();
+  });
+
+  it("keeps type-to-select on digits when nothing is selected", () => {
+    const onTrackSelect = vi.fn();
+    const { container } = render(
+      <TrackTable {...defaultProps} tracks={typeToSelectTracks()} onTrackSelect={onTrackSelect} />,
+    );
+    const body = container.querySelector('[tabindex="0"]')!;
+
+    fireEvent.keyDown(body, { key: "3", code: "Digit3" });
+    expect(onTrackSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
+  });
+
   // jsdom has no layout; give rows a deterministic 20px-tall stacked geometry.
   const stubRowGeometry = (rows: NodeListOf<Element>) => {
     rows.forEach((row, i) => {

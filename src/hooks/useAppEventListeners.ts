@@ -1,6 +1,16 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { matchesShortcut } from "../utils/shortcuts";
+import { isTextEntryTarget, matchesShortcut } from "../utils/shortcuts";
+import type { ShortcutAction } from "../types/shortcuts";
+
+type TopTab = "library" | "tools" | "discover" | "inbox";
+
+const TAB_ACTIONS: { action: ShortcutAction; tab: TopTab }[] = [
+  { action: "switchTabLibrary", tab: "library" },
+  { action: "switchTabTools", tab: "tools" },
+  { action: "switchTabDiscover", tab: "discover" },
+  { action: "switchTabInbox", tab: "inbox" },
+];
 
 export const useAppEventListeners = ({
   onOpenSettings,
@@ -8,12 +18,16 @@ export const useAppEventListeners = ({
   onToggleShortcuts,
   onToggleCommandPalette,
   onCheckForUpdates,
+  onSwitchTab,
+  onToggleQueue,
 }: {
   onOpenSettings: () => void;
   onLibraryChanged: () => void;
   onToggleShortcuts: () => void;
   onToggleCommandPalette: () => void;
   onCheckForUpdates: () => void;
+  onSwitchTab: (tab: TopTab) => void;
+  onToggleQueue: () => void;
 }) => {
   const onOpenSettingsRef = useRef(onOpenSettings);
   onOpenSettingsRef.current = onOpenSettings;
@@ -25,6 +39,10 @@ export const useAppEventListeners = ({
   onToggleCommandPaletteRef.current = onToggleCommandPalette;
   const onCheckForUpdatesRef = useRef(onCheckForUpdates);
   onCheckForUpdatesRef.current = onCheckForUpdates;
+  const onSwitchTabRef = useRef(onSwitchTab);
+  onSwitchTabRef.current = onSwitchTab;
+  const onToggleQueueRef = useRef(onToggleQueue);
+  onToggleQueueRef.current = onToggleQueue;
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -52,15 +70,25 @@ export const useAppEventListeners = ({
     return () => unlisten?.();
   }, []);
 
-  // Global shortcuts: shortcuts dialog (default Cmd+/) and command palette (default Cmd+K)
+  // Global shortcuts: shortcuts dialog (default Cmd+/), queue panel, tab switching, command palette (default Cmd+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't steal keystrokes from text fields (the binding may be a bare key)
-      const target = e.target as HTMLElement;
-      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (isTextEntryTarget(e)) return;
       if (matchesShortcut(e, "toggleShortcutsDialog")) {
         e.preventDefault();
         onToggleShortcutsRef.current();
+        return;
+      }
+      if (matchesShortcut(e, "toggleQueuePanel")) {
+        e.preventDefault();
+        onToggleQueueRef.current();
+        return;
+      }
+      const tabAction = TAB_ACTIONS.find(({ action }) => matchesShortcut(e, action));
+      if (tabAction) {
+        e.preventDefault();
+        onSwitchTabRef.current(tabAction.tab);
       }
       if (matchesShortcut(e, "toggleCommandPalette")) {
         e.preventDefault();

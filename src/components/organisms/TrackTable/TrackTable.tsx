@@ -15,6 +15,7 @@ import { useColumnVisibility } from "./useColumnVisibility";
 import { useTrackContextMenu } from "./useTrackContextMenu";
 import { TrackRow } from "./TrackRow";
 import { getAlbumTracks } from "./helpers";
+import { matchesShortcut, SELECTION_SHORTCUT_ACTIONS } from "../../../utils/shortcuts";
 import { COLUMNS, ROW_HEIGHT, LOAD_AHEAD_ROWS, SORT_KEY_TO_TRACK_FIELD } from "./constants";
 import type { LibraryTrack } from "../../../types/library";
 import type { ContextMenuState } from "./types";
@@ -215,6 +216,14 @@ export const TrackTable = memo(function TrackTable({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       handleNavKeyDown(e);
+      // Selection shortcuts (rate 1–5, clear rating, toggle flag) are handled
+      // globally — don't let type-to-select also jump on the same keystroke.
+      if (
+        selectedRef.current.size > 0 &&
+        SELECTION_SHORTCUT_ACTIONS.some((action) => matchesShortcut(e.nativeEvent, action))
+      ) {
+        return;
+      }
       handleTypeToSelectKeyDown(e);
     },
     [handleNavKeyDown, handleTypeToSelectKeyDown],

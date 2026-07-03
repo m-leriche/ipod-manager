@@ -258,6 +258,12 @@ const AppContent = () => {
       setAutoCheckUpdate(true);
       setSettingsOpen(true);
     },
+    onSwitchTab: (tab) => {
+      // Discover's nav button can be feature-gated off — never switch to a hidden tab
+      if (tab === "discover" && !discoverEnabled) return;
+      setTopTab(tab);
+    },
+    onToggleQueue: () => setQueueOpen((prev) => !prev),
   });
 
   const handleRescan = useCallback(async () => {

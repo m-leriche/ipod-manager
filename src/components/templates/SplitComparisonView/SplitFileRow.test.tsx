@@ -33,4 +33,11 @@ describe("SplitFileRow", () => {
     render(<SplitFileRow entry={entry("same")} depth={1} isSelected={false} onToggleFile={vi.fn()} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
+
+  it("shows the .mp3 name on the target side for transcoded pairs", () => {
+    const transcodedEntry = { ...entry("same"), relative_path: "Artist/song.flac", transcoded: true };
+    render(<SplitFileRow entry={transcodedEntry} depth={1} isSelected={false} onToggleFile={vi.fn()} />);
+    expect(screen.getByText("song.flac")).toBeInTheDocument();
+    expect(screen.getByText("song.mp3")).toBeInTheDocument();
+  });
 });

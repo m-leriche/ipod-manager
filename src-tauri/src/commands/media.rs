@@ -2,6 +2,7 @@ use crate::audioquality;
 use crate::convert;
 use crate::error::AppError;
 use crate::files::SyncCancel;
+use crate::library::LibraryDb;
 use crate::localvideo;
 use crate::youtube;
 use std::process::Command;
@@ -153,26 +154,32 @@ pub async fn convert_audio(
 pub async fn scan_audio_quality(
     path: String,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<audioquality::AudioFileInfo>, AppError> {
     let flag = cancel.new_flag();
+    let conn = db.conn_arc();
 
-    tauri::async_runtime::spawn_blocking(move || audioquality::scan_audio_quality(&path, app, flag))
-        .await
-        .map_err(|e| format!("Scan failed: {}", e))?
-        .map_err(Into::into)
+    tauri::async_runtime::spawn_blocking(move || {
+        audioquality::scan_audio_quality(&path, &conn, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Scan failed: {}", e))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn scan_audio_quality_paths(
     paths: Vec<String>,
     app: AppHandle,
+    db: State<'_, LibraryDb>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<audioquality::AudioFileInfo>, AppError> {
     let flag = cancel.new_flag();
+    let conn = db.conn_arc();
 
     tauri::async_runtime::spawn_blocking(move || {
-        audioquality::scan_audio_quality_paths(&paths, app, flag)
+        audioquality::scan_audio_quality_paths(&paths, &conn, app, flag)
     })
     .await
     .map_err(|e| format!("Scan failed: {}", e))?

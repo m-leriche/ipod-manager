@@ -82,6 +82,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -91,6 +92,7 @@ describe("ComparisonView", () => {
       expect(mockInvoke).toHaveBeenCalledWith("compare_directories", {
         source: "/source",
         target: "/target",
+        transcodeLossless: false,
       });
     });
   });
@@ -102,6 +104,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -122,6 +125,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -142,6 +146,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={onBack}
       />,
@@ -160,6 +165,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -180,6 +186,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -199,6 +206,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -219,6 +227,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -237,6 +246,7 @@ describe("ComparisonView", () => {
         sourcePath="/bad"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -265,6 +275,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -282,6 +293,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,
@@ -305,6 +317,7 @@ describe("ComparisonView", () => {
         sourcePath="/source"
         targetPath="/target"
         exclusions={[]}
+        transcode={null}
         onAddExclusion={vi.fn()}
         onBack={vi.fn()}
       />,

@@ -33,7 +33,10 @@ const buildSections = () => [
   },
   {
     title: "General",
-    shortcuts: [{ keys: registryKeys("toggleShortcutsDialog"), description: "Show this dialog" }],
+    shortcuts: [
+      { keys: registryKeys("toggleCommandPalette"), description: "Open command palette" },
+      { keys: registryKeys("toggleShortcutsDialog"), description: "Show this dialog" },
+    ],
   },
 ];
 

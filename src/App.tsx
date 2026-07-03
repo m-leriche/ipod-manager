@@ -91,6 +91,9 @@ const KeyboardShortcutsDialog = lazy(() =>
     default: m.KeyboardShortcutsDialog,
   })),
 );
+const CommandPalette = lazy(() =>
+  import("./components/organisms/CommandPalette/CommandPalette").then((m) => ({ default: m.CommandPalette })),
+);
 const FeatureTour = lazy(() =>
   import("./components/templates/FeatureTour/FeatureTour").then((m) => ({ default: m.FeatureTour })),
 );
@@ -139,6 +142,7 @@ const AppContent = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [autoCheckUpdate, setAutoCheckUpdate] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const { miniPlayer, toggleMiniPlayer } = useMiniPlayer();
   const lyricsPanelResize = useLyricsPanelWidth();
@@ -249,6 +253,7 @@ const AppContent = () => {
     onOpenSettings: () => setSettingsOpen(true),
     onLibraryChanged: () => libraryRefreshRef.current?.(),
     onToggleShortcuts: () => setShortcutsOpen((prev) => !prev),
+    onToggleCommandPalette: () => setPaletteOpen((prev) => !prev),
     onCheckForUpdates: () => {
       setAutoCheckUpdate(true);
       setSettingsOpen(true);
@@ -536,6 +541,23 @@ const AppContent = () => {
           <Suspense fallback={null}>
             <ErrorBoundary name="Keyboard Shortcuts">
               <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+            </ErrorBoundary>
+          </Suspense>
+        )}
+        {paletteOpen && (
+          <Suspense fallback={null}>
+            <ErrorBoundary name="Command Palette">
+              <CommandPalette
+                onClose={() => setPaletteOpen(false)}
+                onSelectTab={setTopTab}
+                onSelectTool={(tool) => {
+                  setTopTab("tools");
+                  setToolTab(tool);
+                }}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onRescan={handleRescan}
+                discoverEnabled={discoverEnabled}
+              />
             </ErrorBoundary>
           </Suspense>
         )}

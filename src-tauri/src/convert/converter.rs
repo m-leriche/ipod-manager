@@ -1,18 +1,46 @@
+use rayon::prelude::*;
 use std::io::BufRead;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use super::helpers::{build_codec_args, build_output_path, parse_ffmpeg_time};
 use super::probe::probe_audio;
-use super::{ConvertProgress, ConvertRequest, ConvertResult, ConvertedPair};
+use super::progress::BatchProgress;
+use super::{ConvertRequest, ConvertResult, ConvertedPair};
 use crate::process;
 
 /// Timeout for a single file conversion (30 minutes).
 const CONVERT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// Bounded pool so a large batch spawns at most 4 concurrent ffmpeg processes.
+fn convert_pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .min(4);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .thread_name(|i| format!("convert-worker-{}", i))
+            .build()
+            .expect("static thread pool with fixed config")
+    })
+}
+
+enum FileOutcome {
+    Converted {
+        input: String,
+        output: String,
+    },
+    Failed(String),
+    /// Cancelled — either never started, or killed mid-conversion. Not a failure.
+    Skipped,
+}
 
 pub fn convert_batch(
     requests: Vec<ConvertRequest>,
@@ -20,105 +48,135 @@ pub fn convert_batch(
     cancel_flag: Arc<AtomicBool>,
 ) -> ConvertResult {
     let total = requests.len();
-    let mut converted = 0usize;
-    let mut failed = 0usize;
-    let mut errors = Vec::new();
-    let mut output_paths = Vec::new();
-    let mut pairs = Vec::new();
-    let mut warnings = Vec::new();
-
     log::info!("Starting batch conversion of {} files", total);
 
-    for (i, req) in requests.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            log::info!("Batch conversion cancelled after {}/{} files", i, total);
-            return ConvertResult {
-                success: converted > 0,
-                cancelled: true,
-                converted,
-                failed,
-                errors,
-                output_paths,
-                pairs,
-                warnings,
-            };
-        }
+    let progress = BatchProgress::new(app, total);
+    let outcomes: Vec<(FileOutcome, Option<String>)> = convert_pool().install(|| {
+        requests
+            .par_iter()
+            .enumerate()
+            .map(|(i, req)| convert_one(i, req, &progress, &cancel_flag))
+            .collect()
+    });
 
-        // Check for lossy-to-lossless warning
-        if req.target_format == "flac" {
-            if let Ok(info) = probe_audio(&req.input_path) {
-                if !info.is_lossless {
-                    warnings.push(format!(
-                        "{}: lossy source ({}) wrapped in lossless FLAC container",
-                        info.file_name, info.codec
-                    ));
-                }
-            }
-        }
-
-        match convert_single(req, i, total, &app, &cancel_flag) {
-            Ok(path) => {
-                pairs.push(ConvertedPair {
-                    input_path: req.input_path.clone(),
-                    output_path: path.clone(),
-                });
-                output_paths.push(path);
-                converted += 1;
-            }
-            Err(e) => {
-                let file_name = Path::new(&req.input_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?");
-                log::warn!("Conversion failed for {}: {}", file_name, e);
-                errors.push(format!("{}: {}", file_name, e));
-                failed += 1;
-            }
-        }
-    }
-
+    let result = aggregate(outcomes, cancel_flag.load(Ordering::SeqCst));
     log::info!(
-        "Batch conversion complete: {} converted, {} failed",
-        converted,
-        failed
+        "Batch conversion complete: {} converted, {} failed{}",
+        result.converted,
+        result.failed,
+        if result.cancelled { " (cancelled)" } else { "" }
     );
+    result
+}
 
-    ConvertResult {
-        success: failed == 0 && converted > 0,
-        cancelled: false,
-        converted,
-        failed,
-        errors,
-        output_paths,
-        pairs,
-        warnings,
+fn convert_one(
+    file_index: usize,
+    req: &ConvertRequest,
+    progress: &BatchProgress,
+    cancel_flag: &Arc<AtomicBool>,
+) -> (FileOutcome, Option<String>) {
+    if cancel_flag.load(Ordering::SeqCst) {
+        return (FileOutcome::Skipped, None);
     }
+
+    let file_name = Path::new(&req.input_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("?")
+        .to_string();
+
+    let warning = lossy_to_flac_warning(req);
+
+    let result = convert_single(req, file_index, &file_name, progress, cancel_flag);
+    progress.finish_file(file_index, &file_name);
+
+    match result {
+        Ok(path) => (
+            FileOutcome::Converted {
+                input: req.input_path.clone(),
+                output: path,
+            },
+            warning,
+        ),
+        // A file killed mid-conversion by cancellation is not a failure — treat
+        // it like a not-yet-started file so cancel produces no spurious errors.
+        Err(_) if cancel_flag.load(Ordering::SeqCst) => (FileOutcome::Skipped, None),
+        Err(e) => {
+            log::warn!("Conversion failed for {}: {}", file_name, e);
+            (
+                FileOutcome::Failed(format!("{}: {}", file_name, e)),
+                warning,
+            )
+        }
+    }
+}
+
+fn lossy_to_flac_warning(req: &ConvertRequest) -> Option<String> {
+    if req.target_format != "flac" {
+        return None;
+    }
+    let info = probe_audio(&req.input_path).ok()?;
+    if info.is_lossless {
+        return None;
+    }
+    Some(format!(
+        "{}: lossy source ({}) wrapped in lossless FLAC container",
+        info.file_name, info.codec
+    ))
+}
+
+/// Fold per-file outcomes (in request order) into the batch result.
+fn aggregate(outcomes: Vec<(FileOutcome, Option<String>)>, cancelled: bool) -> ConvertResult {
+    let mut result = ConvertResult {
+        success: false,
+        cancelled,
+        converted: 0,
+        failed: 0,
+        errors: Vec::new(),
+        output_paths: Vec::new(),
+        pairs: Vec::new(),
+        warnings: Vec::new(),
+    };
+
+    for (outcome, warning) in outcomes {
+        if let Some(w) = warning {
+            result.warnings.push(w);
+        }
+        match outcome {
+            FileOutcome::Converted { input, output } => {
+                result.pairs.push(ConvertedPair {
+                    input_path: input,
+                    output_path: output.clone(),
+                });
+                result.output_paths.push(output);
+                result.converted += 1;
+            }
+            FileOutcome::Failed(e) => {
+                result.errors.push(e);
+                result.failed += 1;
+            }
+            FileOutcome::Skipped => {}
+        }
+    }
+
+    result.success = if cancelled {
+        result.converted > 0
+    } else {
+        result.failed == 0 && result.converted > 0
+    };
+    result
 }
 
 fn convert_single(
     req: &ConvertRequest,
     file_index: usize,
-    total_files: usize,
-    app: &AppHandle,
+    file_name: &str,
+    progress: &BatchProgress,
     cancel_flag: &Arc<AtomicBool>,
 ) -> Result<String, String> {
     let input_path = &req.input_path;
-    let file_name = Path::new(input_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file")
-        .to_string();
 
-    let _ = app.emit(
-        "convert-progress",
-        ConvertProgress {
-            file_index,
-            total_files,
-            current_file: file_name.clone(),
-            percent: 0.0,
-            phase: "converting".to_string(),
-        },
-    );
+    progress.update(file_index, file_name, 0.0);
 
     // Ensure output directory exists
     std::fs::create_dir_all(&req.output_dir)
@@ -127,10 +185,44 @@ fn convert_single(
     let duration = probe_audio(input_path).map(|p| p.duration).unwrap_or(0.0);
 
     let output_path = build_output_path(input_path, &req.output_dir, &req.target_format);
-
     let codec_args = build_codec_args(req);
+
+    run_ffmpeg(input_path, &output_path, &codec_args, cancel_flag, |secs| {
+        let percent = if duration > 0.0 {
+            (secs / duration * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+        progress.update(file_index, file_name, percent);
+    })?;
+
+    Ok(output_path)
+}
+
+/// Transcode a single file to an exact output path (used by sync copy).
+/// No progress events — the caller tracks per-file progress itself.
+pub fn transcode_file(
+    input_path: &str,
+    output_path: &str,
+    codec_args: &[String],
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    run_ffmpeg(input_path, output_path, codec_args, cancel_flag, |_| {})
+}
+
+/// Run one ffmpeg conversion: spawn, stream `-progress` output through
+/// `on_progress` (converted seconds), honour cancellation (kills the child and
+/// removes the partial output), and surface ffmpeg errors. Tags carry over via
+/// ffmpeg's default `-map_metadata 0` behaviour.
+fn run_ffmpeg(
+    input_path: &str,
+    output_path: &str,
+    codec_args: &[String],
+    cancel_flag: &Arc<AtomicBool>,
+    mut on_progress: impl FnMut(f64),
+) -> Result<(), String> {
     let mut args = vec!["-i".to_string(), input_path.to_string(), "-vn".to_string()];
-    args.extend(codec_args);
+    args.extend(codec_args.iter().cloned());
     args.extend([
         "-progress".to_string(),
         "pipe:1".to_string(),
@@ -139,7 +231,7 @@ fn convert_single(
         // `--` ends option parsing so an output path beginning with `-` is
         // treated as a filename, not an ffmpeg flag.
         "--".to_string(),
-        output_path.clone(),
+        output_path.to_string(),
     ]);
 
     let mut child = Command::new("ffmpeg")
@@ -159,7 +251,7 @@ fn convert_single(
     for line in reader.lines() {
         if cancel_flag.load(Ordering::SeqCst) {
             process::kill_and_wait(&mut child);
-            let _ = std::fs::remove_file(&output_path);
+            let _ = std::fs::remove_file(output_path);
             return Err("Cancelled".to_string());
         }
 
@@ -167,21 +259,7 @@ fn convert_single(
 
         if let Some(time_str) = line.strip_prefix("out_time=") {
             if let Some(secs) = parse_ffmpeg_time(time_str) {
-                let percent = if duration > 0.0 {
-                    (secs / duration * 100.0).min(100.0)
-                } else {
-                    0.0
-                };
-                let _ = app.emit(
-                    "convert-progress",
-                    ConvertProgress {
-                        file_index,
-                        total_files,
-                        current_file: file_name.clone(),
-                        percent,
-                        phase: "converting".to_string(),
-                    },
-                );
+                on_progress(secs);
             }
         }
     }
@@ -195,19 +273,92 @@ fn convert_single(
                 e,
                 stderr.trim()
             );
-            let _ = std::fs::remove_file(&output_path);
+            let _ = std::fs::remove_file(output_path);
             return Err(format!("Process error: {}", e));
         }
     };
 
     if !status.success() {
         let stderr = process::collect_stderr(stderr_handle);
-        let _ = std::fs::remove_file(&output_path);
+        let _ = std::fs::remove_file(output_path);
         return Err(format!(
             "ffmpeg error: {}",
             stderr.lines().last().unwrap_or("unknown error").trim()
         ));
     }
 
-    Ok(output_path)
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn converted(n: usize) -> (FileOutcome, Option<String>) {
+        (
+            FileOutcome::Converted {
+                input: format!("in{}.wav", n),
+                output: format!("out{}.flac", n),
+            },
+            None,
+        )
+    }
+
+    #[test]
+    fn aggregate_preserves_request_order() {
+        let outcomes = vec![converted(0), converted(1), converted(2)];
+        let result = aggregate(outcomes, false);
+        assert_eq!(
+            result.output_paths,
+            vec!["out0.flac", "out1.flac", "out2.flac"]
+        );
+        assert_eq!(result.pairs[1].input_path, "in1.wav");
+        assert_eq!(result.pairs[1].output_path, "out1.flac");
+        assert!(result.success);
+        assert_eq!(result.converted, 3);
+    }
+
+    #[test]
+    fn aggregate_counts_failures_and_collects_errors() {
+        let outcomes = vec![
+            converted(0),
+            (FileOutcome::Failed("b.wav: ffmpeg error".to_string()), None),
+        ];
+        let result = aggregate(outcomes, false);
+        assert!(!result.success);
+        assert_eq!(result.converted, 1);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.errors, vec!["b.wav: ffmpeg error"]);
+        assert_eq!(result.output_paths, vec!["out0.flac"]);
+    }
+
+    #[test]
+    fn aggregate_cancelled_ignores_skipped_files() {
+        let outcomes = vec![converted(0), (FileOutcome::Skipped, None)];
+        let result = aggregate(outcomes, true);
+        assert!(result.cancelled);
+        assert!(result.success, "partial conversion counts as success");
+        assert_eq!(result.converted, 1);
+        assert_eq!(result.failed, 0);
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn aggregate_collects_warnings_even_for_failed_files() {
+        let outcomes = vec![(
+            FileOutcome::Failed("a.mp3: ffmpeg error".to_string()),
+            Some("a.mp3: lossy source (mp3) wrapped in lossless FLAC container".to_string()),
+        )];
+        let result = aggregate(outcomes, false);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn aggregate_empty_batch_is_not_success() {
+        let result = aggregate(Vec::new(), false);
+        assert!(!result.success);
+        assert!(!result.cancelled);
+        assert_eq!(result.converted, 0);
+    }
 }

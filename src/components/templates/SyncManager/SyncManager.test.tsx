@@ -13,9 +13,13 @@ const defaultProps: SyncManagerProps = {
   sourcePath: null,
   targetPath: null,
   exclusions: [],
+  transcodeLossless: false,
+  transcodeBitrate: "320",
   onSourcePathChange: vi.fn(),
   onTargetPathChange: vi.fn(),
   onExclusionsChange: vi.fn(),
+  onTranscodeLosslessChange: vi.fn(),
+  onTranscodeBitrateChange: vi.fn(),
 };
 
 const props = (overrides: Partial<SyncManagerProps> = {}): SyncManagerProps => ({
@@ -23,6 +27,8 @@ const props = (overrides: Partial<SyncManagerProps> = {}): SyncManagerProps => (
   onSourcePathChange: vi.fn(),
   onTargetPathChange: vi.fn(),
   onExclusionsChange: vi.fn(),
+  onTranscodeLosslessChange: vi.fn(),
+  onTranscodeBitrateChange: vi.fn(),
   ...overrides,
 });
 
@@ -111,6 +117,62 @@ describe("SyncManager", () => {
 
     await waitFor(() => expect(mockOpen).toHaveBeenCalled());
     expect(onSourcePathChange).not.toHaveBeenCalled();
+  });
+
+  // ── Transcode options ─────────────────────────────────────────
+
+  it("shows the transcode toggle unchecked by default", () => {
+    render(<SyncManager {...props()} />);
+    expect(screen.getByRole("checkbox", { name: /convert lossless to mp3/i })).not.toBeChecked();
+  });
+
+  it("hides the bitrate select when transcoding is off", () => {
+    render(<SyncManager {...props()} />);
+    expect(screen.queryByRole("combobox", { name: "MP3 quality" })).not.toBeInTheDocument();
+  });
+
+  it("shows the bitrate select when transcoding is on", () => {
+    render(<SyncManager {...props({ transcodeLossless: true })} />);
+    const select = screen.getByRole("combobox", { name: "MP3 quality" });
+    expect(select).toHaveValue("320");
+  });
+
+  it("calls onTranscodeLosslessChange when the toggle is clicked", async () => {
+    const onTranscodeLosslessChange = vi.fn();
+    const user = userEvent.setup();
+    render(<SyncManager {...props({ onTranscodeLosslessChange })} />);
+
+    await user.click(screen.getByRole("checkbox", { name: /convert lossless to mp3/i }));
+    expect(onTranscodeLosslessChange).toHaveBeenCalledWith(true);
+  });
+
+  it("calls onTranscodeBitrateChange when a bitrate is picked", async () => {
+    const onTranscodeBitrateChange = vi.fn();
+    const user = userEvent.setup();
+    render(<SyncManager {...props({ transcodeLossless: true, onTranscodeBitrateChange })} />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "MP3 quality" }), "v0");
+    expect(onTranscodeBitrateChange).toHaveBeenCalledWith("v0");
+  });
+
+  it("passes transcodeLossless to compare_directories when enabled", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockImplementation(async () => []);
+
+    render(
+      <SyncManager
+        {...props({ sourcePath: "/src", targetPath: "/tgt", transcodeLossless: true, transcodeBitrate: "v0" })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Compare Folders" }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("compare_directories", {
+        source: "/src",
+        target: "/tgt",
+        transcodeLossless: true,
+      });
+    });
   });
 
   // ── Compare transition ────────────────────────────────────────

@@ -125,20 +125,20 @@ fn api_get(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
 /// Only requires api_key — no session or signature. Used for public
 /// read-only endpoints like artist.getSimilar, artist.getTopAlbums, etc.
 pub fn api_get_public(params: &[(&str, &str)]) -> Result<serde_json::Value, String> {
-    rate_limit();
-
     let mut req = ureq::get(API_URL).set("User-Agent", USER_AGENT);
     req = req.query("api_key", API_KEY);
     for (key, value) in params {
         req = req.query(key, value);
     }
+    let req = req.query("format", "json");
 
-    let text = req
-        .query("format", "json")
-        .call()
-        .map_err(|e| format!("Last.fm request failed: {}", e))?
-        .into_string()
-        .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
+    let text = crate::network::fetch_with_retry(|| {
+        rate_limit();
+        req.clone().call().map_err(crate::network::FetchError::from)
+    })
+    .map_err(|e| format!("Last.fm request failed: {}", e))?
+    .into_string()
+    .map_err(|e| format!("Failed to read Last.fm response: {}", e))?;
 
     parse_response(text)
 }

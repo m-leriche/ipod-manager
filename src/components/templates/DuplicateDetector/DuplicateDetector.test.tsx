@@ -242,7 +242,7 @@ describe("DuplicateDetector", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Delete Duplicate Tracks")).toBeInTheDocument();
-      expect(screen.getByText(/permanently delete/)).toBeInTheDocument();
+      expect(screen.getByText(/to the Trash/)).toBeInTheDocument();
     });
   });
 

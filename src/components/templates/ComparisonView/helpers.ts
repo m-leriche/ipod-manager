@@ -13,6 +13,12 @@ export const lastSegment = (path: string): string => {
   return i >= 0 ? path.slice(i + 1) : path;
 };
 
+/** File name with its extension replaced by .mp3 (transcoded pair display). */
+export const mp3Name = (name: string): string => {
+  const dot = name.lastIndexOf(".");
+  return `${dot > 0 ? name.slice(0, dot) : name}.mp3`;
+};
+
 export const buildTree = (entries: CompareEntry[]): TreeNode[] => {
   const folderMap = new Map<string, CompareEntry[]>();
   for (const e of entries) {

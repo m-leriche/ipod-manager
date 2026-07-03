@@ -4,7 +4,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::AppHandle;
 
-use super::copy::{copy_dir_parallel, CopyProgress};
+use super::copy::{copy_dir_parallel, verify_copy_size, CopyProgress};
 use super::types::{CopyOperation, CopyResult};
 
 pub fn rename_entry(old_path: &str, new_path: &str) -> Result<(), String> {
@@ -121,6 +121,10 @@ fn move_single(source: &str, dest: &str, progress: &CopyProgress) -> Result<(), 
         fs::remove_dir_all(src_path).map_err(|e| format!("Remove source dir failed: {}", e))
     } else {
         fs::copy(source, dest).map_err(|e| format!("Copy failed: {}", e))?;
+        if let Err(msg) = verify_copy_size(Path::new(source), Path::new(dest)) {
+            let _ = fs::remove_file(dest);
+            return Err(msg);
+        }
         fs::remove_file(source).map_err(|e| format!("Remove source failed: {}", e))?;
         let name = Path::new(source)
             .file_name()

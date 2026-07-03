@@ -15,4 +15,5 @@ export type ShortcutAction =
   | "previousTrack"
   | "nextTrack"
   | "focusSearch"
-  | "toggleShortcutsDialog";
+  | "toggleShortcutsDialog"
+  | "toggleCommandPalette";

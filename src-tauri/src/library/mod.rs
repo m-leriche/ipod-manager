@@ -41,6 +41,7 @@ pub use queries::{
 };
 pub(crate) use queries::{row_to_track, SELECT_COLUMNS};
 pub use reorganize::reorganize_library_file;
+pub(crate) use scan::sync_files;
 pub use scan::{background_rescan_all_folders, rescan_all_folders, scan_folder};
 pub use settings::{
     delete_setting, get_library_location, get_setting, set_library_location, set_setting,

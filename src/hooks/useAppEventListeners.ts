@@ -6,11 +6,13 @@ export const useAppEventListeners = ({
   onOpenSettings,
   onLibraryChanged,
   onToggleShortcuts,
+  onToggleCommandPalette,
   onCheckForUpdates,
 }: {
   onOpenSettings: () => void;
   onLibraryChanged: () => void;
   onToggleShortcuts: () => void;
+  onToggleCommandPalette: () => void;
   onCheckForUpdates: () => void;
 }) => {
   const onOpenSettingsRef = useRef(onOpenSettings);
@@ -19,6 +21,8 @@ export const useAppEventListeners = ({
   onLibraryChangedRef.current = onLibraryChanged;
   const onToggleShortcutsRef = useRef(onToggleShortcuts);
   onToggleShortcutsRef.current = onToggleShortcuts;
+  const onToggleCommandPaletteRef = useRef(onToggleCommandPalette);
+  onToggleCommandPaletteRef.current = onToggleCommandPalette;
   const onCheckForUpdatesRef = useRef(onCheckForUpdates);
   onCheckForUpdatesRef.current = onCheckForUpdates;
 
@@ -48,7 +52,7 @@ export const useAppEventListeners = ({
     return () => unlisten?.();
   }, []);
 
-  // Global shortcut (default Cmd+/) to open keyboard shortcuts dialog
+  // Global shortcuts: shortcuts dialog (default Cmd+/) and command palette (default Cmd+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't steal keystrokes from text fields (the binding may be a bare key)
@@ -57,6 +61,10 @@ export const useAppEventListeners = ({
       if (matchesShortcut(e, "toggleShortcutsDialog")) {
         e.preventDefault();
         onToggleShortcutsRef.current();
+      }
+      if (matchesShortcut(e, "toggleCommandPalette")) {
+        e.preventDefault();
+        onToggleCommandPaletteRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);

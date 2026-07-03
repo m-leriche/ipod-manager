@@ -1,3 +1,4 @@
+use crate::files::TranscodeBitrate;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -107,6 +108,10 @@ pub struct FileManagerProfile {
     pub layout: String,
     #[serde(default)]
     pub exclusions: Vec<String>,
+    #[serde(default)]
+    pub transcode_lossless: bool,
+    #[serde(default)]
+    pub transcode_bitrate: TranscodeBitrate,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -151,6 +156,8 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
             dual_pane: false,
             layout: default_layout(),
             exclusions: p.exclusions,
+            transcode_lossless: false,
+            transcode_bitrate: TranscodeBitrate::default(),
         });
     }
     // Prefer sync active profile if available
@@ -175,6 +182,8 @@ pub fn load_file_manager_profiles(app: &AppHandle) -> Result<FileManagerProfileS
             dual_pane: p.dual_pane,
             layout: p.layout,
             exclusions: Vec::new(),
+            transcode_lossless: false,
+            transcode_bitrate: TranscodeBitrate::default(),
         });
     }
     // Fall back to browse active if no sync active was set

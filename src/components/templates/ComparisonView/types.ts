@@ -1,3 +1,5 @@
+import type { TranscodeBitrate } from "../../../types/profiles";
+
 export interface CompareEntry {
   relative_path: string;
   is_dir: boolean;
@@ -6,6 +8,8 @@ export interface CompareEntry {
   source_modified: number | null;
   target_modified: number | null;
   status: "source_only" | "target_only" | "modified" | "same";
+  /** Lossless source paired with (or destined for) a transcoded .mp3 on the target. */
+  transcoded?: boolean;
 }
 
 export interface CopyOp {
@@ -57,6 +61,8 @@ export interface ComparisonViewProps {
   sourcePath: string;
   targetPath: string;
   exclusions: string[];
+  /** MP3 target when lossless-to-MP3 transcoding is enabled, null when off. */
+  transcode: TranscodeBitrate | null;
   onAddExclusion: (path: string) => void;
   onBack: () => void;
 }

@@ -26,6 +26,7 @@ mod metarepair;
 mod musicbrainz;
 mod network;
 mod playlist_export;
+mod playlist_sync;
 mod process;
 mod profiles;
 mod recommend;
@@ -331,6 +332,8 @@ pub fn run() {
             commands::remove_tracks_from_playlist,
             commands::move_playlist_track,
             commands::export_playlists_to_ipod,
+            commands::plan_playlist_sync,
+            commands::sync_playlists_to_ipod,
             commands::detect_duplicates,
             commands::delete_duplicate_tracks,
             commands::get_smart_playlists,

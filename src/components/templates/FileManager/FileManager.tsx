@@ -32,6 +32,8 @@ export const FileManager = () => {
       localProfile.dual_pane !== savedProfile.dual_pane ||
       localProfile.layout !== savedProfile.layout ||
       localProfile.mode !== savedProfile.mode ||
+      localProfile.transcode_lossless !== savedProfile.transcode_lossless ||
+      localProfile.transcode_bitrate !== savedProfile.transcode_bitrate ||
       JSON.stringify(localProfile.exclusions) !== JSON.stringify(savedProfile.exclusions)
     );
   }, [localProfile, savedProfile]);
@@ -206,9 +208,13 @@ export const FileManager = () => {
           sourcePath={localProfile.left_path}
           targetPath={localProfile.right_path}
           exclusions={exclusions}
+          transcodeLossless={localProfile.transcode_lossless}
+          transcodeBitrate={localProfile.transcode_bitrate}
           onSourcePathChange={(path) => updateLocal({ left_path: path })}
           onTargetPathChange={(path) => updateLocal({ right_path: path })}
           onExclusionsChange={(ex) => updateLocal({ exclusions: ex })}
+          onTranscodeLosslessChange={(v) => updateLocal({ transcode_lossless: v })}
+          onTranscodeBitrateChange={(v) => updateLocal({ transcode_bitrate: v })}
         />
       )}
     </div>

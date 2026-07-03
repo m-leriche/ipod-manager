@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useProgress } from "../../../contexts/ProgressContext";
 import { cancelSync } from "../../../utils/cancelSync";
+import type { TranscodeBitrate } from "../../../types/profiles";
 import type { CompareEntry, CopyOp, CopyResult, SyncProgress } from "./types";
 
 export const useSync = (
@@ -12,6 +13,7 @@ export const useSync = (
   selected: Set<string>,
   compare: () => Promise<void>,
   setError: (err: string | null) => void,
+  transcode: TranscodeBitrate | null = null,
 ) => {
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
   const [syncing, setSyncing] = useState(false);
@@ -65,13 +67,18 @@ export const useSync = (
           source_path: `${sourcePath}/${e.relative_path}`,
           dest_path: `${targetPath}/${e.relative_path}`,
         }));
-      if (ops.length) setResult(await invoke<CopyResult>("copy_files", { operations: ops }));
+      if (ops.length) setResult(await invoke<CopyResult>("copy_files", { operations: ops, transcode }));
     });
 
   const copyToSource = () =>
     run("Copying files to source...", async () => {
+      // Transcoded pairs are excluded — the target holds an .mp3 derivative,
+      // not a copy of the lossless source.
       const ops: CopyOp[] = visibleEntries
-        .filter((e) => selected.has(e.relative_path) && (e.status === "target_only" || e.status === "modified"))
+        .filter(
+          (e) =>
+            selected.has(e.relative_path) && !e.transcoded && (e.status === "target_only" || e.status === "modified"),
+        )
         .map((e) => ({
           source_path: `${targetPath}/${e.relative_path}`,
           dest_path: `${sourcePath}/${e.relative_path}`,
@@ -104,7 +111,7 @@ export const useSync = (
           source_path: `${sourcePath}/${e.relative_path}`,
           dest_path: `${targetPath}/${e.relative_path}`,
         }));
-        const r = await invoke<CopyResult>("copy_files", { operations: ops });
+        const r = await invoke<CopyResult>("copy_files", { operations: ops, transcode });
         succeeded += r.succeeded;
         failed += r.failed;
         errors.push(...r.errors);

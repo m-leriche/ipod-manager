@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
+use super::transcode::{is_lossless, mp3_codec_args, mp3_dest_path, TranscodeBitrate};
 use super::types::{CopyResult, SyncProgress};
+use crate::convert::transcode_file;
 
 fn copy_pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
@@ -88,7 +90,7 @@ impl CopyProgress {
     }
 }
 
-fn available_space(path: &Path) -> Option<u64> {
+pub(crate) fn available_space(path: &Path) -> Option<u64> {
     let mount = path.ancestors().find(|p| p.exists())?;
     let output = Command::new("df").arg("-k").arg(mount).output().ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -106,7 +108,25 @@ pub(super) fn is_no_space(err: &io::Error) -> bool {
     msg.contains("no space") || msg.contains("not enough space") || msg.contains("disk full")
 }
 
-pub(super) fn fmt_bytes(b: u64) -> String {
+pub(crate) fn verify_copy_size(src: &Path, dest: &Path) -> Result<(), String> {
+    let src_len = fs::metadata(src)
+        .map_err(|e| format!("Verify {}: stat source failed: {}", src.display(), e))?
+        .len();
+    let dest_len = fs::metadata(dest)
+        .map_err(|e| format!("Verify {}: stat destination failed: {}", dest.display(), e))?
+        .len();
+    if src_len != dest_len {
+        return Err(format!(
+            "Verify {}: size mismatch (expected {} bytes, got {})",
+            dest.display(),
+            src_len,
+            dest_len
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn fmt_bytes(b: u64) -> String {
     if b < 1024 {
         return format!("{} B", b);
     }
@@ -164,6 +184,13 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
             }
             match fs::copy(src_file, dest_file) {
                 Ok(_) => {
+                    if let Err(msg) = verify_copy_size(src_file, dest_file) {
+                        let _ = fs::remove_file(dest_file);
+                        if let Ok(mut errs) = errors.lock() {
+                            errs.push(msg);
+                        }
+                        return;
+                    }
                     let name = src_file
                         .file_name()
                         .map(|f| f.to_string_lossy().to_string())
@@ -189,6 +216,7 @@ pub(super) fn copy_dir_parallel(src: &Path, dest: &Path, progress: &CopyProgress
 
 pub fn copy_file_list(
     operations: Vec<super::types::CopyOperation>,
+    transcode: Option<TranscodeBitrate>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
 ) -> CopyResult {
@@ -264,6 +292,32 @@ pub fn copy_file_list(
                 errors.extend(dir_errors);
                 failed += 1;
             }
+        } else if let Some(bitrate) = transcode.filter(|_| is_lossless(&op.source_path)) {
+            let file_name = src
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let mp3_dest = mp3_dest_path(&op.dest_path);
+
+            match transcode_file(
+                &op.source_path,
+                &mp3_dest,
+                &mp3_codec_args(bitrate),
+                &progress.cancel_flag,
+            ) {
+                Ok(()) => {
+                    succeeded += 1;
+                    progress.inc_completed(&file_name);
+                }
+                Err(e) => {
+                    if progress.is_cancelled() {
+                        cancelled = true;
+                        break;
+                    }
+                    errors.push(format!("{}: {}", op.source_path, e));
+                    failed += 1;
+                }
+            }
         } else {
             let file_name = src
                 .file_name()
@@ -272,6 +326,12 @@ pub fn copy_file_list(
 
             match fs::copy(src, dest) {
                 Ok(_) => {
+                    if let Err(msg) = verify_copy_size(src, dest) {
+                        let _ = fs::remove_file(dest);
+                        errors.push(msg);
+                        failed += 1;
+                        continue;
+                    }
                     succeeded += 1;
                     progress.inc_completed(&file_name);
                 }
@@ -345,13 +405,7 @@ pub fn delete_file_list(
             continue;
         }
 
-        let result = if path.is_dir() {
-            fs::remove_dir_all(path)
-        } else {
-            fs::remove_file(path)
-        };
-
-        match result {
+        match super::trash_delete::trash_or_delete(path) {
             Ok(_) => succeeded += 1,
             Err(e) => {
                 errors.push(format!("{}: {}", path_str, e));

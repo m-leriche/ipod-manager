@@ -75,6 +75,11 @@ const LibraryHealthDashboard = lazy(() =>
     default: m.LibraryHealthDashboard,
   })),
 );
+const QualityAnalyzer = lazy(() =>
+  import("./components/templates/QualityAnalyzer/QualityAnalyzer").then((m) => ({
+    default: m.QualityAnalyzer,
+  })),
+);
 const LibraryExport = lazy(() =>
   import("./components/templates/LibraryExport/LibraryExport").then((m) => ({ default: m.LibraryExport })),
 );
@@ -461,6 +466,11 @@ const AppContent = () => {
                       {toolTab === "health" && (
                         <ErrorBoundary name="Library Health">
                           <LibraryHealthDashboard onRepairMetadata={handleRepairMetadata} />
+                        </ErrorBoundary>
+                      )}
+                      {toolTab === "quality" && (
+                        <ErrorBoundary name="Quality Analyzer">
+                          <QualityAnalyzer />
                         </ErrorBoundary>
                       )}
                       {toolTab === "export" && (

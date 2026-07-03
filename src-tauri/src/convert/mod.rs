@@ -1,6 +1,7 @@
 mod converter;
 mod helpers;
 mod probe;
+mod progress;
 
 use serde::{Deserialize, Serialize};
 
@@ -32,9 +33,12 @@ pub struct AudioProbeInfo {
     pub is_lossless: bool,
 }
 
+/// Batch-wide progress. Conversions run in parallel, so events are not
+/// per-file sequential: `completed_files` counts finished files and `percent`
+/// is overall batch progress.
 #[derive(Debug, Clone, Serialize)]
 pub struct ConvertProgress {
-    pub file_index: usize,
+    pub completed_files: usize,
     pub total_files: usize,
     pub current_file: String,
     pub percent: f64,

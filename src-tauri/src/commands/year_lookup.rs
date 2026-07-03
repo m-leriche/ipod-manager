@@ -64,7 +64,7 @@ fn lookup_year(
 
     // Fallback: release search (sometimes has results release-group misses).
     // Same iteration — first result with a parseable date wins.
-    if let Ok(releases) = musicbrainz::search_releases(artist_norm, album_norm) {
+    if let Ok(releases) = musicbrainz::search_releases(artist_norm, album_norm, None) {
         for release in &releases {
             let year = release
                 .date

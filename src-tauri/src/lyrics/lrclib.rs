@@ -1,4 +1,5 @@
 use super::{LyricsResult, BASE_URL, USER_AGENT};
+use crate::network::{fetch_with_retry, FetchError};
 
 /// Fetch lyrics from LRCLIB by exact match (artist, title, album, duration).
 pub fn fetch_from_lrclib(
@@ -18,9 +19,8 @@ pub fn fetch_from_lrclib(
         req = req.query("duration", &format!("{}", dur.round() as u64));
     }
 
-    let resp = req
-        .set("User-Agent", USER_AGENT)
-        .call()
+    let req = req.set("User-Agent", USER_AGENT);
+    let resp = fetch_with_retry(|| req.clone().call().map_err(FetchError::from))
         .map_err(|e| format!("LRCLIB request failed: {}", e))?;
 
     let body: serde_json::Value = {
@@ -53,10 +53,10 @@ pub fn fetch_from_lrclib(
 /// Search LRCLIB for lyrics when exact match fails.
 pub fn search_lrclib(artist: &str, title: &str) -> Result<LyricsResult, String> {
     let query = format!("{} {}", artist, title);
-    let resp = ureq::get(&format!("{}/search", BASE_URL))
+    let req = ureq::get(&format!("{}/search", BASE_URL))
         .query("q", &query)
-        .set("User-Agent", USER_AGENT)
-        .call()
+        .set("User-Agent", USER_AGENT);
+    let resp = fetch_with_retry(|| req.clone().call().map_err(FetchError::from))
         .map_err(|e| format!("LRCLIB search failed: {}", e))?;
 
     let body: serde_json::Value = {

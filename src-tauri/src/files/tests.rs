@@ -1,5 +1,6 @@
+use crate::files::compare::mtimes_match;
 use crate::files::compare_dirs;
-use crate::files::copy::{fmt_bytes, is_no_space};
+use crate::files::copy::{fmt_bytes, is_no_space, verify_copy_size};
 use crate::files::{create_folder, list_dir, rename_entry};
 use std::io;
 use std::sync::atomic::AtomicBool;
@@ -57,6 +58,41 @@ fn is_no_space_disk_full_message() {
 fn is_no_space_unrelated_error() {
     let err = io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied");
     assert!(!is_no_space(&err));
+}
+
+// ── verify_copy_size ─────────────────────────────────────────────
+
+#[test]
+fn verify_copy_size_accepts_equal_sizes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    let dest = tmp.path().join("dest.mp3");
+    std::fs::write(&src, "audio").unwrap();
+    std::fs::write(&dest, "audio").unwrap();
+
+    assert!(verify_copy_size(&src, &dest).is_ok());
+}
+
+#[test]
+fn verify_copy_size_rejects_truncated_destination() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    let dest = tmp.path().join("dest.mp3");
+    std::fs::write(&src, "full audio data").unwrap();
+    std::fs::write(&dest, "full").unwrap();
+
+    let err = verify_copy_size(&src, &dest).unwrap_err();
+    assert!(err.contains("size mismatch"));
+}
+
+#[test]
+fn verify_copy_size_rejects_missing_destination() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src.mp3");
+    std::fs::write(&src, "audio").unwrap();
+
+    let err = verify_copy_size(&src, &tmp.path().join("missing.mp3")).unwrap_err();
+    assert!(err.contains("stat destination failed"));
 }
 
 // ── Security: Path traversal & listing ───────────────────────────
@@ -488,7 +524,7 @@ fn pair_entries_stale_lossless_on_target_becomes_orphan() {
 #[test]
 fn pair_entries_non_lossless_unaffected_by_transcode_flag() {
     let src = files(&[("song.mp3", 100, 10), ("other.ogg", 50, 10)]);
-    let tgt = files(&[("song.mp3", 100, 99), ("other.ogg", 60, 10)]);
+    let tgt = files(&[("song.mp3", 100, 10), ("other.ogg", 60, 10)]);
 
     let entries = pair_entries(&src, &tgt, true);
     assert_eq!(find(&entries, "song.mp3").status, "same");
@@ -517,6 +553,83 @@ fn compare_dirs_transcode_pairs_flac_with_mp3() {
     assert_eq!(results[0].relative_path, "song.flac");
     assert_eq!(results[0].status, "same");
     assert!(results[0].transcoded);
+}
+
+#[test]
+fn compare_dirs_same_size_different_mtime_is_modified() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    let src_file = src.path().join("track.mp3");
+    let tgt_file = tgt.path().join("track.mp3");
+    std::fs::write(&src_file, "same size").unwrap();
+    std::fs::write(&tgt_file, "same size").unwrap();
+
+    // Push the target mtime 10 minutes into the past — same size, stale content.
+    let past = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+    let file = std::fs::File::options()
+        .write(true)
+        .open(&tgt_file)
+        .unwrap();
+    file.set_modified(past).unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        false,
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "modified");
+}
+
+// ── mtimes_match ────────────────────────────────────────────────
+
+#[test]
+fn mtimes_match_exact() {
+    assert!(mtimes_match(1_700_000_000, 1_700_000_000));
+}
+
+#[test]
+fn mtimes_match_within_fat_resolution() {
+    assert!(mtimes_match(1_700_000_000, 1_700_000_001)); // 1s off
+    assert!(mtimes_match(1_700_000_000, 1_700_000_002)); // 2s off
+    assert!(mtimes_match(1_700_000_002, 1_700_000_000)); // symmetric
+}
+
+#[test]
+fn mtimes_match_beyond_fat_resolution_differs() {
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_003)); // 3s off
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_600)); // 10min off
+}
+
+#[test]
+fn mtimes_match_whole_hour_offset() {
+    assert!(mtimes_match(1_700_000_000, 1_700_000_000 + 3600)); // exactly 1h
+    assert!(mtimes_match(1_700_000_000 + 3600, 1_700_000_000)); // symmetric
+    assert!(mtimes_match(1_700_000_000, 1_700_000_000 + 3601)); // 1h + 1s
+    assert!(mtimes_match(1_700_000_000, 1_700_000_000 + 3598)); // 1h - 2s
+}
+
+#[test]
+fn mtimes_match_near_hour_but_outside_tolerance_differs() {
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 3603)); // 1h + 3s
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 3597)); // 1h - 3s
+}
+
+#[test]
+fn mtimes_match_beyond_one_hour_differs() {
+    // Only a single DST hour is tolerated; anything further apart is a real
+    // change, not a clock artifact.
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 2 * 3600)); // exactly 2h
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600)); // exactly 5h
+    assert!(!mtimes_match(1_700_000_000, 1_700_000_000 + 5 * 3600 + 2)); // 5h + 2s
+    assert!(!mtimes_match(
+        1_700_000_000,
+        1_700_000_000 + 4 * 3600 + 1800
+    )); // 4.5h
 }
 
 // ── Security: symlink handling ───────────────────────────────────

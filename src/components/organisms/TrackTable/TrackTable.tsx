@@ -566,8 +566,8 @@ export const TrackTable = memo(function TrackTable({
           title="Delete from Library"
           message={
             deleteConfirm.length === 1
-              ? "Are you sure you want to delete this track? The file will be permanently removed."
-              : `Are you sure you want to delete ${deleteConfirm.length} tracks? The files will be permanently removed.`
+              ? "Are you sure you want to delete this track? The file will be moved to the Trash."
+              : `Are you sure you want to delete ${deleteConfirm.length} tracks? The files will be moved to the Trash.`
           }
           confirmLabel="Delete"
           danger

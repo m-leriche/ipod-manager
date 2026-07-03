@@ -50,6 +50,17 @@ export const deduplicateName = (name: string, existingNames: Set<string>): strin
   return `${base} (copy ${n})${ext}`;
 };
 
+// Mirrors the backend rule: root-volume paths go to the Trash, paths on
+// external volumes (/Volumes/…, e.g. the iPod) are deleted permanently.
+export const deleteConfirmMessage = (paths: string[]): string => {
+  const single = paths.length === 1;
+  const what = single ? `"${paths[0].split("/").pop()}"` : `${paths.length} items`;
+  const fate = paths[0]?.startsWith("/Volumes/")
+    ? `${single ? "It" : "They"} will be permanently removed.`
+    : `${single ? "It" : "They"} will be moved to the Trash.`;
+  return `Are you sure you want to delete ${what}? ${fate}`;
+};
+
 export const buildContextMenuItems = ({
   target,
   selectedCount,

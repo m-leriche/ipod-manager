@@ -8,6 +8,20 @@ use std::time::UNIX_EPOCH;
 use super::transcode::{is_lossless, mp3_dest_path};
 use super::types::CompareEntry;
 
+/// FAT32 stores mtimes with 2-second resolution, and in local time — so when
+/// a comparison straddles a daylight-saving change the same file's mtime reads
+/// back exactly one hour off. Treat mtimes as equal when they are within 2s of
+/// each other, or within 2s of a one-hour DST shift in either direction.
+///
+/// The tolerance is capped at a single hour on purpose: DST is always a 1-hour
+/// rule, so anything further apart is a genuine change, not a clock artifact.
+pub(crate) fn mtimes_match(a: u64, b: u64) -> bool {
+    const FAT_RESOLUTION_SECS: u64 = 2;
+    const DST_SHIFT_SECS: u64 = 3600;
+    let delta = a.abs_diff(b);
+    delta <= FAT_RESOLUTION_SECS || delta.abs_diff(DST_SHIFT_SECS) <= FAT_RESOLUTION_SECS
+}
+
 fn collect_files(
     base: &Path,
     cancel_flag: &Arc<AtomicBool>,
@@ -138,7 +152,7 @@ pub(super) fn pair_entries(
             let is_same = if transcoded {
                 tgt_mod >= src_mod
             } else {
-                src_size == tgt_size
+                src_size == tgt_size && mtimes_match(*src_mod, *tgt_mod)
             };
             results.push(CompareEntry {
                 relative_path: rel_path.clone(),

@@ -127,10 +127,10 @@ pub fn probe_audio_batch(
         let _ = app.emit(
             "convert-progress",
             ConvertProgress {
-                file_index: i,
+                completed_files: i,
                 total_files: total,
                 current_file: file_name,
-                percent: 0.0,
+                percent: i as f64 / total.max(1) as f64 * 100.0,
                 phase: "probing".to_string(),
             },
         );

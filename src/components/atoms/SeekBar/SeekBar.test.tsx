@@ -1,6 +1,23 @@
-import { render, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { SeekBar } from "./SeekBar";
+
+beforeAll(() => {
+  (globalThis as Record<string, unknown>).ResizeObserver = class {
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(target: Element) {
+      this.callback(
+        [{ target, contentRect: { width: 300 } } as unknown as ResizeObserverEntry],
+        this as unknown as ResizeObserver,
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 describe("SeekBar", () => {
   it("renders with correct fill width", () => {
@@ -133,5 +150,19 @@ describe("SeekBar", () => {
 
     fireEvent.keyDown(bar, { key: "ArrowLeft" });
     expect(onChange).toHaveBeenCalledWith(0);
+  });
+
+  it("renders a waveform track when peaks are provided", () => {
+    const peaks: [number, number][] = [
+      [-0.5, 0.8],
+      [-0.3, 0.6],
+    ];
+    render(<SeekBar value={0.5} onChange={vi.fn()} peaks={peaks} />);
+    expect(screen.getByTestId("waveform-seek-track")).toBeInTheDocument();
+  });
+
+  it("renders the plain track when peaks are empty", () => {
+    render(<SeekBar value={0.5} onChange={vi.fn()} peaks={[]} />);
+    expect(screen.queryByTestId("waveform-seek-track")).not.toBeInTheDocument();
   });
 });

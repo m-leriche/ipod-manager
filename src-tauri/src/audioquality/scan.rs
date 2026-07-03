@@ -71,7 +71,12 @@ fn probe_files(
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<Vec<AudioFileInfo>, String> {
     let total = audio_files.len();
-    let cached = cache::load_verdicts(conn)?;
+    // The cache is an optimization — a failed read just means every file is
+    // re-probed, never a failed scan.
+    let cached = cache::load_verdicts(conn).unwrap_or_else(|e| {
+        log::warn!("Quality cache load failed, probing all files: {}", e);
+        HashMap::new()
+    });
     let progress = ProbeProgress::new(&app, total);
 
     // (input index, verdict, stamp to cache — None when reused from cache).
@@ -100,7 +105,10 @@ fn probe_files(
         .iter()
         .filter_map(|(_, info, stamp)| stamp.map(|s| (info.clone(), s)))
         .collect();
-    cache::store_verdicts(conn, &fresh)?;
+    // Persisting the cache must never discard a completed scan's results.
+    if let Err(e) = cache::store_verdicts(conn, &fresh) {
+        log::warn!("Quality cache write failed (results unaffected): {}", e);
+    }
 
     Ok(indexed.into_iter().map(|(_, info, _)| info).collect())
 }

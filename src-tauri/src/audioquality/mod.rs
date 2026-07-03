@@ -1,3 +1,4 @@
+mod cache;
 mod probe;
 mod scan;
 mod spectrogram;
@@ -8,7 +9,7 @@ pub use scan::{scan_audio_quality, scan_audio_quality_paths};
 pub use spectrogram::generate_spectrogram;
 pub use waveform::{generate_waveform, WaveformResult};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ const TRANSCODE_THRESHOLD_DB: f64 = 50.0;
 
 // ── Types ───────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioFileInfo {
     pub file_path: String,
     pub file_name: String,

@@ -152,7 +152,9 @@ fn scan_pool() -> &'static rayon::ThreadPool {
 /// stored value, then bulk-upsert the changes in one transaction. Returns the
 /// number of tracks (re)written. The slow tag reads hold no DB lock; the lock
 /// is taken only for the mtime preload and the final transaction.
-fn sync_files(
+///
+/// Also used by the filesystem watcher, which feeds it debounced event batches.
+pub(crate) fn sync_files(
     conn: &super::SharedConn,
     files: &[PathBuf],
     scope: Option<&str>,
@@ -182,6 +184,11 @@ fn sync_files(
                 let file_path_str = file_path.to_string_lossy().to_string();
                 let mtime = file_mtime(file_path);
                 if existing.get(&file_path_str) == Some(&mtime) {
+                    return None;
+                }
+                if !file_path.exists() {
+                    // Vanished between the walk/event and this read — skip
+                    // rather than upsert a ghost record from a fallback read.
                     return None;
                 }
                 Some((read_track_for_library(file_path), mtime))

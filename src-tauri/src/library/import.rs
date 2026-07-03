@@ -1,4 +1,5 @@
 use crate::audio_utils;
+use crate::files::copy::verify_copy_size;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -131,10 +132,16 @@ pub fn import_to_library(
         }
 
         match fs::copy(src_path, &dest_path) {
-            Ok(_) => {
-                copied += 1;
-                imported_paths.push(dest_path.to_string_lossy().to_string());
-            }
+            Ok(_) => match verify_copy_size(src_path, &dest_path) {
+                Ok(()) => {
+                    copied += 1;
+                    imported_paths.push(dest_path.to_string_lossy().to_string());
+                }
+                Err(msg) => {
+                    let _ = fs::remove_file(&dest_path);
+                    errors.push(format!("{}: {}", file_name, msg));
+                }
+            },
             Err(e) => {
                 errors.push(format!("{}: Copy failed: {}", file_name, e));
             }

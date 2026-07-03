@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useUndo } from "../../../contexts/UndoContext";
 import { sortAlbumsByIssues, issuesToUpdates, issueKey, allIssueKeys } from "./helpers";
 import type { RepairReport, AlbumRepairReport, Phase } from "./types";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
@@ -18,6 +19,7 @@ export const useRepairActions = (
   refreshTracks: () => Promise<void>,
   setUndoOperations: (ops: MetadataUpdate[] | null) => void,
 ) => {
+  const { push: pushUndo } = useUndo();
   const [report, setReport] = useState<RepairReport | null>(null);
   const [acceptedFixes, setAcceptedFixes] = useState<Set<string>>(new Set());
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
@@ -164,6 +166,15 @@ export const useRepairActions = (
       setSaveProgress(null);
       if (result.succeeded > 0) {
         setUndoOperations(result.undo_operations);
+        const ops = result.undo_operations;
+        pushUndo({
+          label: `metadata repair (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
+          undo: async () => {
+            await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
+            setUndoOperations(null);
+            await refreshTracks();
+          },
+        });
       }
       finishProgress(`Applied fixes to ${result.succeeded} of ${result.total} files`);
       if (result.succeeded > 0) {

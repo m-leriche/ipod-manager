@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MetadataEditor } from "./MetadataEditor";
+import { UndoProvider } from "../../../contexts/UndoContext";
 import { MetadataStatusBanners } from "./MetadataStatusBanners";
 import { groupTracks, buildUpdate, computeBatchFields, computeMixedFlags, trackToEditable } from "./helpers";
 import type { TrackMetadata, MetadataSaveResult } from "../../../types/metadata";
@@ -69,7 +70,11 @@ beforeEach(() => {
 
 describe("MetadataEditor", () => {
   it("renders idle state with folder picker bar and drop zone", () => {
-    render(<MetadataEditor />);
+    render(
+      <UndoProvider>
+        <MetadataEditor />
+      </UndoProvider>,
+    );
     expect(screen.getByText("Drop audio files or folders here")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scan" })).toBeDisabled();
   });
@@ -79,7 +84,11 @@ describe("MetadataEditor", () => {
     mockOpen.mockResolvedValue("/music");
     mockInvoke.mockResolvedValue(TRACKS);
 
-    render(<MetadataEditor />);
+    render(
+      <UndoProvider>
+        <MetadataEditor />
+      </UndoProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {
@@ -92,7 +101,11 @@ describe("MetadataEditor", () => {
     mockOpen.mockResolvedValue("/music");
     mockInvoke.mockResolvedValue(TRACKS);
 
-    render(<MetadataEditor />);
+    render(
+      <UndoProvider>
+        <MetadataEditor />
+      </UndoProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {
@@ -108,7 +121,11 @@ describe("MetadataEditor", () => {
     mockOpen.mockResolvedValue("/music");
     mockInvoke.mockRejectedValue("Path does not exist");
 
-    render(<MetadataEditor />);
+    render(
+      <UndoProvider>
+        <MetadataEditor />
+      </UndoProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {
@@ -121,7 +138,11 @@ describe("MetadataEditor", () => {
     mockOpen.mockResolvedValue("/music");
     mockInvoke.mockRejectedValue("Cancelled");
 
-    render(<MetadataEditor />);
+    render(
+      <UndoProvider>
+        <MetadataEditor />
+      </UndoProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "Browse" }));
 
     await waitFor(() => {

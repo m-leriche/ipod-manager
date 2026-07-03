@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement, type ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { useRepairActions } from "./useRepairActions";
+import { UndoProvider } from "../../../contexts/UndoContext";
 import type { TrackMetadata, MetadataSaveResult } from "../../../types/metadata";
 import type { RepairReport, AlbumRepairReport, TrackIssue } from "./types";
+
+const wrapper = ({ children }: { children: ReactNode }) => createElement(UndoProvider, null, children);
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -72,20 +76,22 @@ beforeEach(() => {
 describe("useRepairActions", () => {
   it("starts with empty state", () => {
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
     expect(result.current.report).toBeNull();
     expect(result.current.acceptedFixes.size).toBe(0);
@@ -96,20 +102,22 @@ describe("useRepairActions", () => {
   it("startRepair calls repair_analyze and sets report", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -125,20 +133,22 @@ describe("useRepairActions", () => {
   it("startRepair handles cancellation", async () => {
     mockInvoke.mockRejectedValue("Cancelled");
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -151,20 +161,22 @@ describe("useRepairActions", () => {
   it("startRepair handles error", async () => {
     mockInvoke.mockRejectedValue("Network error");
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -177,20 +189,22 @@ describe("useRepairActions", () => {
   it("does nothing with empty tracks", async () => {
     const args = makeHookArgs();
     args.tracks = [];
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -203,20 +217,22 @@ describe("useRepairActions", () => {
   it("toggleFix adds and removes issue keys", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     const key = "/music/song.flac::YearMissing::year";
@@ -232,20 +248,22 @@ describe("useRepairActions", () => {
   it("acceptAllForAlbum selects all fixable issues", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -259,20 +277,22 @@ describe("useRepairActions", () => {
   it("clearAllForAlbum removes all fixes for album", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -289,20 +309,22 @@ describe("useRepairActions", () => {
   it("handleAcceptAllRepairs selects all fixable across all albums", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -315,20 +337,22 @@ describe("useRepairActions", () => {
   it("handleClearAllRepairs clears everything", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -354,20 +378,22 @@ describe("useRepairActions", () => {
       return undefined;
     });
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {
@@ -387,20 +413,22 @@ describe("useRepairActions", () => {
   it("resetRepair clears everything", async () => {
     mockInvoke.mockResolvedValue(report);
     const args = makeHookArgs();
-    const { result } = renderHook(() =>
-      useRepairActions(
-        args.tracks,
-        args.setPhase,
-        args.setError,
-        args.setSaveResult,
-        args.setSaveProgress,
-        args.startProgress,
-        args.finishProgress,
-        args.failProgress,
-        args.cancel,
-        args.refreshTracks,
-        args.setUndoOperations,
-      ),
+    const { result } = renderHook(
+      () =>
+        useRepairActions(
+          args.tracks,
+          args.setPhase,
+          args.setError,
+          args.setSaveResult,
+          args.setSaveProgress,
+          args.startProgress,
+          args.finishProgress,
+          args.failProgress,
+          args.cancel,
+          args.refreshTracks,
+          args.setUndoOperations,
+        ),
+      { wrapper },
     );
 
     await act(async () => {

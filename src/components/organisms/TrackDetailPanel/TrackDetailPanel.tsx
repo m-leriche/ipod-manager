@@ -8,9 +8,11 @@ import { useArtCache } from "../../../contexts/ArtCacheContext";
 import { useBackgroundArtRepair } from "../../../contexts/BackgroundArtRepairContext";
 import { useBackgroundLyrics } from "../../../contexts/BackgroundLyricsContext";
 import { useToast } from "../../../contexts/ToastContext";
+import { useUndo } from "../../../contexts/UndoContext";
 import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import { pickFile } from "../../../utils/pickPath";
+import { groupByPreviousValue } from "../../../utils/undoHelpers";
 import type { LibraryTrack } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
@@ -35,6 +37,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
   const { state: artRepairState, start: startRepair } = useBackgroundArtRepair();
   const { state: lyricsState, start: startLyricsFetch } = useBackgroundLyrics();
   const toast = useToast();
+  const { push: pushUndo } = useUndo();
 
   const { fields: originalFields, mixed: originalMixed } = useMemo(() => computeBatchFields(tracks), [tracks]);
 
@@ -81,14 +84,51 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
 
     setSaving(true);
     try {
-      await invoke<MetadataSaveResult>("save_metadata", { updates });
+      const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       onSave?.();
+      if (result.succeeded > 0) {
+        const ops = result.undo_operations;
+        pushUndo({
+          label: `metadata edit (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
+          undo: async () => {
+            await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
+            onSave?.();
+          },
+        });
+      }
     } catch (e) {
       toast.error(`Failed to save metadata: ${e}`);
     } finally {
       setSaving(false);
     }
-  }, [tracks, editedFields, originalFields, originalMixed, onSave, toast]);
+  }, [tracks, editedFields, originalFields, originalMixed, onSave, toast, pushUndo]);
+
+  const handleRate = useCallback(
+    async (rating: number) => {
+      const previous = groupByPreviousValue(tracks, (t) => t.rating, rating);
+      try {
+        await invoke("rate_tracks", { trackIds: tracks.map((t) => t.id), rating });
+        onSave?.();
+        if (previous.size > 0) {
+          const changed = [...previous.values()].reduce((n, ids) => n + ids.length, 0);
+          const label = `rating change (${changed} track${changed !== 1 ? "s" : ""})`;
+          pushUndo({
+            label,
+            undo: async () => {
+              for (const [prevRating, ids] of previous) {
+                await invoke("rate_tracks", { trackIds: ids, rating: prevRating });
+              }
+              onSave?.();
+            },
+          });
+          toast.success(`${label} — ⌘Z to undo`);
+        }
+      } catch (e) {
+        toast.error(`Failed to rate tracks: ${e}`);
+      }
+    },
+    [tracks, onSave, toast, pushUndo],
+  );
 
   const handleRepairArt = useCallback(async () => {
     const folders = [...new Set(tracks.map((t) => t.folder_path))];
@@ -330,19 +370,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
       {/* Rating */}
       <div className="px-4 pb-3 flex items-center gap-2">
         <span className="text-[10px] text-text-tertiary w-12 shrink-0">Rating</span>
-        <StarRating
-          rating={isSingle ? track.rating : 0}
-          size="md"
-          onChange={async (rating) => {
-            const ids = tracks.map((t) => t.id);
-            try {
-              await invoke("rate_tracks", { trackIds: ids, rating });
-              onSave?.();
-            } catch (e) {
-              toast.error(`Failed to rate tracks: ${e}`);
-            }
-          }}
-        />
+        <StarRating rating={isSingle ? track.rating : 0} size="md" onChange={handleRate} />
       </div>
 
       {/* Audio info (single track only) */}

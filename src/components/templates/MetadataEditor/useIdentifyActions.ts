@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useUndo } from "../../../contexts/UndoContext";
 import type { IdentifyResult, AcoustIdMatch, Phase, View } from "./types";
 import type { MetadataUpdate, MetadataSaveResult } from "../../../types/metadata";
 
@@ -15,6 +16,7 @@ export const useIdentifyActions = (
   setView: (v: View) => void,
   setUndoOperations: (ops: MetadataUpdate[] | null) => void,
 ) => {
+  const { push: pushUndo } = useUndo();
   const [results, setResults] = useState<IdentifyResult[] | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, AcoustIdMatch>>({});
@@ -126,6 +128,15 @@ export const useIdentifyActions = (
       setSaveResult(result);
       if (result.succeeded > 0) {
         setUndoOperations(result.undo_operations);
+        const ops = result.undo_operations;
+        pushUndo({
+          label: `identified metadata (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
+          undo: async () => {
+            await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
+            setUndoOperations(null);
+            await refreshTracks();
+          },
+        });
       }
       finishProgress(`Applied metadata to ${result.succeeded} of ${result.total} files`);
       if (result.succeeded > 0) {

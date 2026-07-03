@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 vi.unmock("./PlaylistContext");
 import { PlaylistProvider, usePlaylist } from "./PlaylistContext";
+import { UndoProvider } from "./UndoContext";
 
 const mockPlaylist = { id: 1, name: "Test", track_count: 2, total_duration: 300, created_at: 0, updated_at: 0 };
 const mockTrack = {
@@ -51,7 +52,11 @@ const mockSmartPlaylist = {
   updated_at: 0,
 };
 
-const wrapper = ({ children }: { children: React.ReactNode }) => <PlaylistProvider>{children}</PlaylistProvider>;
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <UndoProvider>
+    <PlaylistProvider>{children}</PlaylistProvider>
+  </UndoProvider>
+);
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {

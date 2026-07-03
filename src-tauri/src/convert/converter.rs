@@ -38,7 +38,7 @@ enum FileOutcome {
         output: String,
     },
     Failed(String),
-    /// Cancelled before the file was started.
+    /// Cancelled — either never started, or killed mid-conversion. Not a failure.
     Skipped,
 }
 
@@ -87,18 +87,28 @@ fn convert_one(
 
     let warning = lossy_to_flac_warning(req);
 
-    let outcome = match convert_single(req, file_index, &file_name, progress, cancel_flag) {
-        Ok(path) => FileOutcome::Converted {
-            input: req.input_path.clone(),
-            output: path,
-        },
+    let result = convert_single(req, file_index, &file_name, progress, cancel_flag);
+    progress.finish_file(file_index, &file_name);
+
+    match result {
+        Ok(path) => (
+            FileOutcome::Converted {
+                input: req.input_path.clone(),
+                output: path,
+            },
+            warning,
+        ),
+        // A file killed mid-conversion by cancellation is not a failure — treat
+        // it like a not-yet-started file so cancel produces no spurious errors.
+        Err(_) if cancel_flag.load(Ordering::SeqCst) => (FileOutcome::Skipped, None),
         Err(e) => {
             log::warn!("Conversion failed for {}: {}", file_name, e);
-            FileOutcome::Failed(format!("{}: {}", file_name, e))
+            (
+                FileOutcome::Failed(format!("{}: {}", file_name, e)),
+                warning,
+            )
         }
-    };
-    progress.finish_file(file_index, &file_name);
-    (outcome, warning)
+    }
 }
 
 fn lossy_to_flac_warning(req: &ConvertRequest) -> Option<String> {

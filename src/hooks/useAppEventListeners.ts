@@ -16,6 +16,7 @@ export const useAppEventListeners = ({
   onOpenSettings,
   onLibraryChanged,
   onToggleShortcuts,
+  onToggleCommandPalette,
   onCheckForUpdates,
   onSwitchTab,
   onToggleQueue,
@@ -23,6 +24,7 @@ export const useAppEventListeners = ({
   onOpenSettings: () => void;
   onLibraryChanged: () => void;
   onToggleShortcuts: () => void;
+  onToggleCommandPalette: () => void;
   onCheckForUpdates: () => void;
   onSwitchTab: (tab: TopTab) => void;
   onToggleQueue: () => void;
@@ -33,6 +35,8 @@ export const useAppEventListeners = ({
   onLibraryChangedRef.current = onLibraryChanged;
   const onToggleShortcutsRef = useRef(onToggleShortcuts);
   onToggleShortcutsRef.current = onToggleShortcuts;
+  const onToggleCommandPaletteRef = useRef(onToggleCommandPalette);
+  onToggleCommandPaletteRef.current = onToggleCommandPalette;
   const onCheckForUpdatesRef = useRef(onCheckForUpdates);
   onCheckForUpdatesRef.current = onCheckForUpdates;
   const onSwitchTabRef = useRef(onSwitchTab);
@@ -66,7 +70,7 @@ export const useAppEventListeners = ({
     return () => unlisten?.();
   }, []);
 
-  // Global shortcuts: shortcuts dialog (default Cmd+/), queue panel, tab switching
+  // Global shortcuts: shortcuts dialog (default Cmd+/), queue panel, tab switching, command palette (default Cmd+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't steal keystrokes from text fields (the binding may be a bare key)
@@ -85,6 +89,10 @@ export const useAppEventListeners = ({
       if (tabAction) {
         e.preventDefault();
         onSwitchTabRef.current(tabAction.tab);
+      }
+      if (matchesShortcut(e, "toggleCommandPalette")) {
+        e.preventDefault();
+        onToggleCommandPaletteRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);

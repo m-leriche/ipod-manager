@@ -20,9 +20,10 @@ export interface ConvertRequest {
 }
 
 export interface ConvertProgress {
-  file_index: number;
+  completed_files: number;
   total_files: number;
   current_file: string;
+  /** Overall batch percent — files convert in parallel, so events interleave. */
   percent: number;
   phase: string;
 }

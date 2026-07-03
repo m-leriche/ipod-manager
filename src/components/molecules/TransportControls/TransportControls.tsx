@@ -1,12 +1,13 @@
 import { useState, useCallback } from "react";
 import { PlaybackButton } from "../../atoms/PlaybackButton/PlaybackButton";
-import { SeekBar } from "../../atoms/SeekBar/SeekBar";
+import { WaveformSeekBar } from "../WaveformSeekBar/WaveformSeekBar";
 import { formatDuration } from "../../../utils/format";
 
 interface TransportControlsProps {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  filePath?: string;
   shuffle: boolean;
   repeat: "off" | "all" | "one";
   onPlayPause: () => void;
@@ -21,6 +22,7 @@ export const TransportControls = ({
   isPlaying,
   currentTime,
   duration,
+  filePath,
   shuffle,
   repeat,
   onPlayPause,
@@ -107,7 +109,13 @@ export const TransportControls = ({
         <span className="text-[10px] text-text-tertiary tabular-nums min-w-8 text-right">
           {formatDuration(displayTime, "0:00")}
         </span>
-        <SeekBar value={fraction} onChange={onSeek} onScrub={handleScrub} className="flex-1" />
+        <WaveformSeekBar
+          filePath={filePath ?? null}
+          value={fraction}
+          onChange={onSeek}
+          onScrub={handleScrub}
+          className="flex-1"
+        />
         <span className="text-[10px] text-text-tertiary tabular-nums min-w-8">{formatDuration(duration, "0:00")}</span>
       </div>
     </div>

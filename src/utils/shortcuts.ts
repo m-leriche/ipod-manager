@@ -38,6 +38,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { action: "toggleFlagTracks", label: "Toggle sync flag on selection", category: "Library" },
   { action: "toggleShortcutsDialog", label: "Show shortcuts dialog", category: "General" },
   { action: "toggleQueuePanel", label: "Toggle queue panel", category: "General" },
+  { action: "toggleCommandPalette", label: "Open command palette", category: "General" },
 ];
 
 /** Rating actions in star order — index + 1 is the star value. */
@@ -76,6 +77,7 @@ export const DEFAULT_BINDINGS: Record<ShortcutAction, ShortcutBinding> = {
   clearRating: binding("Digit0"),
   toggleFlagTracks: binding("KeyL"),
   toggleQueuePanel: binding("KeyQ", { alt: true }),
+  toggleCommandPalette: binding("KeyK", { mod: true }),
 };
 
 export const getBinding = (action: ShortcutAction): ShortcutBinding =>

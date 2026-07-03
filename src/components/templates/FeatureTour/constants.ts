@@ -15,7 +15,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     title: "Tools",
-    body: "Everything for maintaining your library, grouped by task: File & Sync (iPod, files, export), Library Quality (health, duplicates, metadata), and Audio Tools (extract, convert).",
+    body: "Everything for maintaining your library, grouped by task: File & Sync (iPod, files, export), Library Quality (health, duplicates, metadata, quality), and Audio Tools (extract, convert).",
   },
   {
     title: "Discover",

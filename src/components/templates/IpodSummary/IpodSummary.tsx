@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { StorageBar } from "./StorageBar";
 import { IpodArtRepairModal } from "./IpodArtRepairModal";
+import { PlaylistSyncModal } from "../../organisms/PlaylistSyncModal/PlaylistSyncModal";
 import { fmtBytes } from "./helpers";
 import type { IpodInfo } from "../../../types/ipod";
 import type { SummaryStatus, IpodSummaryProps } from "./types";
@@ -12,6 +13,7 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
   const [info, setInfo] = useState<IpodInfo | null>(cachedInfo);
   const [error, setError] = useState<string | null>(null);
   const [showArtRepair, setShowArtRepair] = useState(false);
+  const [showPlaylistSync, setShowPlaylistSync] = useState(false);
 
   useEffect(() => {
     if (!isMounted || !diskInfo?.mount_point) {
@@ -145,15 +147,24 @@ export const IpodSummary = ({ diskInfo, isMounted, cachedInfo, onInfoLoaded }: I
 
       {/* Actions */}
       <Section title="Actions">
-        <button
-          onClick={() => setShowArtRepair(true)}
-          className="w-full py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:bg-bg-hover hover:text-text-primary"
-        >
-          Repair Album Art
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => setShowPlaylistSync(true)}
+            className="w-full py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:bg-bg-hover hover:text-text-primary"
+          >
+            Sync Playlists…
+          </button>
+          <button
+            onClick={() => setShowArtRepair(true)}
+            className="w-full py-2.5 bg-bg-card border border-border text-text-secondary rounded-xl text-xs font-medium transition-all hover:bg-bg-hover hover:text-text-primary"
+          >
+            Repair Album Art
+          </button>
+        </div>
       </Section>
 
       {showArtRepair && <IpodArtRepairModal musicPath={info.mount_point} onClose={() => setShowArtRepair(false)} />}
+      {showPlaylistSync && <PlaylistSyncModal info={info} onClose={() => setShowPlaylistSync(false)} />}
     </div>
   );
 };

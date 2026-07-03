@@ -19,6 +19,9 @@ pub struct CompareEntry {
     pub source_modified: Option<u64>,
     pub target_modified: Option<u64>,
     pub status: String,
+    /// True when this pair is a lossless source matched against its
+    /// transcoded `.mp3` counterpart on the target.
+    pub transcoded: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

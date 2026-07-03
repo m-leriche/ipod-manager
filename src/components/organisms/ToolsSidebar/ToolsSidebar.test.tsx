@@ -32,4 +32,16 @@ describe("ToolsSidebar", () => {
     await user.click(screen.getByRole("tab", { name: "Duplicates" }));
     expect(onSelect).toHaveBeenCalledWith("duplicates");
   });
+
+  it("lists Quality in the Library Quality group and selects it on click", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ToolsSidebar active="files" onSelect={onSelect} />);
+
+    const libraryQuality = TOOL_GROUPS.find((g) => g.label === "Library Quality")!;
+    expect(libraryQuality.tabs.some((tab) => tab.id === "quality")).toBe(true);
+
+    await user.click(screen.getByRole("tab", { name: "Quality" }));
+    expect(onSelect).toHaveBeenCalledWith("quality");
+  });
 });

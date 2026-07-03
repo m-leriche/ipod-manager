@@ -48,6 +48,7 @@ export const TOOL_ICONS: Record<ToolTab, React.ReactNode> = {
       <path strokeLinecap="round" d="M7 4v16M17 4v16M3 9h4m10 0h4M3 15h4m10 0h4" />
     </>,
   ),
+  quality: svg(<path strokeLinecap="round" d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />),
   convert: svg(
     <path
       strokeLinecap="round"

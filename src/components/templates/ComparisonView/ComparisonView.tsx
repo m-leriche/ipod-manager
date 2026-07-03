@@ -13,7 +13,14 @@ import type { ContextMenuItem } from "../../molecules/ContextMenu/types";
 import type { ComparisonViewProps } from "./types";
 import { FILTERS } from "./constants";
 
-export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclusion, onBack }: ComparisonViewProps) => {
+export const ComparisonView = ({
+  sourcePath,
+  targetPath,
+  exclusions,
+  transcode,
+  onAddExclusion,
+  onBack,
+}: ComparisonViewProps) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderPath: string } | null>(null);
 
   const { expanded, setExpanded, toggleExpand, expandAll, collapseAll } = useTreeExpansion();
@@ -26,7 +33,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
   );
 
   const { loading, error, setError, filter, setFilter, compare, visibleEntries, filtered, tree, entryMap, stats } =
-    useComparison(sourcePath, targetPath, exclusions, onCompared);
+    useComparison(sourcePath, targetPath, exclusions, onCompared, transcode);
 
   const { selected, toggle, toggleNodeSelection, selAll, selNone, reset: resetSelection } = useTreeSelection(filtered);
 
@@ -42,6 +49,7 @@ export const ComparisonView = ({ sourcePath, targetPath, exclusions, onAddExclus
     selected,
     resetAndCompare,
     setError,
+    transcode,
   );
 
   const nSrc = [...selected].filter((p) => {

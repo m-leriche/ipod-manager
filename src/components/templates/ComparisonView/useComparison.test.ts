@@ -56,9 +56,26 @@ describe("useComparison", () => {
     const { result } = renderHook(() => useComparison("/src", "/tgt", [], onCompared));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(mockInvoke).toHaveBeenCalledWith("compare_directories", { source: "/src", target: "/tgt" });
+    expect(mockInvoke).toHaveBeenCalledWith("compare_directories", {
+      source: "/src",
+      target: "/tgt",
+      transcodeLossless: false,
+    });
     expect(result.current.error).toBeNull();
     expect(onCompared).toHaveBeenCalled();
+  });
+
+  it("passes transcodeLossless true when a transcode bitrate is set", async () => {
+    mockInvoke.mockResolvedValue(entries);
+    const onCompared = vi.fn();
+    const { result } = renderHook(() => useComparison("/src", "/tgt", [], onCompared, "320"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockInvoke).toHaveBeenCalledWith("compare_directories", {
+      source: "/src",
+      target: "/tgt",
+      transcodeLossless: true,
+    });
   });
 
   it("computes stats correctly", async () => {

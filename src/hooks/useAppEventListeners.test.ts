@@ -10,6 +10,7 @@ describe("useAppEventListeners", () => {
     onOpenSettings: vi.fn(),
     onLibraryChanged: vi.fn(),
     onToggleShortcuts: vi.fn(),
+    onToggleCommandPalette: vi.fn(),
     onCheckForUpdates: vi.fn(),
     onSwitchTab: vi.fn(),
     onToggleQueue: vi.fn(),
@@ -69,6 +70,20 @@ describe("useAppEventListeners", () => {
 
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", ctrlKey: true }));
     expect(callbacks.onToggleShortcuts).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onToggleCommandPalette on Cmd+K keydown", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyK", metaKey: true }));
+    expect(callbacks.onToggleCommandPalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onToggleCommandPalette on K without modifier", () => {
+    renderHook(() => useAppEventListeners(callbacks));
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyK" }));
+    expect(callbacks.onToggleCommandPalette).not.toHaveBeenCalled();
   });
 
   it("does not call onToggleShortcuts on / without modifier", () => {

@@ -135,6 +135,61 @@ describe("useSync", () => {
     expect(deleteCall).toBeUndefined();
   });
 
+  it("copyToTarget passes the transcode bitrate to copy_files", async () => {
+    mockInvoke.mockResolvedValue(okResult);
+    const { result } = renderHook(() => useSync("/src", "/tgt", entries, selected, compare, setError, "320"));
+
+    await act(async () => {
+      await result.current.copyToTarget();
+    });
+
+    const call = mockInvoke.mock.calls.find((c) => c[0] === "copy_files");
+    expect((call![1] as { transcode: string | null }).transcode).toBe("320");
+  });
+
+  it("copyToTarget passes null transcode when disabled", async () => {
+    mockInvoke.mockResolvedValue(okResult);
+    const { result } = renderHook(() => useSync("/src", "/tgt", entries, selected, compare, setError));
+
+    await act(async () => {
+      await result.current.copyToTarget();
+    });
+
+    const call = mockInvoke.mock.calls.find((c) => c[0] === "copy_files");
+    expect((call![1] as { transcode: string | null }).transcode).toBeNull();
+  });
+
+  it("copyToSource skips transcoded pairs", async () => {
+    mockInvoke.mockResolvedValue(okResult);
+    const withTranscoded: CompareEntry[] = [
+      { ...makeEntry("song.flac", "modified"), transcoded: true },
+      makeEntry("plain.txt", "modified"),
+    ];
+    const sel = new Set(["song.flac", "plain.txt"]);
+    const { result } = renderHook(() => useSync("/src", "/tgt", withTranscoded, sel, compare, setError, "320"));
+
+    await act(async () => {
+      await result.current.copyToSource();
+    });
+
+    const call = mockInvoke.mock.calls.find((c) => c[0] === "copy_files");
+    const ops = (call![1] as { operations: { source_path: string }[] }).operations;
+    expect(ops).toHaveLength(1);
+    expect(ops[0].source_path).toBe("/tgt/plain.txt");
+  });
+
+  it("mirrorToTarget passes the transcode bitrate to copy_files", async () => {
+    mockInvoke.mockResolvedValue(okResult);
+    const { result } = renderHook(() => useSync("/src", "/tgt", entries, selected, compare, setError, "v0"));
+
+    await act(async () => {
+      await result.current.mirrorToTarget();
+    });
+
+    const call = mockInvoke.mock.calls.find((c) => c[0] === "copy_files");
+    expect((call![1] as { transcode: string | null }).transcode).toBe("v0");
+  });
+
   it("sets error on failure", async () => {
     mockInvoke.mockRejectedValue("Disk full");
     setError.mockClear();

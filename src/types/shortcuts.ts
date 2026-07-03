@@ -30,4 +30,5 @@ export type ShortcutAction =
   | "rateTracks5"
   | "clearRating"
   | "toggleFlagTracks"
-  | "toggleQueuePanel";
+  | "toggleQueuePanel"
+  | "toggleCommandPalette";

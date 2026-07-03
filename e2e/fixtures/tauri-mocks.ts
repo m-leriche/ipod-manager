@@ -100,7 +100,7 @@ const DEFAULT_RESPONSES: Record<string, unknown> = {
   scan_audio_quality: [],
   scan_audio_quality_paths: [],
   generate_spectrogram: { path: "" },
-  generate_waveform: { path: "" },
+  generate_waveform: { file_path: "", peaks: [], duration: 0 },
 
   // Album art
   scan_album_art: [],

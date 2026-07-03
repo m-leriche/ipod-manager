@@ -254,7 +254,7 @@ pub fn run_sync(
     }
 
     let mut errors = plan.errors;
-    let copy_result = crate::files::copy_file_list(plan.operations, app, cancel_flag);
+    let copy_result = crate::files::copy_file_list(plan.operations, None, app, cancel_flag);
     errors.extend(copy_result.errors);
 
     if copy_result.cancelled {

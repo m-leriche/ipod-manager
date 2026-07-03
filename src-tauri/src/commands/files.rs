@@ -1,5 +1,7 @@
 use crate::error::AppError;
-use crate::files::{self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel};
+use crate::files::{
+    self, CompareEntry, CopyOperation, CopyResult, FileEntry, SyncCancel, TranscodeBitrate,
+};
 use crate::profiles::{self, FileManagerProfileStore};
 use tauri::{AppHandle, State};
 
@@ -16,12 +18,14 @@ pub async fn compare_directories(
     source: String,
     target: String,
     exclusions: Option<Vec<String>>,
+    transcode_lossless: Option<bool>,
     cancel: State<'_, SyncCancel>,
 ) -> Result<Vec<CompareEntry>, AppError> {
     let flag = cancel.new_flag();
 
     tauri::async_runtime::spawn_blocking(move || {
-        let mut entries = files::compare_dirs(&source, &target, flag)?;
+        let mut entries =
+            files::compare_dirs(&source, &target, transcode_lossless.unwrap_or(false), flag)?;
         if let Some(ref ex) = exclusions {
             if !ex.is_empty() {
                 entries.retain(|e| !profiles::is_excluded(&e.relative_path, ex));
@@ -37,15 +41,17 @@ pub async fn compare_directories(
 #[tauri::command]
 pub async fn copy_files(
     operations: Vec<CopyOperation>,
+    transcode: Option<TranscodeBitrate>,
     app: AppHandle,
     cancel: State<'_, SyncCancel>,
 ) -> Result<CopyResult, AppError> {
     let flag = cancel.new_flag();
 
-    let result =
-        tauri::async_runtime::spawn_blocking(move || files::copy_file_list(operations, app, flag))
-            .await
-            .map_err(|e| format!("Task failed: {}", e))?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        files::copy_file_list(operations, transcode, app, flag)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?;
 
     Ok(result)
 }

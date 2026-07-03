@@ -5,7 +5,7 @@ mod progress;
 
 use serde::{Deserialize, Serialize};
 
-pub use converter::convert_batch;
+pub use converter::{convert_batch, transcode_file};
 pub use probe::probe_audio_batch;
 
 // ── Types ───────────────────────────────────────────────────────

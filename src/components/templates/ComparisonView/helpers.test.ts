@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTree, collectPaths, collectDiffPaths, flattenTree, fmtSize, lastSegment } from "./helpers";
+import { buildTree, collectPaths, collectDiffPaths, flattenTree, fmtSize, lastSegment, mp3Name } from "./helpers";
 import type { CompareEntry } from "./types";
 
 const entry = (relative_path: string, status: CompareEntry["status"] = "source_only"): CompareEntry => ({
@@ -49,6 +49,21 @@ describe("lastSegment", () => {
 
   it("handles trailing segment", () => {
     expect(lastSegment("folder/sub")).toBe("sub");
+  });
+});
+
+describe("mp3Name", () => {
+  it("replaces the extension with .mp3", () => {
+    expect(mp3Name("song.flac")).toBe("song.mp3");
+    expect(mp3Name("track.wav")).toBe("track.mp3");
+  });
+
+  it("keeps dots in the stem", () => {
+    expect(mp3Name("01. Intro.flac")).toBe("01. Intro.mp3");
+  });
+
+  it("appends .mp3 when there is no extension", () => {
+    expect(mp3Name("noext")).toBe("noext.mp3");
   });
 });
 

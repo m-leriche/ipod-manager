@@ -8,4 +8,6 @@ export const emptyFileManagerProfile = (name: string, mode: "browse" | "sync" = 
   dual_pane: false,
   layout: "horizontal",
   exclusions: [],
+  transcode_lossless: false,
+  transcode_bitrate: "320",
 });

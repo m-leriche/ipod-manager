@@ -18,6 +18,7 @@ export const SplitComparisonView = ({
   sourcePath,
   targetPath,
   exclusions,
+  transcode,
   onAddExclusion,
   onBack,
 }: ComparisonViewProps) => {
@@ -33,7 +34,7 @@ export const SplitComparisonView = ({
   );
 
   const { loading, error, setError, filter, setFilter, compare, visibleEntries, filtered, tree, entryMap, stats } =
-    useComparison(sourcePath, targetPath, exclusions, onCompared);
+    useComparison(sourcePath, targetPath, exclusions, onCompared, transcode);
 
   const { selected, toggle, toggleNodeSelection, selAll, selNone, reset: resetSelection } = useTreeSelection(filtered);
 
@@ -49,6 +50,7 @@ export const SplitComparisonView = ({
     selected,
     resetAndCompare,
     setError,
+    transcode,
   );
 
   const nSrc = [...selected].filter((p) => {

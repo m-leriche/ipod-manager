@@ -224,6 +224,7 @@ fn compare_dirs_identical_directories() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -243,6 +244,7 @@ fn compare_dirs_source_only_file() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -261,6 +263,7 @@ fn compare_dirs_target_only_file() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -280,6 +283,7 @@ fn compare_dirs_modified_file() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -308,6 +312,7 @@ fn compare_dirs_mixed_statuses_sorted_correctly() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -333,6 +338,7 @@ fn compare_dirs_recursive_subdirectories() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -354,6 +360,7 @@ fn compare_dirs_skips_dotfiles() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -370,6 +377,7 @@ fn compare_dirs_empty_directories() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();
@@ -388,6 +396,7 @@ fn compare_dirs_cancellation() {
     let result = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         cancel,
     );
 
@@ -401,9 +410,149 @@ fn compare_dirs_rejects_nonexistent_source() {
     let result = compare_dirs(
         "/tmp/nonexistent_dir_xyz_12345",
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     );
     assert!(result.is_err());
+}
+
+// ── Transcode-aware pairing ──────────────────────────────────────
+
+use crate::files::compare::pair_entries;
+use std::collections::HashMap;
+
+fn files(list: &[(&str, u64, u64)]) -> HashMap<String, (u64, u64)> {
+    list.iter()
+        .map(|(path, size, modified)| (path.to_string(), (*size, *modified)))
+        .collect()
+}
+
+fn find<'a>(
+    entries: &'a [crate::files::CompareEntry],
+    path: &str,
+) -> &'a crate::files::CompareEntry {
+    entries
+        .iter()
+        .find(|e| e.relative_path == path)
+        .unwrap_or_else(|| panic!("no entry for {path}"))
+}
+
+#[test]
+fn pair_entries_transcode_off_keeps_size_semantics() {
+    let src = files(&[("a.flac", 100, 10)]);
+    let tgt = files(&[("a.flac", 200, 10)]);
+
+    let entries = pair_entries(&src, &tgt, false);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].status, "modified");
+    assert!(!entries[0].transcoded);
+}
+
+#[test]
+fn pair_entries_lossless_pairs_with_mp3_dest() {
+    let src = files(&[("Artist/song.flac", 30_000_000, 10)]);
+    let tgt = files(&[("Artist/song.mp3", 8_000_000, 20)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(entries.len(), 1);
+    let e = &entries[0];
+    assert_eq!(e.relative_path, "Artist/song.flac");
+    assert_eq!(e.status, "same");
+    assert!(e.transcoded);
+    assert_eq!(e.target_size, Some(8_000_000));
+}
+
+#[test]
+fn pair_entries_size_difference_does_not_mark_transcoded_pair_modified() {
+    // Sizes wildly differ but mtimes match — still "same" by design.
+    let src = files(&[("song.wav", 50_000_000, 10)]);
+    let tgt = files(&[("song.mp3", 5_000_000, 10)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(entries[0].status, "same");
+}
+
+#[test]
+fn pair_entries_older_mp3_is_modified() {
+    let src = files(&[("song.flac", 100, 50)]);
+    let tgt = files(&[("song.mp3", 10, 40)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(entries[0].status, "modified");
+    assert!(entries[0].transcoded);
+}
+
+#[test]
+fn pair_entries_missing_mp3_is_source_only() {
+    let src = files(&[("song.flac", 100, 10)]);
+    let tgt = files(&[]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].status, "source_only");
+    assert!(entries[0].transcoded);
+}
+
+#[test]
+fn pair_entries_matched_mp3_is_not_an_orphan() {
+    let src = files(&[("song.flac", 100, 10)]);
+    let tgt = files(&[("song.mp3", 10, 20)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    // One "same" pair — the mp3 must not also appear as target_only.
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].status, "same");
+}
+
+#[test]
+fn pair_entries_stale_lossless_on_target_becomes_orphan() {
+    // A raw flac previously synced to the target: with transcoding on, the
+    // source flac now pairs with the mp3, so the target flac is an extra.
+    let src = files(&[("song.flac", 100, 10)]);
+    let tgt = files(&[("song.flac", 100, 10), ("song.mp3", 10, 20)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(find(&entries, "song.flac").status, "same");
+    let orphan = entries
+        .iter()
+        .find(|e| e.status == "target_only")
+        .expect("stale flac should be target_only");
+    assert_eq!(orphan.relative_path, "song.flac");
+}
+
+#[test]
+fn pair_entries_non_lossless_unaffected_by_transcode_flag() {
+    let src = files(&[("song.mp3", 100, 10), ("other.ogg", 50, 10)]);
+    let tgt = files(&[("song.mp3", 100, 10), ("other.ogg", 60, 10)]);
+
+    let entries = pair_entries(&src, &tgt, true);
+    assert_eq!(find(&entries, "song.mp3").status, "same");
+    assert_eq!(find(&entries, "other.ogg").status, "modified");
+    assert!(entries.iter().all(|e| !e.transcoded));
+}
+
+#[test]
+fn compare_dirs_transcode_pairs_flac_with_mp3() {
+    let src = tempfile::tempdir().unwrap();
+    let tgt = tempfile::tempdir().unwrap();
+
+    std::fs::write(src.path().join("song.flac"), "lossless data").unwrap();
+    // Written after the source, so mtime is not older.
+    std::fs::write(tgt.path().join("song.mp3"), "mp3").unwrap();
+
+    let results = compare_dirs(
+        src.path().to_str().unwrap(),
+        tgt.path().to_str().unwrap(),
+        true,
+        no_cancel(),
+    )
+    .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].relative_path, "song.flac");
+    assert_eq!(results[0].status, "same");
+    assert!(results[0].transcoded);
 }
 
 #[test]
@@ -427,6 +576,7 @@ fn compare_dirs_same_size_different_mtime_is_modified() {
     let results = compare_dirs(
         src.path().to_str().unwrap(),
         tgt.path().to_str().unwrap(),
+        false,
         no_cancel(),
     )
     .unwrap();

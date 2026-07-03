@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { STATUS_ICON, STATUS_BADGE, FILE_ROW_BG } from "./constants";
-import { fmtSize, lastSegment } from "./helpers";
+import { fmtSize, lastSegment, mp3Name } from "./helpers";
 import type { FileRowProps } from "./types";
 
 const FileRowImpl = ({ entry, depth, isSelected, onToggleFile }: FileRowProps) => (
@@ -31,6 +31,16 @@ const FileRowImpl = ({ entry, depth, isSelected, onToggleFile }: FileRowProps) =
     <span className="text-[11px] text-text-secondary flex-1 min-w-0 truncate" title={entry.relative_path}>
       {lastSegment(entry.relative_path)}
     </span>
+
+    {/* Transcode marker */}
+    {entry.transcoded && (
+      <span
+        className="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[9px] font-bold shrink-0"
+        title={`Synced as ${mp3Name(lastSegment(entry.relative_path))}`}
+      >
+        MP3
+      </span>
+    )}
 
     {/* Sizes */}
     <span className="text-[10px] text-text-tertiary w-16 text-right shrink-0">{fmtSize(entry.source_size)}</span>

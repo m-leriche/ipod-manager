@@ -23,6 +23,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { action: "nextTrack", label: "Next track", category: "Playback" },
   { action: "focusSearch", label: "Search library", category: "Library" },
   { action: "toggleShortcutsDialog", label: "Show shortcuts dialog", category: "General" },
+  { action: "toggleCommandPalette", label: "Open command palette", category: "General" },
 ];
 
 const binding = (code: string, opts: Partial<Omit<ShortcutBinding, "code">> = {}): ShortcutBinding => ({
@@ -40,6 +41,7 @@ export const DEFAULT_BINDINGS: Record<ShortcutAction, ShortcutBinding> = {
   nextTrack: binding("ArrowRight", { mod: true }),
   focusSearch: binding("KeyF", { mod: true }),
   toggleShortcutsDialog: binding("Slash", { mod: true }),
+  toggleCommandPalette: binding("KeyK", { mod: true }),
 };
 
 export const getBinding = (action: ShortcutAction): ShortcutBinding =>

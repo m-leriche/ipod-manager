@@ -61,8 +61,7 @@ export const useMetadataSave = ({
   onSaveToast,
 }: UseMetadataSaveParams) => {
   const { push: pushUndo } = useUndo();
-  // Refs so toast actions and pushed undo entries always call the latest handlers
-  const undoRef = useRef<(() => void) | null>(null);
+  // Ref so pushed undo entries and toast actions always call the latest restore handler
   const restoreRef = useRef<(ops: MetadataUpdate[]) => Promise<void>>(() => Promise.resolve());
   const handleSave = useCallback(async () => {
     const updates = [];
@@ -118,7 +117,11 @@ export const useMetadataSave = ({
         });
         onSaveToast?.(`Saved ${result.succeeded} file${result.succeeded !== 1 ? "s" : ""} — ⌘Z to undo`, {
           label: "Undo",
-          onClick: () => undoRef.current?.(),
+          // Capture this save's ops so the toast always reverts its own save,
+          // even if a later save overwrites the panel's live undo state.
+          onClick: () => {
+            void restoreRef.current(ops).catch(() => {});
+          },
         });
       }
     } catch (e) {
@@ -259,7 +262,6 @@ export const useMetadataSave = ({
     }
   }, [selectedTracks, setRepairingArt, setArtCacheBust, bumpArtCache]);
 
-  undoRef.current = handleUndo;
   restoreRef.current = restoreOperations;
 
   return { handleSave, handleUndo, handleSanitize, handleRepairArt };

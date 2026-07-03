@@ -87,7 +87,7 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
       setConverting(true);
       startProgress(`Converting ${albumLabel(album)}…`, cancelSync);
       const unlisten = await listen<ConvertProgress>("convert-progress", (e) => {
-        updateProgress(e.payload.file_index, e.payload.total_files, e.payload.current_file);
+        updateProgress(e.payload.completed_files, e.payload.total_files, e.payload.current_file);
       });
       try {
         const result = await invoke<ConvertResult>("convert_inbox_album", {

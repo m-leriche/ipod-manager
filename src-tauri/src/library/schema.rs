@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use super::now_epoch;
 
 /// Bump when adding a migration step below.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 pub(super) fn create_tables(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
@@ -179,6 +179,18 @@ pub(super) fn migrate(conn: &Connection) -> Result<(), String> {
              CREATE INDEX IF NOT EXISTS idx_tracks_last_played ON tracks(last_played);",
         )
         .map_err(|e| format!("Migration v1 index creation failed: {}", e))?;
+    }
+
+    if version < 2 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS quality_cache (
+                file_path TEXT PRIMARY KEY,
+                mtime INTEGER NOT NULL,
+                file_size INTEGER NOT NULL,
+                info_json TEXT NOT NULL
+            );",
+        )
+        .map_err(|e| format!("Migration v2 failed: {}", e))?;
     }
 
     if version < SCHEMA_VERSION {

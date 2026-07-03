@@ -15,6 +15,7 @@ export const TOOL_GROUPS: ToolTabGroup[] = [
       { id: "health", label: "Health", description: "Scan for missing art, tags, and quality issues" },
       { id: "duplicates", label: "Duplicates", description: "Find and remove duplicate tracks" },
       { id: "metadata", label: "Metadata", description: "Edit and repair track tags" },
+      { id: "quality", label: "Quality", description: "Analyze audio quality and spot suspect transcodes" },
     ],
   },
   {

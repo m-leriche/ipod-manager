@@ -10,18 +10,19 @@ const mod = isMac ? "\u2318" : "Ctrl";
 
 const registryKeys = (action: (typeof SHORTCUT_DEFS)[number]["action"]) => formatBinding(getBinding(action));
 
+const registrySection = (category: (typeof SHORTCUT_DEFS)[number]["category"]) =>
+  SHORTCUT_DEFS.filter((d) => d.category === category).map((d) => ({
+    keys: registryKeys(d.action),
+    description: d.label,
+  }));
+
 const buildSections = () => [
-  {
-    title: "Playback",
-    shortcuts: SHORTCUT_DEFS.filter((d) => d.category === "Playback").map((d) => ({
-      keys: registryKeys(d.action),
-      description: d.label,
-    })),
-  },
+  { title: "Playback", shortcuts: registrySection("Playback") },
+  { title: "Navigation", shortcuts: registrySection("Navigation") },
   {
     title: "Library",
     shortcuts: [
-      { keys: registryKeys("focusSearch"), description: "Search library" },
+      ...registrySection("Library"),
       { keys: ["\u2191 / \u2193"], description: "Navigate tracks" },
       { keys: ["Enter"], description: "Play selected track" },
       { keys: ["Escape"], description: "Clear selection" },
@@ -31,10 +32,7 @@ const buildSections = () => [
       { keys: ["Type a\u2013z"], description: "Jump to matching track" },
     ],
   },
-  {
-    title: "General",
-    shortcuts: [{ keys: registryKeys("toggleShortcutsDialog"), description: "Show this dialog" }],
-  },
+  { title: "General", shortcuts: registrySection("General") },
 ];
 
 export const KeyboardShortcutsDialog = ({ onClose }: KeyboardShortcutsDialogProps) => {
@@ -101,7 +99,8 @@ export const KeyboardShortcutsDialog = ({ onClose }: KeyboardShortcutsDialogProp
             </div>
           ))}
           <p className="text-[10px] text-text-tertiary pt-1">
-            Playback, search, and dialog shortcuts can be customized in Settings → Shortcuts.
+            Most shortcuts can be customized in Settings → Shortcuts. List navigation and click-modifier shortcuts are
+            fixed.
           </p>
         </div>
       </div>

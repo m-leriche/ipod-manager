@@ -3,13 +3,20 @@ use lofty::prelude::{Accessor, TaggedFileExt};
 use lofty::probe::Probe;
 use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::musicbrainz::MbCache;
 
 use super::{
     find_cover, is_audio, resize_if_needed, save_cover_jpg, AlbumArtProgress, AlbumArtResult,
 };
+
+/// Worker threads for the batch fixer. Network egress stays serialized by the
+/// MusicBrainz rate limiter; the win is overlapping tag reads, image work,
+/// and cache hits.
+const WORKER_THREADS: usize = 4;
 
 /// Ensure cover.jpg exists in the directory with Rockbox-compatible encoding.
 /// Re-encodes existing cover.jpg to guarantee baseline JPEG with compatible
@@ -106,13 +113,14 @@ fn try_save_cover(
     releases: &[crate::musicbrainz::MbRelease],
     dir: &Path,
     cancel_flag: &Arc<AtomicBool>,
+    cache: &MbCache,
 ) -> Result<(), String> {
     for release in releases {
         if cancel_flag.load(Ordering::SeqCst) {
             return Err("Cancelled".into());
         }
 
-        let Ok(bytes) = crate::musicbrainz::fetch_cover_art(&release.id) else {
+        let Ok(bytes) = crate::musicbrainz::fetch_cover_art(&release.id, Some(cache)) else {
             continue;
         };
         let Ok(img) = image::load_from_memory(&bytes) else {
@@ -136,14 +144,15 @@ fn fetch_from_musicbrainz(
     album: &str,
     dir: &Path,
     cancel_flag: &Arc<AtomicBool>,
+    cache: &MbCache,
 ) -> Result<(), String> {
     if cancel_flag.load(Ordering::SeqCst) {
         return Err("Cancelled".into());
     }
 
     // Attempt 1: exact names
-    if let Ok(releases) = crate::musicbrainz::search_releases(artist, album) {
-        if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
+    if let Ok(releases) = crate::musicbrainz::search_releases(artist, album, Some(cache)) {
+        if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag, cache).is_ok() {
             return Ok(());
         }
     }
@@ -159,8 +168,9 @@ fn fetch_from_musicbrainz(
     let artist_changed = clean_artist != artist;
 
     if album_changed {
-        if let Ok(releases) = crate::musicbrainz::search_releases(artist, &clean_album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
+        if let Ok(releases) = crate::musicbrainz::search_releases(artist, &clean_album, Some(cache))
+        {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag, cache).is_ok() {
                 return Ok(());
             }
         }
@@ -171,14 +181,17 @@ fn fetch_from_musicbrainz(
     }
 
     if artist_changed && album_changed {
-        if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, &clean_album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
+        if let Ok(releases) =
+            crate::musicbrainz::search_releases(&clean_artist, &clean_album, Some(cache))
+        {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag, cache).is_ok() {
                 return Ok(());
             }
         }
     } else if artist_changed {
-        if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, album) {
-            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag).is_ok() {
+        if let Ok(releases) = crate::musicbrainz::search_releases(&clean_artist, album, Some(cache))
+        {
+            if !releases.is_empty() && try_save_cover(&releases, dir, cancel_flag, cache).is_ok() {
                 return Ok(());
             }
         }
@@ -194,86 +207,126 @@ fn invalidate_thumbnails(app: &AppHandle, folder_path: &str) {
     }
 }
 
-/// Fix album art for a list of folders.
-/// Tries embedded extraction first (fast, no network), then MusicBrainz.
+enum FolderOutcome {
+    AlreadyOk,
+    Fixed,
+    Failed(String),
+    Cancelled,
+}
+
+/// Fix a single folder: normalize/re-encode an existing cover, else extract
+/// embedded art, else fetch from MusicBrainz.
+fn fix_folder(
+    folder_str: &str,
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+    cache: &MbCache,
+) -> FolderOutcome {
+    let dir = Path::new(folder_str);
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    match normalize_cover(dir) {
+        Ok(true) => return FolderOutcome::AlreadyOk,
+        Ok(false) => {}
+        Err(e) => log::warn!("Cover normalize failed for {}: {}", name, e),
+    }
+
+    match extract_embedded(dir) {
+        Ok(true) => {
+            invalidate_thumbnails(app, folder_str);
+            let _ = app.emit("album-art-fixed", folder_str.to_string());
+            return FolderOutcome::Fixed;
+        }
+        Ok(false) => {}
+        Err(e) => log::warn!("Embed extract failed for {}: {}", name, e),
+    }
+
+    let (artist, album) = read_album_metadata(dir);
+    match (artist, album) {
+        (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir, cancel_flag, cache) {
+            Ok(()) => {
+                invalidate_thumbnails(app, folder_str);
+                let _ = app.emit("album-art-fixed", folder_str.to_string());
+                FolderOutcome::Fixed
+            }
+            Err(e) if e == "Cancelled" => FolderOutcome::Cancelled,
+            Err(e) => FolderOutcome::Failed(format!("{}: {}", name, e)),
+        },
+        _ => FolderOutcome::Failed(format!("{}: no artist/album tags", name)),
+    }
+}
+
+/// Fix album art for a list of folders on a small worker pool. The
+/// MusicBrainz rate limiter keeps network requests serialized; workers
+/// overlap tag reads, image work, and cache hits.
 pub fn fix_album_art(
     folders: Vec<String>,
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
     event_name: &str,
+    cache: &MbCache,
 ) -> AlbumArtResult {
     let total = folders.len();
-    let mut fixed = 0;
-    let mut already_ok = 0;
-    let mut failed = 0;
-    let mut errors = Vec::new();
-    let mut cancelled = false;
+    let fixed = AtomicUsize::new(0);
+    let already_ok = AtomicUsize::new(0);
+    let failed = AtomicUsize::new(0);
+    let errors: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let next = AtomicUsize::new(0);
 
-    for (i, folder_str) in folders.iter().enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            cancelled = true;
-            break;
-        }
-
-        let dir = Path::new(folder_str);
-        let name = dir
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let _ = app.emit(
-            event_name,
-            AlbumArtProgress {
-                total,
-                completed: i,
-                current_album: name.clone(),
-                phase: "processing".to_string(),
-            },
-        );
-
-        match normalize_cover(dir) {
-            Ok(true) => {
-                already_ok += 1;
-                continue;
-            }
-            Ok(false) => {}
-            Err(e) => log::warn!("Cover normalize failed for {}: {}", name, e),
-        }
-
-        match extract_embedded(dir) {
-            Ok(true) => {
-                fixed += 1;
-                invalidate_thumbnails(&app, folder_str);
-                let _ = app.emit("album-art-fixed", folder_str.clone());
-                continue;
-            }
-            Ok(false) => {}
-            Err(e) => log::warn!("Embed extract failed for {}: {}", name, e),
-        }
-
-        let (artist, album) = read_album_metadata(dir);
-        match (artist, album) {
-            (Some(a), Some(b)) => match fetch_from_musicbrainz(&a, &b, dir, &cancel_flag) {
-                Ok(()) => {
-                    fixed += 1;
-                    invalidate_thumbnails(&app, folder_str);
-                    let _ = app.emit("album-art-fixed", folder_str.clone());
-                }
-                Err(e) if e == "Cancelled" => {
-                    cancelled = true;
+    std::thread::scope(|s| {
+        for _ in 0..WORKER_THREADS.min(total.max(1)) {
+            s.spawn(|| loop {
+                if cancel_flag.load(Ordering::SeqCst) {
                     break;
                 }
-                Err(e) => {
-                    errors.push(format!("{}: {}", name, e));
-                    failed += 1;
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                if i >= total {
+                    break;
                 }
-            },
-            _ => {
-                errors.push(format!("{}: no artist/album tags", name));
-                failed += 1;
-            }
+
+                let folder_str = &folders[i];
+                let name = Path::new(folder_str)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let done = fixed.load(Ordering::SeqCst)
+                    + already_ok.load(Ordering::SeqCst)
+                    + failed.load(Ordering::SeqCst);
+                let _ = app.emit(
+                    event_name,
+                    AlbumArtProgress {
+                        total,
+                        completed: done,
+                        current_album: name,
+                        phase: "processing".to_string(),
+                    },
+                );
+
+                match fix_folder(folder_str, &app, &cancel_flag, cache) {
+                    FolderOutcome::AlreadyOk => {
+                        already_ok.fetch_add(1, Ordering::SeqCst);
+                    }
+                    FolderOutcome::Fixed => {
+                        fixed.fetch_add(1, Ordering::SeqCst);
+                    }
+                    FolderOutcome::Failed(e) => {
+                        failed.fetch_add(1, Ordering::SeqCst);
+                        if let Ok(mut errs) = errors.lock() {
+                            errs.push(e);
+                        }
+                    }
+                    FolderOutcome::Cancelled => break,
+                }
+            });
         }
-    }
+    });
+
+    let fixed = fixed.into_inner();
+    let already_ok = already_ok.into_inner();
+    let failed = failed.into_inner();
 
     let _ = app.emit(
         event_name,
@@ -290,8 +343,8 @@ pub fn fix_album_art(
         fixed,
         already_ok,
         failed,
-        cancelled,
-        errors,
+        cancelled: cancel_flag.load(Ordering::SeqCst),
+        errors: errors.into_inner().unwrap_or_else(|e| e.into_inner()),
     }
 }
 

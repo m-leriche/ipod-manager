@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { IpodSummary } from "./IpodSummary";
@@ -138,6 +138,22 @@ describe("IpodSummary", () => {
     expect(screen.queryByText("Serial")).not.toBeInTheDocument();
     expect(screen.queryByText("Firmware")).not.toBeInTheDocument();
     expect(screen.queryByText("Rockbox")).not.toBeInTheDocument();
+  });
+
+  it("opens the playlist sync modal from the actions section", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "get_playlists" || cmd === "get_smart_playlists") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    render(
+      <IpodSummary diskInfo={mockDiskInfo} isMounted={true} cachedInfo={mockIpodInfo} onInfoLoaded={onInfoLoaded} />,
+    );
+
+    fireEvent.click(screen.getByText("Sync Playlists…"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Sync Playlists to iPod")).toBeInTheDocument();
+    });
   });
 
   it("uses cached info without re-fetching", () => {

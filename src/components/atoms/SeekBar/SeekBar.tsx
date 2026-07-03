@@ -1,13 +1,15 @@
 import { useRef, useCallback, useState } from "react";
+import { WaveformTrack } from "./WaveformTrack";
 
 interface SeekBarProps {
   value: number; // 0-1
   onChange: (value: number) => void;
   onScrub?: (fraction: number | null) => void;
+  peaks?: [number, number][];
   className?: string;
 }
 
-export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarProps) => {
+export const SeekBar = ({ value, onChange, onScrub, peaks, className = "" }: SeekBarProps) => {
   const barRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const [dragFraction, setDragFraction] = useState<number | null>(null);
@@ -81,9 +83,13 @@ export const SeekBar = ({ value, onChange, onScrub, className = "" }: SeekBarPro
       tabIndex={0}
       className={`group relative h-3 flex items-center cursor-pointer ${className}`}
     >
-      <div className="w-full h-[3px] group-hover:h-[5px] rounded-full bg-bg-card transition-all relative overflow-hidden">
-        <div className="absolute inset-y-0 left-0 bg-text-primary rounded-full" style={{ width: pct }} />
-      </div>
+      {peaks && peaks.length > 0 ? (
+        <WaveformTrack peaks={peaks} fraction={displayFraction} />
+      ) : (
+        <div className="w-full h-[3px] group-hover:h-[5px] rounded-full bg-bg-card transition-all relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 bg-text-primary rounded-full" style={{ width: pct }} />
+        </div>
+      )}
       <div
         className="absolute w-3 h-3 rounded-full bg-text-primary opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2"
         style={{ left: pct }}

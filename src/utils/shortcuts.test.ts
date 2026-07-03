@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   DEFAULT_BINDINGS,
   SHORTCUT_DEFS,
+  RATING_ACTIONS,
+  SELECTION_SHORTCUT_ACTIONS,
   getBinding,
   setBindingOverride,
   resetAllBindings,
@@ -10,6 +12,7 @@ import {
   formatBinding,
   findConflict,
   bindingsEqual,
+  isTextEntryTarget,
 } from "./shortcuts";
 
 const keyEvent = (code: string, opts: { meta?: boolean; ctrl?: boolean; shift?: boolean; alt?: boolean } = {}) =>
@@ -88,6 +91,100 @@ describe("shortcuts", () => {
       expect(matchesShortcut(keyEvent("Space"), "playPause")).toBe(false);
       expect(matchesShortcut(keyEvent("KeyK"), "playPause")).toBe(true);
     });
+
+    it("routes the same digit to rating, tab, or view mode by modifier", () => {
+      expect(matchesShortcut(keyEvent("Digit1"), "rateTracks1")).toBe(true);
+      expect(matchesShortcut(keyEvent("Digit1"), "switchTabLibrary")).toBe(false);
+      expect(matchesShortcut(keyEvent("Digit1"), "viewColumnBrowser")).toBe(false);
+
+      expect(matchesShortcut(keyEvent("Digit1", { meta: true }), "switchTabLibrary")).toBe(true);
+      expect(matchesShortcut(keyEvent("Digit1", { meta: true }), "rateTracks1")).toBe(false);
+
+      expect(matchesShortcut(keyEvent("Digit1", { alt: true }), "viewColumnBrowser")).toBe(true);
+      expect(matchesShortcut(keyEvent("Digit1", { alt: true }), "rateTracks1")).toBe(false);
+    });
+
+    it("matches every rating key and the clear/flag/queue defaults", () => {
+      RATING_ACTIONS.forEach((action, i) => {
+        expect(matchesShortcut(keyEvent(`Digit${i + 1}`), action)).toBe(true);
+      });
+      expect(matchesShortcut(keyEvent("Digit0"), "clearRating")).toBe(true);
+      expect(matchesShortcut(keyEvent("KeyL"), "toggleFlagTracks")).toBe(true);
+      expect(matchesShortcut(keyEvent("KeyQ", { alt: true }), "toggleQueuePanel")).toBe(true);
+      expect(matchesShortcut(keyEvent("KeyQ"), "toggleQueuePanel")).toBe(false);
+    });
+  });
+
+  describe("new action declarations", () => {
+    it("declares every tab, view, rating, flag, and queue action in the registry", () => {
+      const actions = new Set(SHORTCUT_DEFS.map((d) => d.action));
+      for (const action of [
+        "switchTabLibrary",
+        "switchTabTools",
+        "switchTabDiscover",
+        "switchTabInbox",
+        "viewColumnBrowser",
+        "viewAlbumGrid",
+        "viewArtworkCarousel",
+        ...SELECTION_SHORTCUT_ACTIONS,
+        "toggleQueuePanel",
+      ] as const) {
+        expect(actions.has(action)).toBe(true);
+      }
+    });
+
+    it("binds tabs to mod+1..4 and view modes to alt+1..3", () => {
+      expect(getBinding("switchTabLibrary")).toEqual({ code: "Digit1", mod: true, shift: false, alt: false });
+      expect(getBinding("switchTabInbox")).toEqual({ code: "Digit4", mod: true, shift: false, alt: false });
+      expect(getBinding("viewAlbumGrid")).toEqual({ code: "Digit2", mod: false, shift: false, alt: true });
+    });
+
+    it("keeps selection actions as bare keys", () => {
+      for (const action of SELECTION_SHORTCUT_ACTIONS) {
+        const b = DEFAULT_BINDINGS[action];
+        expect(b.mod).toBe(false);
+        expect(b.shift).toBe(false);
+        expect(b.alt).toBe(false);
+      }
+    });
+  });
+
+  describe("isTextEntryTarget", () => {
+    const eventFrom = (el: Element) => {
+      let captured: KeyboardEvent | null = null;
+      const listener = (e: KeyboardEvent) => {
+        captured = e;
+      };
+      window.addEventListener("keydown", listener);
+      el.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", bubbles: true }));
+      window.removeEventListener("keydown", listener);
+      return captured!;
+    };
+
+    it("returns true for inputs and textareas", () => {
+      const input = document.createElement("input");
+      const textarea = document.createElement("textarea");
+      document.body.append(input, textarea);
+      expect(isTextEntryTarget(eventFrom(input))).toBe(true);
+      expect(isTextEntryTarget(eventFrom(textarea))).toBe(true);
+      input.remove();
+      textarea.remove();
+    });
+
+    it("returns true for contenteditable elements", () => {
+      const div = document.createElement("div");
+      Object.defineProperty(div, "isContentEditable", { value: true });
+      document.body.append(div);
+      expect(isTextEntryTarget(eventFrom(div))).toBe(true);
+      div.remove();
+    });
+
+    it("returns false for regular elements", () => {
+      const div = document.createElement("div");
+      document.body.append(div);
+      expect(isTextEntryTarget(eventFrom(div))).toBe(false);
+      div.remove();
+    });
   });
 
   describe("eventToBinding", () => {
@@ -129,6 +226,22 @@ describe("shortcuts", () => {
     it("allows combos that only share the key with a reserved combo", () => {
       expect(findConflict({ code: "KeyZ", mod: false, shift: false, alt: false }, "playPause")).toBeNull();
       expect(findConflict({ code: "KeyZ", mod: true, shift: true, alt: false }, "playPause")).toBeNull();
+    });
+
+    it("covers the new tab, view, rating, flag, and queue actions", () => {
+      expect(findConflict({ code: "Digit1", mod: true, shift: false, alt: false }, "playPause")).toBe("Go to Library");
+      expect(findConflict({ code: "Digit2", mod: false, shift: false, alt: true }, "playPause")).toBe(
+        "Album grid view",
+      );
+      expect(findConflict({ code: "Digit3", mod: false, shift: false, alt: false }, "playPause")).toBe(
+        "Rate selection 3 stars",
+      );
+      expect(findConflict({ code: "KeyL", mod: false, shift: false, alt: false }, "playPause")).toBe(
+        "Toggle sync flag on selection",
+      );
+      expect(findConflict({ code: "KeyQ", mod: false, shift: false, alt: true }, "playPause")).toBe(
+        "Toggle queue panel",
+      );
     });
   });
 

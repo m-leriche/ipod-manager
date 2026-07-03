@@ -150,6 +150,7 @@ export const NowPlayingBar = ({ onToggleQueue, queueOpen, onToggleMiniPlayer, mi
           isPlaying={state.isPlaying}
           currentTime={currentTime}
           duration={duration}
+          filePath={state.currentTrack.file_path}
           shuffle={state.shuffle}
           repeat={state.repeat}
           onPlayPause={handlePlayPause}

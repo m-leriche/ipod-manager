@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::albumart;
 use crate::audio_utils::normalize_path;
+use crate::files::copy::verify_copy_size;
 use crate::library::{compute_library_dest, read_track_for_library, upsert_track};
 
 use super::scan::direct_audio_children;
@@ -110,7 +111,7 @@ pub fn delete_filed_folder(folder: &str) -> Result<(), String> {
     if !direct_audio_children(folder).is_empty() {
         return Ok(());
     }
-    fs::remove_dir_all(folder).map_err(|e| format!("{}: {}", folder.display(), e))
+    crate::files::trash_or_delete(folder).map_err(|e| format!("{}: {}", folder.display(), e))
 }
 
 /// Reverse a set of moves: restore files to the inbox, remove the tracks from
@@ -153,8 +154,12 @@ pub(super) fn move_file(from: &Path, to: &Path) -> Result<(), String> {
     if fs::rename(from, to).is_ok() {
         return Ok(());
     }
-    // Cross-device move: copy then remove
+    // Cross-device move: copy, verify size, then remove
     fs::copy(from, to).map_err(|e| format!("Copy failed: {}", e))?;
+    if let Err(msg) = verify_copy_size(from, to) {
+        let _ = fs::remove_file(to);
+        return Err(msg);
+    }
     fs::remove_file(from).map_err(|e| format!("Remove failed: {}", e))
 }
 

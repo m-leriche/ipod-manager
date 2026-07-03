@@ -187,7 +187,7 @@ pub fn verify_tracklist(artist: &str, album: &str, track_count: usize) -> CheckR
     let artist = normalize_for_search(artist);
     let album = normalize_for_search(album);
 
-    let releases = match musicbrainz::search_releases(&artist, &album) {
+    let releases = match musicbrainz::search_releases(&artist, &album, None) {
         Ok(r) => r,
         Err(e) => return CheckResult::warn(format!("Could not verify: {}", e)),
     };

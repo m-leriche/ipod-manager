@@ -36,8 +36,7 @@ export const AudioConverter = () => {
     listen<ConvertProgress>("convert-progress", (e) => {
       if (active) {
         const p = e.payload;
-        const overallPercent = ((p.file_index + p.percent / 100) / p.total_files) * 100;
-        updateProgress(Math.round(overallPercent), 100, `${p.current_file} (${p.file_index + 1}/${p.total_files})`);
+        updateProgress(Math.round(p.percent), 100, `${p.current_file} (${p.completed_files}/${p.total_files})`);
       }
     }).then((fn) => {
       if (active) unsubs.push(fn);

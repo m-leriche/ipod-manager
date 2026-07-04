@@ -50,9 +50,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Unix timestamp (seconds) of when the current track started playing — used for scrobble submission
   const trackStartedAtRef = useRef<number>(0);
 
-  // Restored position for resume-from-where-you-left-off
-  const restoredPositionRef = useRef(0);
-
   // True when a track was restored from SQLite but the audio engine hasn't
   // loaded it yet, so the first play must load the file rather than resume.
   const needsEngineLoadRef = useRef(false);
@@ -79,7 +76,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     loadPlaybackState().then((restored) => {
       queueRestoredRef.current = true;
       if (!restored) return;
-      restoredPositionRef.current = restored.position;
       needsEngineLoadRef.current = true;
       setState((prev) => ({
         ...prev,
@@ -501,7 +497,8 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     // Cold resume: track is restored from SQLite but the audio engine hasn't loaded it
     if (s.currentTrack && !s.isPlaying && needsEngineLoadRef.current) {
       needsEngineLoadRef.current = false;
-      const seekPos = restoredPositionRef.current > 0 ? restoredPositionRef.current : null;
+      // currentTime holds the restored position, or a seek made before pressing Play
+      const seekPos = timeRef.current.currentTime > 0 ? timeRef.current.currentTime : null;
       setState((prev) => ({ ...prev, isPlaying: true, playbackError: null }));
       setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
       lastPositionRef.current = seekPos ?? 0;
@@ -510,7 +507,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
-      restoredPositionRef.current = 0;
       return;
     }
     invoke("audio_resume").catch((e) => console.warn("audio_resume failed:", e));

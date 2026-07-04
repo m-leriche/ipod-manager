@@ -80,6 +80,19 @@ describe("usePlaybackEngine cold resume", () => {
     expect(result.current.value.state.isPlaying).toBe(true);
   });
 
+  it("honors a seek made before the first play after launch", async () => {
+    mockRestoredQueue(87);
+    const { result } = renderHook(() => usePlaybackEngine());
+    await waitFor(() => expect(result.current.value.state.currentTrack?.id).toBe(1));
+
+    // User drags the seek bar (to 50% of a 200s track) before pressing Play.
+    act(() => result.current.value.seekTo(0.5));
+    act(() => result.current.value.resume());
+
+    // Cold load must start from the sought position, not the saved position.
+    expect(invokeMock).toHaveBeenCalledWith("audio_play", { path: "/music/song.flac", seekSecs: 100 });
+  });
+
   it("resumes in place (audio_resume) on a later pause/play cycle", async () => {
     mockRestoredQueue(0);
     const { result } = renderHook(() => usePlaybackEngine());

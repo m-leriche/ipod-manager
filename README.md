@@ -323,15 +323,13 @@ Any app that speaks the Subsonic API works. Tested with:
 A codebase review surfaced these as the highest-leverage work, roughly in priority order:
 
 1. **macOS code-signing + notarization** — The release pipeline only signs the *updater* bundle (minisign), not the `.app`/`.dmg`. Unsigned builds hit Gatekeeper, and — more importantly — in-place auto-updates are unreliable on modern macOS for un-notarized apps, which hobbles the updater we already ship. Add a Developer ID cert + notarization + hardened-runtime entitlements to `release.yml`. Unblocks distribution *and* the update feature.
-2. **Resume last session on open** — see [Playback & Library](#playback--library) below.
-3. **Quick performance wins** — `sort_by_cached_key` in the column-browser aggregates, a shared `ureq::Agent` with timeouts, and parallel AcoustID fingerprinting (details in [Performance](#performance)).
-4. **Interactive inline ratings** — wire up star clicks in the track table with optimistic updates (details in [Playback & Library](#playback--library)).
-5. **Security hardening** — rotate the Last.fm shared secret (committed to a public repo), default the Subsonic server to `127.0.0.1`, and move its password to the Keychain (details in [Security](#security)).
-6. **Safety net** — a `std::panic::set_hook` + global frontend error handler, a CI coverage gate, and tests for the playback/playlist contexts and `disk/mount.rs`.
+2. **Quick performance wins** — `sort_by_cached_key` in the column-browser aggregates, a shared `ureq::Agent` with timeouts, and parallel AcoustID fingerprinting (details in [Performance](#performance)).
+3. **Interactive inline ratings** — wire up star clicks in the track table with optimistic updates (details in [Playback & Library](#playback--library)).
+4. **Security hardening** — rotate the Last.fm shared secret (committed to a public repo), default the Subsonic server to `127.0.0.1`, and move its password to the Keychain (details in [Security](#security)).
+5. **Safety net** — a `std::panic::set_hook` + global frontend error handler, a CI coverage gate, and tests for the playback/playlist contexts and `disk/mount.rs`.
 
 ### Playback & Library
-- [ ] **Resume last session on open** — Persist the last-played track (and playback position) across restarts. On launch, pre-load it into the player, paused, so pressing Play resumes where you left off. The queue is currently in-memory only, so nothing survives a restart today. Store in SQLite settings (or a `last_session` row) and restore in `usePlaybackEngine` on boot.
-- [ ] **Queue persistence** — Save the full queue + current index (pairs naturally with the resume feature above) so the entire up-next list survives a restart.
+- [ ] **Queue persistence** — Save the full queue + current index so the entire up-next list survives a restart.
 - [ ] **Interactive inline star rating** — Stars in the track table currently render read-only (`TrackRow.tsx:148` passes no `onChange`); ratings only work via right-click or the detail panel. Pass an `onChange` through to `onRateTracks` for click-to-rate.
 - [ ] **Optimistic rating/flag updates** — Rating a track currently refetches the whole library (`useLibraryActions.ts`). Update `tracks` in place instead (the play-count listener in `useLibraryData.ts` already models this).
 - [ ] **Column browser keyboard nav** — Arrow keys to move selection, Enter to confirm.

@@ -50,8 +50,9 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   // Unix timestamp (seconds) of when the current track started playing — used for scrobble submission
   const trackStartedAtRef = useRef<number>(0);
 
-  // Restored position for resume-from-where-you-left-off
-  const restoredPositionRef = useRef(0);
+  // True when a track was restored from SQLite but the audio engine hasn't
+  // loaded it yet, so the first play must load the file rather than resume.
+  const needsEngineLoadRef = useRef(false);
 
   // Whether the queue has been restored from SQLite (prevents saving empty state on mount)
   const queueRestoredRef = useRef(false);
@@ -75,7 +76,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
     loadPlaybackState().then((restored) => {
       queueRestoredRef.current = true;
       if (!restored) return;
-      restoredPositionRef.current = restored.position;
+      needsEngineLoadRef.current = true;
       setState((prev) => ({
         ...prev,
         queue: restored.queue,
@@ -231,6 +232,7 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const playFile = useCallback(
     (track: LibraryTrack) => {
       engineActiveRef.current = true;
+      needsEngineLoadRef.current = false;
       if (!stateRef.current.libraryAvailable) {
         setState((prev) => ({
           ...prev,
@@ -492,9 +494,11 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
   const resume = useCallback(() => {
     engineActiveRef.current = true;
     const s = stateRef.current;
-    // Cold resume: track is restored from localStorage but audio engine hasn't loaded it
-    if (s.currentTrack && !s.isPlaying && timeRef.current.duration === 0) {
-      const seekPos = restoredPositionRef.current > 0 ? restoredPositionRef.current : null;
+    // Cold resume: track is restored from SQLite but the audio engine hasn't loaded it
+    if (s.currentTrack && !s.isPlaying && needsEngineLoadRef.current) {
+      needsEngineLoadRef.current = false;
+      // currentTime holds the restored position, or a seek made before pressing Play
+      const seekPos = timeRef.current.currentTime > 0 ? timeRef.current.currentTime : null;
       setState((prev) => ({ ...prev, isPlaying: true, playbackError: null }));
       setTime({ currentTime: seekPos ?? 0, duration: s.currentTrack.duration_secs });
       lastPositionRef.current = seekPos ?? 0;
@@ -503,7 +507,6 @@ export const usePlaybackEngine = (): { value: PlaybackContextValue; time: Playba
       invoke("audio_play", { path: s.currentTrack.file_path, seekSecs: seekPos }).catch((e) =>
         console.warn("audio_play failed:", e),
       );
-      restoredPositionRef.current = 0;
       return;
     }
     invoke("audio_resume").catch((e) => console.warn("audio_resume failed:", e));

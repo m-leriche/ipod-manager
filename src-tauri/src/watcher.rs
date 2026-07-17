@@ -6,11 +6,22 @@ use notify_debouncer_full::{
 };
 use rusqlite::Connection;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+
+/// How long a path stays suppressed after the app writes it. Must comfortably
+/// exceed the debouncer window (3s) plus filesystem-event delivery latency, so
+/// the watcher's callback still sees the entry when it finally fires. Kept short
+/// enough that a genuine external re-edit of the same file isn't missed for long.
+const SELF_WRITE_SUPPRESS_SECS: u64 = 30;
+
+/// Paths the app itself just wrote, with the instant they were registered.
+/// Shared with the debouncer callback so it can discard events it caused.
+type RecentWrites = Arc<Mutex<HashMap<PathBuf, Instant>>>;
 
 /// Tauri-managed state for the filesystem watcher.
 ///
@@ -28,6 +39,7 @@ use tauri::{AppHandle, Emitter};
 pub struct FolderWatcher {
     inner: Mutex<Option<WatcherInner>>,
     generation: Arc<AtomicU64>,
+    recent_writes: RecentWrites,
 }
 
 struct WatcherInner {
@@ -46,6 +58,25 @@ impl FolderWatcher {
         Self {
             inner: Mutex::new(None),
             generation: Arc::new(AtomicU64::new(0)),
+            recent_writes: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Register paths the app is about to write (or just wrote) so the watcher
+    /// discards the filesystem events they generate instead of re-syncing them
+    /// and firing a redundant `library-changed` refresh. Callers pass both the
+    /// pre- and post-move paths of any reorganized files.
+    pub fn suppress_paths<I>(&self, paths: I)
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        let Ok(mut guard) = self.recent_writes.lock() else {
+            return;
+        };
+        let now = Instant::now();
+        guard.retain(|_, t| now.duration_since(*t).as_secs() < SELF_WRITE_SUPPRESS_SECS);
+        for path in paths {
+            guard.insert(path, now);
         }
     }
 
@@ -74,6 +105,7 @@ impl FolderWatcher {
         }
 
         let generation = self.generation.clone();
+        let recent_writes = self.recent_writes.clone();
         let mut debouncer = new_debouncer(
             Duration::from_secs(3),
             None,
@@ -82,7 +114,7 @@ impl FolderWatcher {
                     log::debug!("Watcher callback from a stale generation — discarding events");
                     return;
                 }
-                handle_fs_events(events, &app, &db);
+                handle_fs_events(events, &app, &db, &recent_writes);
             },
         )
         .map_err(|e| format!("Failed to create watcher: {}", e))?;
@@ -139,7 +171,12 @@ pub fn restart_from_db(
 
 // ── Event handling ──────────────────────────────────────────────
 
-fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex<Connection>>) {
+fn handle_fs_events(
+    events: DebounceEventResult,
+    app: &AppHandle,
+    db: &Arc<Mutex<Connection>>,
+    recent_writes: &RecentWrites,
+) {
     let events = match events {
         Ok(e) => e,
         Err(errs) => {
@@ -150,7 +187,8 @@ fn handle_fs_events(events: DebounceEventResult, app: &AppHandle, db: &Arc<Mutex
         }
     };
 
-    let (added_or_modified, removed) = classify_events(&events);
+    let (mut added_or_modified, mut removed) = classify_events(&events);
+    drop_self_writes(recent_writes, &mut added_or_modified, &mut removed);
     if added_or_modified.is_empty() && removed.is_empty() {
         return;
     }
@@ -212,6 +250,28 @@ fn classify_events(events: &[DebouncedEvent]) -> (Vec<PathBuf>, Vec<PathBuf>) {
     (added_or_modified, removed)
 }
 
+/// Drop events for paths the app itself just wrote, so a metadata save's own
+/// reorganization moves don't trigger a redundant re-sync and refresh. Matched
+/// entries are left in the set to expire by time — a single move can surface as
+/// more than one debounced batch.
+fn drop_self_writes(
+    recent_writes: &RecentWrites,
+    added: &mut Vec<PathBuf>,
+    removed: &mut Vec<PathBuf>,
+) {
+    let Ok(mut guard) = recent_writes.lock() else {
+        return;
+    };
+    if guard.is_empty() {
+        return;
+    }
+    let now = Instant::now();
+    guard.retain(|_, t| now.duration_since(*t).as_secs() < SELF_WRITE_SUPPRESS_SECS);
+    let is_self_write = |p: &PathBuf| guard.contains_key(p);
+    added.retain(|p| !is_self_write(p));
+    removed.retain(|p| !is_self_write(p));
+}
+
 /// Delete the removed paths' rows in one short transaction under the writer
 /// lock. Returns the number of successful deletes.
 fn delete_removed(db: &Arc<Mutex<Connection>>, removed: &[PathBuf]) -> usize {
@@ -262,6 +322,34 @@ mod tests {
         assert!(!is_audio_file(Path::new("/music/._01-10 Song.flac")));
         assert!(!is_audio_file(Path::new("/music/._song.mp3")));
         assert!(!is_audio_file(Path::new("/music/.hidden.m4a")));
+    }
+
+    #[test]
+    fn drop_self_writes_filters_suppressed_paths() {
+        let watcher = FolderWatcher::new();
+        let moved_from = PathBuf::from("/music/Artist/Album/01 Old.flac");
+        let moved_to = PathBuf::from("/music/Artist/Album/01 New.flac");
+        let external = PathBuf::from("/music/Other/Added.flac");
+        watcher.suppress_paths([moved_from.clone(), moved_to.clone()]);
+
+        // The reorganize's own move (old removed, new created) is dropped, but a
+        // genuine external add still gets through.
+        let mut added = vec![moved_to.clone(), external.clone()];
+        let mut removed = vec![moved_from.clone()];
+        drop_self_writes(&watcher.recent_writes, &mut added, &mut removed);
+
+        assert_eq!(added, vec![external]);
+        assert!(removed.is_empty());
+    }
+
+    #[test]
+    fn drop_self_writes_noop_when_nothing_suppressed() {
+        let recent: RecentWrites = Arc::new(Mutex::new(HashMap::new()));
+        let mut added = vec![PathBuf::from("/music/a.flac")];
+        let mut removed = vec![PathBuf::from("/music/b.flac")];
+        drop_self_writes(&recent, &mut added, &mut removed);
+        assert_eq!(added.len(), 1);
+        assert_eq!(removed.len(), 1);
     }
 
     #[test]

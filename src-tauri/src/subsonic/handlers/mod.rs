@@ -207,7 +207,7 @@ fn song_xml(tag: &str, t: &crate::library::types::LibraryTrack) -> String {
     s.push_str(&xml::opt_attr("bitRate", &t.bitrate_kbps));
     s.push_str(&xml::attr("contentType", content_type));
     s.push_str(&xml::attr("size", &t.file_size.to_string()));
-    s.push_str(&xml::attr("path", &format!("{}/{}", artist, &t.file_name)));
+    s.push_str(&xml::attr("path", &format!("{}/{}", artist, t.file_name)));
     s.push_str(&xml::attr("parent", &album_id));
     s.push_str(&xml::attr("albumId", &album_id));
     s.push_str(&xml::attr("artistId", &artist_id));

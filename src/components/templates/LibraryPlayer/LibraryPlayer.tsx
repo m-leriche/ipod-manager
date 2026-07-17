@@ -90,6 +90,18 @@ export const LibraryPlayer = ({
 
   const data = useLibraryData(onRefreshRef);
 
+  // When no track is highlighted but the user is browsing a single artist or
+  // album, show that album's info read-only in the panel instead of a blank.
+  const previewAlbum = useMemo(() => {
+    if (data.selectedTracks.length > 0) return null;
+    if (data.selectedAlbums.size === 1) {
+      const name = [...data.selectedAlbums][0];
+      return data.albumList.find((a) => a.name === name) ?? data.albumList[0] ?? null;
+    }
+    if (data.selectedArtists.size === 1) return data.albumList[0] ?? null;
+    return null;
+  }, [data.selectedTracks, data.selectedAlbums, data.selectedArtists, data.albumList]);
+
   // Refetch recommendations only when playlist membership changes. Keyed off
   // the raw playlist track set (not the search-filtered/sorted view), sorted so
   // reordering doesn't trigger an identical refetch — the backend seeds from the
@@ -404,7 +416,7 @@ export const LibraryPlayer = ({
 
       {showInfoPanel && (
         <ErrorBoundary name="Track Detail" compact>
-          <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} />
+          <TrackDetailPanel tracks={data.selectedTracks} onSave={data.fetchBrowserData} previewAlbum={previewAlbum} />
         </ErrorBoundary>
       )}
       {showStatsPanel && (

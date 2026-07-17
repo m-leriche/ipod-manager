@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TrackDetailPanel } from "./TrackDetailPanel";
 import { UndoProvider } from "../../../contexts/UndoContext";
-import type { LibraryTrack } from "../../../types/library";
+import type { LibraryTrack, AlbumSummary } from "../../../types/library";
 
 const renderPanel = (ui: ReactElement) => render(<UndoProvider>{ui}</UndoProvider>);
 
@@ -104,6 +104,28 @@ describe("TrackDetailPanel", () => {
     const tracks = [makeTrack({ artist: "Artist A" }), makeTrack({ id: 2, artist: "Artist B" })];
     renderPanel(<TrackDetailPanel tracks={tracks} />);
     expect(screen.getAllByText("(mixed)").length).toBeGreaterThan(0);
+  });
+
+  it("shows read-only album preview when no track is highlighted", () => {
+    const album: AlbumSummary = {
+      name: "Preview Album",
+      artist: "Preview Artist",
+      year: 1999,
+      track_count: 12,
+      folder_path: "/music/Preview Artist/Preview Album",
+    };
+    renderPanel(<TrackDetailPanel tracks={[]} previewAlbum={album} />);
+    expect(screen.getByText("Preview Album")).toBeInTheDocument();
+    expect(screen.getByText("Preview Artist")).toBeInTheDocument();
+    expect(screen.getByText("1999")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    // Read-only: no editable Save/Revert and no "Album Art" empty placeholder label
+    expect(screen.queryByText("Save")).not.toBeInTheDocument();
+  });
+
+  it("shows empty placeholder when no track and no preview album", () => {
+    renderPanel(<TrackDetailPanel tracks={[]} />);
+    expect(screen.getByText("Album Art")).toBeInTheDocument();
   });
 
   it("calls onSave after saving", async () => {

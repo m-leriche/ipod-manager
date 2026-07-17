@@ -13,7 +13,7 @@ import { StarRating } from "../../atoms/StarRating/StarRating";
 import { useResizableWidth } from "./useResizableWidth";
 import { pickFile } from "../../../utils/pickPath";
 import { groupByPreviousValue } from "../../../utils/undoHelpers";
-import type { LibraryTrack } from "../../../types/library";
+import type { LibraryTrack, AlbumSummary } from "../../../types/library";
 import type { MetadataSaveResult } from "../../../types/metadata";
 import type { EditableTrackFields, EditableFieldKey } from "./types";
 import { computeBatchFields, buildMetadataUpdates } from "./helpers";
@@ -22,6 +22,8 @@ import { formatDuration, formatBytes } from "../../../utils/format";
 interface TrackDetailPanelProps {
   tracks: LibraryTrack[];
   onSave?: () => void;
+  /** Shown read-only when no track is highlighted (e.g. browsing an artist). */
+  previewAlbum?: AlbumSummary | null;
 }
 
 const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) => (
@@ -31,7 +33,11 @@ const ResizeHandle = ({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
   />
 );
 
-export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave }: TrackDetailPanelProps) {
+export const TrackDetailPanel = memo(function TrackDetailPanel({
+  tracks,
+  onSave,
+  previewAlbum,
+}: TrackDetailPanelProps) {
   const { width, onDragStart } = useResizableWidth();
   const { bumpArtCache } = useArtCache();
   const { state: artRepairState, start: startRepair } = useBackgroundArtRepair();
@@ -166,7 +172,10 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({ tracks, onSave 
     }
   }, [tracks, onSave, bumpArtCache, toast]);
 
-  if (tracks.length === 0) return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
+  if (tracks.length === 0) {
+    if (previewAlbum) return <AlbumPreviewPanel album={previewAlbum} width={width} onDragStart={onDragStart} />;
+    return <EmptyDetailPanel width={width} onDragStart={onDragStart} />;
+  }
 
   const isSingle = tracks.length === 1;
   const track = tracks[0];
@@ -459,6 +468,36 @@ const EmptyDetailPanel = ({ width, onDragStart }: { width: number; onDragStart: 
           </div>
         </div>
       ))}
+    </div>
+  </div>
+);
+
+// ── Read-only album preview (no track highlighted) ─────────────
+
+const AlbumPreviewPanel = ({
+  album,
+  width,
+  onDragStart,
+}: {
+  album: AlbumSummary;
+  width: number;
+  onDragStart: (e: React.MouseEvent) => void;
+}) => (
+  <div
+    style={{ width }}
+    className="relative shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-y-auto panel-slide-right"
+  >
+    <ResizeHandle onMouseDown={onDragStart} />
+    <div className="p-4">
+      <AlbumArtwork folderPath={album.folder_path} size="full" showMissingLabel />
+    </div>
+    <div className="px-4 pb-3">
+      <div className="text-xs font-medium text-text-primary truncate">{album.name || "Unknown Album"}</div>
+      <div className="text-[11px] text-text-secondary truncate">{album.artist || "Unknown Artist"}</div>
+      {album.year != null && <div className="text-[11px] text-text-tertiary truncate">{album.year}</div>}
+    </div>
+    <div className="px-4 pb-3 border-t border-border pt-3">
+      <DetailRow label="Tracks" value={String(album.track_count)} />
     </div>
   </div>
 );

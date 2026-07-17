@@ -8,7 +8,7 @@ use crate::musicbrainz::MbCache;
 use crate::sanitize;
 use crate::watcher::FolderWatcher;
 use rusqlite::params;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
@@ -113,6 +113,12 @@ pub async fn save_metadata(
     // queued/pending OS filesystem events are discarded.
     watcher.stop();
 
+    // Mark the edited files as our own writes. The watcher restarts below and
+    // the OS can deliver these files' write/move events to the fresh watcher,
+    // which would otherwise re-sync them and fire a redundant `library-changed`
+    // refresh a few seconds after the save (post-move paths are added later).
+    watcher.suppress_paths(file_paths.iter().map(|p| PathBuf::from(p.as_str())));
+
     let final_result: Result<metadata::MetadataSaveResult, AppError> = async {
         let mut result = tauri::async_runtime::spawn_blocking(move || {
             Ok::<_, AppError>(metadata::save_metadata(updates, app, flag, id3_version))
@@ -130,6 +136,14 @@ pub async fn save_metadata(
         })
         .await
         .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
+
+        // Suppress the post-move paths too, so the watcher ignores the Create
+        // events for files the reorganize just moved into place.
+        watcher.suppress_paths(
+            path_renames
+                .iter()
+                .map(|(_, new)| PathBuf::from(new.as_str())),
+        );
 
         // Update undo operations with post-reorganization file paths
         for (old_path, new_path) in &path_renames {

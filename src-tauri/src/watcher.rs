@@ -17,11 +17,36 @@ use tauri::{AppHandle, Emitter};
 /// exceed the debouncer window (3s) plus filesystem-event delivery latency, so
 /// the watcher's callback still sees the entry when it finally fires. Kept short
 /// enough that a genuine external re-edit of the same file isn't missed for long.
+///
+/// Because nothing stops the watcher during a save, an entry has to survive from
+/// the moment it is registered until the debouncer delivers its event — so this
+/// also has to cover however long the save itself runs. A save that exceeds it
+/// costs one redundant `library-changed` refresh, nothing worse: the re-sync
+/// upserts the row the save just wrote.
 const SELF_WRITE_SUPPRESS_SECS: u64 = 30;
 
 /// Paths the app itself just wrote, with the instant they were registered.
 /// Shared with the debouncer callback so it can discard events it caused.
-type RecentWrites = Arc<Mutex<HashMap<PathBuf, Instant>>>;
+pub type RecentWrites = Arc<Mutex<HashMap<PathBuf, Instant>>>;
+
+/// Register `paths` as app-written in `writes`, expiring stale entries.
+///
+/// Takes the shared map rather than `&FolderWatcher` so callers on a blocking
+/// thread — which cannot hold a `State<'_, FolderWatcher>` borrow — can suppress
+/// paths as they are produced instead of in one batch afterwards.
+pub fn suppress_in<I>(writes: &RecentWrites, paths: I)
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    let Ok(mut guard) = writes.lock() else {
+        return;
+    };
+    let now = Instant::now();
+    guard.retain(|_, t| now.duration_since(*t).as_secs() < SELF_WRITE_SUPPRESS_SECS);
+    for path in paths {
+        guard.insert(path, now);
+    }
+}
 
 /// Tauri-managed state for the filesystem watcher.
 ///
@@ -73,14 +98,13 @@ impl FolderWatcher {
     where
         I: IntoIterator<Item = PathBuf>,
     {
-        let Ok(mut guard) = self.recent_writes.lock() else {
-            return;
-        };
-        let now = Instant::now();
-        guard.retain(|_, t| now.duration_since(*t).as_secs() < SELF_WRITE_SUPPRESS_SECS);
-        for path in paths {
-            guard.insert(path, now);
-        }
+        suppress_in(&self.recent_writes, paths);
+    }
+
+    /// Handle onto the self-write map, for suppressing paths from a blocking
+    /// thread that cannot borrow the watcher. Pair with [`suppress_in`].
+    pub fn recent_writes(&self) -> RecentWrites {
+        self.recent_writes.clone()
     }
 
     /// Start (or restart) watching the given folder paths.
@@ -327,6 +351,23 @@ mod tests {
 
         assert_eq!(added, vec![external]);
         assert!(removed.is_empty());
+    }
+
+    #[test]
+    fn suppress_in_through_a_handle_reaches_the_watchers_map() {
+        // The reorganize pass suppresses each post-move path from a blocking
+        // thread via this handle, so entries must land in the same map the
+        // debouncer callback reads.
+        let watcher = FolderWatcher::new();
+        let handle = watcher.recent_writes();
+        let moved_to = PathBuf::from("/music/Artist/Album/01 New.flac");
+        suppress_in(&handle, [moved_to.clone()]);
+
+        let mut added = vec![moved_to];
+        let mut removed = Vec::new();
+        drop_self_writes(&watcher.recent_writes, &mut added, &mut removed);
+
+        assert!(added.is_empty(), "handle writes must reach the watcher");
     }
 
     #[test]

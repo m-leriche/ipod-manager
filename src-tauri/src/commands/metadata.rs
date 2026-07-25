@@ -87,8 +87,8 @@ pub async fn save_metadata(
     let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
 
     // Only fields that feed compute_library_dest can move files. Saves that
-    // touch nothing else (genre, year, sort fields…) skip the reorganize
-    // pass and the whole-library ghost sweep entirely.
+    // touch nothing else (genre, year, sort fields…) skip the reorganize pass
+    // entirely.
     let affects_paths = updates.iter().any(|u| {
         u.title.is_some()
             || u.artist.is_some()
@@ -109,9 +109,9 @@ pub async fn save_metadata(
 
     // Mark the edited files as our own writes so the watcher discards the
     // write/move events they generate instead of re-syncing them and firing a
-    // redundant `library-changed` refresh (post-move paths are added later).
-    // The watcher keeps running throughout: restarting it would rebuild the
-    // debouncer's file-id cache, which walks and stats the entire library.
+    // redundant `library-changed` refresh. The watcher keeps running throughout:
+    // restarting it would rebuild the debouncer's file-id cache, which walks and
+    // stats the entire library.
     watcher.suppress_paths(file_paths.iter().map(|p| PathBuf::from(p.as_str())));
 
     let mut result = tauri::async_runtime::spawn_blocking(move || {
@@ -123,21 +123,14 @@ pub async fn save_metadata(
     // Refresh the library DB on a blocking thread, holding the lock only
     // for short stretches so browsing and filtering stay responsive while
     // large batches (e.g. whole-album genre applies) are processed.
-    let conn_for_db = conn_arc.clone();
+    let conn_for_db = conn_arc;
     let paths_for_db = file_paths.clone();
+    let recent_writes = watcher.recent_writes();
     let (is_library, path_renames) = tauri::async_runtime::spawn_blocking(move || {
-        update_library_after_save(&conn_for_db, &paths_for_db, affects_paths)
+        update_library_after_save(&conn_for_db, &paths_for_db, affects_paths, &recent_writes)
     })
     .await
     .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
-
-    // Suppress the post-move paths too, so the watcher ignores the Create
-    // events for files the reorganize just moved into place.
-    watcher.suppress_paths(
-        path_renames
-            .iter()
-            .map(|(_, new)| PathBuf::from(new.as_str())),
-    );
 
     // Update undo operations with post-reorganization file paths
     for (old_path, new_path) in &path_renames {
@@ -148,6 +141,14 @@ pub async fn save_metadata(
         }
     }
 
+    // This event is the *only* thing that refreshes the library browser after a
+    // save — `TrackDetailPanel` deliberately does not also refetch. Gating on
+    // `is_library` is safe because a track can only exist in the DB once the
+    // library location is set (setting it is what triggers the initial scan), so
+    // any save reaching a library track emits. Non-library saves (e.g. the
+    // metadata editor pointed at an arbitrary folder) correctly emit nothing
+    // rather than forcing a pointless browser refetch. If the browser ever stops
+    // refreshing after a save, check this gate first.
     if is_library {
         let _ = app_clone.emit("library-files-reorganized", file_paths.len());
     }
@@ -167,11 +168,17 @@ type PathRenames = Vec<(String, String)>;
 /// (`library::scan`), which has a walk-based fast path and snapshots the DB
 /// before deleting.
 ///
+/// Each rename is registered in `recent_writes` the moment it completes rather
+/// than in one batch afterwards: the watcher runs throughout, so on a batch that
+/// outlasts the debouncer window the early files' Create events would otherwise
+/// flush before their new paths were suppressed.
+///
 /// Returns whether the files live in the library and any (old, new) renames.
 fn update_library_after_save(
     conn_arc: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
     file_paths: &[String],
     affects_paths: bool,
+    recent_writes: &crate::watcher::RecentWrites,
 ) -> Result<(bool, PathRenames), AppError> {
     let lock_conn = || {
         conn_arc
@@ -231,6 +238,7 @@ fn update_library_after_save(
         let conn = lock_conn()?;
         match library::reorganize_library_file(&conn, &library_root, file_path) {
             Ok(Some(new_path)) => {
+                crate::watcher::suppress_in(recent_writes, [PathBuf::from(new_path.as_str())]);
                 path_renames.push((file_path.clone(), new_path));
             }
             Ok(None) => {}
@@ -473,20 +481,23 @@ mod tests {
 
         // A root that does not exist, standing in for a detached volume.
         let root = "/Volumes/DetachedDrive/Music";
+        let folder = format!("{}/Artist/Album", root);
         library::set_library_location(&conn, root).expect("set location");
         for name in ["a.mp3", "b.mp3"] {
             conn.execute(
                 "INSERT INTO tracks (file_path, file_name, folder_path)
                  VALUES (?1, ?2, ?3)",
-                rusqlite::params![format!("{}/Artist/Album/{}", root, name), name, root],
+                rusqlite::params![format!("{}/{}", folder, name), name, folder],
             )
             .expect("insert");
         }
 
         let conn_arc = Arc::new(Mutex::new(conn));
-        let saved = vec![format!("{}/Artist/Album/a.mp3", root)];
+        let recent_writes = crate::watcher::RecentWrites::default();
+        let saved = vec![format!("{}/a.mp3", folder)];
         let (is_library, renames) =
-            update_library_after_save(&conn_arc, &saved, true).expect("update after save");
+            update_library_after_save(&conn_arc, &saved, true, &recent_writes)
+                .expect("update after save");
 
         assert!(is_library);
         assert!(renames.is_empty(), "no file exists, so nothing can move");

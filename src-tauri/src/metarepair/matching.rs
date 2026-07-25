@@ -129,7 +129,7 @@ pub(super) fn match_tracks(
     (matched, missing)
 }
 
-pub(super) fn select_best_release(
+pub(crate) fn select_best_release(
     releases: &[MbRelease],
     local_track_count: usize,
 ) -> Option<usize> {

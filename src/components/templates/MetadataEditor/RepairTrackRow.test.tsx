@@ -55,14 +55,20 @@ const albumArtistIssue: TrackIssue = {
 
 const matchWithIssues: TrackMatch = {
   local_track: localTrack,
-  mb_track: { position: 1, title: "Come Together (Remastered)", artist: "The Beatles", length_ms: 260000 },
+  mb_track: {
+    position: 1,
+    disc_number: 1,
+    title: "Come Together (Remastered)",
+    artist: "The Beatles",
+    length_ms: 260000,
+  },
   match_confidence: 0.95,
   issues: [titleIssue, yearIssue, albumArtistIssue],
 };
 
 const matchNoIssues: TrackMatch = {
   local_track: localTrack,
-  mb_track: { position: 1, title: "Come Together", artist: "Beatles", length_ms: 260000 },
+  mb_track: { position: 1, disc_number: 1, title: "Come Together", artist: "Beatles", length_ms: 260000 },
   match_confidence: 1.0,
   issues: [],
 };

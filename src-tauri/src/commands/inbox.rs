@@ -3,6 +3,7 @@ use crate::error::AppError;
 use crate::files::SyncCancel;
 use crate::inbox::{self, InboxWatcher};
 use crate::library::{self, LibraryDb};
+use crate::musicbrainz::MbCache;
 use crate::watcher::LibraryChangeEvent;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
@@ -64,6 +65,23 @@ pub async fn verify_inbox_tracklist(
         inbox::cache_tracklist(&conn, &artist2, &album2, track_count, &result);
     }
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn compare_inbox_release(
+    artist: String,
+    album: String,
+    track_count: usize,
+    mbid: Option<String>,
+    db: State<'_, LibraryDb>,
+) -> Result<inbox::ReleaseComparison, AppError> {
+    let cache = MbCache::new(db.conn_arc());
+    tauri::async_runtime::spawn_blocking(move || {
+        inbox::compare_release(&artist, &album, track_count, mbid.as_deref(), &cache)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("Task failed: {}", e)))?
+    .map_err(AppError::Generic)
 }
 
 #[tauri::command]

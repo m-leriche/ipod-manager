@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CheckPill } from "./CheckPill";
 import { InboxAlbumDetails } from "./InboxAlbumDetails";
+import { ReleaseComparisonPanel } from "./ReleaseComparisonPanel";
 import { isBlocked, isPending } from "./helpers";
 import type { AlbumChecks, ConvertTarget, InboxAlbum } from "./types";
 
@@ -23,8 +24,12 @@ export const InboxAlbumRow = ({
   onConvert: (album: InboxAlbum, target: ConvertTarget) => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const blocked = isBlocked(album);
   const pending = isPending(album);
+  // The comparison is keyed on artist + album; without both there is nothing
+  // to look up on MusicBrainz.
+  const canCompare = Boolean(album.artist && album.album) && album.checks.tracklist.status !== "pending";
 
   return (
     <div className="border border-border rounded-xl px-4 py-3 bg-bg-card">
@@ -53,7 +58,13 @@ export const InboxAlbumRow = ({
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {(Object.keys(CHECK_LABELS) as (keyof AlbumChecks)[]).map((key) => (
-              <CheckPill key={key} label={CHECK_LABELS[key]} check={album.checks[key]} />
+              <CheckPill
+                key={key}
+                label={CHECK_LABELS[key]}
+                check={album.checks[key]}
+                onClick={key === "tracklist" && canCompare ? () => setComparing((prev) => !prev) : undefined}
+                expanded={key === "tracklist" ? comparing : undefined}
+              />
             ))}
           </div>
         </div>
@@ -77,6 +88,7 @@ export const InboxAlbumRow = ({
           </button>
         )}
       </div>
+      {comparing && <ReleaseComparisonPanel album={album} />}
       {expanded && <InboxAlbumDetails album={album} disabled={disabled} onConvert={onConvert} />}
     </div>
   );

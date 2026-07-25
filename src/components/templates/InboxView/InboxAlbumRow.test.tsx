@@ -17,6 +17,7 @@ const album = (overrides: Partial<InboxAlbum> = {}): InboxAlbum => ({
       file_name: "01.flac",
       title: "One",
       track_number: 1,
+      disc_number: 1,
       duration_secs: 100,
       format: "FLAC",
       bitrate_kbps: null,
@@ -107,5 +108,32 @@ describe("InboxAlbumRow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Hide files" }));
     expect(screen.queryByText("One")).not.toBeInTheDocument();
+  });
+
+  it("toggles the release comparison from the Tracklist pill", () => {
+    renderRow(album({ checks: { ...album().checks, tracklist: check("fail", "1 track here vs 12") } }));
+    const pill = screen.getByRole("button", { name: /Tracklist/ });
+
+    fireEvent.click(pill);
+    expect(screen.getByTestId("release-comparison")).toBeInTheDocument();
+
+    fireEvent.click(pill);
+    expect(screen.queryByTestId("release-comparison")).not.toBeInTheDocument();
+  });
+
+  it("leaves the Tracklist pill inert without artist and album tags", () => {
+    renderRow(album({ artist: null, album: null }));
+
+    expect(screen.queryByRole("button", { name: /Tracklist/ })).not.toBeInTheDocument();
+  });
+
+  it("leaves the Tracklist pill inert while the check is still pending", () => {
+    renderRow(
+      album({
+        checks: { tags: check("pass"), cover: check("pass"), tracklist: check("pending"), duplicate: check("pass") },
+      }),
+    );
+
+    expect(screen.queryByRole("button", { name: /Tracklist/ })).not.toBeInTheDocument();
   });
 });

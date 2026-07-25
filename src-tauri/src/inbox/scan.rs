@@ -125,6 +125,7 @@ fn to_inbox_track(t: TrackData) -> InboxTrack {
         file_name: t.file_name,
         title: t.title,
         track_number: t.track_number,
+        disc_number: t.disc_number,
         duration_secs: t.duration_secs,
         format: t.format,
         bitrate_kbps: t.bitrate_kbps,

@@ -411,6 +411,7 @@ pub fn run() {
             commands::set_inbox_location,
             commands::scan_inbox,
             commands::verify_inbox_tracklist,
+            commands::compare_inbox_release,
             commands::convert_inbox_album,
             commands::file_inbox_album,
             commands::delete_inbox_folders,

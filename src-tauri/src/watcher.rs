@@ -25,17 +25,20 @@ type RecentWrites = Arc<Mutex<HashMap<PathBuf, Instant>>>;
 
 /// Tauri-managed state for the filesystem watcher.
 ///
-/// `generation` guards against the debouncer's background thread modifying the
-/// database after `stop()` or a restart.  `notify-debouncer-full`'s `Drop` impl
+/// `generation` guards against a replaced debouncer's background thread
+/// modifying the database after a restart.  `notify-debouncer-full`'s `Drop` impl
 /// only sets a stop flag with `Ordering::Relaxed` and does NOT join the thread —
 /// so the thread can execute one final callback *after* the debouncer is
-/// dropped, racing with `save_metadata`'s tag-writing and creating ghost records
-/// from partially-written files.  Each `watch()` bumps `generation` and the
-/// callback captures the value current at its creation; once a newer watcher (or
-/// `stop()`) bumps the counter, any lingering old callback sees a mismatch and
-/// bails before touching the DB.  A generation counter — unlike a boolean
-/// suppress flag that has to be set then cleared — leaves no window in which a
-/// stale callback could slip through.
+/// dropped, creating ghost records from partially-written files.  Each
+/// `watch()` bumps `generation` and the callback captures the value current at
+/// its creation; once a newer watcher bumps the counter, any lingering old
+/// callback sees a mismatch and bails before touching the DB.  A generation
+/// counter — unlike a boolean suppress flag that has to be set then cleared —
+/// leaves no window in which a stale callback could slip through.
+///
+/// Metadata saves do *not* restart the watcher: rebuilding the debouncer walks
+/// and stats the whole library.  They mark their own writes with
+/// [`FolderWatcher::suppress_paths`] instead.
 pub struct FolderWatcher {
     inner: Mutex<Option<WatcherInner>>,
     generation: Arc<AtomicU64>,
@@ -131,22 +134,6 @@ impl FolderWatcher {
 
         log::info!("File watcher started for {} folders", paths.len());
         Ok(())
-    }
-
-    /// Stop watching and suppress any lingering callbacks.
-    ///
-    /// The generation is bumped *before* the debouncer is dropped because
-    /// `notify-debouncer-full`'s `Drop` uses `Ordering::Relaxed` and does not
-    /// join its background thread.  That thread can fire one last callback
-    /// after the drop — the bump ensures it sees a mismatch and returns.
-    ///
-    /// Use [`restart_from_db`] to start a fresh watcher afterward.
-    pub fn stop(&self) {
-        self.generation.fetch_add(1, Ordering::SeqCst);
-        if let Ok(mut guard) = self.inner.lock() {
-            *guard = None;
-            log::info!("File watcher stopped (suppressed)");
-        }
     }
 }
 

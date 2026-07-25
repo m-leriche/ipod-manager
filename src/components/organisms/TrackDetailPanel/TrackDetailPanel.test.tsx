@@ -128,7 +128,9 @@ describe("TrackDetailPanel", () => {
     expect(screen.getByText("Album Art")).toBeInTheDocument();
   });
 
-  it("calls onSave after saving", async () => {
+  // The parent refreshes off the backend's `library-files-reorganized` event;
+  // calling onSave here too refetched the whole browser twice per save.
+  it("saves without triggering a second refresh via onSave", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockResolvedValue({ total: 1, succeeded: 1, failed: 0, cancelled: false, errors: [] });
 
@@ -143,7 +145,7 @@ describe("TrackDetailPanel", () => {
     // Save
     fireEvent.click(screen.getByText("Save"));
 
-    // Wait for async invoke to complete
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
+    await vi.waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_metadata", expect.anything()));
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

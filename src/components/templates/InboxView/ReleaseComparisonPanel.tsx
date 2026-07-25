@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { ComparisonTrackRow } from "./ComparisonTrackRow";
-import { buildComparisonRows, describeMedia, diagnose, releaseYear } from "./compare";
+import { buildComparisonRows, diagnose, isReleaseRow, releaseMeta, releaseYear } from "./compare";
 import { useReleaseComparison } from "./useReleaseComparison";
 import type { InboxAlbum } from "./types";
 
@@ -41,18 +41,19 @@ export const ReleaseComparisonPanel = ({ album }: { album: InboxAlbum }) => {
   }
 
   const { release, media } = comparison.detail;
-  const year = releaseYear(release.date);
+  // The release tracklist is the list; files with no counterpart get their own
+  // section rather than blank cells inside it.
+  const releaseRows = rows.filter(isReleaseRow);
+  const extraRows = rows.filter((r) => !isReleaseRow(r));
 
   return (
-    <Shell className="flex flex-col gap-2">
+    <Shell className="flex flex-col">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest text-text-tertiary">Compared against</div>
-          <div className="text-xs font-medium text-text-primary truncate mt-0.5">
-            {release.title} · {release.artist}
-          </div>
+          <div className="text-[10px] text-text-tertiary">Compared against</div>
+          <div className="text-sm font-medium text-text-primary truncate mt-0.5">{release.title}</div>
           <div className="text-[11px] text-text-tertiary truncate">
-            {[year, describeMedia(media, release.track_count), release.disambiguation].filter(Boolean).join(" · ")}
+            {[releaseMeta(comparison.detail), release.disambiguation].filter(Boolean).join(" · ")}
           </div>
         </div>
         {comparison.alternatives.length > 0 && (
@@ -74,29 +75,29 @@ export const ReleaseComparisonPanel = ({ album }: { album: InboxAlbum }) => {
         )}
       </div>
 
-      <p className="text-[11px] text-text-secondary">{diagnose(rows, comparison, album.tracks.length)}</p>
+      <p className="text-[11px] text-text-secondary mt-2">{diagnose(rows, comparison, album.tracks.length)}</p>
 
-      {/* Capped so the two title columns stay paired instead of drifting to
-          opposite edges of a wide window. */}
-      <div className="max-w-3xl flex flex-col gap-0.5">
-        <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-text-tertiary pt-1 pb-0.5">
-          <span className="w-5 shrink-0" />
-          <span className="flex-1 min-w-0">Your files</span>
-          <span className="flex-1 min-w-0">MusicBrainz</span>
-          <span className="w-14 shrink-0" />
-        </div>
-
-        {rows.map((row, i) => (
+      <div className="mt-2">
+        {releaseRows.map((row, i) => (
           <Fragment key={row.key}>
-            {media.length > 1 && row.mb && row.mb.disc_number !== rows[i - 1]?.mb?.disc_number && (
-              <div className="text-[10px] font-medium text-text-tertiary pt-2 pb-0.5">Disc {row.mb.disc_number}</div>
+            {media.length > 1 && row.mb.disc_number !== releaseRows[i - 1]?.mb?.disc_number && (
+              <div className="text-[10px] text-text-tertiary pt-3 pb-1">Disc {row.mb.disc_number}</div>
             )}
             <ComparisonTrackRow row={row} />
           </Fragment>
         ))}
+
+        {extraRows.length > 0 && (
+          <>
+            <div className="text-[10px] text-text-tertiary pt-3 pb-1">Not on this release</div>
+            {extraRows.map((row) => (
+              <ComparisonTrackRow key={row.key} row={row} />
+            ))}
+          </>
+        )}
       </div>
 
-      <p className="text-[10px] text-text-tertiary pt-1">
+      <p className="text-[10px] text-text-tertiary mt-3">
         Searched “{comparison.query_artist} – {comparison.query_album}”
       </p>
     </Shell>

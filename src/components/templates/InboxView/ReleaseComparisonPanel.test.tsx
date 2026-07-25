@@ -76,8 +76,8 @@ describe("ReleaseComparisonPanel", () => {
     mockInvoke.mockResolvedValue(comparison);
     render(<ReleaseComparisonPanel album={album} />);
 
-    expect(await screen.findByText("Melted · Ty Segall")).toBeInTheDocument();
-    expect(screen.getByText(/2010 · 3 tracks/)).toBeInTheDocument();
+    expect(await screen.findByText("Melted")).toBeInTheDocument();
+    expect(screen.getByText("Ty Segall · 2010 · Vinyl · 3 tracks")).toBeInTheDocument();
     expect(screen.getByText("Compared against")).toBeInTheDocument();
   });
 
@@ -85,9 +85,10 @@ describe("ReleaseComparisonPanel", () => {
     mockInvoke.mockResolvedValue(comparison);
     render(<ReleaseComparisonPanel album={album} />);
 
+    // One list — the release tracklist — not two parallel columns.
     expect(await screen.findByText("Sad Fuzz")).toBeInTheDocument();
-    expect(screen.getAllByText("Finger")).toHaveLength(2); // local + MusicBrainz column
-    expect(screen.getByText("Missing")).toBeInTheDocument();
+    expect(screen.getAllByText("Finger")).toHaveLength(1);
+    expect(screen.queryByText("Missing")).not.toBeInTheDocument();
   });
 
   it("explains why the counts differ", async () => {
@@ -108,7 +109,7 @@ describe("ReleaseComparisonPanel", () => {
     mockInvoke.mockResolvedValue(comparison);
     render(<ReleaseComparisonPanel album={album} />);
 
-    await screen.findByText("Melted · Ty Segall");
+    await screen.findByText("Melted");
     expect(mockInvoke).toHaveBeenCalledWith("compare_inbox_release", {
       artist: "Ty Segall",
       album: "Melted",
@@ -142,7 +143,23 @@ describe("ReleaseComparisonPanel", () => {
     mockInvoke.mockResolvedValue(comparison);
     fireEvent.click(screen.getByText("Retry"));
 
-    expect(await screen.findByText("Melted · Ty Segall")).toBeInTheDocument();
+    expect(await screen.findByText("Melted")).toBeInTheDocument();
+  });
+
+  it("separates files that are not on the release", async () => {
+    mockInvoke.mockResolvedValue({
+      ...comparison,
+      detail: {
+        ...comparison.detail,
+        release: { ...comparison.detail.release, track_count: 1 },
+        media: [{ position: 1, format: "Vinyl", track_count: 1 }],
+        tracks: [comparison.detail.tracks[0]],
+      },
+    } satisfies ReleaseComparison);
+    render(<ReleaseComparisonPanel album={album} />);
+
+    expect(await screen.findByText("Not on this release")).toBeInTheDocument();
+    expect(screen.getByText("Caesar")).toBeInTheDocument();
   });
 
   it("labels each disc when the release spans more than one", async () => {

@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { MbMedium, MbTrack } from "../../../types/musicbrainz";
-import { buildComparisonRows, describeMedia, diagnose, releaseYear, summarizeRows } from "./compare";
+import {
+  buildComparisonRows,
+  describeMedia,
+  diagnose,
+  releaseMeta,
+  releaseYear,
+  summarizeRows,
+  trackNote,
+} from "./compare";
 import type { InboxTrack, ReleaseComparison } from "./types";
 
 const local = (track_number: number | null, title: string, disc_number: number | null = 1): InboxTrack => ({
@@ -118,6 +126,65 @@ describe("describeMedia", () => {
     ];
 
     expect(describeMedia(media, 21)).toBe("2 discs · 11 + 10 tracks");
+  });
+});
+
+describe("releaseMeta", () => {
+  it("reads as one line of release identity", () => {
+    const detail = comparison([mb(1, "Finger")], [{ position: 1, format: "Vinyl", track_count: 1 }]).detail;
+
+    expect(releaseMeta(detail)).toBe("Ty Segall · 2010 · Vinyl · 1 tracks");
+  });
+
+  it("drops the format for a multi-disc release, where the disc breakdown says more", () => {
+    const media: MbMedium[] = [
+      { position: 1, format: "CD", track_count: 1 },
+      { position: 2, format: "CD", track_count: 1 },
+    ];
+    const detail = comparison([mb(1, "A"), mb(1, "B", 2)], media).detail;
+
+    expect(releaseMeta(detail)).toBe("Ty Segall · 2010 · 2 discs · 1 + 1 tracks");
+  });
+});
+
+describe("trackNote", () => {
+  it("says nothing when the file matches cleanly", () => {
+    const [row] = buildComparisonRows([local(1, "Finger")], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBeNull();
+  });
+
+  it("says nothing for a track you simply do not have", () => {
+    const [row] = buildComparisonRows([], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBeNull();
+  });
+
+  it("surfaces a differing local tag", () => {
+    const [row] = buildComparisonRows([local(1, "Fingerz")], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBe("tagged “Fingerz”");
+  });
+
+  it("surfaces duration drift beyond the tolerance", () => {
+    const track = { ...local(1, "Finger"), duration_secs: 240 };
+    const [row] = buildComparisonRows([track], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBe("your file 4:00");
+  });
+
+  it("ignores drift within the tolerance", () => {
+    const track = { ...local(1, "Finger"), duration_secs: 183 };
+    const [row] = buildComparisonRows([track], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBeNull();
+  });
+
+  it("prefers the title difference over the duration difference", () => {
+    const track = { ...local(1, "Fingerz"), duration_secs: 240 };
+    const [row] = buildComparisonRows([track], [mb(1, "Finger")]);
+
+    expect(trackNote(row)).toBe("tagged “Fingerz”");
   });
 });
 

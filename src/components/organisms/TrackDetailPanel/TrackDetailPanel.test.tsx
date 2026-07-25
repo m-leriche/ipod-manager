@@ -128,7 +128,9 @@ describe("TrackDetailPanel", () => {
     expect(screen.getByText("Album Art")).toBeInTheDocument();
   });
 
-  it("calls onSave after saving", async () => {
+  // The parent refreshes off the backend's `library-files-reorganized` event;
+  // calling onSave here too refetched the whole browser twice per save.
+  it("saves without triggering a second refresh via onSave", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockResolvedValue({ total: 1, succeeded: 1, failed: 0, cancelled: false, errors: [] });
 
@@ -143,7 +145,39 @@ describe("TrackDetailPanel", () => {
     // Save
     fireEvent.click(screen.getByText("Save"));
 
-    // Wait for async invoke to complete
-    await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
+    await vi.waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_metadata", expect.anything()));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  // Undo goes back through save_metadata, so it emits the same event and must
+  // not refetch either.
+  it("undoing a save does not trigger a second refresh via onSave", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const undoOps = [{ file_path: "/music/Artist/Album/track.mp3", genre: "Rock" }];
+    vi.mocked(invoke).mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      cancelled: false,
+      errors: [],
+      undo_operations: undoOps,
+    });
+
+    const onSave = vi.fn();
+    renderPanel(<TrackDetailPanel tracks={[makeTrack()]} onSave={onSave} />);
+
+    fireEvent.click(screen.getByText("Rock"));
+    fireEvent.change(screen.getByDisplayValue("Rock"), { target: { value: "Jazz" } });
+    fireEvent.blur(screen.getByDisplayValue("Jazz"));
+    fireEvent.click(screen.getByText("Save"));
+
+    await vi.waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_metadata", expect.anything()));
+    vi.mocked(invoke).mockClear();
+
+    // Cmd+Z pops the entry TrackDetailPanel pushed and runs its undo.
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+    await vi.waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_metadata", { updates: undoOps }));
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

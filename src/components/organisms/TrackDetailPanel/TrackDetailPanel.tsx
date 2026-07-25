@@ -90,15 +90,16 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({
 
     setSaving(true);
     try {
+      // No onSave() here: save_metadata emits `library-files-reorganized`,
+      // which already drives the parent's refresh. Calling both refetched the
+      // whole browser twice per save.
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
-      onSave?.();
       if (result.succeeded > 0) {
         const ops = result.undo_operations;
         pushUndo({
           label: `metadata edit (${result.succeeded} file${result.succeeded !== 1 ? "s" : ""})`,
           undo: async () => {
             await invoke<MetadataSaveResult>("save_metadata", { updates: ops });
-            onSave?.();
           },
         });
       }
@@ -107,7 +108,7 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({
     } finally {
       setSaving(false);
     }
-  }, [tracks, editedFields, originalFields, originalMixed, onSave, toast, pushUndo]);
+  }, [tracks, editedFields, originalFields, originalMixed, toast, pushUndo]);
 
   const handleRate = useCallback(
     async (rating: number) => {

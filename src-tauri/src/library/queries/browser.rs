@@ -1,7 +1,8 @@
 use rusqlite::Connection;
 
 use super::super::types::{
-    AlbumSummary, ArtistSummary, BrowserData, GenreSummary, LibraryFilter, PaginatedBrowserData,
+    AlbumSummary, ArtistSummary, BrowserAggregates, BrowserData, GenreSummary, LibraryFilter,
+    PaginatedBrowserData,
 };
 use super::genre::{aggregate_genre_counts, push_genre_match_conditions};
 use super::tracks::{get_tracks, get_tracks_paginated};
@@ -309,7 +310,7 @@ fn where_clause(conditions: &[String]) -> String {
     }
 }
 
-type BrowserAggregates = (Vec<GenreSummary>, Vec<ArtistSummary>, Vec<AlbumSummary>);
+type AggregateLists = (Vec<GenreSummary>, Vec<ArtistSummary>, Vec<AlbumSummary>);
 
 /// Fetch aggregate data (genres, artists, albums) for the column browser.
 /// Filters cascade left to right (iTunes-style): genre narrows artists and
@@ -318,7 +319,7 @@ type BrowserAggregates = (Vec<GenreSummary>, Vec<ArtistSummary>, Vec<AlbumSummar
 fn get_browser_aggregates(
     conn: &Connection,
     filter: &LibraryFilter,
-) -> Result<BrowserAggregates, String> {
+) -> Result<AggregateLists, String> {
     let genre = filter_strs(&filter.genre);
     let artist = filter_strs(&filter.artist);
     let search = filter.search.as_deref();
@@ -441,6 +442,21 @@ fn get_browser_aggregates(
     };
 
     Ok((genres, artists, albums))
+}
+
+/// The column-browser lists alone, for refreshing the sidebar after an edit
+/// changed a value it groups by. Skips the track page and its COUNT — the
+/// frontend patches the rows it already holds.
+pub fn get_aggregates(
+    conn: &Connection,
+    filter: &LibraryFilter,
+) -> Result<BrowserAggregates, String> {
+    let (genres, artists, albums) = get_browser_aggregates(conn, filter)?;
+    Ok(BrowserAggregates {
+        genres,
+        artists,
+        albums,
+    })
 }
 
 pub fn get_browser_data(conn: &Connection, filter: &LibraryFilter) -> Result<BrowserData, String> {

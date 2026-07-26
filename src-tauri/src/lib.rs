@@ -305,6 +305,7 @@ pub fn run() {
             commands::get_library_tracks,
             commands::get_library_browser_data,
             commands::get_library_browser_data_paginated,
+            commands::get_library_aggregates,
             commands::get_library_tracks_page,
             commands::get_library_artists,
             commands::get_library_albums,

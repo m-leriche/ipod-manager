@@ -1,3 +1,7 @@
+mod save;
+
+pub use save::*;
+
 use crate::albumart;
 use crate::error::AppError;
 use crate::files::{ArtRepairCancel, SyncCancel};
@@ -6,9 +10,8 @@ use crate::metadata;
 use crate::metarepair;
 use crate::musicbrainz::MbCache;
 use crate::sanitize;
-use crate::watcher::FolderWatcher;
 use rusqlite::params;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
@@ -70,185 +73,6 @@ pub async fn scan_metadata(
         .await
         .map_err(|e| format!("Scan failed: {}", e))?
         .map_err(Into::into)
-}
-
-#[tauri::command]
-pub async fn save_metadata(
-    updates: Vec<metadata::MetadataUpdate>,
-    app: AppHandle,
-    db: State<'_, LibraryDb>,
-    watcher: State<'_, FolderWatcher>,
-    cancel: State<'_, SyncCancel>,
-) -> Result<metadata::MetadataSaveResult, AppError> {
-    let flag = cancel.new_flag();
-    let conn_arc = db.conn_arc();
-    let app_clone = app.clone();
-
-    let file_paths: Vec<String> = updates.iter().map(|u| u.file_path.clone()).collect();
-
-    // Only fields that feed compute_library_dest can move files. Saves that
-    // touch nothing else (genre, year, sort fields…) skip the reorganize pass
-    // entirely.
-    let affects_paths = updates.iter().any(|u| {
-        u.title.is_some()
-            || u.artist.is_some()
-            || u.album.is_some()
-            || u.album_artist.is_some()
-            || u.track.is_some()
-            || u.disc_number.is_some()
-    });
-
-    let id3_version = {
-        let conn = conn_arc
-            .lock()
-            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))?;
-        metadata::Id3WriteVersion::from_setting(
-            library::get_setting(&conn, metadata::Id3WriteVersion::SETTING_KEY).as_deref(),
-        )
-    };
-
-    // Mark the edited files as our own writes so the watcher discards the
-    // write/move events they generate instead of re-syncing them and firing a
-    // redundant `library-changed` refresh. The watcher keeps running throughout:
-    // restarting it would rebuild the debouncer's file-id cache, which walks and
-    // stats the entire library.
-    watcher.suppress_paths(file_paths.iter().map(|p| PathBuf::from(p.as_str())));
-
-    let mut result = tauri::async_runtime::spawn_blocking(move || {
-        Ok::<_, AppError>(metadata::save_metadata(updates, app, flag, id3_version))
-    })
-    .await
-    .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
-
-    // Refresh the library DB on a blocking thread, holding the lock only
-    // for short stretches so browsing and filtering stay responsive while
-    // large batches (e.g. whole-album genre applies) are processed.
-    let conn_for_db = conn_arc;
-    let paths_for_db = file_paths.clone();
-    let recent_writes = watcher.recent_writes();
-    let (is_library, path_renames) = tauri::async_runtime::spawn_blocking(move || {
-        update_library_after_save(&conn_for_db, &paths_for_db, affects_paths, &recent_writes)
-    })
-    .await
-    .map_err(|e| AppError::from(format!("Task failed: {}", e)))??;
-
-    // Update undo operations with post-reorganization file paths
-    for (old_path, new_path) in &path_renames {
-        for undo_op in &mut result.undo_operations {
-            if undo_op.file_path == *old_path {
-                undo_op.file_path = new_path.clone();
-            }
-        }
-    }
-
-    // This event is the *only* thing that refreshes the library browser after a
-    // save — `TrackDetailPanel` deliberately does not also refetch. Gating on
-    // `is_library` is safe because a track can only exist in the DB once the
-    // library location is set (setting it is what triggers the initial scan), so
-    // any save reaching a library track emits. Non-library saves (e.g. the
-    // metadata editor pointed at an arbitrary folder) correctly emit nothing
-    // rather than forcing a pointless browser refetch. If the browser ever stops
-    // refreshing after a save, check this gate first.
-    if is_library {
-        let _ = app_clone.emit("library-files-reorganized", file_paths.len());
-    }
-
-    Ok(result)
-}
-
-type PathRenames = Vec<(String, String)>;
-
-/// Upsert saved files into the library DB and reorganize them. Tag re-reads
-/// happen outside the DB lock, and each step takes its own short lock, so
-/// concurrent library queries are never blocked for the whole batch.
-///
-/// Every step is proportional to `file_paths`, never to the library size.
-/// Stale rows at pre-move paths are deleted by `reorganize_library_file`
-/// itself; library-wide ghost cleanup belongs to the scan path
-/// (`library::scan`), which has a walk-based fast path and snapshots the DB
-/// before deleting.
-///
-/// Each rename is registered in `recent_writes` the moment it completes rather
-/// than in one batch afterwards: the watcher runs throughout, so on a batch that
-/// outlasts the debouncer window the early files' Create events would otherwise
-/// flush before their new paths were suppressed.
-///
-/// Returns whether the files live in the library and any (old, new) renames.
-fn update_library_after_save(
-    conn_arc: &std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
-    file_paths: &[String],
-    affects_paths: bool,
-    recent_writes: &crate::watcher::RecentWrites,
-) -> Result<(bool, PathRenames), AppError> {
-    let lock_conn = || {
-        conn_arc
-            .lock()
-            .map_err(|e| AppError::from(format!("DB lock failed: {}", e)))
-    };
-
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    // Re-read tags from the saved files without holding the DB lock —
-    // this is the expensive part (a full tag parse per file).
-    let track_updates: Vec<_> = file_paths
-        .iter()
-        .filter_map(|file_path| {
-            let path = Path::new(file_path);
-            if !path.exists() {
-                return None;
-            }
-            let mtime = std::fs::metadata(path)
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(now);
-            Some((library::read_track_for_library(path), mtime))
-        })
-        .collect();
-
-    let library_root = {
-        let conn = lock_conn()?;
-        for (track_data, mtime) in &track_updates {
-            library::upsert_track(&conn, track_data, *mtime, now).ok();
-        }
-        library::get_library_location(&conn)
-    };
-
-    let Some(library_root) = library_root else {
-        return Ok((false, Vec::new()));
-    };
-
-    // No path-affecting fields changed: files can't need renaming, so the
-    // reorganize pass is a no-op.
-    if !affects_paths {
-        return Ok((true, Vec::new()));
-    }
-
-    // Track path changes so undo operations use the correct
-    // (post-reorganization) file paths.
-    let mut path_renames: PathRenames = Vec::new();
-    for file_path in file_paths {
-        if !file_path.starts_with(&library_root) {
-            continue;
-        }
-        let conn = lock_conn()?;
-        match library::reorganize_library_file(&conn, &library_root, file_path) {
-            Ok(Some(new_path)) => {
-                crate::watcher::suppress_in(recent_writes, [PathBuf::from(new_path.as_str())]);
-                path_renames.push((file_path.clone(), new_path));
-            }
-            Ok(None) => {}
-            Err(e) => {
-                log::warn!("Failed to reorganize {}: {}", file_path, e);
-            }
-        }
-    }
-
-    Ok((true, path_renames))
 }
 
 #[tauri::command]
@@ -465,50 +289,7 @@ pub async fn invalidate_thumbnail(folder_path: String, app: AppHandle) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::update_library_after_save;
-    use crate::library;
     use crate::thumbnail::ThumbSize;
-    use std::sync::{Arc, Mutex};
-
-    /// A save must only ever touch the rows for the files it saved. It used to
-    /// sweep every row under the library root and delete any whose file it
-    /// couldn't stat — so a save while the library volume was detached (the
-    /// library lives on a removable drive) deleted the entire tracks table.
-    #[test]
-    fn save_leaves_rows_for_other_tracks_alone_when_library_root_is_missing() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let conn = library::init_db(&dir.path().join("library.db")).expect("init_db");
-
-        // A root that does not exist, standing in for a detached volume.
-        let root = "/Volumes/DetachedDrive/Music";
-        let folder = format!("{}/Artist/Album", root);
-        library::set_library_location(&conn, root).expect("set location");
-        for name in ["a.mp3", "b.mp3"] {
-            conn.execute(
-                "INSERT INTO tracks (file_path, file_name, folder_path)
-                 VALUES (?1, ?2, ?3)",
-                rusqlite::params![format!("{}/{}", folder, name), name, folder],
-            )
-            .expect("insert");
-        }
-
-        let conn_arc = Arc::new(Mutex::new(conn));
-        let recent_writes = crate::watcher::RecentWrites::default();
-        let saved = vec![format!("{}/a.mp3", folder)];
-        let (is_library, renames) =
-            update_library_after_save(&conn_arc, &saved, true, &recent_writes)
-                .expect("update after save");
-
-        assert!(is_library);
-        assert!(renames.is_empty(), "no file exists, so nothing can move");
-
-        let remaining: i64 = conn_arc
-            .lock()
-            .expect("lock")
-            .query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
-            .expect("count");
-        assert_eq!(remaining, 2, "a save must not delete other tracks' rows");
-    }
 
     #[test]
     fn thumb_size_parse_accepts_valid() {

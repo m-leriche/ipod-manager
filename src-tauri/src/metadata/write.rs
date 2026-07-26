@@ -5,11 +5,13 @@ use lofty::config::WriteOptions;
 use lofty::prelude::{Accessor, TagExt, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::ItemKey;
+use std::io::{Seek, SeekFrom};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
+use super::flac_inplace;
 use super::{
     Id3WriteVersion, MetadataSaveProgress, MetadataSaveResult, MetadataUpdate, TrackMetadata,
 };
@@ -100,6 +102,8 @@ pub fn save_metadata(
 fn build_undo_operation(update: &MetadataUpdate, snapshot: &TrackMetadata) -> MetadataUpdate {
     MetadataUpdate {
         file_path: update.file_path.clone(),
+        // Filled in by the save command once the row id is known.
+        track_id: None,
         title: update
             .title
             .as_ref()
@@ -365,18 +369,123 @@ fn apply_update_id3(
         Id3WriteVersion::V23 => id3::Version::Id3v23,
         Id3WriteVersion::V24 => id3::Version::Id3v24,
     };
-    tag.write_to_path(path, version)
+    write_id3_filling_region(path, &tag, version)
+}
+
+/// Slack left after the tag when the existing region is too small to reuse, so
+/// the *next* edit to this file lands in place instead of shifting audio again.
+const ID3_PADDING: usize = 4096;
+
+/// Write an ID3v2 tag sized to exactly fill the file's existing tag region.
+///
+/// `id3` only writes without touching the audio when the encoded tag is exactly
+/// as long as the region it replaces — both a longer and a shorter tag make it
+/// shift the entire stream to grow or shrink the gap. Measuring the region first
+/// and padding the tag out to fill it keeps the common edit (same frames, new
+/// value) a few-KB write instead of rewriting the whole file.
+///
+/// Getting the region size wrong is safe, just slow: `id3` falls back to
+/// shifting, which is what it did unconditionally before.
+fn write_id3_filling_region(
+    path: &Path,
+    tag: &id3::Tag,
+    version: id3::Version,
+) -> Result<(), String> {
+    let encoder = id3::Encoder::new().version(version);
+
+    let mut encoded = Vec::new();
+    encoder
+        .encode(tag, &mut encoded)
         .map_err(|e| format!("Save failed: {}", e))?;
 
-    Ok(())
+    let padding = match existing_id3_region_len(path) {
+        Some(region) => region.checked_sub(encoded.len()).unwrap_or(ID3_PADDING),
+        None => ID3_PADDING,
+    };
+
+    id3::Encoder::new()
+        .version(version)
+        .padding(padding)
+        .write_to_path(tag, path)
+        .map_err(|e| format!("Save failed: {}", e))
+}
+
+/// Byte length of the ID3v2 region `id3` will replace: the declared tag area
+/// plus any zero bytes immediately after it.
+///
+/// Mirrors `id3`'s own `locate_id3v2`, which is not publicly reachable. Returns
+/// `None` when there is no reusable region — no tag, an extended header (whose
+/// size `id3` subtracts in a way not worth replicating), or a tag that overruns
+/// the file.
+fn existing_id3_region_len(path: &Path) -> Option<usize> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut header = [0u8; 10];
+    file.read_exact(&mut header).ok()?;
+    if &header[..3] != b"ID3" {
+        return None;
+    }
+    const EXTENDED_HEADER: u8 = 0x40;
+    if header[5] & EXTENDED_HEADER != 0 {
+        return None;
+    }
+
+    // The size field is 4 synchsafe bytes: 7 significant bits each.
+    let declared = header[6..10]
+        .iter()
+        .try_fold(0usize, |acc, b| match b & 0x80 {
+            0 => Some((acc << 7) | (*b as usize)),
+            _ => None,
+        })?;
+    let tag_area = 10usize.checked_add(declared)?;
+
+    let file_len = file.metadata().ok()?.len() as usize;
+    if tag_area >= file_len {
+        return None;
+    }
+
+    // Trailing zeros past the declared area count as padding too. Audio frames
+    // open with a sync word, so in practice this stops at the first byte; the cap
+    // just bounds the read on pathological input.
+    const MAX_TRAILING_SCAN: usize = 64 * 1024;
+    file.seek(SeekFrom::Start(tag_area as u64)).ok()?;
+    let mut scan = vec![0u8; MAX_TRAILING_SCAN.min(file_len - tag_area)];
+    let read = read_up_to(&mut file, &mut scan);
+    let trailing = scan[..read].iter().take_while(|b| **b == 0).count();
+
+    Some(tag_area + trailing)
+}
+
+/// Fill as much of `buf` as the file has left, returning how many bytes landed.
+/// A short read just means fewer trailing bytes to inspect.
+fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> usize {
+    use std::io::Read;
+
+    let mut filled = 0;
+    while filled < buf.len() {
+        match file.read(&mut buf[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(_) => break,
+        }
+    }
+    filled
 }
 
 /// Write tags for non-MP3 formats via lofty.
+///
+/// FLAC takes an in-place path first: lofty rewrites the entire stream for any
+/// tag change (see `flac_inplace`), which on a large FLAC costs a full file
+/// read + write. `write_in_place` returns `false` when the new tags don't fit
+/// the existing metadata region, and only then do we pay for a full rewrite.
 fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String> {
     let mut tagged = Probe::open(path)
         .map_err(|e| format!("Open failed: {}", e))?
         .read()
         .map_err(|e| format!("Read failed: {}", e))?;
+
+    let is_flac = tagged.file_type() == lofty::file::FileType::Flac;
 
     let tag = if let Some(t) = tagged.primary_tag_mut() {
         t
@@ -456,6 +565,10 @@ fn apply_update_lofty(path: &Path, update: &MetadataUpdate) -> Result<(), String
         } else {
             tag.remove_key(&ItemKey::FlagCompilation);
         }
+    }
+
+    if is_flac && flac_inplace::write_in_place(path, tag)? {
+        return Ok(());
     }
 
     tag.save_to_path(path, WriteOptions::default())

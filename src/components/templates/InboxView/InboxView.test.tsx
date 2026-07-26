@@ -20,6 +20,7 @@ const album = (overrides: Partial<InboxAlbum> = {}): InboxAlbum => ({
       file_name: "01.flac",
       title: "One",
       track_number: 1,
+      disc_number: 1,
       duration_secs: 100,
       format: "FLAC",
       bitrate_kbps: null,

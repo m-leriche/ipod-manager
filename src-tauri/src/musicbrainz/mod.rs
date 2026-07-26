@@ -24,6 +24,7 @@ pub struct MbRelease {
     pub title: String,
     pub artist: String,
     pub date: Option<String>,
+    pub disambiguation: Option<String>,
     pub track_count: usize,
     pub score: u32,
 }
@@ -40,14 +41,25 @@ pub struct MbReleaseGroup {
 #[derive(Debug, Clone, Serialize)]
 pub struct MbTrack {
     pub position: u32,
+    pub disc_number: u32,
     pub title: String,
     pub artist: String,
     pub length_ms: Option<u64>,
 }
 
+/// One physical disc of a release. Preserved separately from the flattened
+/// track list so callers can tell a 2×11 double album from a 22-track single.
+#[derive(Debug, Clone, Serialize)]
+pub struct MbMedium {
+    pub position: u32,
+    pub format: Option<String>,
+    pub track_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MbReleaseDetail {
     pub release: MbRelease,
+    pub media: Vec<MbMedium>,
     pub tracks: Vec<MbTrack>,
 }
 
@@ -149,6 +161,7 @@ pub fn search_releases(
             title,
             artist,
             date,
+            disambiguation: non_empty(release["disambiguation"].as_str()),
             track_count,
             score,
         });
@@ -225,11 +238,16 @@ pub fn fetch_release_detail(
             .map_err(|e| format!("Read failed: {}", e))
     })?;
 
+    Ok(parse_release_detail(&body))
+}
+
+fn parse_release_detail(body: &serde_json::Value) -> MbReleaseDetail {
     let release = MbRelease {
         id: body["id"].as_str().unwrap_or("").to_string(),
         title: body["title"].as_str().unwrap_or("").to_string(),
         artist: extract_artist_credit(&body["artist-credit"]),
         date: body["date"].as_str().map(|s| s.to_string()),
+        disambiguation: non_empty(body["disambiguation"].as_str()),
         track_count: body["media"]
             .as_array()
             .map(|m| {
@@ -241,31 +259,46 @@ pub fn fetch_release_detail(
         score: 0,
     };
 
+    let mut media = Vec::new();
     let mut tracks = Vec::new();
-    if let Some(media) = body["media"].as_array() {
-        for disc in media {
-            if let Some(track_list) = disc["tracks"].as_array() {
-                for track in track_list {
-                    let position = track["position"].as_u64().unwrap_or(0) as u32;
-                    let title = track["title"].as_str().unwrap_or("").to_string();
-                    let length_ms = track["length"].as_u64();
-                    let artist = track["artist-credit"]
-                        .as_array()
-                        .map(|_| extract_artist_credit(&track["artist-credit"]))
-                        .unwrap_or_else(|| release.artist.clone());
+    if let Some(discs) = body["media"].as_array() {
+        for (idx, disc) in discs.iter().enumerate() {
+            // MB omits `position` on single-disc releases; fall back to order.
+            let disc_number = disc["position"].as_u64().unwrap_or(idx as u64 + 1) as u32;
+            media.push(MbMedium {
+                position: disc_number,
+                format: non_empty(disc["format"].as_str()),
+                track_count: disc["track-count"].as_u64().unwrap_or(0) as usize,
+            });
 
-                    tracks.push(MbTrack {
-                        position,
-                        title,
-                        artist,
-                        length_ms,
-                    });
-                }
+            let Some(track_list) = disc["tracks"].as_array() else {
+                continue;
+            };
+            for track in track_list {
+                let position = track["position"].as_u64().unwrap_or(0) as u32;
+                let title = track["title"].as_str().unwrap_or("").to_string();
+                let length_ms = track["length"].as_u64();
+                let artist = track["artist-credit"]
+                    .as_array()
+                    .map(|_| extract_artist_credit(&track["artist-credit"]))
+                    .unwrap_or_else(|| release.artist.clone());
+
+                tracks.push(MbTrack {
+                    position,
+                    disc_number,
+                    title,
+                    artist,
+                    length_ms,
+                });
             }
         }
     }
 
-    Ok(MbReleaseDetail { release, tracks })
+    MbReleaseDetail {
+        release,
+        media,
+        tracks,
+    }
 }
 
 const COVER_ART_NOT_FOUND: &str = "not-found";
@@ -473,6 +506,10 @@ pub fn fetch_artist_release_groups(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
+fn non_empty(value: Option<&str>) -> Option<String> {
+    value.filter(|s| !s.is_empty()).map(|s| s.to_string())
+}
+
 fn extract_artist_credit(credit: &serde_json::Value) -> String {
     let Some(arr) = credit.as_array() else {
         return String::new();
@@ -513,5 +550,90 @@ mod tests {
     fn extract_artist_credit_null() {
         let json = serde_json::Value::Null;
         assert_eq!(extract_artist_credit(&json), "");
+    }
+
+    fn disc(position: Option<u32>, format: &str, titles: &[&str]) -> serde_json::Value {
+        let tracks: Vec<serde_json::Value> = titles
+            .iter()
+            .enumerate()
+            .map(|(i, t)| serde_json::json!({ "position": i + 1, "title": t, "length": 180000 }))
+            .collect();
+        let mut media = serde_json::json!({
+            "format": format,
+            "track-count": titles.len(),
+            "tracks": tracks,
+        });
+        if let Some(p) = position {
+            media["position"] = serde_json::json!(p);
+        }
+        media
+    }
+
+    #[test]
+    fn parse_release_detail_keeps_disc_breakdown() {
+        let body = serde_json::json!({
+            "id": "abc",
+            "title": "Melted",
+            "date": "2010-04-27",
+            "artist-credit": [{ "name": "Ty Segall", "joinphrase": "" }],
+            "media": [
+                disc(Some(1), "CD", &["Finger", "Caesar"]),
+                disc(Some(2), "CD", &["Bonus One"]),
+            ],
+        });
+
+        let detail = parse_release_detail(&body);
+
+        assert_eq!(detail.release.track_count, 3);
+        assert_eq!(detail.media.len(), 2);
+        assert_eq!(detail.media[0].track_count, 2);
+        assert_eq!(detail.media[1].track_count, 1);
+        assert_eq!(detail.media[0].format.as_deref(), Some("CD"));
+
+        // Positions restart per disc; disc_number is what disambiguates them.
+        let numbered: Vec<(u32, u32)> = detail
+            .tracks
+            .iter()
+            .map(|t| (t.disc_number, t.position))
+            .collect();
+        assert_eq!(numbered, vec![(1, 1), (1, 2), (2, 1)]);
+    }
+
+    #[test]
+    fn parse_release_detail_defaults_disc_number_when_absent() {
+        let body = serde_json::json!({
+            "id": "abc",
+            "title": "Melted",
+            "media": [disc(None, "Digital Media", &["Finger"])],
+        });
+
+        let detail = parse_release_detail(&body);
+
+        assert_eq!(detail.media[0].position, 1);
+        assert_eq!(detail.tracks[0].disc_number, 1);
+    }
+
+    #[test]
+    fn parse_release_detail_reads_disambiguation_only_when_present() {
+        let with = serde_json::json!({ "id": "a", "disambiguation": "deluxe edition" });
+        let without = serde_json::json!({ "id": "a", "disambiguation": "" });
+
+        assert_eq!(
+            parse_release_detail(&with)
+                .release
+                .disambiguation
+                .as_deref(),
+            Some("deluxe edition")
+        );
+        assert_eq!(parse_release_detail(&without).release.disambiguation, None);
+    }
+
+    #[test]
+    fn parse_release_detail_tolerates_missing_media() {
+        let detail = parse_release_detail(&serde_json::json!({ "id": "a", "title": "X" }));
+
+        assert_eq!(detail.release.track_count, 0);
+        assert!(detail.media.is_empty());
+        assert!(detail.tracks.is_empty());
     }
 }

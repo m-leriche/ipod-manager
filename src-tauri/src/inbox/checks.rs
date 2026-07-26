@@ -5,7 +5,8 @@ use std::path::Path;
 
 use crate::albumart;
 use crate::library::types::TrackData;
-use crate::musicbrainz::{self, normalize_for_search};
+use crate::metarepair::matching::select_best_release;
+use crate::musicbrainz::{self, normalize_for_search, MbRelease};
 
 use super::types::CheckResult;
 
@@ -187,23 +188,30 @@ pub fn verify_tracklist(artist: &str, album: &str, track_count: usize) -> CheckR
     let artist = normalize_for_search(artist);
     let album = normalize_for_search(album);
 
-    let releases = match musicbrainz::search_releases(&artist, &album, None) {
-        Ok(r) => r,
-        Err(e) => return CheckResult::warn(format!("Could not verify: {}", e)),
-    };
+    match musicbrainz::search_releases(&artist, &album, None) {
+        Ok(releases) => tracklist_verdict(&releases, track_count),
+        Err(e) => CheckResult::warn(format!("Could not verify: {}", e)),
+    }
+}
 
-    if let Some(matched) = releases.iter().find(|r| r.track_count == track_count) {
+/// The verdict for a search result. Selection goes through `select_best_release`
+/// so the pill and the comparison panel always name the same release — the
+/// panel resolves its release from the same function.
+pub(super) fn tracklist_verdict(releases: &[MbRelease], track_count: usize) -> CheckResult {
+    let Some(idx) = select_best_release(releases, track_count) else {
+        return CheckResult::warn("No MusicBrainz match found".to_string());
+    };
+    let best = &releases[idx];
+
+    if best.track_count == track_count {
         return CheckResult::pass(Some(format!(
             "Matches “{}” ({} tracks)",
-            matched.title, matched.track_count
+            best.title, best.track_count
         )));
     }
 
-    match releases.first() {
-        Some(best) => CheckResult::fail(format!(
-            "{} tracks here vs {} on “{}”",
-            track_count, best.track_count, best.title
-        )),
-        None => CheckResult::warn("No MusicBrainz match found".to_string()),
-    }
+    CheckResult::fail(format!(
+        "{} tracks here vs {} on “{}”",
+        track_count, best.track_count, best.title
+    ))
 }

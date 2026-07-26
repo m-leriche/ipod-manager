@@ -85,10 +85,19 @@ const makeAlbum = (issues1: TrackIssue[], issues2: TrackIssue[]): AlbumRepairRep
   album: "Album",
   folder_path: "/music",
   selected_release: {
-    release: { id: "r1", title: "Album", artist: "Artist", date: "2020", track_count: 2, score: 100 },
+    release: {
+      id: "r1",
+      title: "Album",
+      artist: "Artist",
+      date: "2020",
+      disambiguation: null,
+      track_count: 2,
+      score: 100,
+    },
+    media: [{ position: 1, format: "CD", track_count: 2 }],
     tracks: [
-      { position: 1, title: "Song One (Remastered)", artist: "Artist", length_ms: 200000 },
-      { position: 2, title: "Song Two (Remastered)", artist: "Artist", length_ms: 200000 },
+      { position: 1, disc_number: 1, title: "Song One (Remastered)", artist: "Artist", length_ms: 200000 },
+      { position: 2, disc_number: 1, title: "Song Two (Remastered)", artist: "Artist", length_ms: 200000 },
     ],
   },
   alternative_releases: [],
@@ -96,13 +105,13 @@ const makeAlbum = (issues1: TrackIssue[], issues2: TrackIssue[]): AlbumRepairRep
   track_matches: [
     {
       local_track: track1,
-      mb_track: { position: 1, title: "Song One (Remastered)", artist: "Artist", length_ms: 200000 },
+      mb_track: { position: 1, disc_number: 1, title: "Song One (Remastered)", artist: "Artist", length_ms: 200000 },
       match_confidence: 0.95,
       issues: issues1,
     },
     {
       local_track: track2,
-      mb_track: { position: 2, title: "Song Two (Remastered)", artist: "Artist", length_ms: 200000 },
+      mb_track: { position: 2, disc_number: 1, title: "Song Two (Remastered)", artist: "Artist", length_ms: 200000 },
       match_confidence: 0.95,
       issues: issues2,
     },

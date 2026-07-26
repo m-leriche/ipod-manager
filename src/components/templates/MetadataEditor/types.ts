@@ -1,4 +1,7 @@
 export type { TrackMetadata, MetadataUpdate, MetadataScanProgress, MetadataSaveResult } from "../../../types/metadata";
+import type { MbTrack, MbRelease, MbReleaseDetail } from "../../../types/musicbrainz";
+
+export type { MbTrack, MbRelease, MbReleaseDetail };
 
 export type Phase = "idle" | "scanning" | "scanned" | "looking_up" | "saving";
 
@@ -55,27 +58,6 @@ export interface TrackIssue {
   local_value: string | null;
   suggested_value: string | null;
   description: string;
-}
-
-export interface MbTrack {
-  position: number;
-  title: string;
-  artist: string;
-  length_ms: number | null;
-}
-
-export interface MbRelease {
-  id: string;
-  title: string;
-  artist: string;
-  date: string | null;
-  track_count: number;
-  score: number;
-}
-
-export interface MbReleaseDetail {
-  release: MbRelease;
-  tracks: MbTrack[];
 }
 
 export interface TrackMatch {

@@ -1,3 +1,5 @@
+import type { MbRelease, MbReleaseDetail, MbTrack } from "../../../types/musicbrainz";
+
 export type CheckStatus = "pass" | "warn" | "fail" | "pending";
 
 export interface CheckResult {
@@ -17,6 +19,7 @@ export interface InboxTrack {
   file_name: string;
   title: string | null;
   track_number: number | null;
+  disc_number: number | null;
   duration_secs: number;
   format: string;
   bitrate_kbps: number | null;
@@ -60,4 +63,19 @@ export interface FileMove {
 export interface FileAwayResult {
   moves: FileMove[];
   errors: string[];
+}
+
+/** The MusicBrainz release an album was checked against, fetched on demand. */
+export interface ReleaseComparison {
+  query_artist: string;
+  query_album: string;
+  detail: MbReleaseDetail;
+  alternatives: MbRelease[];
+}
+
+/** One aligned line of the comparison. At least one side is always present. */
+export interface ComparisonRow {
+  key: string;
+  local: InboxTrack | null;
+  mb: MbTrack | null;
 }

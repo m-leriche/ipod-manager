@@ -59,6 +59,7 @@ pub struct InboxTrack {
     pub file_name: String,
     pub title: Option<String>,
     pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
     pub duration_secs: f64,
     pub format: String,
     pub bitrate_kbps: Option<u32>,

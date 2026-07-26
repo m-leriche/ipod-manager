@@ -1,5 +1,6 @@
 mod cache;
 mod checks;
+mod compare;
 mod convert;
 mod filing;
 mod scan;
@@ -12,6 +13,7 @@ mod watcher;
 
 pub use cache::cache_tracklist;
 pub use checks::verify_tracklist;
+pub use compare::{compare_release, ReleaseComparison};
 pub use convert::convert_album;
 pub use filing::{delete_filed_folder, file_album, undo_filing};
 pub use scan::scan_inbox;

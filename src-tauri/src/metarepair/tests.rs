@@ -33,6 +33,7 @@ fn make_track(
 fn make_mb_track(position: u32, title: &str, artist: &str) -> MbTrack {
     MbTrack {
         position,
+        disc_number: 1,
         title: title.to_string(),
         artist: artist.to_string(),
         length_ms: Some(180000),
@@ -115,9 +116,11 @@ fn detect_issues_title_mismatch() {
             title: "Abbey Road".to_string(),
             artist: "The Beatles".to_string(),
             date: Some("1969-09-26".to_string()),
+            disambiguation: None,
             track_count: 2,
             score: 100,
         },
+        media: vec![],
         tracks: vec![make_mb_track(1, "Come Together", "The Beatles")],
     };
 
@@ -155,9 +158,11 @@ fn detect_issues_missing_album_artist() {
             title: "Abbey Road".to_string(),
             artist: "The Beatles".to_string(),
             date: Some("1969-09-26".to_string()),
+            disambiguation: None,
             track_count: 1,
             score: 100,
         },
+        media: vec![],
         tracks: vec![make_mb_track(1, "Come Together", "The Beatles")],
     };
 
@@ -192,9 +197,11 @@ fn detect_issues_year_missing() {
             title: "Abbey Road".to_string(),
             artist: "The Beatles".to_string(),
             date: Some("1969-09-26".to_string()),
+            disambiguation: None,
             track_count: 1,
             score: 100,
         },
+        media: vec![],
         tracks: vec![make_mb_track(1, "Come Together", "The Beatles")],
     };
 
@@ -232,6 +239,7 @@ fn select_best_release_prefers_track_count_match() {
             title: "Abbey Road".to_string(),
             artist: "The Beatles".to_string(),
             date: None,
+            disambiguation: None,
             track_count: 17,
             score: 100,
         },
@@ -240,6 +248,7 @@ fn select_best_release_prefers_track_count_match() {
             title: "Abbey Road (Deluxe)".to_string(),
             artist: "The Beatles".to_string(),
             date: None,
+            disambiguation: None,
             track_count: 40,
             score: 95,
         },
@@ -256,6 +265,7 @@ fn select_best_release_falls_back_to_highest_score() {
         title: "Abbey Road".to_string(),
         artist: "The Beatles".to_string(),
         date: None,
+        disambiguation: None,
         track_count: 17,
         score: 100,
     }];

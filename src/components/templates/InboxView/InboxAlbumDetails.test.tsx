@@ -9,6 +9,7 @@ const track = (overrides: Partial<InboxTrack> = {}): InboxTrack => ({
   file_name: "01.flac",
   title: "One",
   track_number: 1,
+  disc_number: 1,
   duration_secs: 125,
   format: "FLAC",
   bitrate_kbps: null,

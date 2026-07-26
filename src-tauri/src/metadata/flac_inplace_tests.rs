@@ -245,6 +245,50 @@ fn preserves_picture_blocks() {
     assert_eq!(out.len(), after.len());
 }
 
+/// Art can live inside the comment block rather than a PICTURE block. lofty
+/// reads those entries into `Tag::pictures`, so they never reach us as text
+/// items — rebuilding the comment list would drop the art, and because the new
+/// block is *smaller* it would fit and the write would silently succeed. Decline
+/// instead, so the full rewrite keeps it.
+#[test]
+fn declines_when_art_is_stored_in_the_comment_block() {
+    for key in ["METADATA_BLOCK_PICTURE", "COVERART"] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("art.flac");
+        // A long base64-ish payload, standing in for encoded art.
+        let art = "A".repeat(600);
+        write_test_flac(&path, 4096, &[("ARTIST", "Old"), (key, &art)]);
+        let before = std::fs::read(&path).expect("read");
+
+        let fits =
+            write_in_place(&path, &tag_with(&[(ItemKey::TrackArtist, "New")])).expect("write");
+
+        assert!(!fits, "{key} must fall back to the full rewrite");
+        assert_eq!(
+            before,
+            std::fs::read(&path).expect("read back"),
+            "{key}: a declined write must leave the file untouched"
+        );
+    }
+}
+
+/// Lowercase and mixed-case keys mean the same thing in a comment block.
+#[test]
+fn declines_on_embedded_art_regardless_of_key_case() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("art_case.flac");
+    write_test_flac(
+        &path,
+        4096,
+        &[
+            ("ARTIST", "Old"),
+            ("metadata_block_picture", &"A".repeat(600)),
+        ],
+    );
+
+    assert!(!write_in_place(&path, &tag_with(&[(ItemKey::TrackArtist, "New")])).expect("write"));
+}
+
 /// A file whose comment block already fills the region exactly (no padding) is
 /// still writable in place when the new tags happen to be the same size.
 #[test]

@@ -17,6 +17,11 @@
 //! region is rewritten, a file with large embedded art costs that region's size
 //! rather than the audio's — still bounded by `MAX_REGION_LEN`, far below the
 //! stream itself.
+//!
+//! Art stored *inside* the comment block instead (`METADATA_BLOCK_PICTURE`, or
+//! the deprecated `COVERART`) is the one thing this can't carry: lofty parses
+//! those entries into `Tag::pictures`, so they arrive here as neither text items
+//! nor a preserved block. Those files fall back to the full rewrite.
 
 use lofty::tag::{ItemValue, Tag, TagType};
 use std::fs::File;
@@ -56,9 +61,24 @@ pub(super) fn write_in_place(path: &Path, tag: &Tag) -> Result<bool, String> {
         return Ok(false);
     };
 
-    let vendor = blocks
+    let existing_comments = blocks
         .iter()
-        .find(|b| b.block_type == BLOCK_TYPE_VORBIS_COMMENT)
+        .find(|b| b.block_type == BLOCK_TYPE_VORBIS_COMMENT);
+
+    // Some encoders store cover art as a comment entry rather than a PICTURE
+    // block. lofty parses those into `tag.pictures`, so they reach us as
+    // neither text items nor a block we preserve — rebuilding the comment list
+    // would silently drop the art (and the smaller block would fit, so the
+    // write would succeed). Hand those files to the full rewrite, which keeps
+    // them.
+    if existing_comments
+        .map(|b| has_embedded_picture(&b.data))
+        .unwrap_or(false)
+    {
+        return Ok(false);
+    }
+
+    let vendor = existing_comments
         .and_then(|b| parse_vendor(&b.data))
         .unwrap_or_default();
 
@@ -214,6 +234,64 @@ fn parse_vendor(data: &[u8]) -> Option<String> {
     let vendor_len = u32::from_le_bytes(len_bytes.try_into().ok()?) as usize;
     let vendor = data.get(4..4 + vendor_len)?;
     String::from_utf8(vendor.to_vec()).ok()
+}
+
+/// Keys whose values are cover art rather than text. lofty reads these into
+/// `Tag::pictures` instead of the item list, so a rebuilt comment block would
+/// lose them.
+const PICTURE_COMMENT_KEYS: &[&[u8]] = &[b"METADATA_BLOCK_PICTURE", b"COVERART"];
+
+/// Whether a VORBIS_COMMENT block body carries art in one of its entries.
+fn has_embedded_picture(data: &[u8]) -> bool {
+    for entry in comment_entries(data) {
+        let key = match entry.iter().position(|b| *b == b'=') {
+            Some(eq) => &entry[..eq],
+            // No separator: lofty discards the field, and so can we.
+            None => continue,
+        };
+        if PICTURE_COMMENT_KEYS
+            .iter()
+            .any(|k| k.eq_ignore_ascii_case(key))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Iterate the raw `KEY=value` entries of a VORBIS_COMMENT block body.
+///
+/// Stops at the first malformed length rather than guessing, so a truncated
+/// block simply yields fewer entries; callers treat that conservatively.
+fn comment_entries(data: &[u8]) -> Vec<&[u8]> {
+    let read_u32 = |at: usize| -> Option<usize> {
+        let bytes = data.get(at..at + 4)?;
+        Some(u32::from_le_bytes(bytes.try_into().ok()?) as usize)
+    };
+
+    let Some(vendor_len) = read_u32(0) else {
+        return Vec::new();
+    };
+    let mut offset = match 4usize.checked_add(vendor_len) {
+        Some(o) => o,
+        None => return Vec::new(),
+    };
+    let Some(count) = read_u32(offset) else {
+        return Vec::new();
+    };
+    offset += 4;
+
+    let mut entries = Vec::new();
+    for _ in 0..count {
+        let Some(len) = read_u32(offset) else { break };
+        offset += 4;
+        let Some(entry) = data.get(offset..offset.saturating_add(len)) else {
+            break;
+        };
+        entries.push(entry);
+        offset += len;
+    }
+    entries
 }
 
 /// Serialize a VORBIS_COMMENT block body: vendor string, then a length-prefixed

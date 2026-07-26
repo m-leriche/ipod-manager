@@ -17,7 +17,7 @@ import type {
   TracksUpdated,
 } from "../../../types/library";
 import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
-import { getCachedLibrary, setCachedLibrary } from "./helpers";
+import { getCachedLibrary, setCachedLibrary, savedRowLeavesViewStale } from "./helpers";
 import { getSetting, setSetting } from "../../../utils/settings";
 import { matchesShortcut } from "../../../utils/shortcuts";
 
@@ -76,6 +76,9 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const browserSyncTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Work a save left for the debounced sync pass, accumulated across the window
+      so a later event can't cancel what an earlier one asked for. */
+  const pendingSyncRef = useRef({ aggregates: false, page: false });
   const disposedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
@@ -95,6 +98,10 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     total: number;
   }>({ genres: [], artists: [], albums: [], total: 0 });
   aggregatesRef.current = { genres: genreList, artists: artistList, albums: albumList, total: totalTrackCount };
+  /** Mirror of the rows on screen, so the save listener can compare against them
+      without taking `tracks` as a dependency (which would re-register it). */
+  const tracksRef = useRef<(LibraryTrack | undefined)[]>([]);
+  tracksRef.current = tracks;
 
   // ── Global shortcut (default Cmd+F) to focus search ──────────
 
@@ -328,50 +335,90 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     }
   }, [buildFilter, sortFingerprint, isUnfiltered, sortBy, sortDirection, persistUnfilteredCache, fetchBrowserData]);
 
+  /** Re-fetch the first track page along with the total count.
+      Needed when an edit can have changed which rows match the active filter, or
+      the order they sit in — the row's new home may be thousands of rows outside
+      the sparse page the browser holds, so it can't be worked out locally.
+      Returns the new total, or null if the fetch was superseded or failed. */
+  const refetchTrackPage = useCallback(async (): Promise<number | null> => {
+    const id = ++fetchIdRef.current;
+    pendingPageOffsetsRef.current.clear();
+    try {
+      const page = await invoke<PaginatedTracks>("get_library_tracks_page", {
+        filter: buildFilter(0),
+      });
+      if (id !== fetchIdRef.current) return null;
+      startTransition(() => {
+        setTracks(page.tracks);
+        setTotalTrackCount(page.total_count);
+      });
+      const cached = unfilteredCacheRef.current;
+      if (cached && isUnfiltered) cached.data.tracks = page.tracks;
+      return page.total_count;
+    } catch (e) {
+      console.error("Failed to refresh track page after save:", e);
+      return null;
+    }
+  }, [buildFilter, isUnfiltered]);
+
   /** Reconcile everything a metadata save leaves behind, off its critical path.
       The edited rows repaint immediately from the event payload; this catches up
-      the sidebar lists (only when a grouping field changed) and the launch cache
-      a beat later. Debounced so a burst of saves — holding a key in a field,
-      applying a genre across an album — costs one pass. */
-  const scheduleBrowserSync = useCallback(
-    (aggregatesStale: boolean) => {
-      clearTimeout(browserSyncTimerRef.current);
-      browserSyncTimerRef.current = setTimeout(async () => {
-        const generation = fetchIdRef.current;
+      the sidebar lists, the row's place in the view, and the launch cache a beat
+      later. Debounced so a burst of saves — holding a key in a field, applying a
+      genre across an album — costs one pass.
+
+      Work accumulates in `pendingSyncRef` rather than being read from the latest
+      call. A save that moves files emits a second event (with nothing stale) once
+      the background reorganize lands, and that lands inside this debounce window:
+      taking the last call's flags would cancel the refresh the first one asked
+      for. */
+  const scheduleBrowserSync = useCallback(() => {
+    clearTimeout(browserSyncTimerRef.current);
+    browserSyncTimerRef.current = setTimeout(async () => {
+      // Claim the accumulated work; anything flagged from here on is next pass'.
+      const { aggregates: refreshAggregates, page: refreshPage } = pendingSyncRef.current;
+      pendingSyncRef.current = { aggregates: false, page: false };
+      const generation = fetchIdRef.current;
+
+      if (refreshAggregates) {
         try {
-          if (aggregatesStale) {
-            const aggregates = await invoke<BrowserAggregates>("get_library_aggregates", {
-              filter: buildFilter(0, true),
-            });
-            // A filter or sort change since we asked owns the lists now.
-            if (generation !== fetchIdRef.current) return;
-            const cached = unfilteredCacheRef.current;
-            if (cached) {
-              cached.data.genres = aggregates.genres;
-              cached.data.artists = aggregates.artists;
-              cached.data.albums = aggregates.albums;
-            }
-            startTransition(() => {
-              setGenreList(aggregates.genres);
-              setArtistList(aggregates.artists);
-              setAlbumList(aggregates.albums);
-            });
+          const aggregates = await invoke<BrowserAggregates>("get_library_aggregates", {
+            filter: buildFilter(0, true),
+          });
+          // A filter or sort change since we asked owns the lists now.
+          if (generation !== fetchIdRef.current) return;
+          const cached = unfilteredCacheRef.current;
+          if (cached) {
+            cached.data.genres = aggregates.genres;
+            cached.data.artists = aggregates.artists;
+            cached.data.albums = aggregates.albums;
           }
+          startTransition(() => {
+            setGenreList(aggregates.genres);
+            setArtistList(aggregates.artists);
+            setAlbumList(aggregates.albums);
+          });
         } catch (e) {
           console.error("Failed to refresh browser aggregates:", e);
           return;
         }
-        // Re-persist so the next launch's instant paint isn't showing pre-edit
-        // values. The background rescan can't cover this: the save already wrote
-        // the row, so the file no longer looks changed to an mtime comparison.
-        const cached = unfilteredCacheRef.current;
-        if (cached && isUnfiltered && generation === fetchIdRef.current) {
-          persistUnfilteredCache(cached.data, aggregatesRef.current.total);
-        }
-      }, BROWSER_SYNC_DELAY_MS);
-    },
-    [buildFilter, isUnfiltered, persistUnfilteredCache],
-  );
+      }
+
+      let total = aggregatesRef.current.total;
+      if (refreshPage) {
+        const refreshed = await refetchTrackPage();
+        if (refreshed !== null) total = refreshed;
+      }
+
+      // Re-persist so the next launch's instant paint isn't showing pre-edit
+      // values. The background rescan can't cover this: the save already wrote
+      // the row, so the file no longer looks changed to an mtime comparison.
+      const cached = unfilteredCacheRef.current;
+      if (cached && isUnfiltered) {
+        persistUnfilteredCache(cached.data, total);
+      }
+    }, BROWSER_SYNC_DELAY_MS);
+  }, [buildFilter, isUnfiltered, persistUnfilteredCache, refetchTrackPage]);
 
   useEffect(() => () => clearTimeout(browserSyncTimerRef.current), []);
 
@@ -509,9 +556,9 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   }, [onRefreshRef, fetchBrowserData]);
 
   // Re-fetch when any filter/sort changes. A sort-only change re-fetches just
-  // the track page; a filter change refreshes the aggregates too. Mutations
-  // (deletes, metadata saves) call fetchBrowserData directly and always do a
-  // full refresh.
+  // the track page; a filter change refreshes the aggregates too. Deletes and
+  // imports call fetchBrowserData directly for a full refresh; metadata saves
+  // patch their rows in place instead (see the `library-tracks-updated` listener).
   useEffect(() => {
     if (!dataLoaded) return;
     const sameFilters = lastAggregatesKeyRef.current === aggregatesKey;
@@ -548,8 +595,23 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
   // missed event would leave stale paths on screen.
   const applyTracksUpdatedRef = useRef<(payload: TracksUpdated) => void>(() => {});
   applyTracksUpdatedRef.current = (payload: TracksUpdated) => {
+    if (payload.aggregates_stale) pendingSyncRef.current.aggregates = true;
+
     if (payload.tracks.length > 0) {
       const byId = new Map(payload.tracks.map((t) => [t.id, t]));
+      const view = { filtered: !isUnfiltered, sortBy };
+
+      // A patched row can stop matching the active filter, or belong somewhere
+      // else in the sort order. Compare against what's on screen now, before
+      // replacing it, and let the sync pass refetch if so.
+      for (const current of tracksRef.current) {
+        const updated = current && byId.get(current.id);
+        if (updated && savedRowLeavesViewStale(current, updated, view)) {
+          pendingSyncRef.current.page = true;
+          break;
+        }
+      }
+
       setTracks((prev) => {
         let changed = false;
         const next = prev.map((t) => {
@@ -565,7 +627,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
         cached.data.tracks = cached.data.tracks.map((t) => byId.get(t.id) ?? t);
       }
     }
-    scheduleBrowserSync(payload.aggregates_stale);
+    scheduleBrowserSync();
   };
 
   useEffect(() => {

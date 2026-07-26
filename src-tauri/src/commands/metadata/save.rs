@@ -74,10 +74,15 @@ pub async fn save_metadata(
             || u.disc_number.is_some()
     });
 
-    // Fields the column browser groups by. Anything else leaves the sidebar
-    // lists — and their counts — exactly as they were.
+    // Fields the column browser's lists are built from. Anything else leaves
+    // those lists — and their counts — exactly as they were. `year` counts:
+    // `AlbumSummary` carries `MIN(year)`, which the album grid can sort by.
     let aggregates_stale = updates.iter().any(|u| {
-        u.artist.is_some() || u.album_artist.is_some() || u.album.is_some() || u.genre.is_some()
+        u.artist.is_some()
+            || u.album_artist.is_some()
+            || u.album.is_some()
+            || u.genre.is_some()
+            || u.year.is_some()
     });
 
     let id3_version = {
@@ -219,7 +224,16 @@ fn upsert_saved_files(
         .unchecked_transaction()
         .map_err(|e| AppError::from(format!("Transaction failed: {}", e)))?;
     for (track_data, mtime) in &track_updates {
-        library::upsert_track(&tx, track_data, *mtime, now).ok();
+        // One bad row shouldn't fail the whole save — the tags are already on
+        // disk by now. But it does drop that file from the emitted rows and from
+        // undo-id stamping, so say so rather than failing silently.
+        if let Err(e) = library::upsert_track(&tx, track_data, *mtime, now) {
+            log::warn!(
+                "Failed to update library row for {}: {}",
+                track_data.file_path,
+                e
+            );
+        }
     }
     tx.commit()
         .map_err(|e| AppError::from(format!("Commit failed: {}", e)))?;

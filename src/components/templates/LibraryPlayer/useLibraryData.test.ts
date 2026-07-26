@@ -289,3 +289,84 @@ describe("useLibraryData track updates", () => {
     expect(aggregateCalls).toHaveLength(1);
   });
 });
+
+describe("useLibraryData post-save reconciliation", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(listen).mockReset();
+    vi.mocked(listen).mockImplementation(() => Promise.resolve(() => {}));
+  });
+
+  const handlerFor = (event: string) => {
+    const call = vi.mocked(listen).mock.calls.find(([name]) => name === event);
+    if (!call) throw new Error(`no listener registered for ${event}`);
+    return call[1] as (e: { payload: TracksUpdated }) => void;
+  };
+
+  const emit = async (payload: TracksUpdated) => {
+    await act(async () => {
+      handlerFor("library-tracks-updated")({ payload });
+    });
+  };
+
+  const commandsUsed = () => vi.mocked(invoke).mock.calls.map(([cmd]) => cmd);
+
+  /** An artist/album edit both marks the aggregates stale *and* moves the file,
+      so the background reorganize emits a second event with aggregates_stale
+      false — inside the debounce window. Reading only the latest call's flag
+      cancelled the refresh the first event asked for, and the sidebar kept
+      showing the old name indefinitely. */
+  it("still refreshes aggregates when a later event in the window is not stale", async () => {
+    await renderLoaded(2000);
+    vi.mocked(invoke).mockClear();
+
+    // The save, then the reorganize follow-up landing before the debounce fires.
+    await emit({ tracks: [makeTrack({ id: 1, artist: "Corrected" })], aggregates_stale: true });
+    await emit({
+      tracks: [makeTrack({ id: 1, artist: "Corrected", file_path: "/music/Corrected/a.flac" })],
+      aggregates_stale: false,
+    });
+
+    await waitFor(() => expect(commandsUsed()).toContain("get_library_aggregates"));
+  });
+
+  it("applies the moved path from the reorganize follow-up event", async () => {
+    const { result } = await renderLoaded(2000);
+
+    await emit({ tracks: [makeTrack({ id: 5, artist: "Corrected" })], aggregates_stale: true });
+    await emit({
+      tracks: [makeTrack({ id: 5, artist: "Corrected", file_path: "/music/Corrected/b.flac" })],
+      aggregates_stale: false,
+    });
+
+    expect(result.current.tracks[5]?.file_path).toBe("/music/Corrected/b.flac");
+  });
+
+  /** Sorted by title, a retitled row belongs somewhere else — and its new home
+      can be outside the loaded page, so the order can't be fixed locally. */
+  it("refetches the track page when the edit changes the active sort field", async () => {
+    const { result } = await renderLoaded(2000);
+    act(() => result.current.handleSort("title"));
+    await waitFor(() => expect(result.current.sortBy).toBe("title"));
+    vi.mocked(invoke).mockClear();
+
+    await emit({ tracks: [makeTrack({ id: 1, title: "Zzz Renamed" })], aggregates_stale: false });
+
+    await waitFor(() => expect(commandsUsed()).toContain("get_library_tracks_page"));
+  });
+
+  /** An edit to a field the view neither filters nor sorts on leaves the row
+      exactly where it is — no refetch, which is the whole point. */
+  it("does not refetch the page for an edit the view does not depend on", async () => {
+    const { result } = await renderLoaded(2000);
+    act(() => result.current.handleSort("date_added"));
+    await waitFor(() => expect(result.current.sortBy).toBe("date_added"));
+    vi.mocked(invoke).mockClear();
+
+    await emit({ tracks: [makeTrack({ id: 1, genre: "Jazz" })], aggregates_stale: true });
+    await new Promise((r) => setTimeout(r, SYNC_SETTLE_MS));
+
+    expect(commandsUsed()).toContain("get_library_aggregates");
+    expect(commandsUsed()).not.toContain("get_library_tracks_page");
+  });
+});

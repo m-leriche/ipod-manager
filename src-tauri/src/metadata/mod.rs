@@ -1,3 +1,4 @@
+mod flac_inplace;
 mod read;
 mod write;
 
@@ -25,6 +26,13 @@ pub struct TrackMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetadataUpdate {
     pub file_path: String,
+    /// Library row this update targets, when known.
+    ///
+    /// Stamped onto undo operations so they survive the file being moved by the
+    /// background reorganize after the save that produced them. Absent on
+    /// updates built by the frontend, which always name a file that exists.
+    #[serde(default)]
+    pub track_id: Option<i64>,
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,

@@ -76,6 +76,21 @@ export interface PaginatedBrowserData {
   albums: AlbumSummary[];
 }
 
+/** Column-browser lists without a track page. */
+export interface BrowserAggregates {
+  genres: GenreSummary[];
+  artists: ArtistSummary[];
+  albums: AlbumSummary[];
+}
+
+/** Payload of `library-tracks-updated`: specific rows the backend changed, so
+    the browser can patch them instead of re-querying the whole library. */
+export interface TracksUpdated {
+  tracks: LibraryTrack[];
+  /** The edit changed a field the sidebar groups by, so its lists are stale. */
+  aggregates_stale: boolean;
+}
+
 export interface LibraryFilter {
   artist?: string[];
   album?: string[];

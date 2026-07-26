@@ -35,9 +35,9 @@ pub use import::import_to_library;
 pub(crate) use queries::genre::split_genres;
 pub(crate) use queries::register_sort_key;
 pub use queries::{
-    get_albums, get_albums_sorted, get_artists, get_browser_data, get_browser_data_paginated,
-    get_genres, get_track_by_id, get_tracks, get_tracks_paginated, search_albums, search_artists,
-    search_tracks,
+    get_aggregates, get_albums, get_albums_sorted, get_artists, get_browser_data,
+    get_browser_data_paginated, get_genres, get_track_by_id, get_tracks, get_tracks_by_paths,
+    get_tracks_paginated, search_albums, search_artists, search_tracks,
 };
 pub(crate) use queries::{row_to_track, SELECT_COLUMNS};
 pub use reorganize::reorganize_library_file;
@@ -167,8 +167,15 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
     let conn =
         Connection::open(db_path).map_err(|e| format!("Failed to open library db: {}", e))?;
 
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-        .map_err(|e| format!("Failed to set pragmas: {}", e))?;
+    // synchronous=NORMAL: under WAL this drops the fsync on every commit and
+    // only syncs at checkpoints. A metadata save commits per batch, so the
+    // fsyncs were a real cost on an external drive. The tradeoff is bounded —
+    // WAL still rules out corruption; a power loss can only cost the last few
+    // committed transactions, which a rescan recovers.
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;",
+    )
+    .map_err(|e| format!("Failed to set pragmas: {}", e))?;
 
     // Catch page-level corruption before schema work touches the file —
     // periodically, not per launch, since quick_check reads every page.

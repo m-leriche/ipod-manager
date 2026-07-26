@@ -17,6 +17,9 @@ export interface TrackMetadata {
 
 export interface MetadataUpdate {
   file_path: string;
+  /** Set by the backend on undo operations so they still resolve after the
+      background reorganize moves the file. Never set when building an update. */
+  track_id?: number;
   title?: string;
   artist?: string;
   album?: string;

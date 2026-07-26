@@ -90,9 +90,9 @@ export const TrackDetailPanel = memo(function TrackDetailPanel({
 
     setSaving(true);
     try {
-      // No onSave() here: save_metadata emits `library-files-reorganized`,
-      // which already drives the parent's refresh. Calling both refetched the
-      // whole browser twice per save.
+      // No onSave() here: save_metadata emits `library-tracks-updated` with the
+      // changed rows, which the parent patches in place. Refetching the browser
+      // would undo the point of that.
       const result = await invoke<MetadataSaveResult>("save_metadata", { updates });
       if (result.succeeded > 0) {
         const ops = result.undo_operations;

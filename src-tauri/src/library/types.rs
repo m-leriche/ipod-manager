@@ -88,6 +88,16 @@ pub struct BrowserData {
     pub albums: Vec<AlbumSummary>,
 }
 
+/// The column-browser lists without a track page. Metadata edits change what
+/// the sidebar groups by, but the frontend already holds the track rows it
+/// needs, so refreshing the sidebar shouldn't re-ship them.
+#[derive(Debug, Clone, Serialize)]
+pub struct BrowserAggregates {
+    pub genres: Vec<GenreSummary>,
+    pub artists: Vec<ArtistSummary>,
+    pub albums: Vec<AlbumSummary>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PaginatedTracks {
     pub tracks: Vec<LibraryTrack>,

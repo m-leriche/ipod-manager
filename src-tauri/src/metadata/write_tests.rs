@@ -24,6 +24,7 @@ fn make_snapshot() -> TrackMetadata {
 fn undo_captures_only_changed_fields() {
     let update = MetadataUpdate {
         file_path: "/music/song.flac".to_string(),
+        track_id: None,
         title: Some("New Title".to_string()),
         artist: None,
         album: None,
@@ -53,6 +54,7 @@ fn undo_captures_only_changed_fields() {
 fn undo_uses_empty_string_for_none_snapshot_fields() {
     let update = MetadataUpdate {
         file_path: "/music/song.flac".to_string(),
+        track_id: None,
         title: None,
         artist: None,
         album: None,
@@ -78,6 +80,7 @@ fn undo_uses_empty_string_for_none_snapshot_fields() {
 fn undo_preserves_file_path() {
     let update = MetadataUpdate {
         file_path: "/music/song.flac".to_string(),
+        track_id: None,
         title: Some("X".to_string()),
         artist: None,
         album: None,
@@ -102,6 +105,7 @@ fn undo_preserves_file_path() {
 fn undo_all_fields_changed() {
     let update = MetadataUpdate {
         file_path: "/music/song.flac".to_string(),
+        track_id: None,
         title: Some("New".to_string()),
         artist: Some("New".to_string()),
         album: Some("New".to_string()),
@@ -164,9 +168,71 @@ fn make_test_m4a(name: &str) -> Option<std::path::PathBuf> {
     status.success().then_some(path)
 }
 
+fn make_test_mp3(name: &str) -> Option<std::path::PathBuf> {
+    let ffmpeg_ok = std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !ffmpeg_ok {
+        eprintln!("ffmpeg not available, skipping");
+        return None;
+    }
+    let dir = std::env::temp_dir().join("crate_write_tests");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(name);
+    let status = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=44100:cl=mono",
+            "-t",
+            "1",
+            "-c:a",
+            "libmp3lame",
+        ])
+        .arg(&path)
+        .status()
+        .ok()?;
+    status.success().then_some(path)
+}
+
+/// Once a file has an ID3 region with padding, later edits must reuse it rather
+/// than shifting the audio. A changed file length is the tell that `id3` fell
+/// back to growing or shrinking the region — the slow path this avoids.
+#[test]
+fn mp3_edits_reuse_the_existing_tag_region() {
+    let Some(path) = make_test_mp3("id3_region_reuse.mp3") else {
+        return;
+    };
+
+    let mut update = year_only_update(&path, 2000);
+    update.year = None;
+    update.artist = Some("First Artist".to_string());
+    apply_update(&update, Id3WriteVersion::V23).unwrap();
+    let len_after_first = std::fs::metadata(&path).unwrap().len();
+
+    // A longer value still has to fit the padding established above.
+    update.artist = Some("A Substantially Longer Artist Name".to_string());
+    apply_update(&update, Id3WriteVersion::V23).unwrap();
+
+    assert_eq!(
+        len_after_first,
+        std::fs::metadata(&path).unwrap().len(),
+        "second edit must land in the existing region, not move the audio"
+    );
+    assert_eq!(
+        super::super::read::read_track(&path).artist.as_deref(),
+        Some("A Substantially Longer Artist Name")
+    );
+}
+
 fn year_only_update(path: &std::path::Path, year: u32) -> MetadataUpdate {
     MetadataUpdate {
         file_path: path.to_string_lossy().to_string(),
+        track_id: None,
         title: None,
         artist: None,
         album: None,

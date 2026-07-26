@@ -8,10 +8,12 @@ use rusqlite::Connection;
 use super::types::{LibraryFilter, LibraryTrack};
 
 pub use browser::{
-    get_albums, get_albums_sorted, get_artists, get_browser_data, get_browser_data_paginated,
-    get_genres, search_albums, search_artists,
+    get_aggregates, get_albums, get_albums_sorted, get_artists, get_browser_data,
+    get_browser_data_paginated, get_genres, search_albums, search_artists,
 };
-pub use tracks::{get_track_by_id, get_tracks, get_tracks_paginated, search_tracks};
+pub use tracks::{
+    get_track_by_id, get_tracks, get_tracks_by_paths, get_tracks_paginated, search_tracks,
+};
 
 /// Generate a sort key that strips leading "The ", removes non-alphanumeric
 /// characters, and lowercases — so "The Beatles" sorts under "B" and

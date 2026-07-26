@@ -13,6 +13,8 @@ import type {
   PaginatedBrowserData,
   PaginatedTracks,
   LibraryFilter,
+  BrowserAggregates,
+  TracksUpdated,
 } from "../../../types/library";
 import type { AlbumSortMode } from "../../organisms/AlbumGrid/types";
 import { getCachedLibrary, setCachedLibrary } from "./helpers";
@@ -26,6 +28,9 @@ const MAX_INFLIGHT_PAGES = 4;
 /** Delay before the launch rescan kicks off, so its disk I/O doesn't compete
     with first paint and provider hydration. */
 const BACKGROUND_RESCAN_DELAY_MS = 3_000;
+/** How long to wait after a save before reconciling the sidebar lists and the
+    launch cache. Long enough that a burst of saves costs one pass. */
+const BROWSER_SYNC_DELAY_MS = 400;
 
 /** Window event fired by Settings when the default sort preferences change. */
 export const SORT_SETTINGS_CHANGED_EVENT = "crate:sort-settings-changed";
@@ -70,6 +75,7 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const browserSyncTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const disposedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fetchIdRef = useRef(0);
@@ -322,6 +328,53 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     }
   }, [buildFilter, sortFingerprint, isUnfiltered, sortBy, sortDirection, persistUnfilteredCache, fetchBrowserData]);
 
+  /** Reconcile everything a metadata save leaves behind, off its critical path.
+      The edited rows repaint immediately from the event payload; this catches up
+      the sidebar lists (only when a grouping field changed) and the launch cache
+      a beat later. Debounced so a burst of saves — holding a key in a field,
+      applying a genre across an album — costs one pass. */
+  const scheduleBrowserSync = useCallback(
+    (aggregatesStale: boolean) => {
+      clearTimeout(browserSyncTimerRef.current);
+      browserSyncTimerRef.current = setTimeout(async () => {
+        const generation = fetchIdRef.current;
+        try {
+          if (aggregatesStale) {
+            const aggregates = await invoke<BrowserAggregates>("get_library_aggregates", {
+              filter: buildFilter(0, true),
+            });
+            // A filter or sort change since we asked owns the lists now.
+            if (generation !== fetchIdRef.current) return;
+            const cached = unfilteredCacheRef.current;
+            if (cached) {
+              cached.data.genres = aggregates.genres;
+              cached.data.artists = aggregates.artists;
+              cached.data.albums = aggregates.albums;
+            }
+            startTransition(() => {
+              setGenreList(aggregates.genres);
+              setArtistList(aggregates.artists);
+              setAlbumList(aggregates.albums);
+            });
+          }
+        } catch (e) {
+          console.error("Failed to refresh browser aggregates:", e);
+          return;
+        }
+        // Re-persist so the next launch's instant paint isn't showing pre-edit
+        // values. The background rescan can't cover this: the save already wrote
+        // the row, so the file no longer looks changed to an mtime comparison.
+        const cached = unfilteredCacheRef.current;
+        if (cached && isUnfiltered && generation === fetchIdRef.current) {
+          persistUnfilteredCache(cached.data, aggregatesRef.current.total);
+        }
+      }, BROWSER_SYNC_DELAY_MS);
+    },
+    [buildFilter, isUnfiltered, persistUnfilteredCache],
+  );
+
+  useEffect(() => () => clearTimeout(browserSyncTimerRef.current), []);
+
   // ── Background incremental rescan ──────────────────────────────
 
   const backgroundRescan = useCallback(async () => {
@@ -478,18 +531,58 @@ export const useLibraryData = (onRefreshRef?: React.MutableRefObject<(() => void
     }
   }, [dataLoaded, fetchBrowserData, fetchSortedPage, aggregatesKey, sortFingerprint]);
 
-  // Refresh on library file reorganization
+  // Apply a metadata save to the rows already on screen.
+  //
+  // This replaces what used to be a full `fetchBrowserData()` on every save. On
+  // a large library that re-queried the whole browser and shipped the entire
+  // genre/artist/album aggregates plus a track page across the IPC boundary, then
+  // re-rendered every sidebar row — hundreds of milliseconds to show a one-field
+  // edit. The backend now hands us the changed rows directly.
+  //
+  // Rows are matched by id, not path, because a save can move the file: the
+  // background reorganize emits a second update carrying the new paths.
+  //
+  // Registered once, via a ref, so a filter or sort change can't tear the
+  // listener down in the window where that background update arrives — the
+  // reorganize now lands at an arbitrary time after the save returns, and a
+  // missed event would leave stale paths on screen.
+  const applyTracksUpdatedRef = useRef<(payload: TracksUpdated) => void>(() => {});
+  applyTracksUpdatedRef.current = (payload: TracksUpdated) => {
+    if (payload.tracks.length > 0) {
+      const byId = new Map(payload.tracks.map((t) => [t.id, t]));
+      setTracks((prev) => {
+        let changed = false;
+        const next = prev.map((t) => {
+          const updated = t && byId.get(t.id);
+          if (!updated) return t;
+          changed = true;
+          return updated;
+        });
+        return changed ? next : prev;
+      });
+      const cached = unfilteredCacheRef.current;
+      if (cached) {
+        cached.data.tracks = cached.data.tracks.map((t) => byId.get(t.id) ?? t);
+      }
+    }
+    scheduleBrowserSync(payload.aggregates_stale);
+  };
+
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen<number>("library-files-reorganized", () => {
-      fetchBrowserData();
-    }).then((fn) => {
-      unlisten = fn;
-    });
+    let disposed = false;
+    listen<TracksUpdated>("library-tracks-updated", ({ payload }) => applyTracksUpdatedRef.current(payload)).then(
+      (fn) => {
+        // Registration is async, so it can resolve after unmount.
+        if (disposed) fn();
+        else unlisten = fn;
+      },
+    );
     return () => {
+      disposed = true;
       unlisten?.();
     };
-  }, [fetchBrowserData]);
+  }, []);
 
   // Update play count in place
   useEffect(() => {

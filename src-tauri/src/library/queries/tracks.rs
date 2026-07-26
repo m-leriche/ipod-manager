@@ -13,6 +13,37 @@ pub fn get_track_by_id(conn: &Connection, track_id: i64) -> Result<LibraryTrack,
         })
 }
 
+/// Look up tracks by exact file path.
+///
+/// Used after a metadata save to hand the frontend the rows it should patch, so
+/// it never has to re-query the whole browser to show an edit. Paths missing
+/// from the table are silently absent from the result — a save can touch a file
+/// that isn't in the library.
+pub fn get_tracks_by_paths(
+    conn: &Connection,
+    paths: &[String],
+) -> Result<Vec<LibraryTrack>, String> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders = vec!["?"; paths.len()].join(",");
+    let sql = format!(
+        "SELECT {} FROM tracks WHERE file_path IN ({})",
+        SELECT_COLUMNS, placeholders
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("Query failed: {}", e))?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(paths), row_to_track)
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row read failed: {}", e))
+}
+
 pub fn get_tracks(conn: &Connection, filter: &LibraryFilter) -> Result<Vec<LibraryTrack>, String> {
     let (where_clause, param_values) = build_track_conditions(filter);
     let order_by = build_order_by(filter);

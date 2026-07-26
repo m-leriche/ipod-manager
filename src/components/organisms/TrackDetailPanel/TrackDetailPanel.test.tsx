@@ -128,8 +128,8 @@ describe("TrackDetailPanel", () => {
     expect(screen.getByText("Album Art")).toBeInTheDocument();
   });
 
-  // The parent refreshes off the backend's `library-files-reorganized` event;
-  // calling onSave here too refetched the whole browser twice per save.
+  // The parent patches the changed rows off the backend's `library-tracks-updated`
+  // event; calling onSave here too would refetch the whole browser per save.
   it("saves without triggering a second refresh via onSave", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockResolvedValue({ total: 1, succeeded: 1, failed: 0, cancelled: false, errors: [] });

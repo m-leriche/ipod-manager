@@ -30,6 +30,18 @@ pub async fn get_library_browser_data_paginated(
         .await
 }
 
+/// Column-browser lists only. A metadata edit changes what the sidebar groups
+/// by, but the frontend patches its own track rows, so refreshing the sidebar
+/// shouldn't re-ship a track page with them.
+#[tauri::command]
+pub async fn get_library_aggregates(
+    filter: library::LibraryFilter,
+    db: State<'_, LibraryDb>,
+) -> Result<library::BrowserAggregates, AppError> {
+    db.with_read_db(move |conn| library::get_aggregates(conn, &filter))
+        .await
+}
+
 #[tauri::command]
 pub async fn get_library_tracks_page(
     filter: library::LibraryFilter,

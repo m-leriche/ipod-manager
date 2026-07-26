@@ -10,7 +10,7 @@ import type { InboxAlbum } from "./types";
  * tracklist aligned line-by-line against the files in the inbox folder.
  */
 export const ReleaseComparisonPanel = ({ album }: { album: InboxAlbum }) => {
-  const { comparison, loading, error, reload } = useReleaseComparison(album, true);
+  const { comparison, loading, error, reload } = useReleaseComparison(album);
 
   const rows = useMemo(
     () => (comparison ? buildComparisonRows(album.tracks, comparison.detail.tracks) : []),

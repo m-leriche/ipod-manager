@@ -57,21 +57,29 @@ export const summarizeRows = (rows: ComparisonRow[]): ComparisonSummary => ({
   extra: rows.filter((r) => !r.mb).length,
 });
 
-/** "2 discs · 11 + 10 tracks", or "12 tracks" for a single disc. */
-export const describeMedia = (media: MbMedium[], trackCount: number): string => {
-  if (media.length <= 1) return `${trackCount} tracks`;
-  return `${media.length} discs · ${media.map((m) => m.track_count).join(" + ")} tracks`;
+const trackCount = (n: number): string => `${n} ${n === 1 ? "track" : "tracks"}`;
+
+/** The tracks a release lists for one disc. */
+const discTracks = (tracks: MbTrack[], disc: number): MbTrack[] => tracks.filter((t) => t.disc_number === disc);
+
+/**
+ * "2 discs · 11 + 10 tracks", or "12 tracks" for a single disc. Counts come
+ * from the tracklist itself, not the per-medium totals, so the header can never
+ * disagree with the rows below it.
+ */
+export const describeMedia = (media: MbMedium[], tracks: MbTrack[]): string => {
+  if (media.length <= 1) return trackCount(tracks.length);
+  const perDisc = media.map((m) => discTracks(tracks, m.position).length);
+  return `${media.length} discs · ${perDisc.join(" + ")} tracks`;
 };
 
 export const releaseYear = (date: string | null): string | null => date?.slice(0, 4) || null;
 
 /** "Ty Segall · 2010 · Vinyl · 12 tracks" */
 export const releaseMeta = (detail: MbReleaseDetail): string => {
-  const { release, media } = detail;
+  const { release, media, tracks } = detail;
   const format = media.length === 1 ? media[0].format : null;
-  return [release.artist, releaseYear(release.date), format, describeMedia(media, release.track_count)]
-    .filter(Boolean)
-    .join(" · ");
+  return [release.artist, releaseYear(release.date), format, describeMedia(media, tracks)].filter(Boolean).join(" · ");
 };
 
 /**
@@ -97,19 +105,21 @@ export const trackNote = (row: ComparisonRow): string | null => {
  */
 export const diagnose = (rows: ComparisonRow[], comparison: ReleaseComparison, localCount: number): string => {
   const { matched, missing, extra } = summarizeRows(rows);
-  const { media } = comparison.detail;
+  const { media, tracks } = comparison.detail;
 
   if (missing === 0 && extra === 0) return "Every track matches this release.";
 
   if (extra === 0 && media.length > 1) {
     const discs = new Set(rows.filter((r) => r.local).map((r) => r.mb?.disc_number));
     const only = discs.size === 1 ? [...discs][0] : null;
-    if (only && matched === localCount) {
+    // Only reassuring if that disc is *complete* — a partial disc is still a
+    // shortfall, and saying otherwise hides the very gap this panel exists for.
+    if (only && matched === localCount && matched === discTracks(tracks, only).length) {
       return `Your ${localCount} tracks match disc ${only} of this ${media.length}-disc release. The other disc may be in a separate folder.`;
     }
   }
 
-  if (extra === 0) return `Missing ${missing} of ${comparison.detail.tracks.length} tracks.`;
+  if (extra === 0) return `Missing ${missing} of ${tracks.length} tracks.`;
 
   if (missing === 0) {
     return `You have ${extra} extra ${extra === 1 ? "track" : "tracks"} — this may be a deluxe or expanded edition.`;

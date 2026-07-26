@@ -1,8 +1,10 @@
 use super::cache::{cache_tracklist, cached_tracklist};
-use super::checks::{check_tags, local_tracklist, quality_desc, quality_rank};
+use super::checks::{check_tags, local_tracklist, quality_desc, quality_rank, tracklist_verdict};
 use super::filing::{delete_filed_folder, file_album, move_file, undo_filing};
 use super::types::{CheckResult, CheckStatus};
 use crate::library::types::TrackData;
+use crate::metarepair::matching::select_best_release;
+use crate::musicbrainz::MbRelease;
 use rusqlite::Connection;
 use std::path::Path;
 
@@ -151,6 +153,71 @@ fn quality_desc_formats() {
     assert_eq!(quality_desc("FLAC", None), "FLAC");
     assert_eq!(quality_desc("mp3", Some(320)), "MP3 320 kbps");
     assert_eq!(quality_desc("MP3", None), "MP3");
+}
+
+fn release(id: &str, title: &str, track_count: usize, score: u32) -> MbRelease {
+    MbRelease {
+        id: id.into(),
+        title: title.into(),
+        artist: "Ty Segall".into(),
+        date: None,
+        disambiguation: None,
+        track_count,
+        score,
+    }
+}
+
+#[test]
+fn tracklist_verdict_passes_on_a_count_match() {
+    let releases = vec![release("a", "Melted", 12, 100)];
+
+    let result = tracklist_verdict(&releases, 12);
+
+    assert_eq!(result.status, CheckStatus::Pass);
+    assert_eq!(
+        result.detail.as_deref(),
+        Some("Matches “Melted” (12 tracks)")
+    );
+}
+
+#[test]
+fn tracklist_verdict_fails_when_no_release_has_the_count() {
+    let releases = vec![release("a", "Melted", 12, 100)];
+
+    let result = tracklist_verdict(&releases, 10);
+
+    assert_eq!(result.status, CheckStatus::Fail);
+    assert_eq!(
+        result.detail.as_deref(),
+        Some("10 tracks here vs 12 on “Melted”")
+    );
+}
+
+/// The pill must name the release the comparison panel will show, so both go
+/// through `select_best_release` — including its tie-break, which takes the
+/// last of several equally-scored releases with the same track count.
+#[test]
+fn tracklist_verdict_names_the_release_the_panel_resolves() {
+    let releases = vec![
+        release("a", "Melted (US)", 12, 100),
+        release("b", "Melted (EU)", 12, 100),
+    ];
+
+    let picked = select_best_release(&releases, 12).unwrap();
+    let expected = format!("Matches “{}” (12 tracks)", releases[picked].title);
+
+    assert_eq!(
+        tracklist_verdict(&releases, 12).detail.as_deref(),
+        Some(expected.as_str())
+    );
+}
+
+#[test]
+fn tracklist_verdict_warns_on_an_empty_search() {
+    let result = tracklist_verdict(&[], 12);
+
+    assert_eq!(result.status, CheckStatus::Warn);
+    assert_eq!(result.detail.as_deref(), Some("No MusicBrainz match found"));
 }
 
 #[test]

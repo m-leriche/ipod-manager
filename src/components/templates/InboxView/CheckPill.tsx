@@ -40,6 +40,7 @@ export const CheckPill = ({ label, check, onClick, expanded }: CheckPillProps) =
 
   return (
     <button
+      type="button"
       onClick={onClick}
       title={check.detail ?? undefined}
       aria-expanded={expanded}

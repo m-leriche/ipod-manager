@@ -116,16 +116,23 @@ describe("summarizeRows", () => {
 
 describe("describeMedia", () => {
   it("reports a plain track count for a single disc", () => {
-    expect(describeMedia([{ position: 1, format: "CD", track_count: 12 }], 12)).toBe("12 tracks");
+    const tracks = [mb(1, "Finger"), mb(2, "Caesar")];
+
+    expect(describeMedia([{ position: 1, format: "CD", track_count: 2 }], tracks)).toBe("2 tracks");
+  });
+
+  it("pluralizes a single track", () => {
+    expect(describeMedia([{ position: 1, format: "CD", track_count: 1 }], [mb(1, "Finger")])).toBe("1 track");
   });
 
   it("breaks out the per-disc counts for a multi-disc release", () => {
     const media: MbMedium[] = [
-      { position: 1, format: "CD", track_count: 11 },
-      { position: 2, format: "CD", track_count: 10 },
+      { position: 1, format: "CD", track_count: 2 },
+      { position: 2, format: "CD", track_count: 1 },
     ];
+    const tracks = [mb(1, "Finger"), mb(2, "Caesar"), mb(1, "Later", 2)];
 
-    expect(describeMedia(media, 21)).toBe("2 discs · 11 + 10 tracks");
+    expect(describeMedia(media, tracks)).toBe("2 discs · 2 + 1 tracks");
   });
 });
 
@@ -133,7 +140,7 @@ describe("releaseMeta", () => {
   it("reads as one line of release identity", () => {
     const detail = comparison([mb(1, "Finger")], [{ position: 1, format: "Vinyl", track_count: 1 }]).detail;
 
-    expect(releaseMeta(detail)).toBe("Ty Segall · 2010 · Vinyl · 1 tracks");
+    expect(releaseMeta(detail)).toBe("Ty Segall · 2010 · Vinyl · 1 track");
   });
 
   it("drops the format for a multi-disc release, where the disc breakdown says more", () => {
@@ -219,6 +226,17 @@ describe("diagnose", () => {
     expect(diagnose(rows, comparison(tracks, media), 2)).toBe(
       "Your 2 tracks match disc 1 of this 2-disc release. The other disc may be in a separate folder.",
     );
+  });
+
+  it("reports a shortfall when the folder holds only part of one disc", () => {
+    const tracks = [mb(1, "Finger"), mb(2, "Caesar"), mb(1, "Later", 2)];
+    const media: MbMedium[] = [
+      { position: 1, format: "CD", track_count: 2 },
+      { position: 2, format: "CD", track_count: 1 },
+    ];
+    const rows = buildComparisonRows([local(1, "Finger")], tracks);
+
+    expect(diagnose(rows, comparison(tracks, media), 1)).toBe("Missing 2 of 3 tracks.");
   });
 
   it("suggests a deluxe edition when there are only extras", () => {

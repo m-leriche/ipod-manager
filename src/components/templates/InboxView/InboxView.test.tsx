@@ -126,7 +126,7 @@ describe("InboxView", () => {
     });
   });
 
-  it("deletes the original folder after confirming the modal", async () => {
+  it("moves the original folder to the Trash in the background without a confirmation", async () => {
     mockBackend({
       get_inbox_location: "/inbox",
       scan_inbox: [album()],
@@ -138,11 +138,6 @@ describe("InboxView", () => {
     renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
-
-    const dialog = await screen.findByRole("dialog", { name: /imported successfully/i });
-    expect(dialog).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_inbox_folders", { folderPaths: ["/inbox/Artist - Album"] });
@@ -150,34 +145,15 @@ describe("InboxView", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("keeps the original folder when the modal is cancelled", async () => {
-    mockBackend({
-      get_inbox_location: "/inbox",
-      scan_inbox: [album()],
-      file_inbox_album: {
-        moves: [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }],
-        errors: [],
-      },
-    });
-    renderView();
-
-    fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
-    await screen.findByRole("dialog", { name: /imported successfully/i });
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-    expect(invoke).not.toHaveBeenCalledWith("delete_inbox_folders", expect.anything());
-  });
-
-  it("undoes a filing with Cmd+Z", async () => {
+  it("undoes a filing with Cmd+Z, after the Trash cleanup has finished", async () => {
     const moves = [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }];
-    mockBackend({
-      get_inbox_location: "/inbox",
-      scan_inbox: [album()],
-      file_inbox_album: { moves, errors: [] },
+    let resolveCleanup: () => void = () => {};
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_inbox_location") return "/inbox";
+      if (cmd === "scan_inbox") return [album()];
+      if (cmd === "file_inbox_album") return { moves, errors: [] };
+      if (cmd === "delete_inbox_folders") return new Promise<void>((r) => (resolveCleanup = r));
+      return undefined;
     });
     renderView();
 
@@ -187,6 +163,10 @@ describe("InboxView", () => {
     });
 
     fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+    // Undo can't race the cleanup: it only restores once the Trash move is done.
+    expect(invoke).not.toHaveBeenCalledWith("undo_inbox_filing", expect.anything());
+    resolveCleanup();
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("undo_inbox_filing", { moves });

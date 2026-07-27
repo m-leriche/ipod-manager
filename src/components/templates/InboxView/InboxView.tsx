@@ -1,9 +1,8 @@
 import { useCallback } from "react";
 import { emit } from "@tauri-apps/api/event";
-import { ConfirmDialog } from "../../atoms/ConfirmDialog/ConfirmDialog";
 import { Spinner } from "../../atoms/Spinner/Spinner";
 import { InboxAlbumRow } from "./InboxAlbumRow";
-import { deleteOriginalsMessage, isReady } from "./helpers";
+import { isReady } from "./helpers";
 import { useInboxActions } from "./useInboxActions";
 import { useInboxData } from "./useInboxData";
 
@@ -14,8 +13,7 @@ export const InboxView = () => {
     (folderPaths: string[]) => setAlbums((prev) => prev.filter((a) => !folderPaths.includes(a.folder_path))),
     [setAlbums],
   );
-  const { fileAway, fileAll, convertAlbum, busy, pendingDelete, confirmDeleteOriginals, cancelDeleteOriginals } =
-    useInboxActions(removeAlbums, rescan);
+  const { fileAway, fileAll, convertAlbum, busy } = useInboxActions(removeAlbums, rescan);
 
   if (location === undefined) return null;
 
@@ -69,17 +67,6 @@ export const InboxView = () => {
           ))
         )}
       </div>
-      {pendingDelete && (
-        <ConfirmDialog
-          title={`${pendingDelete.length} ${pendingDelete.length === 1 ? "album" : "albums"} imported successfully`}
-          message={deleteOriginalsMessage(pendingDelete.length)}
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
-          danger
-          onConfirm={() => void confirmDeleteOriginals()}
-          onCancel={cancelDeleteOriginals}
-        />
-      )}
     </div>
   );
 };

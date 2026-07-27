@@ -12,7 +12,6 @@ import type { ConvertProgress, ConvertTarget, FileAwayResult, FileMove, InboxAlb
 export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, rescan: () => Promise<void>) => {
   const [filing, setFiling] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
   const toast = useToast();
   const { push } = useUndo();
   const { start: startProgress, update: updateProgress, finish: finishProgress, fail: failProgress } = useProgress();
@@ -39,34 +38,31 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
         }
         if (filed.length > 0) {
           removeAlbums(filed);
-          push({ label, undo: () => invoke<void>("undo_inbox_filing", { moves }) });
+          // Originals go to the Trash in the background — recoverable, so no
+          // confirmation. The backend keeps any folder that still has audio.
+          const cleanup = invoke<void>("delete_inbox_folders", { folderPaths: filed }).catch((e) => {
+            toast.warning(`Could not move original folder(s) to Trash: ${e}`);
+          });
+          // Undo waits for the cleanup so it can't race the Trash move.
+          push({
+            label,
+            undo: async () => {
+              await cleanup;
+              await invoke<void>("undo_inbox_filing", { moves });
+            },
+          });
         }
         if (errors.length > 0) {
           toast.warning(`${label}: ${errors.length} issue(s) — ${errors[0]}`);
         } else if (filed.length > 0) {
-          toast.success(`${label} — ⌘Z to undo`);
+          toast.success(`${label} — originals in Trash, ⌘Z to undo`);
         }
-        // Originals only get deleted once the user confirms.
-        if (filed.length > 0) setPendingDelete(filed);
       } finally {
         setFiling(false);
       }
     },
     [push, removeAlbums, toast],
   );
-
-  const confirmDeleteOriginals = useCallback(async () => {
-    if (!pendingDelete) return;
-    const folderPaths = pendingDelete;
-    setPendingDelete(null);
-    try {
-      await invoke<void>("delete_inbox_folders", { folderPaths });
-    } catch (e) {
-      toast.warning(`Could not delete original folder(s): ${e}`);
-    }
-  }, [pendingDelete, toast]);
-
-  const cancelDeleteOriginals = useCallback(() => setPendingDelete(null), []);
 
   const fileAway = useCallback(
     (album: InboxAlbum) => fileAlbums([album], `File away ${albumLabel(album)}`),
@@ -119,11 +115,6 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
     fileAway,
     fileAll,
     convertAlbum,
-    // Block further filing while a delete confirmation is open so its pending
-    // folder list can't be silently overwritten by another File Away.
-    busy: filing || converting || pendingDelete !== null,
-    pendingDelete,
-    confirmDeleteOriginals,
-    cancelDeleteOriginals,
+    busy: filing || converting,
   };
 };

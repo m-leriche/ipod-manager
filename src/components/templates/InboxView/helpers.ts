@@ -10,11 +10,6 @@ export const isReady = (album: InboxAlbum): boolean => !isBlocked(album) && !isP
 export const albumLabel = (album: InboxAlbum): string =>
   album.artist && album.album ? `${album.artist} – ${album.album}` : album.folder_name;
 
-export const deleteOriginalsMessage = (count: number): string =>
-  count === 1
-    ? "Move the original folder and its remaining content to the Trash?"
-    : `Move the ${count} original folders and their remaining content to the Trash?`;
-
 export const formatTrackQuality = (t: InboxTrack): string => {
   const parts = [t.format.toUpperCase()];
   if (t.bit_depth) parts.push(`${t.bit_depth}-bit`);

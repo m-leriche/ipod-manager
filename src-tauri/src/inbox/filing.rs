@@ -101,7 +101,8 @@ pub fn file_album(
 }
 
 /// Delete an inbox folder after its album was filed away, along with any
-/// leftover files (lyrics, .txt, etc.). Called only once the user confirms.
+/// leftover files (lyrics, .txt, etc.). Runs unprompted in the background once
+/// filing succeeds; the folder goes to the Trash, so it stays recoverable.
 /// If any audio remains (already in the library, or a move error), the folder
 /// is kept intact so un-imported audio is never destroyed — that's a success,
 /// not a failure. A genuine filesystem error (e.g. permissions) propagates so

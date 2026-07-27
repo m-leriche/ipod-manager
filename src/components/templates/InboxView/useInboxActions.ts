@@ -43,7 +43,12 @@ export const useInboxActions = (removeAlbums: (folderPaths: string[]) => void, r
           const cleanup = invoke<void>("delete_inbox_folders", { folderPaths: filed }).catch((e) => {
             toast.warning(`Could not move original folder(s) to Trash: ${e}`);
           });
-          // Undo waits for the cleanup so it can't race the Trash move.
+          // Undo waits for the cleanup so it can't race the Trash move, and
+          // restores only what filing moved (audio + cover) into a recreated
+          // folder. Leftovers filing didn't touch — lyrics, .cue/.log, scans —
+          // went to the Trash with the folder and stay there for the user to
+          // recover from Finder. Accepted: undoing an import is rare, and the
+          // alternative is holding the folder until the undo entry is evicted.
           push({
             label,
             undo: async () => {

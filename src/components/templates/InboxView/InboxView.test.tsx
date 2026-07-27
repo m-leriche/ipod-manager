@@ -6,6 +6,25 @@ import { UndoProvider } from "../../../contexts/UndoContext";
 import { InboxView } from "./InboxView";
 import type { CheckResult, InboxAlbum } from "./types";
 
+// The global mock in src/test/setup.ts hands out a fresh spy object per call,
+// so toast calls can't be asserted. A stable object mirrors the real provider.
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn(),
+  dismiss: vi.fn(),
+}));
+
+vi.mock("../../../contexts/ToastContext", () => ({
+  useToast: () => toast,
+  useToastState: () => [],
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+/** Drain every pending microtask so ordering assertions can't pass by luck. */
+const flushAsync = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const check = (status: CheckResult["status"], detail: string | null = null): CheckResult => ({ status, detail });
 
 const album = (overrides: Partial<InboxAlbum> = {}): InboxAlbum => ({
@@ -158,16 +177,43 @@ describe("InboxView", () => {
     renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
+    // The undo entry is pushed in the same synchronous block as this invoke,
+    // so waiting for it guarantees Cmd+Z has an entry to pop.
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("file_inbox_album", { folderPath: "/inbox/Artist - Album" });
+      expect(invoke).toHaveBeenCalledWith("delete_inbox_folders", { folderPaths: ["/inbox/Artist - Album"] });
     });
 
     fireEvent.keyDown(window, { key: "z", metaKey: true });
+    await flushAsync();
 
     // Undo can't race the cleanup: it only restores once the Trash move is done.
     expect(invoke).not.toHaveBeenCalledWith("undo_inbox_filing", expect.anything());
     resolveCleanup();
 
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("undo_inbox_filing", { moves });
+    });
+  });
+
+  it("warns when the Trash cleanup fails and still allows undo", async () => {
+    const moves = [{ from: "/inbox/Artist - Album/01.flac", to: "/lib/Artist/Album/01-01 One.flac", is_audio: true }];
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_inbox_location") return "/inbox";
+      if (cmd === "scan_inbox") return [album()];
+      if (cmd === "file_inbox_album") return { moves, errors: [] };
+      if (cmd === "delete_inbox_folders") throw new Error("Permission denied");
+      return undefined;
+    });
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "File Away" }));
+
+    await waitFor(() => {
+      expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining("Could not move original folder(s) to Trash"));
+    });
+
+    // A failed cleanup leaves the folder on disk, so undo must not be blocked.
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("undo_inbox_filing", { moves });
     });

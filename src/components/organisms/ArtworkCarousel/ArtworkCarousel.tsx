@@ -7,7 +7,16 @@ import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/hel
 import { CoverFlowLyrics } from "./CoverFlowLyrics";
 import { ArtistPicker } from "./ArtistPicker";
 import { DensityStepper } from "./DensityStepper";
-import { applyPositions, buildItemStyle, buildTransforms, findCenteredIndex, sortAlbums } from "./helpers";
+import {
+  applyPositions,
+  availableX,
+  buildItemStyle,
+  buildTransforms,
+  coverSizePx,
+  findCenteredIndex,
+  sortAlbums,
+} from "./helpers";
+import { COVER_HEIGHT_CSS, PERSPECTIVE_PX } from "./constants";
 import { getSetting, setSetting } from "../../../utils/settings";
 import type { ArtworkCarouselProps, AlbumArtProps } from "./types";
 
@@ -39,12 +48,30 @@ export const ArtworkCarousel = ({
 
   const [sideCount, setSideCount] = useState(() => getSetting("coverFlowSideCount"));
   const renderRange = sideCount + 1;
-  const transforms = useMemo(() => buildTransforms(sideCount), [sideCount]);
 
   const handleSideCountChange = useCallback((next: number) => {
     setSideCount(next);
     setSetting("coverFlowSideCount", next);
   }, []);
+
+  // Stage size drives cover size and how far the rack may reach
+  const [stage, setStage] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setStage((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const coverSize = coverSizePx(stage.height);
+  const transforms = useMemo(
+    () => buildTransforms(sideCount, availableX(stage.width, coverSize)),
+    [sideCount, stage.width, coverSize],
+  );
 
   // Spring state — refs only, never triggers re-renders
   const posRef = useRef<number | null>(null);
@@ -203,7 +230,7 @@ export const ArtworkCarousel = ({
       <div
         ref={stageRef}
         className="relative flex-1 min-h-0 w-full flex items-center justify-center"
-        style={{ perspective: "1400px", perspectiveOrigin: "50% 40%" }}
+        style={{ perspective: `${PERSPECTIVE_PX}px`, perspectiveOrigin: "50% 40%" }}
       >
         {sortedAlbums.map((album, i) => {
           const intOffset = i - centeredIndex;
@@ -216,7 +243,7 @@ export const ArtworkCarousel = ({
               data-idx={i}
               className={`absolute ${intOffset !== 0 && clickable ? "cursor-pointer" : ""}`}
               style={{
-                height: "clamp(180px, 75%, 380px)",
+                height: COVER_HEIGHT_CSS,
                 aspectRatio: "1",
                 transform: initial.transform,
                 opacity: Number(initial.opacity),

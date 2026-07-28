@@ -1,44 +1,65 @@
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
 import type { TransformConfig } from "./types";
+import {
+  COVER_FLOW_TUNING as T,
+  COVER_HEIGHT_RATIO,
+  COVER_MAX_PX,
+  COVER_MIN_PX,
+  MIN_SIDE_COUNT,
+  PERSPECTIVE_PX,
+} from "./constants";
 
-/** Covers per side of the center cover. Mirrors the `coverFlowSideCount` setting bounds. */
-export const MIN_SIDE_COUNT = 2;
-export const MAX_SIDE_COUNT = 10;
-
-// Cover flow pose: the first side cover turns, the rest stack behind it at the
-// same angle with a small step in x and z — the tight racks from iTunes.
 const CENTER: TransformConfig = { x: 0, ry: 0, z: 0, scale: 1, opacity: 1 };
-const TURN_ANGLE = 50;
-const FIRST_X = 62;
-const STEP_X = 17;
-const FIRST_Z = 200;
-const STEP_Z = 55;
-const SIDE_SCALE = 0.62;
 
-const transformCache = new Map<number, TransformConfig[]>();
+/** Cover edge length for a given stage height — mirrors the CSS clamp on each cover. */
+export const coverSizePx = (stageHeight: number): number =>
+  Math.min(COVER_MAX_PX, Math.max(COVER_MIN_PX, stageHeight * COVER_HEIGHT_RATIO));
 
 /**
- * Transform configs indexed by absolute offset from center, for `sideCount`
- * covers per side plus one trailing slot that fades out as covers exit.
+ * Horizontal room on one side of the center cover, as a percentage of cover
+ * width, measured on screen (i.e. after perspective foreshortening).
  */
-export const buildTransforms = (sideCount: number): TransformConfig[] => {
-  const cached = transformCache.get(sideCount);
+export const availableX = (stageWidth: number, coverWidth: number): number => {
+  if (stageWidth <= 0 || coverWidth <= 0) return T.fallbackReachX;
+  const halfPx = stageWidth / 2 - T.edgeMarginPx;
+  return Math.round(Math.min(T.maxReachX, Math.max(T.minReachX, (halfPx / coverWidth) * 100 - T.outerInsetX)));
+};
+
+const transformCache = new Map<string, TransformConfig[]>();
+
+/**
+ * Transform configs indexed by absolute offset from center: `sideCount` covers
+ * per side plus one trailing slot that fades out as covers exit.
+ *
+ * The rack turns further inward the denser it gets, which narrows each cover
+ * and leaves room for the extra ones. `roomX` is the on-screen room available
+ * per side; the outermost slot is placed to land right at it.
+ */
+export const buildTransforms = (sideCount: number, roomX: number): TransformConfig[] => {
+  const cacheKey = `${sideCount}:${roomX}`;
+  const cached = transformCache.get(cacheKey);
   if (cached) return cached;
 
   const exitSlot = sideCount + 1;
+  const exitZ = T.firstZ + sideCount * T.stepZ;
+  // Undo the foreshortening the exit slot's depth will apply, so it lands on `roomX`
+  const reachX = (roomX * (PERSPECTIVE_PX + exitZ)) / PERSPECTIVE_PX;
+  const stepX = Math.min(T.maxStepX, Math.max(0, (reachX - T.firstX) / sideCount));
+  const ry = Math.min(T.maxTurnAngle, T.turnAngle + (sideCount - MIN_SIDE_COUNT) * T.turnAnglePerCover);
+
   const configs: TransformConfig[] = [CENTER];
   for (let i = 1; i <= exitSlot; i++) {
     configs.push({
-      x: FIRST_X + (i - 1) * STEP_X,
-      ry: TURN_ANGLE,
-      z: FIRST_Z + (i - 1) * STEP_Z,
-      scale: SIDE_SCALE,
-      opacity: i === exitSlot ? 0 : i === sideCount ? 0.45 : 0.85,
+      x: T.firstX + (i - 1) * stepX,
+      ry,
+      z: T.firstZ + (i - 1) * T.stepZ,
+      scale: T.sideScale,
+      opacity: i === exitSlot ? 0 : i === sideCount ? T.fadingOpacity : T.sideOpacity,
     });
   }
 
-  transformCache.set(sideCount, configs);
+  transformCache.set(cacheKey, configs);
   return configs;
 };
 
@@ -61,13 +82,17 @@ export const interpolateConfig = (transforms: TransformConfig[], absOffset: numb
   };
 };
 
-/** Build inline CSS for a given continuous offset from center. */
+/**
+ * Build inline CSS for a given continuous offset from center. Depth is applied
+ * before the turn so it only pushes covers back, never sideways — a rotated
+ * translateZ would shove each cover outward and open a gap next to the center.
+ */
 export const buildItemStyle = (transforms: TransformConfig[], offset: number) => {
   const absOffset = Math.abs(offset);
   const sign = Math.sign(offset) || 1;
   const config = interpolateConfig(transforms, absOffset);
   return {
-    transform: `translateX(${sign * config.x}%) rotateY(${-sign * config.ry}deg) translateZ(${-config.z}px) scale(${config.scale})`,
+    transform: `translateX(${sign * config.x}%) translateZ(${-config.z}px) rotateY(${-sign * config.ry}deg) scale(${config.scale})`,
     opacity: String(config.opacity),
     zIndex: String(Math.round(100 - absOffset * 4)),
   };

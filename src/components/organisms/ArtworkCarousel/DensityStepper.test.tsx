@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DensityStepper } from "./DensityStepper";
-import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./helpers";
+import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./constants";
 
 describe("DensityStepper", () => {
   it("shows the total number of visible covers", () => {

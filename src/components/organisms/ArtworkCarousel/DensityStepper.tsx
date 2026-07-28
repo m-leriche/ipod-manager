@@ -1,4 +1,4 @@
-import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./helpers";
+import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./constants";
 import type { DensityStepperProps } from "./types";
 
 /** Steps the number of visible covers (center + `sideCount` per side). */

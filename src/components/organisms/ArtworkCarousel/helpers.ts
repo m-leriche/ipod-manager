@@ -1,14 +1,8 @@
 import type { AlbumSummary } from "../../../types/library";
 import type { AlbumSortMode } from "../AlbumGrid/types";
 import type { TransformConfig } from "./types";
-import {
-  COVER_FLOW_TUNING as T,
-  COVER_HEIGHT_RATIO,
-  COVER_MAX_PX,
-  COVER_MIN_PX,
-  MIN_SIDE_COUNT,
-  PERSPECTIVE_PX,
-} from "./constants";
+import { COVER_FLOW_TUNING as T, COVER_HEIGHT_RATIO, COVER_MAX_PX, COVER_MIN_PX, PERSPECTIVE_PX } from "./constants";
+import { COVER_FLOW_SIDE_COUNTS } from "../../../utils/settings";
 
 const CENTER: TransformConfig = { x: 0, ry: 0, z: 0, scale: 1, opacity: 1 };
 
@@ -26,8 +20,6 @@ export const availableX = (stageWidth: number, coverWidth: number): number => {
   return Math.round(Math.min(T.maxReachX, Math.max(T.minReachX, (halfPx / coverWidth) * 100 - T.outerInsetX)));
 };
 
-const transformCache = new Map<string, TransformConfig[]>();
-
 /**
  * Transform configs indexed by absolute offset from center: `sideCount` covers
  * per side plus one trailing slot that fades out as covers exit.
@@ -37,16 +29,12 @@ const transformCache = new Map<string, TransformConfig[]>();
  * per side; the outermost slot is placed to land right at it.
  */
 export const buildTransforms = (sideCount: number, roomX: number): TransformConfig[] => {
-  const cacheKey = `${sideCount}:${roomX}`;
-  const cached = transformCache.get(cacheKey);
-  if (cached) return cached;
-
   const exitSlot = sideCount + 1;
   const exitZ = T.firstZ + sideCount * T.stepZ;
   // Undo the foreshortening the exit slot's depth will apply, so it lands on `roomX`
   const reachX = (roomX * (PERSPECTIVE_PX + exitZ)) / PERSPECTIVE_PX;
-  const stepX = Math.min(T.maxStepX, Math.max(0, (reachX - T.firstX) / sideCount));
-  const ry = Math.min(T.maxTurnAngle, T.turnAngle + (sideCount - MIN_SIDE_COUNT) * T.turnAnglePerCover);
+  const stepX = Math.min(T.maxStepX, (reachX - T.firstX) / sideCount);
+  const ry = Math.min(T.maxTurnAngle, T.turnAngle + (sideCount - COVER_FLOW_SIDE_COUNTS.min) * T.turnAnglePerCover);
 
   const configs: TransformConfig[] = [CENTER];
   for (let i = 1; i <= exitSlot; i++) {
@@ -59,7 +47,6 @@ export const buildTransforms = (sideCount: number, roomX: number): TransformConf
     });
   }
 
-  transformCache.set(cacheKey, configs);
   return configs;
 };
 

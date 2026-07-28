@@ -67,11 +67,9 @@ export const ArtworkCarousel = ({
     return () => observer.disconnect();
   }, []);
 
-  const coverSize = coverSizePx(stage.height);
-  const transforms = useMemo(
-    () => buildTransforms(sideCount, availableX(stage.width, coverSize)),
-    [sideCount, stage.width, coverSize],
-  );
+  // Rounded, so resizing only rebuilds the rack when the layout actually changes
+  const roomX = availableX(stage.width, coverSizePx(stage.height));
+  const transforms = useMemo(() => buildTransforms(sideCount, roomX), [sideCount, roomX]);
 
   // Spring state — refs only, never triggers re-renders
   const posRef = useRef<number | null>(null);

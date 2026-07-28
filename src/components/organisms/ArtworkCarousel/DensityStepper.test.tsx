@@ -1,12 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DensityStepper } from "./DensityStepper";
-import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./constants";
+import { COVER_FLOW_SIDE_COUNTS } from "../../../utils/settings";
+
+const { min: MIN_SIDE_COUNT, max: MAX_SIDE_COUNT } = COVER_FLOW_SIDE_COUNTS;
 
 describe("DensityStepper", () => {
   it("shows the total number of visible covers", () => {
     render(<DensityStepper sideCount={3} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("Visible covers")).toHaveTextContent("7");
+    expect(screen.getByRole("group", { name: "Cover flow density" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Visible covers" })).toHaveTextContent("7");
   });
 
   it("steps the side count up and down", () => {

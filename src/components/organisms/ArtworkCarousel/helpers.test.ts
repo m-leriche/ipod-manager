@@ -8,11 +8,17 @@ import {
   interpolateConfig,
   sortAlbums,
 } from "./helpers";
-import { COVER_FLOW_TUNING, COVER_MAX_PX, COVER_MIN_PX, MAX_SIDE_COUNT, MIN_SIDE_COUNT } from "./constants";
+import { COVER_FLOW_TUNING, COVER_MAX_PX, COVER_MIN_PX, PERSPECTIVE_PX } from "./constants";
+import { COVER_FLOW_SIDE_COUNTS } from "../../../utils/settings";
 import type { AlbumSummary } from "../../../types/library";
+
+const { min: MIN_SIDE_COUNT, max: MAX_SIDE_COUNT } = COVER_FLOW_SIDE_COUNTS;
 
 /** On-screen room per side for a 1000px-wide stage showing 300px covers. */
 const ROOM = availableX(1000, 300);
+
+/** Where a slot actually lands on screen, in cover widths, after foreshortening. */
+const onScreenX = ({ x, z }: { x: number; z: number }) => (x * PERSPECTIVE_PX) / (PERSPECTIVE_PX + z);
 
 const makeAlbum = (name: string, artist = "Artist"): AlbumSummary => ({
   name,
@@ -86,15 +92,13 @@ describe("buildTransforms", () => {
 
   it("places the exit slot at the available room, undoing its foreshortening", () => {
     const configs = buildTransforms(4, ROOM);
-    const exit = configs[configs.length - 1];
-    const foreshortened = (exit.x * 1400) / (1400 + exit.z);
-    expect(foreshortened).toBeCloseTo(ROOM, 5);
+    expect(onScreenX(configs[configs.length - 1])).toBeCloseTo(ROOM, 5);
   });
 
   it("keeps the rack inside the room at every density", () => {
     for (let sideCount = MIN_SIDE_COUNT; sideCount <= MAX_SIDE_COUNT; sideCount++) {
       for (const config of buildTransforms(sideCount, ROOM)) {
-        expect((config.x * 1400) / (1400 + config.z)).toBeLessThanOrEqual(ROOM + 0.001);
+        expect(onScreenX(config)).toBeLessThanOrEqual(ROOM + 0.001);
       }
     }
   });
@@ -113,12 +117,6 @@ describe("buildTransforms", () => {
     expect(configs.slice(1, 4).map((c) => c.opacity)).toEqual([sideOpacity, sideOpacity, sideOpacity]);
     expect(configs[4].opacity).toBe(fadingOpacity);
     expect(configs[5].opacity).toBe(0);
-  });
-
-  it("memoizes per side count and room", () => {
-    expect(buildTransforms(7, ROOM)).toBe(buildTransforms(7, ROOM));
-    expect(buildTransforms(7, ROOM)).not.toBe(buildTransforms(8, ROOM));
-    expect(buildTransforms(7, ROOM)).not.toBe(buildTransforms(7, ROOM + 10));
   });
 });
 

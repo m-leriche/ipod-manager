@@ -1,7 +1,3 @@
-/** Covers per side of the center cover. Mirrors the `coverFlowSideCount` setting bounds. */
-export const MIN_SIDE_COUNT = 2;
-export const MAX_SIDE_COUNT = 10;
-
 /** 3D perspective applied to the stage. The transform math depends on it, so keep them in sync. */
 export const PERSPECTIVE_PX = 1400;
 

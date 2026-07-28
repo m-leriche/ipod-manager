@@ -37,6 +37,17 @@ const num = (key: string, defaultValue: number, min: number, max: number): Setti
   serialize: String,
 });
 
+/** Like `num`, but rounds — for settings used as counts. */
+const int = (key: string, defaultValue: number, min: number, max: number): SettingDef<number> => ({
+  key,
+  defaultValue,
+  parse: (raw) => {
+    const v = Math.round(parseFloat(raw));
+    return isFinite(v) && v >= min && v <= max ? v : undefined;
+  },
+  serialize: String,
+});
+
 const str = (key: string, defaultValue: string, allowed?: string[]): SettingDef<string> => ({
   key,
   defaultValue,
@@ -130,6 +141,9 @@ const isCustomTheme = (t: unknown): t is CustomTheme =>
   typeof (t as CustomTheme).accent === "string" &&
   typeof (t as CustomTheme).text === "string";
 
+/** Cover flow density bounds — covers per side of the center cover (so 5–21 on screen). */
+export const COVER_FLOW_SIDE_COUNTS = { min: 2, max: 10 };
+
 export const SETTINGS = {
   // Theme
   theme: str("crate-theme", "dark"),
@@ -203,7 +217,7 @@ export const SETTINGS = {
   detailPanelWidth: num("crate-detail-panel-width", 220, 0, 10000),
   lyricsOverlaySize: num("crate-lyrics-overlay-size", 1, 0.5, 2),
   // Cover flow density: covers per side of the center cover (3 → 7 on screen)
-  coverFlowSideCount: num("crate-cover-flow-side-count", 3, 2, 10),
+  coverFlowSideCount: int("crate-cover-flow-side-count", 3, COVER_FLOW_SIDE_COUNTS.min, COVER_FLOW_SIDE_COUNTS.max),
 } as const;
 
 /** Stored shape for EQ presets (matches EqPreset from EqualizerPanel/types). */

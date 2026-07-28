@@ -1,22 +1,27 @@
-import { MIN_SIDE_COUNT, MAX_SIDE_COUNT } from "./constants";
+import { COVER_FLOW_SIDE_COUNTS } from "../../../utils/settings";
 import type { DensityStepperProps } from "./types";
 
 /** Steps the number of visible covers (center + `sideCount` per side). */
 export const DensityStepper = ({ sideCount, onChange }: DensityStepperProps) => (
-  <div className="flex items-center gap-0.5 bg-white/5 backdrop-blur-sm rounded-md p-0.5">
+  <div
+    role="group"
+    aria-label="Cover flow density"
+    className="flex items-center gap-0.5 bg-white/5 backdrop-blur-sm rounded-md p-0.5"
+  >
     <StepButton
       label="−"
       title="Fewer covers"
-      disabled={sideCount <= MIN_SIDE_COUNT}
+      disabled={sideCount <= COVER_FLOW_SIDE_COUNTS.min}
       onClick={() => onChange(sideCount - 1)}
     />
-    <span className="px-1 text-[10px] font-medium text-white/55 tabular-nums" aria-label="Visible covers">
+    {/* role=status so stepping announces the new count */}
+    <span role="status" aria-label="Visible covers" className="px-1 text-[10px] font-medium text-white/55 tabular-nums">
       {sideCount * 2 + 1}
     </span>
     <StepButton
       label="+"
       title="More covers"
-      disabled={sideCount >= MAX_SIDE_COUNT}
+      disabled={sideCount >= COVER_FLOW_SIDE_COUNTS.max}
       onClick={() => onChange(sideCount + 1)}
     />
   </div>

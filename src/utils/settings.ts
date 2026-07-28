@@ -202,6 +202,8 @@ export const SETTINGS = {
   lyricsPanelWidth: num("crate-lyrics-panel-width", 280, 0, 10000),
   detailPanelWidth: num("crate-detail-panel-width", 220, 0, 10000),
   lyricsOverlaySize: num("crate-lyrics-overlay-size", 1, 0.5, 2),
+  // Cover flow density: covers per side of the center cover (3 → 7 on screen)
+  coverFlowSideCount: num("crate-cover-flow-side-count", 3, 2, 10),
 } as const;
 
 /** Stored shape for EQ presets (matches EqPreset from EqualizerPanel/types). */

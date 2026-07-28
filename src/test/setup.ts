@@ -16,6 +16,20 @@ afterEach(() => {
   disconnect() {}
 };
 
+// Mock ResizeObserver (jsdom has none); reports an unmeasured box, so components
+// fall back to their defaults. Tests needing real sizes override it locally.
+(globalThis as Record<string, unknown>).ResizeObserver = class {
+  callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+  observe(target: Element) {
+    this.callback([{ target, contentRect: { width: 0, height: 0 } }] as unknown as ResizeObserverEntry[], this);
+  }
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mock ProgressContext — provides a no-op implementation for all components
 vi.mock("../contexts/ProgressContext", () => ({
   useProgress: () => ({

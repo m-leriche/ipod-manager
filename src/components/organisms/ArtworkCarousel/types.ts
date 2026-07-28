@@ -19,3 +19,17 @@ export interface AlbumArtProps {
   album: AlbumSummary;
   isCenter: boolean;
 }
+
+/** Cover pose at a given absolute offset from the center cover. */
+export interface TransformConfig {
+  x: number;
+  ry: number;
+  z: number;
+  scale: number;
+  opacity: number;
+}
+
+export interface DensityStepperProps {
+  sideCount: number;
+  onChange: (sideCount: number) => void;
+}

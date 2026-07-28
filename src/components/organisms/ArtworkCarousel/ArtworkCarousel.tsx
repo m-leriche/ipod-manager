@@ -6,104 +6,23 @@ import { AlphabetScroller } from "../../atoms/AlphabetScroller/AlphabetScroller"
 import { buildLetterMap, getAlbumLetter } from "../../atoms/AlphabetScroller/helpers";
 import { CoverFlowLyrics } from "./CoverFlowLyrics";
 import { ArtistPicker } from "./ArtistPicker";
+import { DensityStepper } from "./DensityStepper";
+import {
+  applyPositions,
+  availableX,
+  buildItemStyle,
+  buildTransforms,
+  coverSizePx,
+  findCenteredIndex,
+  sortAlbums,
+} from "./helpers";
+import { COVER_HEIGHT_CSS, PERSPECTIVE_PX } from "./constants";
+import { getSetting, setSetting } from "../../../utils/settings";
 import type { ArtworkCarouselProps, AlbumArtProps } from "./types";
-import type { AlbumSummary } from "../../../types/library";
-import type { AlbumSortMode } from "../AlbumGrid/types";
-
-const VISIBLE_RANGE = 3;
-const RENDER_RANGE = VISIBLE_RANGE + 1;
-
-// Transform configs per offset: [center, +-1, +-2, +-3, +-4 (exit)]
-const TRANSFORMS = [
-  { x: 0, ry: 0, z: 0, scale: 1, opacity: 1 },
-  { x: 62, ry: 45, z: 200, scale: 0.62, opacity: 0.7 },
-  { x: 100, ry: 50, z: 340, scale: 0.5, opacity: 0.4 },
-  { x: 130, ry: 55, z: 440, scale: 0.42, opacity: 0.15 },
-  { x: 155, ry: 58, z: 520, scale: 0.38, opacity: 0 },
-];
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-/** Interpolate between transform configs for a continuous float offset. */
-const interpolateConfig = (absOffset: number) => {
-  const maxIdx = TRANSFORMS.length - 1;
-  if (absOffset >= maxIdx) return TRANSFORMS[maxIdx];
-  const lower = Math.floor(absOffset);
-  const t = absOffset - lower;
-  const a = TRANSFORMS[lower];
-  const b = TRANSFORMS[lower + 1];
-  return {
-    x: lerp(a.x, b.x, t),
-    ry: lerp(a.ry, b.ry, t),
-    z: lerp(a.z, b.z, t),
-    scale: lerp(a.scale, b.scale, t),
-    opacity: lerp(a.opacity, b.opacity, t),
-  };
-};
 
 // Damped spring: stiffness=70, critical damping ≈ 16.7, using 15 = slightly underdamped (tiny overshoot)
 const SPRING_STIFFNESS = 70;
 const SPRING_DAMPING = 15;
-
-/** Build inline CSS for a given continuous offset from center. */
-const buildItemStyle = (offset: number) => {
-  const absOffset = Math.abs(offset);
-  const sign = Math.sign(offset) || 1;
-  const config = interpolateConfig(absOffset);
-  return {
-    transform: `translateX(${sign * config.x}%) rotateY(${-sign * config.ry}deg) translateZ(${-config.z}px) scale(${config.scale})`,
-    opacity: String(config.opacity),
-    zIndex: String(Math.round(100 - absOffset * 10)),
-  };
-};
-
-/** Apply spring-animated positions directly to DOM (bypasses React rendering). */
-const applyPositions = (stage: HTMLDivElement | null, pos: number) => {
-  if (!stage) return;
-  stage.querySelectorAll<HTMLDivElement>(":scope > [data-idx]").forEach((el) => {
-    const { transform, opacity, zIndex } = buildItemStyle(Number(el.dataset.idx) - pos);
-    el.style.transform = transform;
-    el.style.opacity = opacity;
-    el.style.zIndex = zIndex;
-  });
-};
-
-/** Sort key matching the backend: strip "The ", remove non-alphanumeric, lowercase. */
-const sortKey = (s: string): string => {
-  const trimmed = s.trim();
-  const withoutThe = /^the /i.test(trimmed) ? trimmed.slice(4) : trimmed;
-  return withoutThe.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-};
-
-const sortAlbums = (albums: AlbumSummary[], mode: AlbumSortMode): AlbumSummary[] => {
-  const sorted = [...albums];
-  if (mode === "artist") {
-    sorted.sort((a, b) => {
-      const cmp = sortKey(a.artist).localeCompare(sortKey(b.artist));
-      if (cmp !== 0) return cmp;
-      return sortKey(a.name).localeCompare(sortKey(b.name));
-    });
-  } else {
-    sorted.sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name)));
-  }
-  return sorted;
-};
-
-const findCenteredIndex = (
-  albums: AlbumSummary[],
-  selectedAlbum: string | null,
-  playingAlbum: string | undefined | null,
-): number => {
-  if (selectedAlbum) {
-    const idx = albums.findIndex((a) => a.name === selectedAlbum);
-    if (idx >= 0) return idx;
-  }
-  if (playingAlbum) {
-    const idx = albums.findIndex((a) => a.name === playingAlbum);
-    if (idx >= 0) return idx;
-  }
-  return 0;
-};
 
 export const ArtworkCarousel = ({
   albums,
@@ -127,6 +46,31 @@ export const ArtworkCarousel = ({
   const wheelAccumRef = useRef(0);
   const lastNavRef = useRef(0);
 
+  const [sideCount, setSideCount] = useState(() => getSetting("coverFlowSideCount"));
+  const renderRange = sideCount + 1;
+
+  const handleSideCountChange = useCallback((next: number) => {
+    setSideCount(next);
+    setSetting("coverFlowSideCount", next);
+  }, []);
+
+  // Stage size drives cover size and how far the rack may reach
+  const [stage, setStage] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setStage((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Rounded, so resizing only rebuilds the rack when the layout actually changes
+  const roomX = availableX(stage.width, coverSizePx(stage.height));
+  const transforms = useMemo(() => buildTransforms(sideCount, roomX), [sideCount, roomX]);
+
   // Spring state — refs only, never triggers re-renders
   const posRef = useRef<number | null>(null);
   const velRef = useRef(0);
@@ -143,12 +87,13 @@ export const ArtworkCarousel = ({
   if (posRef.current === null) posRef.current = centeredIndex;
 
   // Snap immediately on large jumps (sort mode change, etc.)
-  if (Math.abs(centeredIndex - posRef.current) > VISIBLE_RANGE) {
+  if (Math.abs(centeredIndex - posRef.current) > sideCount) {
     posRef.current = centeredIndex;
     velRef.current = 0;
   }
 
-  // Damped spring animation — writes directly to DOM, zero React overhead per frame
+  // Damped spring animation — writes directly to DOM, zero React overhead per frame.
+  // Restarts on density change so new transforms apply from the current position.
   useEffect(() => {
     let active = true;
     prevTimeRef.current = performance.now();
@@ -169,11 +114,11 @@ export const ArtworkCarousel = ({
       if (Math.abs(velRef.current) < 0.08 && Math.abs(centeredIndex - posRef.current) < 0.003) {
         posRef.current = centeredIndex;
         velRef.current = 0;
-        applyPositions(stageRef.current, centeredIndex);
+        applyPositions(stageRef.current, centeredIndex, transforms);
         return;
       }
 
-      applyPositions(stageRef.current, posRef.current);
+      applyPositions(stageRef.current, posRef.current, transforms);
       rafRef.current = requestAnimationFrame(step);
     };
 
@@ -184,7 +129,7 @@ export const ArtworkCarousel = ({
       active = false;
       cancelAnimationFrame(rafRef.current);
     };
-  }, [centeredIndex]);
+  }, [centeredIndex, transforms]);
 
   const navigate = useCallback(
     (direction: -1 | 1) => {
@@ -269,40 +214,44 @@ export const ArtworkCarousel = ({
         <ArtistPicker artists={artists} selectedArtist={selectedArtist ?? null} onSelectArtist={onSelectArtist} />
       )}
 
-      {onSortModeChange && (
-        <div className="absolute top-2 right-3 z-10 flex gap-0.5 bg-white/5 backdrop-blur-sm rounded-md p-0.5">
-          <SortButton active={sortMode === "album"} onClick={() => onSortModeChange("album")} label="Album" />
-          <SortButton active={sortMode === "artist"} onClick={() => onSortModeChange("artist")} label="Artist" />
-        </div>
-      )}
+      <div className="absolute top-2 right-3 z-10 flex items-center gap-1.5">
+        {onSortModeChange && (
+          <div className="flex gap-0.5 bg-white/5 backdrop-blur-sm rounded-md p-0.5">
+            <SortButton active={sortMode === "album"} onClick={() => onSortModeChange("album")} label="Album" />
+            <SortButton active={sortMode === "artist"} onClick={() => onSortModeChange("artist")} label="Artist" />
+          </div>
+        )}
+        <DensityStepper sideCount={sideCount} onChange={handleSideCountChange} />
+      </div>
 
       {/* Carousel stage — rAF directly manipulates children via data-idx */}
       <div
         ref={stageRef}
         className="relative flex-1 min-h-0 w-full flex items-center justify-center"
-        style={{ perspective: "1400px", perspectiveOrigin: "50% 40%" }}
+        style={{ perspective: `${PERSPECTIVE_PX}px`, perspectiveOrigin: "50% 40%" }}
       >
         {sortedAlbums.map((album, i) => {
           const intOffset = i - centeredIndex;
-          if (Math.abs(intOffset) > RENDER_RANGE) return null;
-          const initial = buildItemStyle(i - currentPos);
+          if (Math.abs(intOffset) > renderRange) return null;
+          const clickable = Math.abs(intOffset) <= sideCount;
+          const initial = buildItemStyle(transforms, i - currentPos);
           return (
             <div
               key={album.folder_path}
               data-idx={i}
-              className={`absolute ${intOffset !== 0 && Math.abs(intOffset) <= VISIBLE_RANGE ? "cursor-pointer" : ""}`}
+              className={`absolute ${intOffset !== 0 && clickable ? "cursor-pointer" : ""}`}
               style={{
-                height: "clamp(180px, 75%, 380px)",
+                height: COVER_HEIGHT_CSS,
                 aspectRatio: "1",
                 transform: initial.transform,
                 opacity: Number(initial.opacity),
                 zIndex: Number(initial.zIndex),
                 willChange: "transform, opacity",
                 transformStyle: "preserve-3d",
-                pointerEvents: Math.abs(intOffset) > VISIBLE_RANGE ? "none" : undefined,
+                pointerEvents: clickable ? undefined : "none",
               }}
               onClick={
-                Math.abs(intOffset) <= VISIBLE_RANGE
+                clickable
                   ? () => {
                       if (intOffset !== 0) {
                         onSelectAlbum(album.name);
@@ -312,7 +261,7 @@ export const ArtworkCarousel = ({
                   : undefined
               }
               onDoubleClick={
-                Math.abs(intOffset) <= VISIBLE_RANGE
+                clickable
                   ? () => {
                       onSelectAlbum(album.name);
                       onPlayAlbum(album.name);

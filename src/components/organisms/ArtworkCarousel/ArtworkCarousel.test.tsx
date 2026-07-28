@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ArtworkCarousel } from "./ArtworkCarousel";
+import { getSetting, setSetting } from "../../../utils/settings";
 import type { AlbumSummary } from "../../../types/library";
 
 vi.mock("../../../contexts/ArtCacheContext", () => ({
@@ -23,7 +24,16 @@ const albums: AlbumSummary[] = [
   makeAlbum("Epsilon"),
 ];
 
+// 15 albums so render culling has something to cull at every density
+const manyAlbums: AlbumSummary[] = "ABCDEFGHIJKLMNO".split("").map((letter) => makeAlbum(letter));
+
+const renderedCovers = (container: HTMLElement) => container.querySelectorAll("[data-idx]").length;
+
 describe("ArtworkCarousel", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("shows empty state when no albums", () => {
     render(<ArtworkCarousel albums={[]} selectedAlbum={null} onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />);
     expect(screen.getByText("No albums in library")).toBeInTheDocument();
@@ -106,5 +116,35 @@ describe("ArtworkCarousel", () => {
     const deltaImg = screen.getByAltText("Delta");
     fireEvent.click(deltaImg.closest("div[class*='absolute']")!);
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  describe("density", () => {
+    it("renders center + 3 per side + exit slots by default", () => {
+      const { container } = render(
+        <ArtworkCarousel albums={manyAlbums} selectedAlbum="H" onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />,
+      );
+      expect(renderedCovers(container)).toBe(2 * (3 + 1) + 1);
+    });
+
+    it("renders more covers when a larger density is stored", () => {
+      setSetting("coverFlowSideCount", 6);
+      const { container } = render(
+        <ArtworkCarousel albums={manyAlbums} selectedAlbum="H" onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />,
+      );
+      expect(renderedCovers(container)).toBe(2 * (6 + 1) + 1);
+    });
+
+    it("updates the rendered covers and persists the setting when stepping density", () => {
+      const { container } = render(
+        <ArtworkCarousel albums={manyAlbums} selectedAlbum="H" onSelectAlbum={vi.fn()} onPlayAlbum={vi.fn()} />,
+      );
+      expect(screen.getByLabelText("Visible covers")).toHaveTextContent("7");
+
+      fireEvent.click(screen.getByLabelText("More covers"));
+
+      expect(screen.getByLabelText("Visible covers")).toHaveTextContent("9");
+      expect(renderedCovers(container)).toBe(2 * (4 + 1) + 1);
+      expect(getSetting("coverFlowSideCount")).toBe(4);
+    });
   });
 });

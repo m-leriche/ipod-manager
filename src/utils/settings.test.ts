@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getSetting, setSetting, SETTINGS } from "./settings";
+import { getSetting, setSetting, SETTINGS, COVER_FLOW_SIDE_COUNTS } from "./settings";
 
 describe("settings", () => {
   beforeEach(() => {
@@ -106,5 +106,18 @@ describe("settings", () => {
     expect(getSetting("lyricsOverlaySize")).toBe(1);
     setSetting("lyricsOverlaySize", 1.5);
     expect(getSetting("lyricsOverlaySize")).toBe(1.5);
+  });
+
+  it("coverFlowSideCount stays a whole number within the density bounds", () => {
+    expect(getSetting("coverFlowSideCount")).toBe(3);
+
+    localStorage.setItem(SETTINGS.coverFlowSideCount.key, "3.5");
+    expect(getSetting("coverFlowSideCount")).toBe(4);
+
+    localStorage.setItem(SETTINGS.coverFlowSideCount.key, String(COVER_FLOW_SIDE_COUNTS.max + 1));
+    expect(getSetting("coverFlowSideCount")).toBe(3); // out of range → default
+
+    localStorage.setItem(SETTINGS.coverFlowSideCount.key, "not-a-number");
+    expect(getSetting("coverFlowSideCount")).toBe(3);
   });
 });

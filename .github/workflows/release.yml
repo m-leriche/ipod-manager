@@ -24,6 +24,7 @@ jobs:
         run: npm ci
 
       - name: Build and release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,4 +35,42 @@ jobs:
           releaseName: "Crate v__VERSION__"
           releaseBody: "See the assets below to download and install."
           releaseDraft: true
-          includeUpdaterJson: true
+
+      - name: Generate and upload latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME}"
+          BUNDLE_DIR="src-tauri/target/release/bundle/macos"
+          SIG_FILE="${BUNDLE_DIR}/Crate.app.tar.gz.sig"
+
+          if [ ! -f "$SIG_FILE" ]; then
+            echo "ERROR: Signature file not found at $SIG_FILE"
+            ls -la "$BUNDLE_DIR"
+            exit 1
+          fi
+
+          SIGNATURE=$(cat "$SIG_FILE")
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          DOWNLOAD_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/${TAG}/Crate_aarch64.app.tar.gz"
+
+          cat > latest.json <<EOJSON
+          {
+            "version": "${VERSION}",
+            "notes": "Crate v${VERSION}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${SIGNATURE}",
+                "url": "${DOWNLOAD_URL}"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIGNATURE}",
+                "url": "${DOWNLOAD_URL}"
+              }
+            }
+          }
+          EOJSON
+
+          gh release upload "${TAG}" latest.json --clobber

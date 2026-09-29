@@ -52,14 +52,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm audit --omit=dev --audit-level=high
-      # Suppressed advisories — reviewed 2026-06-04:
+      # Suppressed advisories — reviewed 2026-09-29:
       #
-      # rustls-webpki (transitive dep via ureq/reqwest/tauri-plugin-updater, pinned at 0.103.11):
-      #   RUSTSEC-2026-0098: URI name constraints incorrectly accepted. Low risk — requires
-      #                      certificate misissuance and we don't assert URI names.
-      #   RUSTSEC-2026-0099: Wildcard names bypass name constraints. Same low-risk preconditions.
-      #   RUSTSEC-2026-0104: Panic parsing CRL with empty BIT STRING in onlySomeReasons. DoS only,
-      #                      and we don't use CRLs. Fix requires 0.103.13+ (waiting on upstream).
+      # rkyv (lockfile-only, via tauri-plugin-log -> byte-unit -> rust_decimal; rust_decimal's
+      # rkyv feature is not enabled, so rkyv is never compiled into the app):
+      #   RUSTSEC-2026-0235: Out-of-bounds read validating untrusted archives with Rc/Arc.
+      #                      Unreachable — we never build or call rkyv. Fix is 0.8.17+ only.
       #
       # atk / atk-sys (transitive dep, Linux CI only — not in macOS production builds):
       #   RUSTSEC-2024-0413: atk crate unmaintained (INFO). GTK3 binding, no security impact.
@@ -75,7 +73,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: src-tauri
-          ignore: RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2026-0104,RUSTSEC-2024-0413,RUSTSEC-2024-0416,RUSTSEC-2026-0194,RUSTSEC-2026-0195
+          ignore: RUSTSEC-2026-0235,RUSTSEC-2024-0413,RUSTSEC-2024-0416,RUSTSEC-2026-0194,RUSTSEC-2026-0195
 
   build:
     name: Build

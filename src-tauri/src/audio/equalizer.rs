@@ -123,9 +123,7 @@ impl BiquadFilter {
     }
 
     fn reset(&mut self) {
-        for st in &mut self.state {
-            *st = [0.0; 4];
-        }
+        self.state.fill([0.0; 4]);
     }
 }
 
